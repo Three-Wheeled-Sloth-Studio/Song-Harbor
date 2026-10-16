@@ -1,0 +1,25 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: TEMPLATE_TODO_DATE
+commands:
+  - id: generate-source-catalog
+    command: python refs/tools/generate_source_catalog.py
+    purpose: Regenerate the committed sharded source catalog after source files change.
+  - id: check-source-catalog
+    command: python refs/tools/generate_source_catalog.py --check
+    purpose: Verify the committed source catalog exactly matches tracked and untracked implementation source.
+  - id: generate-okf-indexes
+    command: python refs/tools/generate_okf_indexes.py
+    purpose: Regenerate committed OKF discovery indexes after refs files or concept metadata change.
+  - id: check-okf-indexes
+    command: python refs/tools/generate_okf_indexes.py --check
+    purpose: Verify committed OKF discovery indexes exactly match deterministic generated output.
+  - id: check-agent-context
+    command: python refs/tools/generate_agent_context.py --check
+    purpose: Verify source-catalog freshness plus deterministic bounded coding-agent re-entry context generation.
+  - id: validate-refs-template
+    command: python refs/tools/validate_refs.py --mode template
+    purpose: Validate the reusable blank harness, Agent Academy schemas, and OKF compatibility before publishing framework changes.
+  - id: validate-refs-initialized
+    command: python refs/tools/validate_refs.py --mode initialized
+    purpose: Validate a copied project after required bootstrap placeholders have been replaced.

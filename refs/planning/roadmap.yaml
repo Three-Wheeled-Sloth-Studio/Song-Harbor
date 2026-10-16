@@ -1,0 +1,28 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+roadmap:
+  - id: SH-RM-000
+    horizon: now
+    status: planned
+    summary: Establish product brief, decisions, and Agent Academy-compatible durable references.
+  - id: SH-RM-010
+    horizon: now
+    status: planned
+    summary: Technical spike for local model performance, native-vs-separated stems, section surgery, and interoperability.
+  - id: SH-RM-020
+    horizon: next
+    status: planned
+    summary: Project schema and orchestration prototype with import, generation, save/reopen, and provenance.
+  - id: SH-RM-030
+    horizon: next
+    status: planned
+    summary: Arrangement timeline, basic mixer, track-region replacement, and candidate audition workflow.
+  - id: SH-RM-040
+    horizon: later
+    status: planned
+    summary: Import decomposition, remix/cover, validated export and standalone installer.
+  - id: SH-RM-050
+    horizon: later
+    status: planned
+    summary: Advanced plugins, model training, remote execution and other optional capabilities.

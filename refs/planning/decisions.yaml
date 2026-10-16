@@ -1,0 +1,60 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+decisions:
+  - id: SH-DEC-001
+    status: accepted
+    date: 2026-10-16
+    decision: TWS Studios is the parent brand; Song Harbor is the locked working project and repository name.
+    rationale: Name fits the TWS naming family while allowing separate component identities.
+    consequences:
+      - Working title is not trademark clearance or a final public product name.
+  - id: SH-DEC-002
+    status: accepted
+    date: 2026-10-16
+    decision: The product and branding are independent of Infra Choir.
+    rationale: The digital band is a product consumer, not a co-brand or cross-promotion.
+    consequences:
+      - Avoid hard-coded artist identities and band-specific marketing.
+  - id: SH-DEC-003
+    status: accepted
+    date: 2026-10-16
+    decision: Local generation and a standalone end-user app are required; RTX 4070 12 GB VRAM and 96 GB RAM are the reference workstation.
+    rationale: Viability on established consumer hardware and independent distribution are core requirements.
+    consequences:
+      - Benchmark local jobs and define graceful lower/higher compute profiles.
+  - id: SH-DEC-004
+    status: accepted
+    date: 2026-10-16
+    decision: Product requirements include section-level and stem-level direction, generation and output; interchangeable models; plug-ins, LoRA and LoKr; remix/cover; and song/stem ingestion and reconstruction.
+    rationale: These are explicit user requirements, not an assertion that current models satisfy them.
+    consequences:
+      - Feasibility spikes must test genuine edit isolation and interchange.
+  - id: SH-DEC-005
+    status: accepted
+    date: 2026-10-16
+    decision: Cloud execution and training are future capabilities, not MVP requirements.
+    rationale: Keep first implementation local and focused while retaining extension paths.
+    consequences:
+      - Define provider and adapter interfaces without building cloud or training UI yet.
+  - id: SH-DEC-006
+    status: accepted
+    date: 2026-10-16
+    decision: Align project documentation and agent handoffs with the Agent Academy refs conventions.
+    rationale: Consistent durable, auditable memory across TWS Studios repositories.
+    consequences:
+      - Keep accepted decisions, roadmap, open questions and handoffs under refs.
+  - id: SH-DEC-007
+    status: proposed
+    date: 2026-10-16
+    decision: Use a model-neutral Music Arrangement Graph and capability-aware adapter orchestration.
+    rationale: Prevent a single generation model from dictating composition storage and supported operations.
+    consequences:
+      - Design versioned schema and perform model interoperability prototypes before locking representation.
+  - id: SH-DEC-008
+    status: proposed
+    date: 2026-10-16
+    decision: Consider Second Take, Track Yard, Pocket Producer, and Patch Bay as potential component names.
+    rationale: Enables product family hierarchy similar to Parchment Worlds and World Forge.
+    consequences:
+      - Names, module boundaries, and legal checks remain open.

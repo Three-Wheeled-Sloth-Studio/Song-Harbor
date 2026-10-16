@@ -9,7 +9,7 @@ todos:
   - id: SH-TODO-002
     status: open
     area: research
-    summary: Prepare authorized benchmark fixtures, reproducible experiment manifests, objective metrics and listening rubric.
+    summary: Prepare generation-first benchmark fixtures, reproducible experiment manifests, objective metrics and listening rubric.
   - id: SH-TODO-003
     status: open
     area: research
@@ -17,7 +17,7 @@ todos:
   - id: SH-TODO-004
     status: open
     area: research
-    summary: Compare true generated stems, separation output, cross-model score handoff, and timing preservation.
+    summary: Prioritize directed stem generation, cross-model score handoff, and timing preservation; run only bounded separation feasibility checks.
   - id: SH-TODO-005
     status: open
     area: licensing
@@ -41,7 +41,7 @@ todos:
   - id: SH-TODO-010
     status: open
     area: product
-    summary: Confirm proposed MVP cutoff and composition, selective revision, ingest and remix release criteria after spikes.
+    summary: Specify generation-first MVP acceptance, selective revision release gates, and separate later import/remix acceptance criteria.
   - id: SH-TODO-011
     status: open
     area: branding

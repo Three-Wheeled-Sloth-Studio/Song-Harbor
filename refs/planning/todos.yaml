@@ -5,24 +5,44 @@ todos:
   - id: SH-TODO-001
     status: open
     area: agent-academy
-    summary: Bootstrap the full Agent Academy refs harness, generate discovery indexes, and run initialized validation.
+    summary: Complete full refs harness bootstrap and run source-catalog, OKF index, context generator and initialized validation gates.
   - id: SH-TODO-002
     status: open
     area: research
-    summary: Benchmark ACE-Step and YuE2 on reference hardware, including edit isolation and VRAM measurements.
+    summary: Prepare authorized benchmark fixtures, reproducible experiment manifests, objective metrics and listening rubric.
   - id: SH-TODO-003
     status: open
-    area: architecture
-    summary: Draft native project schema and adapter contract with hard/soft constraints, timing and provenance.
+    area: research
+    summary: Benchmark ACE-Step and YuE2 full-song generation and section surgery on RTX 4070 12 GB.
   - id: SH-TODO-004
     status: open
     area: research
-    summary: Investigate model/component licensing and plugin/LoRA/LoKr compatibility.
+    summary: Compare true generated stems, separation output, cross-model score handoff, and timing preservation.
   - id: SH-TODO-005
     status: open
-    area: product
-    summary: Define objectively testable MVP acceptance thresholds and target audience.
+    area: licensing
+    summary: Inventory model code, weights, plugin, transcription, remix and adapter licenses prior to redistribution.
   - id: SH-TODO-006
     status: open
+    area: architecture
+    summary: Specify prototype adapter capability registry, bounded job contract, error handling and local memory policy.
+  - id: SH-TODO-007
+    status: open
+    area: architecture
+    summary: Prototype versioned native project schema with section IDs, track identities, musical clock, provenance and locks.
+  - id: SH-TODO-008
+    status: open
+    area: ui
+    summary: Evaluate minimal desktop shell and responsive playback without committing to a full DAW stack.
+  - id: SH-TODO-009
+    status: open
+    area: product
+    summary: Establish target hardware tiers and measured pass/fail thresholds for generation, timing drift and isolation.
+  - id: SH-TODO-010
+    status: open
+    area: product
+    summary: Confirm proposed MVP cutoff and composition, selective revision, ingest and remix release criteria after spikes.
+  - id: SH-TODO-011
+    status: open
     area: branding
-    summary: Evaluate Song Harbor and module naming availability and product-family taxonomy.
+    summary: Evaluate Song Harbor trademark/domain availability and potential module naming taxonomy before commercial release.

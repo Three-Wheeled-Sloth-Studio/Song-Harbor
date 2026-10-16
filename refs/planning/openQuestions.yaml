@@ -4,7 +4,7 @@ updated: 2026-10-16
 open_questions:
   - id: Q-001
     status: open
-    question: What exact MVP boundary and first usable vertical slice should be committed?
+    question: What precise pass/fail acceptance criteria define the accepted generation-first MVP scope and first usable vertical slice?
   - id: Q-002
     status: open
     question: Which native project schema and interchange formats best express timing, stems, scores, confidence and edits?

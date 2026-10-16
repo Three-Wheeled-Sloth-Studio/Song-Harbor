@@ -58,3 +58,13 @@ decisions:
     rationale: Enables product family hierarchy similar to Parchment Worlds and World Forge.
     consequences:
       - Names, module boundaries, and legal checks remain open.
+  - id: SH-DEC-009
+    status: accepted
+    date: 2026-10-16
+    decision: Deliver generation-first; establish native composition and generation workflows before productionizing import, reconstruction, covers, and remixes.
+    rationale: Imported music cannot be meaningfully reconstructed and revised against Song Harbor's native workflow until generation and selective editing capabilities exist to receive it.
+    consequences:
+      - The first standalone release is generation-first, not import-and-remix complete.
+      - Early import and separation experiments are permitted as exploratory spikes, not release-gating implementation.
+      - Existing-track reconstruction and guided remix remain required subsequent product capabilities.
+      - Prioritize generation, section/track control, selective revision, offline packaging, then reconstruction and remix.

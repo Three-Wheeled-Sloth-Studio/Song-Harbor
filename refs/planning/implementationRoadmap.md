@@ -7,18 +7,23 @@ tags: [roadmap, discovery, implementation, music-production]
 ---
 # Song Harbor Implementation Roadmap
 
-Last updated: 2026-10-16. **Proposed sequence**, not approved schedule or validated technical feasibility. `refs/planning/roadmap.yaml` is the structured roadmap; this document explains stage rationale, discovery and gates. Product constraints are authoritative in `refs/product/requirements.md` and accepted decisions in `refs/planning/decisions.yaml`.
+Last updated: 2026-10-16. **Generation-first sequencing is accepted (SH-DEC-009).** Exact implementation stack, acceptance thresholds and schedule remain proposed/unvalidated. `refs/planning/roadmap.yaml` is the structured roadmap; this document explains stage rationale, discovery and gates. Product constraints are authoritative in `refs/product/requirements.md` and accepted decisions in `refs/planning/decisions.yaml`.
 
 ## Delivery strategy
 
 Build vertical slices that produce testable musical outputs, not a collection of disconnected model demos. Test difficult integration and preservation constraints early; maintain a desktop shell from the start. Default development target: Windows on RTX 4070 12 GB VRAM, 96 GB RAM, with user-selectable lower/higher capability profiles planned. Never interpret proposed performance or model support as proven.
 
-Use five delivery milestones:
-- **M1 First Sound (stages 0-2):** 2 interchangeable local generation backends, auditable jobs, preview, exports, saved/reopened project.
-- **M2 First Arrangement (stages 3-4):** editable sections and independently addressable track media, synchronized audition, basic mixer.
-- **M3 First Surgery (stages 5-6):** bounded edits, alternative candidates, selective preservation, and import reconstruction where feasible.
-- **M4 First Release (stages 7-8):** guided remix/cover and dependable offline Windows distribution with documentation, licensing and recovery.
-- **M5 Open Studio (stage 9):** training, providers and advanced extensions, only after stable local workflows.
+Use six delivery milestones:
+- **M1 First Sound (stages 0-3):** at least one viable local generation engine, interchangeable adapter architecture, auditable jobs, preview, export, saved/reopened native project; a second engine is targeted subject to feasibility.
+- **M2 First Arrangement (stages 4-5):** sections, independently addressable generated/imported tracks, synchronized audition, basic mixer and track export.
+- **M3 First Surgery (stage 6):** bounded region/stem revisions, alternate takes, preservation locks and safe transitions.
+- **M4 First Release (stage 9):** a standalone offline **generation-first** Windows application; does not require full mixed-track reconstruction, cover, or remix workflows.
+- **M5 Reconstruction and Remix (stages 7-8):** import existing tracks, reconstruct editable musical structure, create guided covers/remixes on the established project and generation pipeline.
+- **M6 Open Studio (stage 10):** advanced model/adapters training, remote providers and extensions.
+
+**Accepted sequencing:** A functional native generation and revision workflow precedes full import-and-remix product development. Early import/separation analysis may be used for feasibility research but must not block the generation-first release.
+
+**Implementation order:** 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 9 -> 7 -> 8 -> 10. Stage IDs retain their historical identifiers for stable references; numbering is not implementation order after this decision.
 
 The stage IDs below match the structured roadmap. Phases can overlap after interface contracts stabilize.
 
@@ -39,7 +44,7 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 **Experiment C - Stems:** independently generate or condition drums, horns, and vocals; compare with separator-derived tracks, record bleed, edit control and alignment.
 **Experiment D - Cross-model handoff:** pass common score/MIDI/ABC or audio conditioning between engines; document which fields survive and which are approximate.
 **Experiment E - Adaptation:** inventory LoRA/LoKr compatibility, weighted combinations, loading cost and model-specific constraints.
-**Experiment F - Reverse ingestion:** test tempo/key/sections, transcription and separation accuracy on reference fixtures.
+**Experiment F - Reverse ingestion (optional, bounded):** sample tempo/key/sections, transcription and separation only to expose likely format/schema requirements. Defer systematic reconstruction benchmarks until native generation and selective revision work.
 
 **Exit gate:** signed-off capability registry with observed/support classifications; at least one viable 12 GB offline end-to-end generation path; explicit go/no-go/fallback choices for surgery and true stem generation. Failed experiments are acceptable evidence; do not conceal missing capability.
 
@@ -51,7 +56,7 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 **Discovery:** test process isolation, Python model worker packaging, worker crashes, cold/warm load time, model download locations, CPU offload/quantization, and UI responsiveness. Choose desktop and audio stack after small proof-of-concept; Tauri/React/Rust remain proposals.
 
-**Exit gate (M1 part):** can choose compatible engines, generate, audition, export, interrupt/restart jobs and run disconnected once dependencies are installed. Record performance rather than setting speculative latency promises.
+**Exit gate (M1 part): can choose compatible engines, generate, audition, export, interrupt/restart jobs and run disconnected once dependencies are installed. Record performance rather than setting speculative latency promises.
 
 ## Stage 3: Native project representation (SH-RM-030)
 
@@ -71,9 +76,9 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 ## Stage 5: Stem production, separation and mixer (SH-RM-050)
 
-**Build:** four track origin types (native generated, separated, imported, symbolic), region-level mute/solo/level/pan, synchronized playback, stem rendering/export, routing and basic effects. Capability labels must disclose which stems are inferred versus generated independently.
+**Build:** stem-directed native generated tracks, imported reference tracks, symbolic tracks, region-level mute/solo/level/pan, synchronized playback, stem rendering/export, routing and basic effects. Keep separated-stem origin metadata in the schema, but defer complete mixed-track reconstruction tooling until M5. Capability labels must disclose which stems are inferred versus generated independently.
 
-**Discovery:** latency/drift for long stems, loudness/phase behavior, onset alignment, resampling, plugin-host feasibility, spill/bleed after separation, compatible local synthesis/rendering methods. Limit heavyweight DAW authoring.
+**Discovery:** latency/drift for long stems, loudness/phase behavior, onset alignment, resampling, plugin-host feasibility, native stem generation fidelity and compatible local synthesis/rendering methods. Separation quality can receive a bounded research check. Limit heavyweight DAW authoring.
 
 **Exit gate (M2 complete):** at least one song with four independently addressable tracks; independently replace or mute any one; synchronized playback and exports with documented artifacts/tolerances.
 
@@ -91,7 +96,7 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 **Discovery:** precision/recall of detected boundaries, BPM half/double errors, chord ambiguities, speech/music transcription, symbolic transcription quality, tool licenses and inference speed on 12 GB. Evaluate multi-pass analysis without VRAM contention.
 
-**Exit gate (M3 complete):** reconstruct a useful draft from a mixed song and perform one non-destructive revision. Inferences remain labeled; no promise of perfect source-project recovery.
+**Exit gate (M5 part):** reconstruct a useful draft from a mixed song and perform one non-destructive revision. Inferences remain labeled; no promise of perfect source-project recovery.
 
 ## Stage 8: Covers and remixes (SH-RM-080)
 
@@ -99,15 +104,15 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 **Discovery:** test which control combinations preserve requested musical content per engine, duration/structure constraints, vocal conditioning, and cover/remix licensing obligations. Verify supported workflows on owned/licensed material.
 
-**Exit gate:** controlled transformation of authorized source material with explicit differences and preserved elements; clear limitations when model cannot honor a hard requirement.
+**Exit gate (M5 complete):** controlled transformation of authorized source material with explicit differences and preserved elements; clear limitations when model cannot honor a hard requirement.
 
-## Stage 9: Standalone MVP hardening (SH-RM-090)
+## Stage 9: Standalone generation-first MVP hardening (SH-RM-090)\n\n**Sequencing:** Implement this stage immediately after Second Take (stage 6), before full reconstruction/remix (stages 7-8).
 
 **Build:** reliable installer/update strategy, external model-weight manager, offline first-run and dependency checks, security boundaries, license notices, project migration, backup/recovery, accessibility, audio device behavior, export profiles, help and troubleshooting. Prefer Windows first.
 
 **Discovery:** test clean installs on non-developer machines, hardware below/above reference, driver mismatch, antivirus interference, disk/VRAM pressure, corrupted projects, and model-download interruptions.
 
-**Exit gate (M4 complete):** fresh user installs without development tooling, works offline after setup, generates/edits/imports/remixes/mixes/exports within documented model limitations, and recovers reliably from failed jobs. The scope of M4 is proposed and may be adjusted after feasibility results.
+**Exit gate (M4 complete):** fresh user installs without development tooling, works offline after setup, generates/arranges/selectively revises/mixes/exports native projects within documented model limitations, and recovers reliably from failed jobs. Full song reconstruction and guided covers/remixes are not requirements for this release. The scope of M4 is proposed and may be adjusted after feasibility results.
 
 ## Stage 10: Open Studio and advanced extensions (SH-RM-100)
 
@@ -115,14 +120,14 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 **Discovery:** GPU/training cost, licensing and weight redistribution, provider privacy/cost models, compatibility tests, extension sandboxing, plugin review and maintenance costs.
 
-**Exit gate:** each optional subsystem is bounded and replaceable, without undermining offline core features.
+**Exit gate (M6):** each optional subsystem is bounded and replaceable, without undermining offline core features.
 
 ## Cross-cutting discovery and engineering gates
 
 1. **Performance:** peak GPU/RAM, execution time, cold/warm starts and playback responsiveness tracked per workflow on reference hardware; step-down/up matrix published after measurement.
 2. **Preservation:** protected tracks/regions checked by deterministic asset hashes and render diff where possible; audible quality judged separately.
 3. **Reproducibility:** model versions, seeds, conditioning, inputs and adapter manifest stored; probabilistic output is not guaranteed bit-for-bit repeatable.
-4. **Licensing and safety:** model weight and code distribution, third-party plugin licenses, user input/cover rights, and source provenance reviewed before packaging.
+4. **Licensing and safety:** model weight and code distribution, third-party plugin licenses, user input/cover rights, and source provenance reviewed before packaging; M5 remix/covers require separate rights review.
 5. **Testing:** fast automated contract tests, fixture-based audio comparison, UI smoke tests and periodic human listening evaluations.
 6. **Fallbacks:** if a model cannot perform a promised action precisely, degrade to manual/symbolic editing or declare unsupported rather than regenerate unrelated content.
 
@@ -130,7 +135,7 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 - No cloud service, accounts or model training required in the initial release.
 - No commitment yet to Tauri, SQLite, Rust, React, an audio engine, project file extension or named module brands.
-- Define MVP acceptance thresholds, release licensing, minimum supported hardware, and model distribution rules after technical spikes.
+- Generation-first MVP scope is accepted; define measurable release acceptance thresholds, release licensing, minimum supported hardware and model distribution rules after technical spikes.
 - Native-stem generation and exact section surgery are aspirational user capabilities requiring measured validation; imported and separated stems are practical fallbacks, not equivalent capabilities.
 - Keep Song Harbor independent of Infra Choir's identity. Use authorized music from that workflow as optional test fixtures, not branding.
 

@@ -1,0 +1,9 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+areas:
+  product-documentation:
+    guidance:
+      - Read refs/product/requirements.md and refs/planning/decisions.yaml before changing requirements.
+    source_roots: []
+    notes: Discovery-phase project; no implementation source roots yet.

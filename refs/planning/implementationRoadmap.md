@@ -106,7 +106,9 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 **Exit gate (M5 complete):** controlled transformation of authorized source material with explicit differences and preserved elements; clear limitations when model cannot honor a hard requirement.
 
-## Stage 9: Standalone generation-first MVP hardening (SH-RM-090)\n\n**Sequencing:** Implement this stage immediately after Second Take (stage 6), before full reconstruction/remix (stages 7-8).
+## Stage 9: Standalone generation-first MVP hardening (SH-RM-090)
+
+**Sequencing:** Implement this stage immediately after Second Take (stage 6), before full reconstruction/remix (stages 7-8).
 
 **Build:** reliable installer/update strategy, external model-weight manager, offline first-run and dependency checks, security boundaries, license notices, project migration, backup/recovery, accessibility, audio device behavior, export profiles, help and troubleshooting. Prefer Windows first.
 

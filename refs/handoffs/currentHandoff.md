@@ -1,7 +1,7 @@
 ---
 type: Handoff
 title: Current Song Harbor Handoff
-description: Discovery-phase project context and immediate next slice.
+description: Discovery-phase baseline and next bounded implementation slice.
 status: draft
 tags: [handoff]
 ---
@@ -9,35 +9,39 @@ tags: [handoff]
 
 ## Accepted Baseline
 
-Song Harbor is the working title of a TWS Studios standalone local-first music production product. Baseline hardware RTX 4070 12 GB VRAM, 96 GB RAM. Requirements include stem and section control, exchangeable models, plugin/LoRA/LoKr support, remix/cover, native reconstruction from imported music, and future optional training/cloud. Infra Choir is a consumer, not a brand tie-in. See `refs/planning/decisions.yaml`.
+Song Harbor is the TWS Studios working title. A standalone local-first product must support stem/section-level music editing and generation, swappable models, plugins/LoRA/LoKr, remix/cover, imported-track reconstruction, and future optional training/cloud execution. Reference system RTX 4070 12 GB VRAM / 96 GB RAM. Infra Choir is a consumer, not co-brand. Accepted facts are in `refs/planning/decisions.yaml`.
 
 ## What Landed
 
-Initial product vision, requirements, architecture direction, decision register, roadmap and open questions established under Agent Academy-compatible paths.
+Product vision, requirements, architecture direction, decisions, open questions, structured roadmap and detailed implementation roadmap with discovery spikes, experiment goals, stage gates, fallback paths and proposed release milestones. Agent Academy foundation files were partially copied previously.
 
 ## Current Evidence Or Gap
 
-No application code or measured product integration exists yet. Proposed MAG schema, specific model capabilities, hardware tiers and technology stack are not accepted/validated. The full Agent Academy harness, generated index and validation scripts have not yet been copied into Song Harbor.
+No music app runtime, technical feasibility measurements or confirmed production stack. Full Agent Academy harness and generated indexes are still not verified as initialized. Stage sequence and M1-M5 boundary are **proposals**, not newly accepted product decisions. Work remains to prove source isolation, independent stem output and reliable 12 GB execution.
 
 ## Next Slice
 
-Copy Agent Academy harness and bootstrap initialized required files, regenerate its indexes, validate; then run bounded technical spikes against current local generation tools and reference hardware.
+1. Finish the Agent Academy harness and validation, creating a stable agent re-entry workflow.
+2. Define a reproducible benchmark fixture pack and experiment manifest for two local model backends.
+3. Run controlled tests of full generation, localized edits, independent stems, score-conditioned handoff and import analysis on reference hardware.
+4. Record observed capabilities, model licenses and measurable go/no-go results; only then finalize adapter and project schema contracts.
 
 ## Required Reads For Next Slice
 
-- `refs/planning/decisions.yaml`: accepted requirements and proposal/decision separation.
-- `refs/product/requirements.md`: concrete user scenarios for technical spikes.
-- `refs/planning/openQuestions.yaml`: uncertainties to measure.
-- Agent Academy `refs/README.md` and `refs/templatePolicy.yaml`: exact harness bootstrap/validation requirements.
+- `refs/planning/implementationRoadmap.md`: Stage 0/1 experiment definition and exit criteria.
+- `refs/product/requirements.md`: required track, section and local capability outcomes.
+- `refs/planning/decisions.yaml`: accepted boundaries versus proposals.
+- `refs/planning/openQuestions.yaml`: unresolved technical and release decisions.
+- `refs/README.md` and `refs/templatePolicy.yaml`: harness bootstrap and validation requirements.
 
 ## Relevant Files
 
-`refs/project.yaml`, `refs/product/vision.md`, `refs/product/requirements.md`, `refs/architecture/overview.md`, `refs/planning/roadmap.yaml`, `refs/planning/todos.yaml`.
+`refs/planning/roadmap.yaml`, `refs/planning/todos.yaml`, `refs/architecture/overview.md`, `refs/project.yaml`.
 
 ## Do Not Reopen
 
-Local-first, standalone application, Infra Choir separation, and the working repository name unless directed by product owner.
+Song Harbor working title/repo, TWS Studios ownership, Infra Choir brand independence, local-first/standalone and future-not-MVP cloud/training policy.
 
 ## Validation
 
-Documentation-only initialization; no application tests executed. Full Agent Academy initialized-mode validation pending harness installation.
+Documentation-only updates were pushed. No executable product tests or initialized Agent Academy generator/index validation was run. Do not declare full harness compliance before those checks pass.

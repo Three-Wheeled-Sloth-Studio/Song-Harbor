@@ -1,0 +1,28 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+todos:
+  - id: SH-TODO-001
+    status: open
+    area: agent-academy
+    summary: Bootstrap the full Agent Academy refs harness, generate discovery indexes, and run initialized validation.
+  - id: SH-TODO-002
+    status: open
+    area: research
+    summary: Benchmark ACE-Step and YuE2 on reference hardware, including edit isolation and VRAM measurements.
+  - id: SH-TODO-003
+    status: open
+    area: architecture
+    summary: Draft native project schema and adapter contract with hard/soft constraints, timing and provenance.
+  - id: SH-TODO-004
+    status: open
+    area: research
+    summary: Investigate model/component licensing and plugin/LoRA/LoKr compatibility.
+  - id: SH-TODO-005
+    status: open
+    area: product
+    summary: Define objectively testable MVP acceptance thresholds and target audience.
+  - id: SH-TODO-006
+    status: open
+    area: branding
+    summary: Evaluate Song Harbor and module naming availability and product-family taxonomy.

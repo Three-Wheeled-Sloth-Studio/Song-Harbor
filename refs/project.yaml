@@ -1,0 +1,30 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+identity:
+  name: Song Harbor
+  repository_url: https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor
+  summary: Local-first modular music composition, production, and revision workbench
+  current_phase: discovery
+thesis:
+  core_promise: Keep what works; regenerate or edit precisely what does not.
+audience:
+  primary_users:
+    - Independent music creators using consumer hardware
+    - Songwriters, producers, and technically curious musicians
+stack:
+  summary: Standalone desktop required; Tauri, TypeScript, Rust, and managed local model workers are candidates, not accepted selections.
+repository_layout:
+  source_roots: []
+  docs_roots:
+    - refs
+source_of_truth:
+  discovery: README.md
+  planning: refs/planning
+  architecture: refs/architecture
+  product: refs/product
+  handoffs: refs/handoffs
+known_open_questions:
+  - Q-001
+  - Q-002
+  - Q-003

@@ -5,24 +5,44 @@ roadmap:
   - id: SH-RM-000
     horizon: now
     status: planned
-    summary: Establish product brief, decisions, and Agent Academy-compatible durable references.
+    summary: Complete Agent Academy bootstrap and pin a repeatable discovery and validation environment.
   - id: SH-RM-010
     horizon: now
     status: planned
-    summary: Technical spike for local model performance, native-vs-separated stems, section surgery, and interoperability.
+    summary: Benchmark ACE-Step, YuE2, existing DAW/separation/transcription tools, model licensing, and 12 GB hardware limits.
   - id: SH-RM-020
     horizon: next
     status: planned
-    summary: Project schema and orchestration prototype with import, generation, save/reopen, and provenance.
+    summary: Build standalone shell and local model workbench: model registry, queued jobs, generation, preview, caching and export.
   - id: SH-RM-030
     horizon: next
     status: planned
-    summary: Arrangement timeline, basic mixer, track-region replacement, and candidate audition workflow.
+    summary: Establish non-destructive project and arrangement schema with versioned tracks, sections, assets, timing and provenance.
   - id: SH-RM-040
-    horizon: later
+    horizon: next
     status: planned
-    summary: Import decomposition, remix/cover, validated export and standalone installer.
+    summary: Implement structured composition direction, sections, score/lyrics, timeline editing and transitions.
   - id: SH-RM-050
+    horizon: next
+    status: planned
+    summary: Implement stem generation/import/separation, synchronized playback, mixer and isolated track export.
+  - id: SH-RM-060
+    horizon: next
+    status: planned
+    summary: Build Second Take region regeneration, candidate comparisons, preserve locks, and safe transition replacement.
+  - id: SH-RM-070
     horizon: later
     status: planned
-    summary: Advanced plugins, model training, remote execution and other optional capabilities.
+    summary: Develop music ingestion, song structure detection, inferred instructions and reconstruction into editable project state.
+  - id: SH-RM-080
+    horizon: later
+    status: planned
+    summary: Deliver guided cover and remix workflows with controlled preservation of musical features.
+  - id: SH-RM-090
+    horizon: later
+    status: planned
+    summary: Harden and ship standalone MVP with offline operation, model installation, recovery, licensing controls and export.
+  - id: SH-RM-100
+    horizon: later
+    status: planned
+    summary: Expand into training, advanced plugins, remote/cloud execution, and optional collaboration.

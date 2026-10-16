@@ -1,0 +1,37 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-16
+open_questions:
+  - id: Q-001
+    status: open
+    question: What exact MVP boundary and first usable vertical slice should be committed?
+  - id: Q-002
+    status: open
+    question: Which native project schema and interchange formats best express timing, stems, scores, confidence and edits?
+  - id: Q-003
+    status: open
+    question: Can current local models generate independently useful stems and isolated section replacements within 12 GB VRAM?
+  - id: Q-004
+    status: open
+    question: Which ACE-Step and YuE2 APIs or components can be safely integrated, and under what licenses?
+  - id: Q-005
+    status: open
+    question: Which audio engine, plugin host, desktop stack and installer strategy are viable across Windows and future operating systems?
+  - id: Q-006
+    status: open
+    question: What hardware support matrix and acceptable job latency, fidelity and edit-isolation tolerances should be published?
+  - id: Q-007
+    status: open
+    question: How will model weights, user audio, derivative works, adapters, attribution and commercial rights be handled?
+  - id: Q-008
+    status: open
+    question: How should natural-language direction interact with structured score/timeline editing and undo semantics?
+  - id: Q-009
+    status: open
+    question: Are Song Harbor and component names sufficiently distinguishable for public distribution?
+  - id: Q-010
+    status: open
+    question: What is the pricing, licensing and distribution model for the product?
+  - id: Q-011
+    status: open
+    question: Should Agent Academy be copied as the complete refs harness with its generated catalogs, scripts and validation gates?

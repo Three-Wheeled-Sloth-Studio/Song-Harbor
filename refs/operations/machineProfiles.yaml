@@ -69,21 +69,44 @@ machine_profiles:
       - pip check output after final repair not explicitly supplied. Recheck on resumption.
       - Paused prior to checking --model_file_dir CLI option and installing/downloading a specific separation checkpoint.
   - id: primary-desktop
-    status: pending_direct_measurement
+    status: baseline_observed
     label: Primary desktop
+    observed_at_local: "2026-10-17 10:53:27"
+    os_family: Windows
+    shell: PowerShell 7.6.7
     gpu:
-      model: NVIDIA RTX 4070
-      vram_gib_reported: 12
-    ram_gib_reported: 96
+      model: NVIDIA GeForce RTX 4070
+      vram_mib: 12282
+      driver: "616.92"
+      driver_reported_cuda_max: "13.4"
+      display_driver_model: WDDM
+      baseline_used_vram_mib: 2096
+    python:
+      default_launcher: "3.14-64"
+      versions:
+        - "3.14-64"
+        - "3.13-32"
+        - "3.12"
+        - "3.11-32"
+        - "Astral/CPython3.11.15-64 (uv)"
+      uv_python311_path: 'C:\Users\sloth\AppData\Roaming\uv\python\cpython-3.11.15-windows-x86_64-none\python.exe'
+    ffmpeg:
+      version: "8.1-essentials_build-www.gyan.dev"
+      gpl_v3_enabled_build: true
+    ram_gib_observed: 95.1035
     unknowns:
-      - measured_gpu_driver_and_cuda
-      - python_versions
-      - ffmpeg_version
-      - memory_and_storage_baseline
-      - pytorch_cuda_availability
+      - preferred_work_drive_and_free_space
+      - python_311_runtime_verification
+      - virtual_environment
+      - torch_cuda_availability
+      - onnx_cuda_availability
+      - stem_inference
     performance_tests: []
     notes:
-      - Preliminary hardware values from previously established workstation details; await direct results.
+      - GPU used memory is a momentary observation and should be remeasured with background loads minimized.
+      - Existing yue-server.exe and other creative applications were running during baseline; avoid disrupting them.
+      - System default Python 3.14 not selected; prefer isolated Python 3.11 environment for parity with Predator.
+      - FFmpeg binary displays --enable-gpl and --enable-version3; redistribution requires review.
   - id: platform-03
     status: pending_identification
     label: Third benchmark platform (TBD)

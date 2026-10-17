@@ -10,6 +10,10 @@ todos:
     status: open
     area: separation
     summary: Prototype python-audio-separator and verify specific 2-stem and 4-stem model checkpoint licensing.
+  - id: SH-TODO-015
+    status: open
+    area: benchmarking
+    summary: Populate three or more machine profiles with measured OS, CPU, RAM, GPU, driver, Torch/CUDA, FFmpeg and common separation test results.
   - id: SH-TODO-013
     status: open
     area: separation

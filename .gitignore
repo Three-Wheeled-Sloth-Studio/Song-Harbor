@@ -1,0 +1,31 @@
+# Local virtual environments and machine-specific assets
+.venv/
+venv/
+data/
+models/
+cache/
+temp/
+tests/
+*.wav
+*.flac
+*.mp3
+*.m4a
+*.aiff
+*.ogg
+
+# Frontend generated content
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Python generated content
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+
+# Runtime / logs
+*.log

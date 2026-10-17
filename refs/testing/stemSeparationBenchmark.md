@@ -110,3 +110,9 @@ User selected **`htdemucs_6s.yaml` as the current baseline** for continued Song 
 - Requested `htdemucs_6s.yaml` on original 3:28.20 (208.20 s) stereo 48 kHz `Raise the Neon Black.wav`, destination `D:\Apps\SongHarbor\tests\full-song-6`.
 - PowerShell `Measure-Command` result **15.7727548 s**; nominal **13.2× real-time speed** if processing succeeded.
 - **Provisional, not yet a passed full-track inference test:** `Measure-Command` can produce time even when an invoked external process errors, and no full console output or produced stem list has been provided. Verify six output stems with ≈208.20 s duration and listen before accepting performance result. No peak GPU memory capture.
+
+## Six-stem full-song Audacity audition (primary desktop, 2026-10-17)
+
+- User imported all six full-song outputs into Audacity, played them in parallel, and reported that the recombination **sounds good**. This establishes that all six stems were produced and available for listening, but exact duration/sample counts have not yet been independently measured with ffprobe.
+- This recording has **no piano** and **sparse bass**, both audibly reflected in their respective separated stems. Useful qualitative evidence for source selectivity, not yet a quantitative leakage or silence measurement.
+- Current baseline remains `htdemucs_6s.yaml`; vocals/percussion take precedence for production utility. Full-track elapsed 15.7727548 seconds is user-measured but should be rerun for cold/warm performance characterization and memory sampling.

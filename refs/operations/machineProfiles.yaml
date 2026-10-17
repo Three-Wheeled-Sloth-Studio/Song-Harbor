@@ -33,7 +33,10 @@ machine_profiles:
     venv:
       path: 'G:\Apps\SongHarbor\.venv'
       creation_command_completed_without_error: true
-      interpreter_verified: false
+      interpreter_verified: true
+      python_version: '3.11.2'
+      pip_version: '22.3.1'
+      pip_location: 'G:\Apps\SongHarbor\.venv\Lib\site-packages\pip'
     unknowns:
       - os_version
       - pytorch_cuda_available

@@ -7,13 +7,16 @@ tags: [roadmap, discovery, implementation, music-production]
 ---
 # Song Harbor Implementation Roadmap
 
-Last updated: 2026-10-16. **Generation-first sequencing is accepted (SH-DEC-009).** Exact implementation stack, acceptance thresholds and schedule remain proposed/unvalidated. `refs/planning/roadmap.yaml` is the structured roadmap; this document explains stage rationale, discovery and gates. Product constraints are authoritative in `refs/product/requirements.md` and accepted decisions in `refs/planning/decisions.yaml`.
+Last updated: 2026-10-17. **Generation-first sequencing is accepted (SH-DEC-009).** Exact implementation stack, acceptance thresholds and schedule remain proposed/unvalidated. `refs/planning/roadmap.yaml` is the structured roadmap; this document explains stage rationale, discovery and gates. Product constraints are authoritative in `refs/product/requirements.md` and accepted decisions in `refs/planning/decisions.yaml`.
 
 ## Delivery strategy
 
 Build vertical slices that produce testable musical outputs, not a collection of disconnected model demos. Test difficult integration and preservation constraints early; maintain a desktop shell from the start. Default development target: Windows on RTX 4070 12 GB VRAM, 96 GB RAM, with user-selectable lower/higher capability profiles planned. Never interpret proposed performance or model support as proven.
 
+**Priority-zero deliverable (SH-RM-005):** Local stem separator before the generation workbench. This is a self-contained utility, not full imported-track reconstruction. See [Stem Separation Discovery](stemSeparationDiscovery.md).
+
 Use six delivery milestones:
+- **M0 First Stems (stage 0.5):** 2/4-stem local separation, preview, batch and aligned export on reference hardware.
 - **M1 First Sound (stages 0-3):** at least one viable local generation engine, interchangeable adapter architecture, auditable jobs, preview, export, saved/reopened native project; a second engine is targeted subject to feasibility.
 - **M2 First Arrangement (stages 4-5):** sections, independently addressable generated/imported tracks, synchronized audition, basic mixer and track export.
 - **M3 First Surgery (stage 6):** bounded region/stem revisions, alternate takes, preservation locks and safe transitions.
@@ -23,7 +26,7 @@ Use six delivery milestones:
 
 **Accepted sequencing:** A functional native generation and revision workflow precedes full import-and-remix product development. Early import/separation analysis may be used for feasibility research but must not block the generation-first release.
 
-**Implementation order:** 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 9 -> 7 -> 8 -> 10. Stage IDs retain their historical identifiers for stable references; numbering is not implementation order after this decision.
+**Implementation order:** 0 -> 0.5 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 9 -> 7 -> 8 -> 10. Stage IDs retain their historical identifiers for stable references; numbering is not implementation order after this decision.
 
 The stage IDs below match the structured roadmap. Phases can overlap after interface contracts stabilize.
 
@@ -36,6 +39,16 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 **Exit gate:** initialized Agent Academy validation passes; test assets are legally usable; experiment protocol and reproducibility criteria recorded; key unknowns owned.
 
 **Avoid:** implementation-stack commitments based only on attractive demos; storing licensed or private music in git.
+
+## Stage 0.5: Stem Separation Workbench (SH-RM-005)
+
+**Build:** standalone-compatible local 2-stem and 4-stem separation; batch queue, model selection, progress, solo/mute preview, aligned lossless WAV/FLAC export, source preservation and output provenance. Use a replaceable local inference worker that can later plug into Song Harbor.
+
+**Discovery:** First test python-audio-separator, including model-weight rights, Windows CUDA, 12 GB VRAM, CPU fallback and 30-second/full-track fixtures. Compare Demucs and MSST if warranted. See `refs/planning/stemSeparationDiscovery.md`.
+
+**Exit gate (M0):** local offline inference once weights are installed, 2/4-stem output, aligned lossless exports, batch and audition, repeatable measurements, and reviewed checkpoint rights before any distribution.
+
+**Scope boundary:** Separation is not native independent stem generation or reconstruction of song instructions. Defer full reconstruction/remix to M5 and continue generation-first afterward.
 
 ## Stage 1: Technical feasibility bakeoff (SH-RM-010)
 
@@ -143,4 +156,4 @@ The stage IDs below match the structured roadmap. Phases can overlap after inter
 
 ## Next actionable slice
 
-Finalize Agent Academy harness validation, then implement a **benchmarked local model adapter experiment** before a full timeline UI. The experiment should produce a machine-readable capability report and audio examples, making architecture choices evidence-based.
+Complete the Agent Academy validation path, then deliver M0 local stem separation with benchmarked engines. After M0, proceed with the generation model-adapter experiment. The experiment should produce a machine-readable capability report and audio examples, making architecture choices evidence-based.

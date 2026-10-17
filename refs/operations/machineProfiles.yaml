@@ -130,6 +130,19 @@ machine_profiles:
       - virtual_environment
       - stem_inference
     performance_tests:
+      - run_id: desktop-20261017-demucs-6stem-001
+        test_type: six_stem_smoke
+        model: htdemucs_6s.yaml
+        model_architecture: Demucs
+        source_excerpt_id: source-30s.wav
+        input_duration_seconds: 30
+        elapsed_seconds: 9.046711
+        realtime_factor: 0.301557
+        output_format: WAV
+        expected_stems: [Vocals, Drums, Bass, Guitar, Piano, Other]
+        stems_verified: false
+        listening_assessment: pending
+        peak_vram_observed: null
       - run_id: desktop-20261017-vr-2stem-001
         test_type: two_stem_smoke
         model: 1_HP-UVR.pth

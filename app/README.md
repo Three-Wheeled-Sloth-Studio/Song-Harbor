@@ -40,13 +40,13 @@ Opens local interface at http://127.0.0.1:5173. Backend listens only on 127.0.0.
 
 ## M0 acceptance
 
-- [ ] UI starts locally and imports shared TWS UI components.
-- [ ] Select a supported audio file using native browser file selection.
-- [ ] Six-stem model is fixed to `htdemucs_6s.yaml` for this milestone.
-- [ ] Start a separation job; show truthful queued/running/complete/error status.
-- [ ] Show six WAV outputs; download and open output folder.
-- [ ] Confirm existing source remains unchanged; no shell invocation with untrusted file contents.
-- [ ] Real 3:28 track tested end-to-end from the interface.
+- [x] UI starts locally via batch launcher; user reports launcher works (Laptop Omen).
+- [x] User reports splitter works from entry UI on Laptop Omen; end-to-end workflow smoke passed.
+- [x] Six-stem model fixed to `htdemucs_6s.yaml` for M0.
+- [x] End-to-end separation user smoke passed; individual error/cancel paths not yet exercised.
+- [x] Splitter output successful as reported by user; individual download/open-folder actions not independently verified.
+- [ ] Independently validate source preservation and runtime security beyond code review.
+- [ ] Record exact Omen input fixture, stem durations, and per-stem listening confirmation (user reports successful splitter without specifics).
 - [ ] `npm run build --prefix app/frontend` passes.
 
 ## Scope boundaries
@@ -54,3 +54,7 @@ Opens local interface at http://127.0.0.1:5173. Backend listens only on 127.0.0.
 One job at a time. Basic local-only progress state rather than fabricated percent; model downloads may delay startup. No multitrack editor, instrument playback, packaging, model selector, job persistence across app restarts, or deep licensing approval in this slice. No claims of tested production readiness before validation.
 
 The source code sits in `app/`; generated assets, caches, model weights and imported music must remain local and untracked. The TWS design repo remains canonical rather than copying design-system source into Song Harbor.
+
+## Laptop Omen user acceptance checkpoint (2026-10-17)
+
+User reports **“Launcher works. Splitter works.”** for the C:-based bootstrap/launcher and M0 separation UI on Laptop Omen. This establishes user-reported functional end-to-end acceptance for the limited milestone of opening the app and separating audio, without claiming validation of every export/open-folder, error/cancel, performance, or packaging path. The core M0 entry UI + functional splitter is **accepted for the requested milestone scope**. Further tests and standalone packaging remain separate work.

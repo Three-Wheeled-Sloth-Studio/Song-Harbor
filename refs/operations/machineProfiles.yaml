@@ -165,7 +165,12 @@ machine_profiles:
         output_channels: 2
         output_duration_seconds_each: 30.0
         sample_level_alignment_measured: false
-        reconstruction_error_measured: false
+        reconstruction_error_measured: true
+        output_samples_per_stem: 1440000
+        original_rms: 0.15053791521019433
+        reconstruction_error_rms: 0.004297088053176496
+        reconstruction_error_relative_rms_percent: 2.8545
+        reconstruction_correlation: 0.9996214151357643
     notes:
       - User closed obvious competing apps, but approximately 2 GiB remains allocated on GPU; defer clearing until needed.
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.

@@ -70,7 +70,7 @@ machine_profiles:
       - Paused prior to checking --model_file_dir CLI option and installing/downloading a specific separation checkpoint.
   - id: primary-desktop
     status: baseline_observed
-    label: Primary desktop
+    label: PC Skynet
     observed_at_local: "2026-10-17 10:53:27"
     os_family: Windows
     shell: PowerShell 7.6.7
@@ -206,9 +206,9 @@ machine_profiles:
       - pip constraints file preserved PyTorch 2.6.0 CUDA during audio-separator installation.
       - onnxruntime-gpu 1.31.0 requested CUDA 13 DLLs; pinned to 1.24.4 to match CUDA 12 Torch. Subsequent environment probe showed no CUDA DLL warnings.
       - Default model directory /tmp/audio-separator-models/ needs override to D: before downloading checkpoints.
-  - id: platform-03
-    status: pending_identification
-    label: Third benchmark platform (TBD)
+  - id: laptop-omen
+    status: pending_inventory
+    label: Laptop Omen
     unknowns:
       - hardware_and_software_inventory
     performance_tests: []

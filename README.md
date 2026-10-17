@@ -4,7 +4,9 @@
 
 Song Harbor combines structured composition, section-level direction, stem-level editing, multiple interchangeable music models, audio processing, remixing, and reconstruction of imported music. The project owns its arrangement data; no generator owns the project format.
 
-Status: discovery and technical validation. **No implementation or model performance is yet claimed.**
+Status: M0 six-stem separation feasibility validated on the primary desktop by user listening tests. Initial local UI/backend vertical slice implemented in `app/` but **not yet installed or smoke-tested on the user's machine**. Production packaging and model-weight licensing remain open.
+
+**Try the M0 entry UI:** [setup and acceptance checks](app/README.md). The frontend consumes [TWS UI](https://github.com/Three-Wheeled-Sloth-Studio/TWS-UI), whose canonical guidance is [TWS Design Principles](https://github.com/Three-Wheeled-Sloth-Studio/TWS-Design-Principles).
 
 Start here:
 - [Product vision](refs/product/vision.md)

@@ -159,7 +159,13 @@ machine_profiles:
         user_listening_assessment: "Smoke test: pass"
         gpu_inference_confirmed_by_logs: false
         peak_vram_observed: null
-        output_alignment_measured: false
+        output_format_alignment_verified: true
+        verified_stems: [Bass, Drums, Other, Vocals]
+        output_sample_rate_hz: 48000
+        output_channels: 2
+        output_duration_seconds_each: 30.0
+        sample_level_alignment_measured: false
+        reconstruction_error_measured: false
     notes:
       - User closed obvious competing apps, but approximately 2 GiB remains allocated on GPU; defer clearing until needed.
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.

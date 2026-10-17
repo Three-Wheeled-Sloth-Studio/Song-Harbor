@@ -9,7 +9,7 @@ tags: [handoff]
 
 ## Accepted Baseline
 
-Song Harbor is the TWS Studios working title. A standalone local-first product must support stem/section-level music editing and generation, swappable models, plugins/LoRA/LoKr, remix/cover, imported-track reconstruction, and future optional training/cloud execution. Reference system RTX 4070 12 GB VRAM / 96 GB RAM. Infra Choir is a consumer, not co-brand. Accepted facts are in `refs/planning/decisions.yaml`. **SH-DEC-009 accepts generation-first release sequencing.** Full mixed-song reconstruction and guided remix follow, rather than gate, the initial standalone generation-first release.
+Song Harbor is the TWS Studios working title. A standalone local-first product must support stem/section-level music editing and generation, swappable models, plugins/LoRA/LoKr, remix/cover, imported-track reconstruction, and future optional training/cloud execution. Reference system RTX 4070 12 GB VRAM / 96 GB RAM. Infra Choir is a consumer, not co-brand. Accepted facts are in `refs/planning/decisions.yaml`. **SH-DEC-009 accepts generation-first comprehensive release sequencing, while SH-DEC-010 makes a self-contained stem separator the first functional deliverable.** Full mixed-song reconstruction and guided remix follow, rather than gate, the initial standalone generation-first release.
 
 ## What Landed
 
@@ -21,14 +21,17 @@ No music app runtime, technical feasibility measurements or confirmed production
 
 ## Next Slice
 
+**Priority zero: Stem Separation Workbench, ahead of generation.**
+
 1. Finish the Agent Academy harness and validation, creating a stable agent re-entry workflow.
-2. Define a reproducible benchmark fixture pack and experiment manifest for two local model backends.
-3. Run controlled generation-first tests of full generation, localized edits, directed independent stems and score-conditioned handoff on reference hardware. Import analysis is optional bounded early discovery, not a release gate.
+2. Prototype python-audio-separator with legally reviewed 2/4-stem models; measure 12 GB VRAM, audio quality and alignment.
+3. Build standalone-compatible separation utility: batch, progress, preview, export, manifests. Then resume ACE-Step/YuE2 generation benchmark.
 4. Record observed capabilities, model licenses and measurable go/no-go results; only then finalize adapter and project schema contracts.
 
 ## Required Reads For Next Slice
 
-- `refs/planning/implementationRoadmap.md`: Stage 0/1 experiment definition and exit criteria.
+- `refs/planning/implementationRoadmap.md`: M0 separator gate and subsequent generation sequence.
+- `refs/planning/stemSeparationDiscovery.md`: candidates, licensing and benchmark criteria.
 - `refs/product/requirements.md`: required track, section and local capability outcomes.
 - `refs/planning/decisions.yaml`: accepted boundaries versus proposals.
 - `refs/planning/openQuestions.yaml`: unresolved technical and release decisions.
@@ -40,7 +43,7 @@ No music app runtime, technical feasibility measurements or confirmed production
 
 ## Do Not Reopen
 
-Song Harbor working title/repo, TWS Studios ownership, Infra Choir brand independence, local-first/standalone, future-not-MVP cloud/training policy, and generation-first release sequence (SH-DEC-009).
+Song Harbor working title/repo, TWS Studios ownership, Infra Choir brand independence, local-first/standalone, future-not-MVP cloud/training policy, and generation-first release sequence (SH-DEC-009), with separator first (SH-DEC-010).
 
 ## Validation
 

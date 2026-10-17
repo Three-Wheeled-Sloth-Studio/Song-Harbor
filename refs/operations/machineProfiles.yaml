@@ -7,6 +7,7 @@ machine_profiles:
     label: Laptop Predator
     observed_at_local: "2026-10-17 08:44:53"
     os_family: Windows
+    os_build_observed: '10.0.26100'
     shell: PowerShell 7.6.7
     gpu:
       model: NVIDIA GeForce GTX 1660 Ti
@@ -49,19 +50,24 @@ machine_profiles:
       onnx_providers: [TensorrtExecutionProvider, CUDAExecutionProvider, CPUExecutionProvider]
       torch_cuda_detected: true
       ffmpeg_detected: true
+      environment_info_observed: '2026-10-17 10:40:10'
+      default_model_location_reported: '/tmp/audio-separator-models/'
+      command_line_model_directory_option: not_yet_checked
       environment_probe_passed: true
       model_path_needs_override: true
       inference_tested: false
     unknowns:
-      - os_version
       - cuda_toolkit_installed
       - ffmpeg_executable_location
-      - storage_and_free_space
     performance_tests: []
     notes:
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.
       - CUDA reported by nvidia-smi is driver capability, not proof of CUDA toolkit or GPU-enabled PyTorch.
       - FFmpeg binary displays --enable-gpl and --enable-version3; redistribution requires review.
+      - audio-separator 0.47.0 install selected torch 2.14.1+cpu and broke torchaudio 2.6.0+cu126; manually restored torch 2.6.0+cu126 and torchaudio, plus torchvision 0.21.0+cu126 using pip --no-deps.
+      - Installed onnxruntime-gpu 1.24.4 after initial ModuleNotFoundError. Provider listing and audio-separator --env_info succeed; no separation inference yet.
+      - pip check output after final repair not explicitly supplied. Recheck on resumption.
+      - Paused prior to checking --model_file_dir CLI option and installing/downloading a specific separation checkpoint.
   - id: primary-desktop
     status: pending_direct_measurement
     label: Primary desktop

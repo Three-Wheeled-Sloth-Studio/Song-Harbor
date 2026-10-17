@@ -4,14 +4,16 @@ This is a **local vertical slice**, not a bundled standalone installer yet. The 
 
 ## Current machine setup (Windows)
 
-Prerequisites: Node.js + npm, FFmpeg on PATH, existing working `D:\Apps\SongHarbor\.venv` with CUDA PyTorch and `audio-separator[gpu]` already validated. Check out Song-Harbor so the repository root is `D:\Apps\SongHarbor`, or supply a root path to run.ps1 that contains the .venv and models. **Do not overwrite an existing project directory without inspecting it first.**
+Prerequisites: Node.js + npm, FFmpeg on PATH, existing working `D:\Apps\SongHarbor\.venv` with CUDA PyTorch and `audio-separator[gpu]` already validated. Because `D:\Apps\SongHarbor` already holds the validated `.venv` and downloaded models, clone the source into a **subdirectory**. Point `run.ps1 -Root` at the parent data/runtime folder, not the source checkout. **Do not overwrite the existing environment or downloaded models.**
 
-From a checkout of this repo:
+From PowerShell on the desktop:
 
 ```powershell
+git clone https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor.git D:\Apps\SongHarbor\source
+Set-Location D:\Apps\SongHarbor\source
 & "D:\Apps\SongHarbor\.venv\Scripts\python.exe" -m pip install -r app\backend\requirements.txt
 npm install --prefix app\frontend
-.\app\run.ps1
+.\app\run.ps1 -Root D:\Apps\SongHarbor
 ```
 
 Opens local interface at http://127.0.0.1:5173. Backend listens only on 127.0.0.1:8765 and executes audio-separator.exe from the active virtual environment; no remote upload. Source files are copied into `data/jobs/<id>` and left untouched at their original location. Download stems individually or open the local output folder.

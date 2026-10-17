@@ -55,3 +55,13 @@ Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM a
 - **Predator:** environment passes CUDA compute and separator initialization, but no inference. On resumption, verify final `pip check`, check model storage CLI option, set `G:\Apps\SongHarbor\models`, clear checkpoint licensing, then perform 20-30-second first 2-stem smoke test.
 - **Primary desktop:** user moving to reference RTX 4070 12 GB / 96 GB workstation. Start independently with `py -0p`, `nvidia-smi`, `ffmpeg -version`, physical RAM and free preferred-drive space. Do not carry Predator's Python paths or venv assumptions to another machine. Build isolated environment after inventory.
 - **Third platform:** to be identified. Use same fixture/quality rubric when available.
+
+## First completed audio smoke test (primary desktop, 2026-10-17)
+
+- Run ID: `desktop-20261017-vr-2stem-001`.
+- Source: locally produced `Raise the Neon Black`; 30 seconds starting at 0:30, stereo 48 kHz original 16-bit WAV, exported to 24-bit PCM test WAV (bit-depth conversion does not create fidelity).
+- Engine: audio-separator 0.47.0, `1_HP-UVR.pth` VR vocals/instrumental checkpoint, torch 2.6.0+cu126; model integrity hash reported as `b5f988cd3e891dca7253bf5f0f3427c7`.
+- Output: user confirms quick listening test sounds well separated; no objective artifact, reconstruction, timing, or stem-file count measurements yet.
+- `Measure-Command` elapsed: **21.9218053 s** for 30 s input, ratio **0.7307x source duration**, approximately **1.37x real time** (includes startup/model loading).
+- Unknown: captured GPU utilization/peak VRAM, whether logs confirm inference GPU placement, output sample count and exact stem alignment, repeatability, licensing of checkpoint weights. Do not treat a passing smoke test as proof of full production readiness.
+- Next functional test: 4-stem vocals/drums/bass/other, then instrument-specific model capabilities; separating overlapping individual singers is a distinct source-separation/speaker task with variable feasibility.

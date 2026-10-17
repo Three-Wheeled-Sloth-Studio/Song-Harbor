@@ -102,11 +102,26 @@ machine_profiles:
       pip_version: "24.0"
       interpreter_verified: true
     other_drive_free_gib_observed: { "C:": 209.70, "G:": 199.30 }
+    pytorch:
+      virtualenv_torch: '2.6.0+cu126'
+      virtualenv_torchaudio: '2.6.0+cu126'
+      virtualenv_torchvision: '0.21.0+cu126'
+      cuda_available: true
+      gpu_execution_verified: true
+      test_operation: '1024x1024 CUDA matrix multiplication'
+    separator_runtime:
+      version: '0.47.0'
+      onnxruntime_gpu: '1.24.4'
+      torch_cuda_detected: true
+      onnx_cuda_provider_available: true
+      ffmpeg_detected: true
+      environment_probe_passed: true
+      pip_check_passed: true
+      model_path_needs_override: true
+      inference_tested: false
     unknowns:
       - python_311_runtime_verification
       - virtual_environment
-      - torch_cuda_availability
-      - onnx_cuda_availability
       - stem_inference
     performance_tests: []
     notes:
@@ -115,6 +130,9 @@ machine_profiles:
       - Existing yue-server.exe and other creative applications were running during baseline; avoid disrupting them.
       - System default Python 3.14 not selected; prefer isolated Python 3.11 environment for parity with Predator.
       - FFmpeg binary displays --enable-gpl and --enable-version3; redistribution requires review.
+      - pip constraints file preserved PyTorch 2.6.0 CUDA during audio-separator installation.
+      - onnxruntime-gpu 1.31.0 requested CUDA 13 DLLs; pinned to 1.24.4 to match CUDA 12 Torch. Subsequent environment probe showed no CUDA DLL warnings.
+      - Default model directory /tmp/audio-separator-models/ needs override to D: before downloading checkpoints.
   - id: platform-03
     status: pending_identification
     label: Third benchmark platform (TBD)

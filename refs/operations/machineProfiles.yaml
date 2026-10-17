@@ -94,8 +94,10 @@ machine_profiles:
       version: "8.1-essentials_build-www.gyan.dev"
       gpl_v3_enabled_build: true
     ram_gib_observed: 95.1035
+    preferred_work_drive: "D:"
+    work_drive_free_gib_observed: 1571.30
+    other_drive_free_gib_observed: { "C:": 209.70, "G:": 199.30 }
     unknowns:
-      - preferred_work_drive_and_free_space
       - python_311_runtime_verification
       - virtual_environment
       - torch_cuda_availability
@@ -103,6 +105,7 @@ machine_profiles:
       - stem_inference
     performance_tests: []
     notes:
+      - User closed obvious competing apps, but approximately 2 GiB remains allocated on GPU; defer clearing until needed.
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.
       - Existing yue-server.exe and other creative applications were running during baseline; avoid disrupting them.
       - System default Python 3.14 not selected; prefer isolated Python 3.11 environment for parity with Predator.

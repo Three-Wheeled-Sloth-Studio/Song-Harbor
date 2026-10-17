@@ -104,3 +104,9 @@ User reports six-stem isolation is **mostly good**. Guitar stem picks up some in
 ## Current default model decision (2026-10-17)
 
 User selected **`htdemucs_6s.yaml` as the current baseline** for continued Song Harbor tests. Use it for full-song, performance, quality, and hardware comparisons by default. The four-stem and VR two-stem models remain reference alternatives, not the present default. For current production needs, clean vocal and percussion stems are the primary qualitative acceptance criteria; modest guitar-versus-Other bleed is tolerated. This is a testing baseline, not a final release or licensing decision.
+
+## Six-stem full-track timing (primary desktop, 2026-10-17)
+
+- Requested `htdemucs_6s.yaml` on original 3:28.20 (208.20 s) stereo 48 kHz `Raise the Neon Black.wav`, destination `D:\Apps\SongHarbor\tests\full-song-6`.
+- PowerShell `Measure-Command` result **15.7727548 s**; nominal **13.2× real-time speed** if processing succeeded.
+- **Provisional, not yet a passed full-track inference test:** `Measure-Command` can produce time even when an invoked external process errors, and no full console output or produced stem list has been provided. Verify six output stems with ≈208.20 s duration and listen before accepting performance result. No peak GPU memory capture.

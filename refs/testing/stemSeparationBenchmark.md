@@ -79,3 +79,10 @@ Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM a
 ## Four-stem output inspection (primary desktop)
 
 User ran ffprobe on four `htdemucs` WAV outputs. Bass, Drums, Other and Vocals each report 48,000 Hz, 2 channels, and exactly 30.000000 s duration. This establishes format/duration parity; sample-level alignment and mix reconstruction accuracy are not yet measured.
+
+## Four-stem reconstruction check (primary desktop)
+
+- Python `soundfile` and `numpy` loaded original 30 s WAV and all four outputs. Each output shape was **(1,440,000, 2)**, matching 48 kHz stereo x 30 s.
+- Original RMS: **0.15053791521019433**; sample-domain residual `original - sum(stems)` RMS: **0.004297088053176496**, or about **2.85%** of original RMS.
+- Pearson sample correlation between original and summed stems: **0.9996214151357643**.
+- These measurements support close waveform reconstruction, not perceptually transparent stems or exact null; no listening evaluation of residual and no stem artifact scoring yet.

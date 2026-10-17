@@ -130,6 +130,19 @@ machine_profiles:
       - virtual_environment
       - stem_inference
     performance_tests:
+      - run_id: desktop-20261017-demucs-6stem-full-001
+        test_type: six_stem_full_song
+        model: htdemucs_6s.yaml
+        model_architecture: Demucs
+        source_track: Raise the Neon Black
+        source_duration_seconds: 208.20
+        elapsed_seconds: 15.7727548
+        realtime_factor: 0.075758
+        output_format: WAV
+        expected_stems: [Vocals, Drums, Bass, Guitar, Piano, Other]
+        stems_verified: false
+        listening_assessment: pending
+        peak_vram_observed: null
       - run_id: desktop-20261017-demucs-6stem-001
         test_type: six_stem_smoke
         model: htdemucs_6s.yaml

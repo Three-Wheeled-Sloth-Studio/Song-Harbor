@@ -118,7 +118,8 @@ machine_profiles:
       environment_probe_passed: true
       pip_check_passed: true
       model_path_needs_override: true
-      inference_tested: false
+      inference_tested: true
+      two_stem_smoke_test_passed: true
       model_directory: 'D:\Apps\SongHarbor\models'
       downloaded_test_model: '1_HP-UVR.pth'
       downloaded_test_model_architecture: VR
@@ -128,7 +129,24 @@ machine_profiles:
       - python_311_runtime_verification
       - virtual_environment
       - stem_inference
-    performance_tests: []
+    performance_tests:
+      - run_id: desktop-20261017-vr-2stem-001
+        test_type: two_stem_smoke
+        model: 1_HP-UVR.pth
+        model_architecture: VR
+        source_track: Raise the Neon Black
+        source_excerpt_start_seconds: 30
+        input_duration_seconds: 30
+        input_format: WAV
+        input_sample_rate_hz: 48000
+        input_channels: 2
+        elapsed_seconds: 21.9218053
+        realtime_factor: 0.730727
+        output_format: WAV
+        user_listening_assessment: "Sounds pretty well separated in quick smoke test"
+        gpu_inference_confirmed_by_logs: false
+        peak_vram_observed: null
+        output_alignment_measured: false
     notes:
       - User closed obvious competing apps, but approximately 2 GiB remains allocated on GPU; defer clearing until needed.
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.

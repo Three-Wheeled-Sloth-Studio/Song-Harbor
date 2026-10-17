@@ -1,11 +1,23 @@
 version: 1
 schema: refs/schemas/schemaRegistry.yaml
-updated: 2026-10-16
+updated: 2026-10-17
 todos:
   - id: SH-TODO-001
     status: open
     area: agent-academy
     summary: Complete full refs harness bootstrap and run source-catalog, OKF index, context generator and initialized validation gates.
+  - id: SH-TODO-012
+    status: open
+    area: separation
+    summary: Prototype python-audio-separator and verify specific 2-stem and 4-stem model checkpoint licensing.
+  - id: SH-TODO-013
+    status: open
+    area: separation
+    summary: Benchmark separation quality, alignment and resource usage against Demucs and optional MSST on reference hardware.
+  - id: SH-TODO-014
+    status: open
+    area: separation
+    summary: Build local batch queue, model picker, progress, solo/mute preview, and lossless aligned output with provenance as the first deliverable.
   - id: SH-TODO-002
     status: open
     area: research

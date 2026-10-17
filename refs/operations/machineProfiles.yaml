@@ -27,7 +27,13 @@ machine_profiles:
       gpl_v3_enabled_build: true
     ram_gib_observed: 15.843
     pytorch:
-      installed_in_python311: false
+      installed_in_system_python311: false
+      virtualenv_torch: '2.6.0+cu126'
+      virtualenv_torchaudio: '2.6.0+cu126'
+      cuda_available: true
+      gpu_execution_verified: true
+      test_operation: '1024x1024 CUDA matrix multiplication'
+      test_result: 'torch.Size([1024, 1024])'
     preferred_work_drive: 'G:'
     work_drive_free_gib_observed: 677.17
     venv:
@@ -35,12 +41,10 @@ machine_profiles:
       creation_command_completed_without_error: true
       interpreter_verified: true
       python_version: '3.11.2'
-      pip_version: '22.3.1'
+      pip_version: '26.2.1'
       pip_location: 'G:\Apps\SongHarbor\.venv\Lib\site-packages\pip'
     unknowns:
       - os_version
-      - pytorch_cuda_available
-      - pytorch_cuda_available
       - cuda_toolkit_installed
       - ffmpeg_executable_location
       - storage_and_free_space

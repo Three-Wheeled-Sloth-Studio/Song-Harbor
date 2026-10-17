@@ -207,8 +207,13 @@ machine_profiles:
       - onnxruntime-gpu 1.31.0 requested CUDA 13 DLLs; pinned to 1.24.4 to match CUDA 12 Torch. Subsequent environment probe showed no CUDA DLL warnings.
       - Default model directory /tmp/audio-separator-models/ needs override to D: before downloading checkpoints.
   - id: laptop-omen
-    status: pending_inventory
+    status: user_reported_functional_smoke_pass
     label: Laptop Omen
+    preferred_work_drive: 'C:'
+    application_root: 'C:\\Apps\\SongHarbor'
+    bootstrap_batch_launcher_user_verified: true
+    six_stem_splitter_user_verified: true
+    test_details: 'User confirmed launcher works and splitter works on 2026-10-17; GPU, runtime timing and exact song fixture not supplied'
     unknowns:
       - hardware_and_software_inventory
     performance_tests: []

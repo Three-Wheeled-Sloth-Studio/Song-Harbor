@@ -1,0 +1,51 @@
+---
+type: Test Protocol
+title: Cross-Platform Stem Separation Benchmark
+description: Track hardware environments, install capability, performance and quality across three or more systems.
+status: draft
+tags: [benchmark, hardware, audio, separation]
+---
+# Cross-Platform Stem Separation Benchmark
+
+## Source of truth
+
+- Machine inventory: [machineProfiles.yaml](../operations/machineProfiles.yaml)
+- Engine candidates and licensing: [stemSeparationDiscovery.md](../planning/stemSeparationDiscovery.md)
+- Each test run: a unique ID and an evidence record. Do not mistake environment readiness for a successful separation.
+
+## Platform targets
+
+| Platform ID | Current information | Status |
+| --- | --- | --- |
+| laptop-predator | GTX 1660 Ti 6 GB, NVIDIA driver 572.47, Windows PowerShell 7.6.7, Python 3.11/3.10/Anaconda, FFmpeg 4.2.3 | Inventory started; no separator installed or tested |
+| primary-desktop | RTX 4070 12 GB, 96 GB RAM reported previously | Direct baseline pending |
+| platform-03 | Third device to be supplied | Pending |
+
+## Recommended test ladder per platform
+
+0. Inventory: OS, CPU, physical RAM, GPU, VRAM, driver, Python, FFmpeg, free disk, PyTorch GPU capability, idle VRAM and competing loads.
+1. Environment: isolated virtual environment, package and dependency install versions, CUDA availability and model retrieval, no modifications to existing music/Comfy installs.
+2. Smoke test: 20-30 s source, 2 stems. Record model ID/checkpoint/hash and output.
+3. Four-stem test: exact same fixture, record alignment, runtime, artifacts and peak VRAM.
+4. Full-song test: same source (authorized/owned), cold and warm runs; log input duration and elapsed time.
+5. Quality: blind listening where possible, bass/transient quality, vocal bleed, phase/stereo; compare re-summed stems with source, document differences.
+6. Degradation: try GPU and available CPU fallback; OOM handling and recommended chunk sizes; try reduced RAM/VRAM profiles.
+7. Batch and export: multiple songs, WAV/FLAC, preserved sample count/rate, no source modification, cancellation/retry.
+
+## Run record fields
+
+- run_id, timestamp, machine_id, OS and GPU/driver, tool and version/commit
+- Python, torch, CUDA-runtime build, CUDA available, optional FFmpeg path/version
+- checkpoint name, source URL, explicit weight license status, model hash, separation mode and settings
+- input filename or anonymous fixture ID, input SHA256, duration, sample rate/channels
+- baseline VRAM; peak allocated/used VRAM; peak host RAM; elapsed seconds; real-time factor (elapsed / source duration)
+- output stems, sample count and alignment, output format, reconstruction delta where measured
+- perceived quality, bleed/artifacts, error traceback, success/failure and recommended fallback
+
+## Comparison guardrails
+
+Use identical authorized source fixtures and matching input sample rate and channel layout where supported. Do not compare absolute run times without noting shared GPU loads, power mode, thermal throttling, disk/cache state, and cold/warm status. Always distinguish observed results, expectations and unknowns. A passed smoke test does not imply commercially redistributable checkpoints.
+
+## Current initial observation
+
+Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM and 830 MiB in use; NVIDIA-SMI 572.47, supported CUDA driver interface 12.8. PowerShell 7.6.7, Python launcher default 3.11, and FFmpeg 4.2.3 with GPL/version3 build options. System RAM and PyTorch availability have not yet been measured. No model inference has been run.

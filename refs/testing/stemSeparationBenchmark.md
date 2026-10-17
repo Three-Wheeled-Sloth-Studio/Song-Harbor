@@ -75,3 +75,7 @@ Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM a
 - User listening result: **“Smoke test: pass.”** Full console logs, exact output file names/count, model checkpoint hash, actual GPU utilization, peak VRAM, alignment and artifact measurements have not yet been supplied independently; treat as user-confirmed smoke test, not comprehensive validation.
 - Comparison to first 2-stem VR run (21.9218053 s): ≈ **2.15 ×** faster in observed wall time. Models differ and cold/warm model cache effects may be significant, so repeat controlled runs before inferring architectural speed advantage.
 - Follow-up: inspect four output stems and filenames; measure sample rate, channel count, sample counts, stem alignment and quality; record checkpoint provenance/licensing; repeat both tests with matching cold/warm conditions.
+
+## Four-stem output inspection (primary desktop)
+
+User ran ffprobe on four `htdemucs` WAV outputs. Bass, Drums, Other and Vocals each report 48,000 Hz, 2 channels, and exactly 30.000000 s duration. This establishes format/duration parity; sample-level alignment and mix reconstruction accuracy are not yet measured.

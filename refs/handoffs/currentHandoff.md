@@ -17,19 +17,16 @@ Product vision, requirements, architecture direction, decisions, open questions,
 
 ## Current Evidence Or Gap
 
-Three-platform benchmark tracking is initialized in `refs/operations/machineProfiles.yaml` and `refs/testing/stemSeparationBenchmark.md`. Laptop Predator inventory observed GTX 1660 Ti 6 GB, NVIDIA driver 572.47 and Python 3.11, but GPU-enabled PyTorch and RAM remain unknown. Primary desktop and third platform are pending direct measurements.
+Laptop Predator setup (2026-10-17) reached **environment validated, inference not yet attempted**. GTX 1660 Ti 6 GB, RAM 15.843 GiB, Windows build 10.0.26100, driver 572.47; Python 3.11.2 isolated in `G:\Apps\SongHarbor\.venv`; torch/torchaudio 2.6.0+cu126, torchvision 0.21.0+cu126, onnxruntime-gpu 1.24.4, audio-separator 0.47.0. Torch CUDA matrix multiplication succeeded and `audio-separator --env_info` detected Torch CUDA, ONNX CUDA provider, and FFmpeg 4.2.3. Pip initially upgraded torch to CPU-only 2.14.1; compatible CUDA packages restored with --no-deps. Missing ONNX Runtime was corrected by installing onnxruntime-gpu. Default model directory is /tmp/audio-separator-models/ and needs explicit G: override. Final pip check was not supplied. No model download or stem separation performed.
 
-
-No music app runtime, technical feasibility measurements or confirmed production stack. Full Agent Academy harness and generated indexes are still not verified as initialized. The generation-first sequencing is accepted, while detailed milestone acceptance thresholds and the implementation stack remain proposed. Work remains to prove source isolation, independent stem output and reliable 12 GB execution.
+The user is moving to the **primary desktop**. Its previously reported RTX 4070 12 GB and 96 GB RAM are pending direct verification. Three-machine benchmark process is captured in `refs/testing/stemSeparationBenchmark.md`. No product runtime exists; full Agent Academy initialized-mode validation still pending.
 
 ## Next Slice
 
-**Priority zero: Stem Separation Workbench, ahead of generation.**
-
-1. Finish the Agent Academy harness and validation, creating a stable agent re-entry workflow.
-2. Prototype python-audio-separator with legally reviewed 2/4-stem models; measure 12 GB VRAM, audio quality and alignment.
-3. Build standalone-compatible separation utility: batch, progress, preview, export, manifests. Then resume ACE-Step/YuE2 generation benchmark.
-4. Record observed capabilities, model licenses and measurable go/no-go results; only then finalize adapter and project schema contracts.
+1. **Primary desktop first:** inventory Python installations, GPU/driver, FFmpeg, physical RAM and available storage. Ask for output, then select an isolated environment location. Do not copy Predator paths.
+2. Verify CUDA Torch in the desktop environment; avoid letting audio-separator pip dependencies silently replace the selected CUDA build. Check `pip check`.
+3. Install audio-separator and onnxruntime-gpu as needed; verify `--env_info`, configure a known model directory, then select a legally reviewable model for a short audio smoke test.
+4. Later resume Predator at model-dir CLI inspection and a 2-stem short test. Compare same fixture across environments and keep provenance/performance separate.
 
 ## Required Reads For Next Slice
 

@@ -17,7 +17,7 @@ tags: [benchmark, hardware, audio, separation]
 
 | Platform ID | Current information | Status |
 | --- | --- | --- |
-| laptop-predator | GTX 1660 Ti 6 GB, NVIDIA driver 572.47, Windows PowerShell 7.6.7, Python 3.11/3.10/Anaconda, FFmpeg 4.2.3 | Inventory started; no separator installed or tested |
+| laptop-predator | GTX 1660 Ti 6 GB, NVIDIA driver 572.47, Windows PowerShell 7.6.7, Python 3.11/3.10/Anaconda, FFmpeg 4.2.3 | Python/Torch/ONNX/CUDA setup complete; separator environment probe passed, no audio inference yet |
 | primary-desktop | RTX 4070 12 GB, 96 GB RAM reported previously | Direct baseline pending |
 | platform-03 | Third device to be supplied | Pending |
 
@@ -48,4 +48,10 @@ Use identical authorized source fixtures and matching input sample rate and chan
 
 ## Current initial observation
 
-Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM and 830 MiB in use; NVIDIA-SMI 572.47, supported CUDA driver interface 12.8. PowerShell 7.6.7, Python launcher default 3.11, and FFmpeg 4.2.3 with GPL/version3 build options. System RAM and PyTorch availability have not yet been measured. No model inference has been run.
+Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM and 830 MiB in use; NVIDIA-SMI 572.47, supported CUDA driver interface 12.8. PowerShell 7.6.7, Python launcher default 3.11, and FFmpeg 4.2.3 with GPL/version3 build options. System RAM observed 15.843 GiB. Isolated Python 3.11.2 virtual environment created on G:; torch 2.6.0+cu126 ran a 1024 x 1024 CUDA matrix multiplication on GTX 1660 Ti. audio-separator 0.47.0 installed; dependency resolver initially changed torch to CPU 2.14.1 and caused a torchaudio conflict. CUDA torch/vision/audio versions were restored with --no-deps. onnxruntime-gpu 1.24.4 installed; reported providers include TensorRT, CUDA and CPU. audio-separator --env_info successfully detected FFmpeg, Torch CUDA and ONNX CUDA. No model downloaded, no separation attempted, no latency or fidelity claims. Default model path displayed as /tmp/audio-separator-models/ and requires explicit G: configuration. Final pip check not provided.
+
+## 2026-10-17 pause checkpoint
+
+- **Predator:** environment passes CUDA compute and separator initialization, but no inference. On resumption, verify final `pip check`, check model storage CLI option, set `G:\Apps\SongHarbor\models`, clear checkpoint licensing, then perform 20-30-second first 2-stem smoke test.
+- **Primary desktop:** user moving to reference RTX 4070 12 GB / 96 GB workstation. Start independently with `py -0p`, `nvidia-smi`, `ffmpeg -version`, physical RAM and free preferred-drive space. Do not carry Predator's Python paths or venv assumptions to another machine. Build isolated environment after inventory.
+- **Third platform:** to be identified. Use same fixture/quality rubric when available.

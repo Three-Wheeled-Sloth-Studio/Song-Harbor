@@ -140,8 +140,8 @@ machine_profiles:
         realtime_factor: 0.301557
         output_format: WAV
         expected_stems: [Vocals, Drums, Bass, Guitar, Piano, Other]
-        stems_verified: false
-        listening_assessment: pending
+        stems_verified: true
+        listening_assessment: 'Mostly good; guitar captures some sources expected in Other; vocals and percussion separate cleanly for current production needs'
         peak_vram_observed: null
       - run_id: desktop-20261017-vr-2stem-001
         test_type: two_stem_smoke

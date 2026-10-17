@@ -147,6 +147,19 @@ machine_profiles:
         gpu_inference_confirmed_by_logs: false
         peak_vram_observed: null
         output_alignment_measured: false
+      - run_id: desktop-20261017-demucs-4stem-001
+        test_type: four_stem_smoke
+        model: htdemucs.yaml
+        model_architecture: Demucs
+        source_excerpt_id: source-30s.wav
+        input_duration_seconds: 30
+        elapsed_seconds: 10.1791727
+        realtime_factor: 0.339306
+        output_format: WAV
+        user_listening_assessment: "Smoke test: pass"
+        gpu_inference_confirmed_by_logs: false
+        peak_vram_observed: null
+        output_alignment_measured: false
     notes:
       - User closed obvious competing apps, but approximately 2 GiB remains allocated on GPU; defer clearing until needed.
       - GPU used memory is a momentary observation and should be remeasured with background loads minimized.

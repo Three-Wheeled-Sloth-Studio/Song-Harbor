@@ -29,6 +29,11 @@ machine_profiles:
     pytorch:
       installed_in_python311: false
     preferred_work_drive: 'G:'
+    work_drive_free_gib_observed: 677.17
+    venv:
+      path: 'G:\Apps\SongHarbor\.venv'
+      creation_command_completed_without_error: true
+      interpreter_verified: false
     unknowns:
       - os_version
       - pytorch_cuda_available

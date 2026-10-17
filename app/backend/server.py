@@ -16,9 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -46,6 +45,12 @@ def safe_name(name: str) -> str:
     return stem + Path(basename).suffix.lower()
 
 
+def require_local_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    if origin and origin not in {"http://127.0.0.1:5173", "http://localhost:5173"}:
+        raise HTTPException(403, "Requests must originate from the local Song Harbor UI")
+
+
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     return {
@@ -57,12 +62,13 @@ def health() -> dict[str, Any]:
 
 
 @app.post("/api/jobs")
-async def submit(file: UploadFile = File(...)) -> dict[str, Any]:
+async def submit(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
+    require_local_origin(request)
     name = safe_name(file.filename or "song.wav")
     if Path(name).suffix not in ALLOWED:
         raise HTTPException(400, "Unsupported audio format")
     with lock:
-        if any(j["status"] in ("queued", "running") for j in jobs.values()):
+        if any(j["status"] in ("uploading", "queued", "running") for j in jobs.values()):
             raise HTTPException(409, "A separation is already running")
         if not SEPARATOR.is_file():
             raise HTTPException(503, "audio-separator.exe not found in this Python environment")
@@ -94,6 +100,11 @@ async def submit(file: UploadFile = File(...)) -> dict[str, Any]:
         raise
     finally:
         await file.close()
+    if size == 0:
+        shutil.rmtree(folder, ignore_errors=True)
+        with lock:
+            jobs.pop(ident, None)
+        raise HTTPException(400, "Audio file is empty")
     job["status"] = "queued"
     job["message"] = "Waiting to start"
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
@@ -155,7 +166,8 @@ def status(ident: str) -> dict[str, Any]:
 
 
 @app.post("/api/jobs/{ident}/cancel")
-def cancel(ident: str) -> dict[str, Any]:
+def cancel(ident: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
     job = jobs.get(ident)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -175,7 +187,8 @@ def download(ident: str, filename: str):
 
 
 @app.post("/api/jobs/{ident}/open-folder")
-def open_folder(ident: str) -> dict[str, bool]:
+def open_folder(ident: str, request: Request) -> dict[str, bool]:
+    require_local_origin(request)
     job = jobs.get(ident)
     if job is None or job["status"] != "complete":
         raise HTTPException(404, "Output folder not available")

@@ -1,0 +1,62 @@
+version: 1
+schema: refs/schemas/schemaRegistry.yaml
+updated: 2026-10-17
+machine_profiles:
+  - id: laptop-predator
+    status: baseline_observed
+    label: Laptop Predator
+    observed_at_local: "2026-10-17 08:44:53"
+    os_family: Windows
+    shell: PowerShell 7.6.7
+    gpu:
+      model: NVIDIA GeForce GTX 1660 Ti
+      vram_mib: 6144
+      driver: "572.47"
+      driver_reported_cuda_max: "12.8"
+      display_driver_model: WDDM
+      baseline_used_vram_mib: 830
+    python:
+      default_launcher: "3.11"
+      versions:
+        - "3.11"
+        - "3.10"
+        - "Anaconda39-64"
+      python_311_path: 'C:\Users\sloth\AppData\Local\Programs\Python\Python311\python.exe'
+    ffmpeg:
+      version: "4.2.3"
+      gpl_v3_enabled_build: true
+    unknowns:
+      - physical_ram
+      - os_version
+      - pytorch_installed
+      - pytorch_cuda_available
+      - cuda_toolkit_installed
+      - ffmpeg_executable_location
+      - storage_and_free_space
+    performance_tests: []
+    notes:
+      - GPU used memory is a momentary observation and should be remeasured with background loads minimized.
+      - CUDA reported by nvidia-smi is driver capability, not proof of CUDA toolkit or GPU-enabled PyTorch.
+      - FFmpeg binary displays --enable-gpl and --enable-version3; redistribution requires review.
+  - id: primary-desktop
+    status: pending_direct_measurement
+    label: Primary desktop
+    gpu:
+      model: NVIDIA RTX 4070
+      vram_gib_reported: 12
+    ram_gib_reported: 96
+    unknowns:
+      - measured_gpu_driver_and_cuda
+      - python_versions
+      - ffmpeg_version
+      - memory_and_storage_baseline
+      - pytorch_cuda_availability
+    performance_tests: []
+    notes:
+      - Preliminary hardware values from previously established workstation details; await direct results.
+  - id: platform-03
+    status: pending_identification
+    label: Third benchmark platform (TBD)
+    unknowns:
+      - hardware_and_software_inventory
+    performance_tests: []

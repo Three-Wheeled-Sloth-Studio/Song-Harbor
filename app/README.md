@@ -6,7 +6,11 @@ This is a **local vertical slice**, not a bundled standalone installer yet. The 
 
 The reusable installer is [`scripts/bootstrap-windows.ps1`](../scripts/bootstrap-windows.ps1). It performs GPU, free-space, Python 3.11 x64, FFmpeg, Git, and npm checks, creates an isolated Python virtual environment, moves transient caches to the chosen work drive, pins CUDA PyTorch and compatible ONNX Runtime versions, installs the six-stem separator and UI, and verifies dependencies plus CUDA arithmetic.
 
-**Use a suitable work drive for Omen, rather than copying Skynet's D: or Predator's G: paths.** From PowerShell 7 after cloning the repository:
+**Laptop Omen uses C: as its only work drive.** The double-click launchers therefore default to `C:\Apps\SongHarbor` for Python, models, and runtime data. Generated data is stored outside the source checkout when the repo is cloned to a separate folder; this C: placement is an explicit hardware-driven exception to the preferred separate-drive policy.
+
+From the cloned repository, double-click `scripts/bootstrap-windows.bat` to install dependencies, then `scripts/launch-song-harbor.bat` to start the UI. The first launcher keeps the console open and prints any failure. Both accept an optional custom root path as their first argument.
+
+Or invoke PowerShell 7 directly from a repository checkout:
 
 ```powershell
 Set-Location <Song-Harbor-repo-checkout>
@@ -14,7 +18,7 @@ Set-Location <Song-Harbor-repo-checkout>
 .\\app\\run.ps1 -Root "E:\\Apps\\SongHarbor"
 ```
 
-Replace `E:\\Apps\\SongHarbor` with a real chosen path on the machine. The bootstrap requires working Git, FFmpeg, NVIDIA driver compatible with CUDA 12.6, Node.js/npm for the UI, and Python 3.11 x64. If `uv` is present, `uv python install 3.11` can provide Python 3.11 before bootstrap. No existing unrelated Python or music-generation environment is modified.
+If you use another machine, replace `C:\\Apps\\SongHarbor` with an appropriate path. The bootstrap requires working Git, FFmpeg, NVIDIA driver compatible with CUDA 12.6, Node.js/npm for the UI, and Python 3.11 x64. If `uv` is present, `uv python install 3.11` can provide Python 3.11 before bootstrap. No existing unrelated Python or music-generation environment is modified.
 
 Use `-SkipUI` to install only the separator backend, or `-SkipModel` to skip downloading the six-stem checkpoint. The script will **fail clearly** if prerequisites or CUDA tests are unavailable; it will not automatically replace drivers or install system software. It must still be tested on Omen and should not be presented as a validated installer until then.
 

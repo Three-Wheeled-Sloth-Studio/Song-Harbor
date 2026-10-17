@@ -119,6 +119,11 @@ machine_profiles:
       pip_check_passed: true
       model_path_needs_override: true
       inference_tested: false
+      model_directory: 'D:\Apps\SongHarbor\models'
+      downloaded_test_model: '1_HP-UVR.pth'
+      downloaded_test_model_architecture: VR
+      downloaded_test_model_md5_reported: b5f988cd3e891dca7253bf5f0f3427c7
+      test_model_download_verified: true
     unknowns:
       - python_311_runtime_verification
       - virtual_environment

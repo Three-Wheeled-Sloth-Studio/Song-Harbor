@@ -1,15 +1,19 @@
 version: 1
 schema: refs/schemas/schemaRegistry.yaml
-updated: 2026-10-16
+updated: 2026-10-17
 roadmap:
   - id: SH-RM-000
     horizon: now
     status: planned
     summary: Complete Agent Academy bootstrap and pin a repeatable discovery and validation environment.
+  - id: SH-RM-005
+    horizon: now
+    status: planned
+    summary: Deliver local standalone-compatible Stem Separation Workbench first; prototype MIT-licensed inference wrapper, verify model-weight rights, benchmark 2/4-stem output on 12 GB, then add batch, preview and export.
   - id: SH-RM-010
     horizon: now
     status: planned
-    summary: Benchmark ACE-Step and YuE2 generation, section surgery, stem-directed generation, model licensing and 12 GB hardware limits; defer in-depth reconstruction research until generation foundation is proven.
+    summary: After usable stem separator, benchmark ACE-Step and YuE2 generation, section surgery, stem-directed generation, model licensing and 12 GB hardware limits; full reconstruction remains later.
   - id: SH-RM-020
     horizon: next
     status: planned

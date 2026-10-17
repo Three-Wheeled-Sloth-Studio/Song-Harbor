@@ -17,6 +17,9 @@ Product vision, requirements, architecture direction, decisions, open questions,
 
 ## Current Evidence Or Gap
 
+Three-platform benchmark tracking is initialized in `refs/operations/machineProfiles.yaml` and `refs/testing/stemSeparationBenchmark.md`. Laptop Predator inventory observed GTX 1660 Ti 6 GB, NVIDIA driver 572.47 and Python 3.11, but GPU-enabled PyTorch and RAM remain unknown. Primary desktop and third platform are pending direct measurements.
+
+
 No music app runtime, technical feasibility measurements or confirmed production stack. Full Agent Academy harness and generated indexes are still not verified as initialized. The generation-first sequencing is accepted, while detailed milestone acceptance thresholds and the implementation stack remain proposed. Work remains to prove source isolation, independent stem output and reliable 12 GB execution.
 
 ## Next Slice

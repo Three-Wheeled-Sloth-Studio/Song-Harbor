@@ -65,3 +65,13 @@ Predator baseline at 2026-10-17 08:44:53: GTX 1660 Ti with 6144 MiB total VRAM a
 - `Measure-Command` elapsed: **21.9218053 s** for 30 s input, ratio **0.7307x source duration**, approximately **1.37x real time** (includes startup/model loading).
 - Unknown: captured GPU utilization/peak VRAM, whether logs confirm inference GPU placement, output sample count and exact stem alignment, repeatability, licensing of checkpoint weights. Do not treat a passing smoke test as proof of full production readiness.
 - Next functional test: 4-stem vocals/drums/bass/other, then instrument-specific model capabilities; separating overlapping individual singers is a distinct source-separation/speaker task with variable feasibility.
+
+## Four-stem smoke test (primary desktop, 2026-10-17)
+
+- Run ID: `desktop-20261017-demucs-4stem-001`.
+- Test input: same 30-second `source-30s.wav` sample as the two-stem run, originating from `Raise the Neon Black`.
+- Engine: audio-separator 0.47.0, requested `htdemucs.yaml` (Demucs four-stem configuration), output format WAV.
+- Elapsed reported by PowerShell `Measure-Command`: **10.1791727 seconds** (0.3393 × source duration; ≈ 2.95 × realtime processing speed).
+- User listening result: **“Smoke test: pass.”** Full console logs, exact output file names/count, model checkpoint hash, actual GPU utilization, peak VRAM, alignment and artifact measurements have not yet been supplied independently; treat as user-confirmed smoke test, not comprehensive validation.
+- Comparison to first 2-stem VR run (21.9218053 s): ≈ **2.15 ×** faster in observed wall time. Models differ and cold/warm model cache effects may be significant, so repeat controlled runs before inferring architectural speed advantage.
+- Follow-up: inspect four output stems and filenames; measure sample rate, channel count, sample counts, stem alignment and quality; record checkpoint provenance/licensing; repeat both tests with matching cold/warm conditions.

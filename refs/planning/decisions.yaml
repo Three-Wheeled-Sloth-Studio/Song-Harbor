@@ -68,3 +68,13 @@ decisions:
       - Early import and separation experiments are permitted as exploratory spikes, not release-gating implementation.
       - Existing-track reconstruction and guided remix remain required subsequent product capabilities.
       - Prioritize generation, section/track control, selective revision, offline packaging, then reconstruction and remix.
+  - id: SH-DEC-010
+    status: accepted
+    date: 2026-10-17
+    decision: Deliver a reusable local stem separator as the first functional Song Harbor deliverable, preceding the generation workbench.
+    rationale: Provides immediate mastering value for existing recordings and a separable capability needed by the eventual music production platform.
+    consequences:
+      - Preserve SH-DEC-009 generation-first sequencing for full native production and the first comprehensive application release.
+      - Implement separation as a focused standalone-compatible utility/worker, not full imported-song reconstruction.
+      - Begin license and 12 GB benchmark discovery with python-audio-separator, Demucs and other compatible engines.
+      - Keep exported separated stems explicitly distinguished from genuinely independently generated stems.

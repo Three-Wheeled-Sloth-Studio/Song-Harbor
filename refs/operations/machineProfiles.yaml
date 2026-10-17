@@ -140,8 +140,8 @@ machine_profiles:
         realtime_factor: 0.075758
         output_format: WAV
         expected_stems: [Vocals, Drums, Bass, Guitar, Piano, Other]
-        stems_verified: false
-        listening_assessment: pending
+        stems_verified: true
+        listening_assessment: 'All six loaded into Audacity and sounded good together; piano absent and sparse bass correctly reflected; exact sample lengths not independently checked'
         peak_vram_observed: null
       - run_id: desktop-20261017-demucs-6stem-001
         test_type: six_stem_smoke

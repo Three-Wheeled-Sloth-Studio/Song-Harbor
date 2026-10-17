@@ -96,6 +96,11 @@ machine_profiles:
     ram_gib_observed: 95.1035
     preferred_work_drive: "D:"
     work_drive_free_gib_observed: 1571.30
+    venv:
+      path: 'D:\Apps\SongHarbor\.venv'
+      python_version: "3.11.15"
+      pip_version: "24.0"
+      interpreter_verified: true
     other_drive_free_gib_observed: { "C:": 209.70, "G:": 199.30 }
     unknowns:
       - python_311_runtime_verification

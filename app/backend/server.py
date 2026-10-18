@@ -315,6 +315,15 @@ def download_mix(ident: str):
     return FileResponse(target, filename=target.name, media_type="audio/wav")
 
 
+@app.get("/api/jobs/{ident}/stream/{filename}")
+def stream_stem(ident: str, filename: str):
+    job = jobs.get(ident)
+    if job is None or job["status"] != "complete" or filename not in job["files"]:
+        raise HTTPException(404, "Stem not available")
+    # Inline streaming supports browser media playback, including seeking via byte ranges.
+    return FileResponse(job["output_path"] / filename, media_type="audio/wav")
+
+
 @app.post("/api/jobs/{ident}/open-folder")
 def open_folder(ident: str, request: Request) -> dict[str, bool]:
     require_local_origin(request)

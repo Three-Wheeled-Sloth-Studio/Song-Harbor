@@ -20,6 +20,9 @@ Write-Host "UI: http://127.0.0.1:5173"
 $frontend = Join-Path $PSScriptRoot "frontend"
 if (-not (Test-Path (Join-Path $frontend "node_modules"))) { throw "Frontend dependencies missing. Run npm install in $frontend" }
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+# Release old Song Harbor dev listeners before binding our fixed localhost ports.
+# This script refuses to kill unrelated apps or active separation jobs.
+& (Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts\prepare-local-ports.ps1') -Repository (Split-Path -Parent $PSScriptRoot)
 $vite = $null
 $instanceToken = [guid]::NewGuid().ToString("N")
 $env:SONG_HARBOR_INSTANCE_TOKEN = $instanceToken

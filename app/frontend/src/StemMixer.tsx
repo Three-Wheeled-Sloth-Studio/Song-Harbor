@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Status } from "@tws-ui/core/react";
+import { Button, IconButton, Status } from "@tws-ui/core/react";
 import { DawHandoff } from "./DawHandoff";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
+const stemSymbols: Record<string,string> = { Vocals:"🎙", Drums:"🥁", Bass:"♭", Guitar:"🎸", Piano:"🎹", Other:"♫" };
+
 
 function labelOf(filename: string) {
   return names.find(label => filename.includes("(" + label + ")")) || filename;
@@ -234,18 +236,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <div className="song-project-controls">
       <label htmlFor="song-project-name">Song project</label>
       <input id="song-project-name" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} />
-      <Button variant="secondary" size="compact" disabled={saving || !title.trim()} onClick={() => { void saveProject(); }}>
-        {saving ? "Saving…" : "Save song"}
-      </Button>
+      <IconButton icon="▣" label="Save song" disabled={saving || !title.trim()} onClick={() => { void saveProject(); }}/>
     </div>
     <div className="mixer-heading">
-      <div><h3>Stem mixer</h3><p>Audition the arrangement before exporting a new mix.</p></div>
-      <Button variant="subtle" size="compact" onClick={() => {
+      <div><h3>Stem mixer</h3></div>
+      <IconButton icon="↶" label="Reset mix" onClick={() => {
         setStems(current => current.map(s => ({ ...s, gain: 100, mute: false, solo: false })));
-      }}>Reset mix</Button>
+      }}/>
     </div>
     <div className="transport">
-      <Button variant="primary" onClick={togglePlayback}>{playing ? "Pause" : "Play"}</Button>
+      <IconButton icon={playing ? "⏸" : "▶"} label={playing ? "Pause" : "Play"} onClick={togglePlayback}/>
       <span className="timecode">{timecode(position)}</span>
       <input type="range" aria-label="Playback position" min={0} max={Math.max(duration, 1)}
         step={0.05} value={Math.min(position, duration || 1)} onChange={e => seek(Number(e.target.value))} />
@@ -258,7 +258,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     </div>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
-        <strong>{s.name}</strong>
+        <strong className="stem-icon-name" title={s.name} aria-label={s.name}>{stemSymbols[s.name] || "♫"}<span className="sr-only">{s.name}</span></strong>
         <div className="track-actions">
           <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
             aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>
@@ -272,22 +272,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     </div>
     <div className="mix-footer">
       <div className="mix-actions">
-        <Button variant="primary" disabled={exporting} onClick={exportMix}>
-          {exporting ? "Rendering WAV…" : "Export mix WAV"}
-        </Button>
-        {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav">Download mix</a>}
+        <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
+          disabled={exporting} onClick={exportMix}/>
+        {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">⇩ WAV</a>}
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
     </div>
     <div className="daw-handoff">
-      <strong>DAW handoff</strong>
-      <Button variant="secondary" onClick={() => setDawOpen(true)}>
-        Export to DAW
-      </Button>
+      <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
     </div>
     {dawOpen && <DawHandoff jobId={jobId} saveProject={saveProject} onClose={() => setDawOpen(false)} />}
     {notice && <p role="status" className="song-save-notice">{notice}</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
-    <p className="mixer-note">Preview uses browser audio streams with periodic synchronization. WAV export is rendered sample-aligned by FFmpeg and preserves the original stems.</p>
+
   </section>;
 }

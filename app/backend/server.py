@@ -389,7 +389,13 @@ def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, A
         raise HTTPException(400, "Song title cannot be blank")
     record["stems"] = [s.model_dump() for s in body.stems]
     record["updated_at"] = time.time()
-    return {"project": projects.write_project(DATA_ROOT, record)}
+    saved = projects.write_project(DATA_ROOT, record)
+    library.adopt_jobs(DATA_ROOT)
+    for song in library.list_songs(DATA_ROOT):
+        if song["legacy_job_id"] == ident:
+            library.rename_song(DATA_ROOT, song["id"], record["title"])
+            break
+    return {"project": saved}
 
 
 class DawTargetRequest(BaseModel):

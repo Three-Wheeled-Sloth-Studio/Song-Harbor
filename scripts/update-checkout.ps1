@@ -56,7 +56,7 @@ if ($LASTEXITCODE -ne 0 -or $ancestor.Trim() -ne $before.Trim()) {
 
 # Capture stderr in text instead of allowing PowerShell native stderr preference
 # to abort an otherwise recoverable update.
-$results = @(& $git.Source -C $Repository -c core.autocrlf=false merge --ff-only FETCH_HEAD 2>&1)
+$results = @(& $git.Source -C $Repository merge --ff-only FETCH_HEAD 2>&1)
 if ($LASTEXITCODE -ne 0) {
   Write-Warning "Update couldn't apply without changing local files. Existing checkout preserved."
   $results | Select-Object -Last 8 | ForEach-Object { Write-Update "  $_" }

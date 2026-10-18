@@ -1,0 +1,23 @@
+name: Frontend build
+on:
+  push:
+    paths:
+      - 'app/frontend/**'
+      - '.github/workflows/frontend-build.yml'
+  pull_request:
+    paths:
+      - 'app/frontend/**'
+      - '.github/workflows/frontend-build.yml'
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --prefix app/frontend
+      - name: Typecheck and bundle
+        run: npm run build --prefix app/frontend

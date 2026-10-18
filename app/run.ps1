@@ -20,11 +20,35 @@ Write-Host "UI: http://127.0.0.1:5173"
 $frontend = Join-Path $PSScriptRoot "frontend"
 if (-not (Test-Path (Join-Path $frontend "node_modules"))) { throw "Frontend dependencies missing. Run npm install in $frontend" }
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+$vite = $null
 $backend = Start-Process -FilePath $python -ArgumentList @((Join-Path $PSScriptRoot "backend\server.py")) -WorkingDirectory $Root -PassThru -NoNewWindow
 try {
-  for ($i=0; $i -lt 30; $i++) {
-    try { $null = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 1; break } catch { Start-Sleep -Milliseconds 300 }
+  $backendReady = $false
+  for ($i=0; $i -lt 45; $i++) {
+    if ($backend.HasExited) { throw "Song Harbor backend exited before reporting healthy (code $($backend.ExitCode))." }
+    try {
+      $response = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 1
+      if ($null -ne $response.separator_ready) { $backendReady = $true; break }
+    } catch { Start-Sleep -Milliseconds 350 }
   }
+  if (-not $backendReady) { throw "Song Harbor backend did not become ready. Check the console for errors." }
+  # Start the Vite server before opening the browser. Otherwise first launch can
+  # briefly display a 404/connection error while frontend dependencies load.
+  $viteCommand = '""' + $npm + '" run dev --prefix "' + $frontend + '""'
+  $vite = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/s", "/c", $viteCommand) -PassThru -NoNewWindow
+  $frontendReady = $false
+  for ($i=0; $i -lt 100; $i++) {
+    if ($vite.HasExited) { throw "Song Harbor frontend exited before becoming ready (code $($vite.ExitCode))." }
+    try {
+      $page = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -TimeoutSec 2 -UseBasicParsing
+      if ($page.StatusCode -eq 200 -and $page.Content -match '<div id="root"') {
+        $frontendReady = $true
+        break
+      }
+    } catch { }
+    Start-Sleep -Milliseconds 300
+  }
+  if (-not $frontendReady) { throw "Song Harbor frontend did not become ready. Check Vite output." }
   if (-not $NoBrowser) {
     $url = "http://127.0.0.1:5173"
     $launched = $false
@@ -69,8 +93,13 @@ try {
       Write-Host "Opened via Windows default HTTP handler."
     }
   }
-  & $npm run dev --prefix $frontend
+  Write-Host "Song Harbor ready. Press Ctrl+C here to stop the app."
+  Wait-Process -Id $vite.Id
 }
 finally {
+  if ($null -ne $vite -and -not $vite.HasExited) {
+    # npm launcher may spawn vite as a child; kill the process tree on shutdown.
+    & taskkill.exe /PID $vite.Id /T /F *> $null
+  }
   if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
 }

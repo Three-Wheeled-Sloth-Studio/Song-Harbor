@@ -86,6 +86,8 @@ def require_local_origin(request: Request) -> None:
 def health() -> dict[str, Any]:
     ffmpeg = dependencies.resolve(APP_ROOT)
     return {
+        "instance_token": os.environ.get("SONG_HARBOR_INSTANCE_TOKEN", ""),
+        "api_features": ["library-v2", "library-remove", "combine-takes", "source-fingerprints"],
         "ready": SEPARATOR.is_file() and bool(ffmpeg),
         "separator_ready": SEPARATOR.is_file(),
         "ffmpeg": ffmpeg,

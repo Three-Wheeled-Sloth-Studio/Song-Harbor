@@ -90,3 +90,16 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .dependency-matches button:hover{border-color:var(--tws-color-border-strong)}
 .dependency-configured{margin-top:16px;border-top:1px solid var(--tws-color-border-normal);padding-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--tws-color-text-muted)}
 .dependency-configured span{overflow-wrap:anywhere;min-width:0}
+
+/* Compact, passive dependency status; never reserve workspace area for setup */
+.header-actions{display:flex;align-items:center;gap:10px}
+.dependency-indicator{position:relative;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;border:1px solid #47606a;border-radius:999px;background:#233540;color:#d5e7e5;cursor:pointer;font-size:18px}
+.dependency-indicator:hover{border-color:#8cc8c6;background:#304854}
+.dependency-indicator:focus-visible{outline:2px solid #8dd7d4;outline-offset:3px}
+.dependency-count{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#9a7052;color:#fff;border:1px solid #17222c;font-size:10px;font-weight:700;line-height:15px;text-align:center}
+.tws-dialog{--tws-color-surface-panel:#1b252f;--tws-color-surface-raised:#202e39;--tws-color-surface-inset:#15212b;--tws-color-text-primary:#ecf0ee;--tws-color-text-muted:#a9b8bf;--tws-color-border-normal:#394f5e;--tws-color-border-strong:#6c8793;--tws-color-action-primary:#68bbbe;--tws-color-action-primary-hover:#85d1d0;--tws-color-action-subtle:#28404c}
+.tws-dialog .dependency-panel{padding:0;margin:0;border:0}
+.tws-dialog .dependency-intro{font-size:12px;margin:0 0 6px}
+.tws-dialog .dependency-choice{padding:10px 0 5px}
+.tws-dialog .dependency-inline{margin:6px 0}
+.tws-dialog .dependency-choice p{margin:6px 0}

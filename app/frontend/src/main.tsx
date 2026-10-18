@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
+import { Button, FormField, IconButton, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
 import type { SavedStem } from "./StemMixer";
 import { FfmpegSetup } from "./FfmpegSetup";
@@ -110,9 +110,14 @@ function App() {
 
   async function separate() {
     if (!file || busy || job && ["queued", "running"].includes(job.status)) return;
+    // This is a recoverable feature action: do not disable it for missing FFmpeg.
     if (!health?.ffmpeg) {
       pendingSeparation.current = true;
       setSetupOpen(true);
+      return;
+    }
+    if (!health.separator_ready) {
+      setError("The stem separator is not installed in this runtime yet. Relaunch Song Harbor to run environment setup.");
       return;
     }
     await startSeparation();
@@ -167,7 +172,8 @@ function App() {
   const running = job && ["queued", "running"].includes(job.status);
   const finished = job?.status === "complete";
   const statusTone = finished ? "success" : job?.status === "error" ? "danger" : running ? "info" : "neutral";
-  const canStart = !!file && !!health?.separator_ready && !busy && !running;
+  const canStart = !!file && !busy && !running;
+  const ffmpegNeeded = !!file && !health?.ffmpeg;
   const missingCount = health?.needs_setup?.length ?? 0;
   function completedSetup(next: Health) {
     setHealth(next);
@@ -229,7 +235,18 @@ function App() {
           <div className="section-label"><span>02</span><h2>Separation</h2></div>
           <div className="model-row"><div><strong>Demucs · Six stems</strong><small>Vocals · Drums · Bass · Guitar · Piano · Other</small></div><Status tone="neutral">Baseline</Status></div>
           <div className="action-row">
-            <Button variant="primary" disabled={!canStart} onClick={separate}>{busy ? "Importing…" : running ? "Separating…" : "Separate stems"}</Button>
+            <span className={"separator-action" + (ffmpegNeeded ? " needs-setup" : "")}
+              title={ffmpegNeeded ? "FFmpeg required — click to locate or install, then separation will begin." : "Separate audio into six stems"}>
+              <IconButton className="separator-trigger" icon={<svg viewBox="0 0 32 32" width="28" height="28"
+                  fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  aria-hidden="true">
+                  <path d="M4 9h5m3 0h16M4 16h12m4 0h8M4 23h18m4 0h2" />
+                  <path d="M9 5v8M16 12v8M22 19v8" />
+                </svg>}
+                label={ffmpegNeeded ? "Separate stems — FFmpeg needed; click to install or locate FFmpeg" : busy ? "Importing audio" : "Separate stems"}
+                disabled={!canStart} onClick={() => {void separate();}} />
+              {ffmpegNeeded && <span className="separator-requirement" aria-hidden="true">!</span>}
+            </span>
             {running && <Button variant="secondary" onClick={cancel}>Cancel</Button>}
           </div>
           {error && <div className="error-message" role="alert">{error}</div>}

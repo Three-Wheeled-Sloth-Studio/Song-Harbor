@@ -26,6 +26,7 @@ export function LibraryHome({onOpenSong, onImport}: {
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   async function refresh(trash = showTrash) {
     const response = await fetch(trash ? ROOT + "/trash" : ROOT);
@@ -35,7 +36,23 @@ export function LibraryHome({onOpenSong, onImport}: {
     setCollections(result.collections);
   }
 
-  useEffect(() => { void refresh().catch(e => setError(String(e))); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    const retry = async () => {
+      for (let i=0;i<4;i++) {
+        try {
+          await refresh(false);
+          if (!cancelled) {setLoading(false);setError("");}
+          return;
+        } catch {
+          if (i<3) await new Promise<void>(resolve => setTimeout(resolve, 350*(i+1)));
+        }
+      }
+      if (!cancelled) {setLoading(false);setError("Library isn't ready yet. Try Refresh.");}
+    };
+    void retry();
+    return () => {cancelled=true;};
+  }, []);
 
   const visible = useMemo(() => songs.filter(song => {
     const text = (song.title + " " + song.imported_filename).toLowerCase();
@@ -212,7 +229,13 @@ export function LibraryHome({onOpenSong, onImport}: {
           void changeAvailability(removedSong,true);
         }}>Undo</Button>
       </div>}
-      {error && <p role="alert" className="error-message">{error}</p>}
+      {loading && <p role="status" className="lib-muted-notice">Loading Library…</p>}
+      {error && <div className="lib-undo" role="alert">{error}
+        <IconButton icon="↻" label="Retry Library loading" onClick={() => {
+          setError(""); setLoading(true);
+          void refresh().then(()=>setLoading(false)).catch(e=>{setLoading(false);setError(String(e));});
+        }}/>
+      </div>}
     </section>
     {helpSong && <Dialog open onOpenChange={open => {if(!open)setHelpSong(null);}}
       title="Song Library help" description={helpSong.title}>

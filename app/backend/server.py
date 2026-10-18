@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import dependencies
 import projects
@@ -29,6 +30,8 @@ DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).res
 MODEL_ROOT = Path(os.environ.get("SONG_HARBOR_MODELS", str(APP_ROOT / "models"))).resolve()
 SEPARATOR = Path(sys.executable).with_name("audio-separator.exe")
 MODEL = "htdemucs_6s.yaml"
+UI_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+APP_PORT = int(os.environ.get("SONG_HARBOR_PORT", "8765"))
 MAX_UPLOAD = 1024 * 1024 * 1024
 ALLOWED = {".wav", ".flac", ".mp3", ".m4a", ".aiff", ".aif", ".ogg"}
 DURATION_TOLERANCE_SECONDS = 0.25
@@ -78,7 +81,7 @@ def validate_stem_lengths(source_duration: float, durations: dict[str, float],
 
 def require_local_origin(request: Request) -> None:
     origin = request.headers.get("origin")
-    if origin and origin not in {"http://127.0.0.1:5173", "http://localhost:5173"}:
+    if origin and origin not in {f"http://127.0.0.1:{APP_PORT}", f"http://localhost:{APP_PORT}", "http://127.0.0.1:5173", "http://localhost:5173"}:
         raise HTTPException(403, "Requests must originate from the local Song Harbor UI")
 
 
@@ -736,6 +739,33 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
     return {"opened": True}
 
 
+# The installed build and API share ONE HTTP server. Vite is build-time only;
+# no Vite proxy, hot-reload server, or fixed second port is needed to launch.
+if UI_DIST.is_dir():
+    assets = UI_DIST / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets)), name="ui-assets")
+
+
+@app.get("/", include_in_schema=False)
+def ui_index():
+    index = UI_DIST / "index.html"
+    if not index.is_file():
+        raise HTTPException(503, "Song Harbor UI has not been built. Relaunch to build the interface.")
+    return FileResponse(index, media_type="text/html",
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/{route:path}", include_in_schema=False)
+def ui_fallback(route: str):
+    # Never turn a missing API endpoint into a successful HTML response.
+    if route.startswith(("api/", "assets/")):
+        raise HTTPException(404, "Not Found")
+    if route and "." in Path(route).name:
+        raise HTTPException(404, "Asset not found")
+    return ui_index()
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    uvicorn.run(app, host="127.0.0.1", port=APP_PORT)

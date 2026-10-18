@@ -138,3 +138,25 @@ Automated checks: GitHub Actions [Song projects and Waveform exchange](https://g
 5. Re-export; confirm the first Waveform folder still exists and is not overwritten.
 
 M2 is committed and the code-level CI checks passed; **Waveform application import and Predator end-to-end smoke checks remain unverified**.
+
+## Library-first foundation and DAW adapter recovery (2026-10-18)
+
+The application now **opens to a compact Library** instead of the former separation landing screen. The source/separation/mixer remains available by selecting Import song or opening an existing song. The Library indexes existing six-stem jobs in an on-drive SQLite database at `<runtime>/data/library/library.sqlite` without relocating recordings. Virtual nested collections can hold the same song in multiple groups; the catalog stores stable identity apart from physical files. Renaming a song updates Library metadata and the portable song manifest **without renaming WAV/MP3 audio files**. A shared TWS-UI `EditableTitle`, `Menu`, `IconButton` and status/dialog primitives are used; native right-click handling and broader context-action abstractions are reserved for the shared UI follow-up.
+
+**DAW export is now generic**. The mixer exposes **Export to DAW**, leading to a focused target dialog. Waveform Free is the only active adapter today; REAPER follows. Portable aligned WAV export works even if Waveform is not installed. The dialog supports Detect installed Waveform, browse for its executable, save the resolved location, and launch it. When missing, it opens the **official Tracktion Waveform Free download page**, allows choosing the downloaded installer, and can launch a Windows-signed Tracktion installer on explicit command; after the publisher's account/install flow, press Detect to resume. The app never assumes it can bypass account or licensing steps or directly fetch an unverified installer. This recovery is distinct from FFmpeg setup.
+
+The mixer now has **playback-only master volume**; it changes monitoring loudness, never rendered mix gain or the availability of an already-exported WAV.
+
+### Local acceptance checklist
+
+1. Pull main, restart the backend/launcher, confirm the Library is the default home.
+2. Confirm existing six-stem songs show without file relocation. Open one into Song Workspace and return to Library.
+3. Create a virtual collection, place a song in it, and check the underlying source/stem paths stay unchanged.
+4. Rename the Library display name (e.g., Salt in the Circuit → Circuit of Salt) and confirm that the original imported WAV/MP3 filename has **not** changed. Confirm the display title survives restart.
+5. In the mixer, change **monitoring volume**, then export a mix and verify the output loudness is controlled by channel mix settings, not the monitoring slider.
+6. Click **Export to DAW**. Choose Waveform; prepare stems. If Waveform is absent, the dialog must explain the absence and offer Detect/Browse/official publisher download/installer assistance—never raw Not Found. Imported stems should start simultaneously at 0:00.
+7. If selecting a downloaded Waveform installer, run it only after explicit confirmation; Windows signature verification will reject missing/untrusted signatures.
+
+This is **P0 / early P1**, not the full library/version history experience. Named branching versions, multi-export history management, trash/restore, relationship-aware deletion, complete right-click/touch context menus, verified native Waveform projects and REAPER adapter are still planned. See [Library-first architecture](../docs/library-first-architecture.md).
+
+Automated checks validate Python syntax, SQLite adoption/rename/virtual grouping, non-destructive exports and TypeScript/Vite builds. **A local Windows + Waveform first-use smoke test remains necessary before acceptance.**

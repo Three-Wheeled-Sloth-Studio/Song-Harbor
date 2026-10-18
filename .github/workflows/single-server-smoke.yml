@@ -1,0 +1,85 @@
+name: Single-server launch smoke
+on:
+  push:
+    paths:
+      - 'app/backend/**'
+      - 'app/frontend/**'
+      - 'app/run.ps1'
+      - '.github/workflows/single-server-smoke.yml'
+  pull_request:
+    paths:
+      - 'app/backend/**'
+      - 'app/frontend/**'
+      - 'app/run.ps1'
+      - '.github/workflows/single-server-smoke.yml'
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build static application
+        shell: pwsh
+        run: |
+          npm install --prefix app/frontend
+          if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
+          npm run build --prefix app/frontend
+          if ($LASTEXITCODE -ne 0) { throw 'UI build failed' }
+      - name: Install minimum backend API dependencies
+        run: python -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3"
+      - name: Test one server exposes UI and API on dynamic localhost port
+        shell: pwsh
+        run: |
+          @'
+          import os, socket, subprocess, sys, time, urllib.request
+          from pathlib import Path
+
+          frontend = Path("app/frontend/dist/index.html")
+          assert frontend.exists(), "UI build missing"
+          probe = socket.socket()
+          probe.bind(("127.0.0.1", 0))
+          port = probe.getsockname()[1]
+          probe.close()
+          env = os.environ.copy()
+          env.update({
+              "SONG_HARBOR_HOME": str((Path.cwd() / "qa-runtime").resolve()),
+              "SONG_HARBOR_PORT": str(port),
+              "SONG_HARBOR_INSTANCE_TOKEN": "ci-smoke-single-server",
+          })
+          proc = subprocess.Popen(
+              [sys.executable, "app/backend/server.py"], env=env,
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+          )
+          try:
+              for attempt in range(100):
+                  if proc.poll() is not None:
+                      raise RuntimeError("Backend exited early: " + proc.stdout.read())
+                  try:
+                      with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as res:
+                          import json
+                          health = json.load(res)
+                      with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as res:
+                          page = res.read().decode("utf-8")
+                      assert health["instance_token"] == "ci-smoke-single-server"
+                      assert '<div id="root"' in page
+                      assert "assets/" in page
+                      print("PASS: one Python server served health and built UI, no Vite")
+                      break
+                  except (OSError, TimeoutError):
+                      time.sleep(.2)
+              else:
+                  raise RuntimeError("UI/API did not become healthy on dynamic port")
+          finally:
+              proc.terminate()
+              try:
+                  proc.wait(timeout=8)
+              except subprocess.TimeoutExpired:
+                  proc.kill()
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

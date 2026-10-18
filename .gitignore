@@ -29,3 +29,7 @@ __pycache__/
 
 # Runtime / logs
 *.log
+
+# Machine-local install configuration and downloaded FFmpeg binaries
+config/settings.json
+tools/ffmpeg/

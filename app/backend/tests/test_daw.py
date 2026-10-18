@@ -43,6 +43,42 @@ class DawAdapterTests(unittest.TestCase):
         self.assertEqual(str(self.audacity.resolve()), found)
         self.assertEqual(found, daw.configured(self.root, "audacity"))
 
+    def test_custom_apps_path_discovery(self):
+        drive = self.root / "C"
+        custom = drive / "Apps" / "Audacity"
+        custom.mkdir(parents=True)
+        exe = custom / "Audacity.exe"
+        exe.write_bytes(b"fixture")
+        with patch.object(daw, "available_drives", return_value=[drive]), \
+             patch.object(daw, "windows_registry_locations", return_value=[]), \
+             patch.object(daw, "windows_shortcut_locations", return_value=[]), \
+             patch.object(daw.shutil, "which", return_value=None):
+            self.assertEqual(str(exe.resolve()),
+                             daw.resolve(self.root, target_id="audacity"))
+        self.assertEqual(str(exe.resolve()), daw.configured(self.root, "audacity"))
+
+    def test_deep_search_finds_nested_portable_installation(self):
+        install = self.root / "C" / "Apps" / "Audio" / "Editors" / "Audacity 3.7"
+        install.mkdir(parents=True)
+        exe = install / "Audacity.exe"
+        exe.write_bytes(b"fixture")
+        with patch.object(daw, "search_roots", return_value=[self.root / "C" / "Apps"]):
+            job = {"status": "running", "message": "starting", "target": "audacity"}
+            daw.scan_existing(self.root, "audacity", job, max_directories=80, max_seconds=10)
+        self.assertEqual("found", job["status"], job)
+        self.assertEqual(str(exe.resolve()), job["executable"])
+        self.assertEqual(str(exe.resolve()), daw.configured(self.root, "audacity"))
+
+    def test_deep_search_does_not_scan_unrelated_junctions(self):
+        app = self.root / "Apps"
+        app.mkdir()
+        (app / "node_modules").mkdir()
+        (app / "node_modules" / "Audacity.exe").write_bytes(b"ignored")
+        with patch.object(daw, "search_roots", return_value=[app]):
+            job = {"status": "running", "message": "starting", "target": "audacity"}
+            daw.scan_existing(self.root, "audacity", job, max_directories=20, max_seconds=3)
+        self.assertEqual("not_found", job["status"])
+
     def test_wrong_executable_rejected(self):
         with self.assertRaises(ValueError):
             daw.set_location(self.root, str(self.waveform), "audacity")

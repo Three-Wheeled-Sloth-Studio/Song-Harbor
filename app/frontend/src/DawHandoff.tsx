@@ -58,7 +58,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
     const result = await post("/projects/" + jobId + "/daw/export", {target});
     if (!result.directory) throw new Error("DAW export didn't return a folder");
     setFolder(result.directory);
-    setMessage("Six aligned stems prepared. Choose Open files or continue setup.");
+    setMessage("Six aligned stems prepared.");
   }
 
   async function detect() {
@@ -108,18 +108,18 @@ export function DawHandoff({jobId, saveProject, onClose}: {
         {installed ? <Status tone="success">Ready</Status> : <Status tone="neutral">Not configured</Status>}
       </div>
       <div className="daw-controls">
-        <Button variant="primary" disabled={busy} onClick={() => { void perform(prepare); }}>
-          {busy ? "Working…" : "Prepare stems"}
+        <Button variant="primary" disabled={busy} onClick={() => { void perform(folder ? launch : prepare); }}>
+          {busy ? "Working…" : folder ? "Launch" : "Prepare stems"}
         </Button>
-        {folder && <Button variant="secondary" disabled={busy} onClick={() => {
-          void perform(async () => {
-            const result = await post("/projects/" + jobId + "/daw/open-folder");
-            if (result.status !== "opened") throw new Error(result.message || "Could not open export folder");
-          });
-        }}>Files</Button>}
-        {installed && <Button variant="secondary" disabled={busy} onClick={() => { void perform(launch); }}>
-          Launch
-        </Button>}
+        {folder && <>
+          <Button variant="secondary" disabled={busy} onClick={() => {
+            void perform(async () => {
+              const result = await post("/projects/" + jobId + "/daw/open-folder");
+              if (result.status !== "opened") throw new Error(result.message || "Could not open export folder");
+            });
+          }}>Files</Button>
+          <Button variant="subtle" disabled={busy} onClick={() => { void perform(prepare); }}>Reprepare</Button>
+        </>}}
       </div>
       {folder && <p className="daw-path" title={folder}>{folder}</p>}
       {!installed && <>

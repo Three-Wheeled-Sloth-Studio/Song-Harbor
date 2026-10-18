@@ -59,7 +59,7 @@ def verify_executable(target_id: str, chosen: Path) -> Path | None:
         if not candidate.is_file():
             continue
         basename = candidate.name.lower()
-        valid = bool(re.fullmatch(r"audacity(?:[ _-]?\\d+(?:\\.\\d+)*)?\\.exe", basename, re.I)) if target_id == "audacity" else bool(re.fullmatch(r"Waveform.*\\.exe", candidate.name, re.I))
+        valid = bool(re.fullmatch(r"audacity(?:[ _-]?\d+(?:\.\d+)*)?\.exe", basename, re.I)) if target_id == "audacity" else bool(re.fullmatch(r"Waveform.*\.exe", candidate.name, re.I))
         if valid:
             return candidate.resolve()
     return None

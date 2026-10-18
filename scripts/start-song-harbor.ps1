@@ -52,14 +52,22 @@ if (-not $needsPython) {
   $needsBackend = $LASTEXITCODE -ne 0
 }
 $needsUI = -not (Test-Path -LiteralPath $nodeModules -PathType Container)
-$needsInstall = $needsPython -or $needsSeparator -or $needsBackend -or $needsUI
+$needsEngine = $needsPython -or $needsSeparator -or $needsBackend
+$needsInstall = $needsEngine -or $needsUI
 if ($needsInstall) {
   if ($SkipInstall) {
     throw "Missing Song Harbor dependencies at $workRoot; rerun without -SkipInstall to install."
   }
-  Write-Host 'Missing runtime or UI dependencies; performing one-time bootstrap.'
-  & (Join-Path $PSScriptRoot 'bootstrap-windows.ps1') -Root $workRoot
-  if (-not $?) { throw 'Bootstrap did not complete successfully.' }
+  if ($needsEngine) {
+    Write-Host 'Missing runtime dependencies; performing one-time bootstrap.'
+    & (Join-Path $PSScriptRoot 'bootstrap-windows.ps1') -Root $workRoot
+    if (-not $?) { throw 'Bootstrap did not complete successfully.' }
+  } else {
+    Write-Host 'Python/CUDA backend is ready. Installing missing UI dependencies only.'
+    $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+    & $npm install --prefix $frontend
+    if ($LASTEXITCODE -ne 0) { throw "UI dependency install failed (exit $LASTEXITCODE)" }
+  }
 }
 if ($InstallOnly) {
   Write-Host 'Song Harbor dependencies are available.'

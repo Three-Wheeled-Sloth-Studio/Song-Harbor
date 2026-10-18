@@ -225,6 +225,9 @@ export function LibraryHome({onOpenSong, onImport}: {
         {displayed.map(song =>
           <div className="lib-song-group" key={song.id}><div role="listitem" className={"lib-song" + (selected === song.id?" selected":"")}
             onClick={() => setSelected(song.id)}
+            onContextMenu={e => openContext(e,song)}
+            onKeyDown={e => {if(e.key==="ContextMenu" || e.shiftKey && e.key==="F10")openContext(e,song);}}
+            tabIndex={0}
             onDoubleClick={() => onOpenSong(song.legacy_job_id)}>
             <div className="lib-song-main">
               <EditableTitle value={song.title} label={"Rename " + song.title}
@@ -243,8 +246,10 @@ export function LibraryHome({onOpenSong, onImport}: {
                 aria-label={"Options for " + song.title} title="More actions">⋯</button>}
                 items={[
                   ...(!showTrash ? [{id:"open",label:"Open",onSelect:()=>onOpenSong(song.legacy_job_id)}] : []),
-                  ...(!showTrash ? collections.map(folder => ({id:folder.id,label:"Add to " + folder.title,
-                    onSelect:()=>{void assign(song.id,folder.id);}})) : []),
+                  ...(!showTrash ? [
+                    {id:"collection",label:"Add to collection…",onSelect:()=>{setCollectionSong(song);setChosenCollection("");}},
+                    {id:"combine",label:"Combine as takes…",onSelect:()=>{setCombineSong(song);setChosenParent("");}},
+                  ] : []),
                   {id:showTrash ? "restore" : "remove",
                    label:showTrash ? "Restore to Library" : "Remove from Library · keep files",
                    onSelect:()=>{void changeAvailability(song,showTrash);}},
@@ -279,6 +284,38 @@ export function LibraryHome({onOpenSong, onImport}: {
         }}/>
       </div>}
     </section>
+    {context && <div role="menu" className="lib-context-menu" style={{left:context.x,top:context.y}}
+      onPointerDown={e=>e.stopPropagation()}>
+      {!showTrash && <button role="menuitem" onClick={()=>{onOpenSong(context.song.legacy_job_id);setContext(null);}}>Open</button>}
+      {!showTrash && <button role="menuitem" onClick={()=>{setCollectionSong(context.song);setContext(null);}}>Add to collection…</button>}
+      {!showTrash && <button role="menuitem" onClick={()=>{setCombineSong(context.song);setContext(null);}}>Combine as takes…</button>}
+      <button role="menuitem" onClick={()=>{void changeAvailability(context.song,showTrash);setContext(null);}}>
+        {showTrash ? "Restore" : "Remove from Library"}</button>
+      <button role="menuitem" onClick={()=>{setHelpSong(context.song);setContext(null);}}>Help</button>
+    </div>}
+    {collectionSong && <Dialog open onOpenChange={v=>{if(!v)setCollectionSong(null);}}
+      title="Add to collection" description={collectionSong.title}>
+      <div className="lib-picker">
+        <input type="search" aria-label="Filter collections" placeholder="Search collections"
+          value={chosenCollection} onChange={e=>setChosenCollection(e.target.value)}/>
+        <div className="lib-picker-items">
+          {collections.filter(item=>item.title.toLowerCase().includes(chosenCollection.toLowerCase())).map(item=>
+            <button key={item.id} onClick={()=>{void assign(collectionSong.id,item.id).then(()=>setCollectionSong(null));}}>
+              ♧ {item.title}</button>)}
+        </div>
+      </div>
+    </Dialog>}
+    {combineSong && <Dialog open onOpenChange={v=>{if(!v)setCombineSong(null);}}
+      title="Combine as takes" description={"Keep both recordings; group " + combineSong.title + " with:"}>
+      <div className="lib-picker">
+        <select aria-label="Parent song" value={chosenParent} onChange={e=>setChosenParent(e.target.value)}>
+          <option value="">Choose song…</option>
+          {songs.filter(s=>s.id!==combineSong.id).map(s=>
+            <option key={s.id} value={s.id}>{s.title}</option>)}
+        </select>
+        <Button variant="primary" disabled={!chosenParent||busy} onClick={()=>{void combine();}}>Combine</Button>
+      </div>
+    </Dialog>}
     {helpSong && <Dialog open onOpenChange={open => {if(!open)setHelpSong(null);}}
       title="Song Library help" description={helpSong.title}>
       <div className="library-help">

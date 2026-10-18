@@ -48,3 +48,30 @@ h1{font-size:clamp(25px,2.5vw,34px);font-weight:650;letter-spacing:-.04em;margin
 .job-logs{margin-top:14px;max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:11px/1.5 Consolas,monospace;background:#0b151d;border-radius:8px;padding:12px;color:#a4c0c1}
 .footnote{text-align:right;font-size:11px;color:var(--tws-color-text-muted);padding-top:12px}
 @media(max-width:850px){.workspace-grid{grid-template-columns:1fr}.workspace{padding:20px 15px}.topbar{padding:0 14px}.edition{display:none}.task-panel,.results-panel{min-height:0}}
+
+/* M1: compact six-stem mixing workbench, using TWS shared controls */
+.mixer{border:1px solid var(--tws-color-border-normal);background:var(--tws-color-surface-inset);border-radius:10px;padding:14px;margin-bottom:14px}
+.mixer-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:13px}
+.mixer-heading h3{font-size:14px;margin:0 0 4px}
+.mixer-heading p{font-size:12px;color:var(--tws-color-text-muted);margin:0}
+.transport{display:flex;align-items:center;gap:10px;border-radius:9px;background:var(--tws-color-surface-panel);padding:9px;margin-bottom:12px}
+.transport input[type=range]{flex:1;min-width:20px}
+.timecode{font:12px/1 Consolas,monospace;color:var(--tws-color-text-muted);font-variant-numeric:tabular-nums}
+.mixer-tracks{display:grid;gap:6px}
+.mixer-track{display:grid;grid-template-columns:minmax(60px,1fr) auto minmax(75px,1.5fr) 42px;gap:10px;align-items:center;border:1px solid var(--tws-color-border-normal);border-radius:8px;padding:9px;background:var(--tws-color-surface-panel)}
+.mixer-track strong{font-size:12px}
+.mixer-track input[type=range]{width:100%;accent-color:var(--tws-color-action-primary)}
+.track-actions{display:flex;gap:4px}
+.track-toggle{min-width:28px;height:27px;border-radius:7px;border:1px solid var(--tws-color-border-strong);background:#283942;color:var(--tws-color-text-primary);cursor:pointer;font-weight:700;font-size:12px}
+.track-toggle:hover{background:#3e5c69}
+.track-toggle.is-muted{border-color:#c79b6e;background:#73543b;color:white}
+.track-toggle.is-solo{border-color:#89d2cb;background:#236b67;color:white}
+.track-percent{font:12px Consolas,monospace;text-align:right;color:var(--tws-color-text-muted)}
+.mix-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px}
+.mix-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mix-download{color:#8dd7d4;font-size:12px}
+.mixer-note{font-size:11px;color:var(--tws-color-text-muted);line-height:1.4;margin:13px 0 0}
+.stem-download-details{padding:9px 0;border-top:1px solid var(--tws-color-border-normal)}
+.stem-download-details summary{font-size:12px;color:var(--tws-color-text-muted);cursor:pointer;margin-bottom:9px}
+input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8dd7d4;outline-offset:2px}
+@media(max-width:480px){.mixer{padding:9px}.mixer-track{grid-template-columns:65px auto minmax(58px,1fr) 37px;gap:5px;padding:7px}.transport{gap:6px}.workspace-heading p:last-child{font-size:12px}}

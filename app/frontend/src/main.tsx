@@ -4,6 +4,7 @@ import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
 import type { SavedStem } from "./StemMixer";
 import { FfmpegSetup } from "./FfmpegSetup";
+import { LibraryHome } from "./LibraryHome";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
 import "./song-harbor.css";
@@ -25,6 +26,7 @@ type Health = { ready: boolean; separator_ready: boolean; model: string; model_d
 const API = "/api";
 
 function App() {
+  const [view, setView] = useState<"library"|"song">("library");
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -67,18 +69,19 @@ function App() {
     return () => { cancelled = true; };
   }, [job?.id, job?.status]);
 
-  async function openSong() {
-    if (!recentChoice || openingSong) return;
+  async function openSongById(ident: string) {
+    if (!ident || openingSong) return;
     setOpeningSong(true);
     setError("");
     try {
-      const response = await fetch(API + "/projects/" + recentChoice);
+      const response = await fetch(API + "/projects/" + ident);
       const payload = await response.json() as {job?: Job; project?: SongProject; detail?: string};
       if (!response.ok || !payload.job || !payload.project) throw new Error(payload.detail || "Could not reopen song");
       setJob(null); // release previous mixer and streams before restoring
       setFile(null);
       setProject(payload.project);
       setJob(payload.job);
+      setView("song");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reopen song");
     } finally {
@@ -93,12 +96,17 @@ function App() {
         const response = await fetch(API + "/jobs/" + job.id);
         if (!response.ok) throw new Error("Could not read separation status");
         setJob(await response.json() as Job);
+      setView("song");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Status check failed");
       }
     }, 1000);
     return () => clearInterval(poll);
   }, [job?.id, job?.status]);
+
+  async function openSong() {
+    await openSongById(recentChoice);
+  }
 
   async function separate() {
     if (!file || busy || job && ["queued", "running"].includes(job.status)) return;
@@ -188,7 +196,9 @@ function App() {
         </button>
       </div>
     </header>
-    <main className="workspace">
+    {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
+      onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className="workspace">
+      <button className="back-to-library" title="Back to Library" onClick={() => setView("library")}>← Library</button>
       <section className="workspace-heading">
         <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
         <span className="edition">M1 · STEM MIXER</span>
@@ -254,7 +264,7 @@ function App() {
         </Panel>
       </div>
       <p className="footnote">Local processing · Original recording preserved · Six-stem Demucs baseline</p>
-    </main>
+    </main>}
   </div>;
 }
 

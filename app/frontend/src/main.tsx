@@ -172,15 +172,19 @@ function App() {
   const running = job && ["queued", "running"].includes(job.status);
   const finished = job?.status === "complete";
   const statusTone = finished ? "success" : job?.status === "error" ? "danger" : running ? "info" : "neutral";
-  const canStart = !!file && !busy && !running;
-  const ffmpegNeeded = !!file && !health?.ffmpeg;
+  const canStart = !!file && !!health && !busy && !running;
+  const ffmpegNeeded = !!file && !!health && !health.ffmpeg;
   const missingCount = health?.needs_setup?.length ?? 0;
   function completedSetup(next: Health) {
     setHealth(next);
     setSetupOpen(false);
     if (pendingSeparation.current && next.ffmpeg) {
       pendingSeparation.current = false;
-      void startSeparation();
+      if (next.separator_ready) {
+        void startSeparation();
+      } else {
+        setError("FFmpeg is configured, but the separator engine is missing. Relaunch Song Harbor to repair its Python environment.");
+      }
     }
     if (next.ffmpeg && pendingMixRetry.current) {
       const retry = pendingMixRetry.current;

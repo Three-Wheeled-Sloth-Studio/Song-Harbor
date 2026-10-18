@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, EditableTitle, IconButton, Menu } from "@tws-ui/core/react";
+import { Button, Dialog, EditableTitle, IconButton, Menu } from "@tws-ui/core/react";
 
 type Song = {id: string; legacy_job_id: string; title: string; imported_filename: string;
   created_at: number; version_count: number; variant_count: number; removed?: boolean;
@@ -21,6 +21,7 @@ export function LibraryHome({onOpenSong, onImport}: {
   const [newCollection, setNewCollection] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [removedSong, setRemovedSong] = useState<Song | null>(null);
+  const [helpSong, setHelpSong] = useState<Song | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
@@ -188,9 +189,7 @@ export function LibraryHome({onOpenSong, onImport}: {
                   {id:showTrash ? "restore" : "remove",
                    label:showTrash ? "Restore to Library" : "Remove from Library · keep files",
                    onSelect:()=>{void changeAvailability(song,showTrash);}},
-                  {id:"help",label:"Help",onSelect:()=>window.open(
-                    "https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/blob/main/docs/library-first-architecture.md",
-                    "_blank","noopener,noreferrer")},
+                  {id:"help",label:"Help",onSelect:()=>setHelpSong(song)},
                 ]}/>
             </div>
           </div>
@@ -215,5 +214,16 @@ export function LibraryHome({onOpenSong, onImport}: {
       </div>}
       {error && <p role="alert" className="error-message">{error}</p>}
     </section>
+    {helpSong && <Dialog open onOpenChange={open => {if(!open)setHelpSong(null);}}
+      title="Song Library help" description={helpSong.title}>
+      <div className="library-help">
+        <p>Double-click a song or use ▶ to open its stem workspace.</p>
+        <p>Use the pencil beside its name to rename the song without changing the original WAV/MP3 filename.</p>
+        <p>Identical source recordings appear as takes under one song. Expand them to open a specific separation.</p>
+        <p>Use ⋯ to place songs into collections or remove them from the Library. Removing a song keeps its media files and can be undone from Removed.</p>
+        <a href="https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/blob/main/docs/library-first-architecture.md"
+          target="_blank" rel="noreferrer">Detailed reference ↗</a>
+      </div>
+    </Dialog>}
   </main>;
 }

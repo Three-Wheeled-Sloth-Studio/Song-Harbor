@@ -68,9 +68,11 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
     finally { setAction(""); }
   }
 
-  return <Panel elevation="raised" className="dependency-panel">
-    <div className="section-label"><span>SETUP</span><h2>FFmpeg · Required audio tools</h2></div>
-    <p className="dependency-intro">Song Harbor needs FFmpeg and FFprobe for accurate duration checks, separation and exporting. You can reuse an existing installation or choose where to install it. We will remember your selection; no system PATH changes.</p>
+  const installing = !!installJob && ["queued", "running"].includes(installJob.status);
+  return <Dialog open={open} onOpenChange={next => { if (!installing) onOpenChange(next); }}
+    title={settings?.found ? "FFmpeg settings" : "FFmpeg not found"}
+    description="Required for separation and mix export. Locate an existing copy or choose where to install it.">
+    <div className="dependency-panel">
     {settings?.found && <div className="dependency-found"><Status tone="success">Configured</Status><span>{settings.found.directory}</span></div>}
 
     <div className="dependency-choice">

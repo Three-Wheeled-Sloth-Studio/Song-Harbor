@@ -1,71 +1,92 @@
+#Requires -Version 7.0
+<#
+  Song Harbor standalone source launcher.
+  One Python/FastAPI process serves BOTH the built UI and API.
+  No Vite development server, HTTP proxy, fixed port, process killing or
+  changes to existing listeners. The OS assigns an available loopback port.
+#>
+[CmdletBinding()]
 param([string]$Root = "", [switch]$NoBrowser)
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 $Root = [IO.Path]::GetFullPath($Root)
-$python = Join-Path $Root ".venv\Scripts\python.exe"
-if (-not (Test-Path $python)) { throw "Python environment not found: $python" }
+$python = Join-Path $Root '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw "Python environment not found: $python" }
+
 $env:SONG_HARBOR_HOME = $Root
-$env:SONG_HARBOR_DATA = Join-Path $Root "data"
-$env:SONG_HARBOR_MODELS = Join-Path $Root "models"
-$env:PIP_CACHE_DIR = Join-Path $Root "cache\pip"
-$env:HF_HOME = Join-Path $Root "cache\huggingface"
-$env:TORCH_HOME = Join-Path $Root "cache\torch"
-$env:TEMP = Join-Path $Root "temp"
+$env:SONG_HARBOR_DATA = Join-Path $Root 'data'
+$env:SONG_HARBOR_MODELS = Join-Path $Root 'models'
+$env:PIP_CACHE_DIR = Join-Path $Root 'cache\pip'
+$env:HF_HOME = Join-Path $Root 'cache\huggingface'
+$env:TORCH_HOME = Join-Path $Root 'cache\torch'
+$env:TEMP = Join-Path $Root 'temp'
 $env:TMP = $env:TEMP
-@($env:SONG_HARBOR_DATA,$env:SONG_HARBOR_MODELS,$env:PIP_CACHE_DIR,$env:HF_HOME,$env:TORCH_HOME,$env:TEMP) | ForEach-Object { New-Item -ItemType Directory -Force $_ | Out-Null }
+@($env:SONG_HARBOR_DATA,$env:SONG_HARBOR_MODELS,$env:PIP_CACHE_DIR,
+  $env:HF_HOME,$env:TORCH_HOME,$env:TEMP) | ForEach-Object {
+  New-Item -ItemType Directory -Force $_ | Out-Null
+}
+
+# Build the frontend *before* serving it. This also catches TSX errors
+# before a broken browser page appears. npm/Vite is never left running.
+$frontend = Join-Path $PSScriptRoot 'frontend'
+$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+if (-not (Test-Path -LiteralPath (Join-Path $frontend 'node_modules') -PathType Container)) {
+  Write-Host 'Installing frontend dependencies...'
+  & $npm install --prefix $frontend
+  if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed (exit $LASTEXITCODE)" }
+}
+Write-Host 'Building Song Harbor interface...'
+& $npm run build --prefix $frontend
+if ($LASTEXITCODE -ne 0) { throw "Frontend build failed (exit $LASTEXITCODE)" }
+$index = Join-Path $frontend 'dist\index.html'
+if (-not (Test-Path -LiteralPath $index -PathType Leaf)) {
+  throw "Frontend build did not produce $index"
+}
+
+# Each launch gets a free ephemeral localhost port; existing Song Harbor
+# sessions (and completely unrelated programs) are never terminated.
+$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+try {
+  $listener.Start()
+  $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+} finally {
+  $listener.Stop()
+}
+$env:SONG_HARBOR_PORT = [string]$port
+$instanceToken = [guid]::NewGuid().ToString('N')
+$env:SONG_HARBOR_INSTANCE_TOKEN = $instanceToken
+$url = "http://127.0.0.1:$port/"
 Write-Host "Data: $env:SONG_HARBOR_DATA"
 Write-Host "Models: $env:SONG_HARBOR_MODELS"
-Write-Host "Caches: $env:PIP_CACHE_DIR"
-Write-Host "UI: http://127.0.0.1:5173"
-$frontend = Join-Path $PSScriptRoot "frontend"
-if (-not (Test-Path (Join-Path $frontend "node_modules"))) { throw "Frontend dependencies missing. Run npm install in $frontend" }
-$npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-# Release old Song Harbor dev listeners before binding our fixed localhost ports.
-# This script refuses to kill unrelated apps or active separation jobs.
-& (Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts\prepare-local-ports.ps1') -Repository (Split-Path -Parent $PSScriptRoot)
-$vite = $null
-$instanceToken = [guid]::NewGuid().ToString("N")
-$env:SONG_HARBOR_INSTANCE_TOKEN = $instanceToken
-$backend = Start-Process -FilePath $python -ArgumentList @((Join-Path $PSScriptRoot "backend\server.py")) -WorkingDirectory $Root -PassThru -NoNewWindow
+Write-Host "UI/API (single server): $url"
+
+$backend = Start-Process -FilePath $python -ArgumentList @(
+  (Join-Path $PSScriptRoot 'backend\server.py')
+) -WorkingDirectory $Root -PassThru -NoNewWindow
 try {
-  $backendReady = $false
-  for ($i=0; $i -lt 45; $i++) {
-    if ($backend.HasExited) { throw "Song Harbor backend exited before reporting healthy (code $($backend.ExitCode))." }
-    try {
-      $response = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 1
-      if ($response.instance_token -eq $instanceToken -and $null -ne $response.separator_ready) {
-        $backendReady = $true
-        break
-      }
-      if ($response.instance_token -ne $instanceToken) {
-        if ($backend.HasExited) {
-          throw "Another Song Harbor backend is already running on port 8765. Close earlier Song Harbor windows/launchers, then retry."
-        }
-      }
-    } catch { Start-Sleep -Milliseconds 350 }
-  }
-  if (-not $backendReady) {
-    throw "Could not reach the newly launched Song Harbor backend. An earlier instance may still own port 8765. Close prior Song Harbor launchers and retry."
-  }
-  # Start the Vite server before opening the browser. Otherwise first launch can
-  # briefly display a 404/connection error while frontend dependencies load.
-  $viteCommand = '""' + $npm + '" run dev --prefix "' + $frontend + '""'
-  $vite = Start-Process -FilePath "cmd.exe" -ArgumentList @("/d", "/s", "/c", $viteCommand) -PassThru -NoNewWindow
-  $frontendReady = $false
+  $ready = $false
   for ($i=0; $i -lt 100; $i++) {
-    if ($vite.HasExited) { throw "Song Harbor frontend exited before becoming ready (code $($vite.ExitCode))." }
+    $backend.Refresh()
+    if ($backend.HasExited) {
+      throw "Song Harbor process exited during startup (code $($backend.ExitCode)). See console output."
+    }
     try {
-      $page = Invoke-WebRequest -Uri "http://127.0.0.1:5173/" -TimeoutSec 2 -UseBasicParsing
-      if ($page.StatusCode -eq 200 -and $page.Content -match '<div id="root"') {
-        $frontendReady = $true
+      $status = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 2
+      $page = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing
+      if ($status.instance_token -eq $instanceToken -and
+          $null -ne $status.separator_ready -and
+          $page.StatusCode -eq 200 -and $page.Content -match '<div id="root"') {
+        $ready = $true
         break
       }
-    } catch { }
-    Start-Sleep -Milliseconds 300
+    } catch {
+      # Startup may take a few seconds on lower-end hardware.
+    }
+    Start-Sleep -Milliseconds 250
   }
-  if (-not $frontendReady) { throw "Song Harbor frontend did not become ready. Check Vite output." }
+  if (-not $ready) { throw "Song Harbor did not become ready at $url. See console output." }
   if (-not $NoBrowser) {
-    $url = "http://127.0.0.1:5173"
+    $url = "http://127.0.0.1:$port/"
     $launched = $false
     # Respect the Windows HTTP UserChoice association. Never pick another browser
     # merely because its executable is installed or happens to be on PATH.
@@ -108,13 +129,11 @@ try {
       Write-Host "Opened via Windows default HTTP handler."
     }
   }
-  Write-Host "Song Harbor ready. Press Ctrl+C here to stop the app."
-  Wait-Process -Id $vite.Id
-}
-finally {
-  if ($null -ne $vite -and -not $vite.HasExited) {
-    # npm launcher may spawn vite as a child; kill the process tree on shutdown.
-    & taskkill.exe /PID $vite.Id /T /F *> $null
+  Write-Host 'Song Harbor is ready. Press Ctrl+C here to exit.'
+  Wait-Process -Id $backend.Id
+} finally {
+  $backend.Refresh()
+  if (-not $backend.HasExited) {
+    Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
   }
-  if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force }
 }

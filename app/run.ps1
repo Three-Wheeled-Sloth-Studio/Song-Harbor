@@ -27,30 +27,46 @@ try {
   }
   if (-not $NoBrowser) {
     $url = "http://127.0.0.1:5173"
-    # Ask a supported browser for a separate window instead of an existing tab.
-    # Prefer a discoverable Edge/Chrome installation; otherwise honor the system URL handler.
-    $browser = $null
-    foreach ($name in @("msedge.exe", "chrome.exe")) {
-      $found = Get-Command $name -ErrorAction SilentlyContinue
-      if ($found) { $browser = $found.Source; break }
-    }
-    if (-not $browser) {
-      foreach ($candidate in @(
-        (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
-        (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe"),
-        (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe"),
-        (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe")
-      )) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-          $browser = $candidate; break
+    $launched = $false
+    # Respect the Windows HTTP UserChoice association. Never pick another browser
+    # merely because its executable is installed or happens to be on PATH.
+    try {
+      $choiceKey = 'HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice'
+      $progId = (Get-ItemProperty -LiteralPath $choiceKey -ErrorAction Stop).ProgId
+      if ($progId) {
+        $commandKey = "Registry::HKEY_CLASSES_ROOT\$progId\shell\open\command"
+        $commandText = (Get-Item -LiteralPath $commandKey -ErrorAction Stop).GetValue('')
+        $exePath = $null
+        if ($commandText -match '^\s*"([^"]+\.exe)"') {
+          $exePath = $Matches[1]
+        } elseif ($commandText -match '^\s*(.+?\.exe)(?=\s|$)') {
+          $exePath = $Matches[1]
+        }
+        if ($exePath -and (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+          $binaryName = [IO.Path]::GetFileName($exePath).ToLowerInvariant()
+          $windowSwitch = switch ($binaryName) {
+            'chrome.exe'  { '--new-window' }
+            'msedge.exe'  { '--new-window' }
+            'firefox.exe' { '-new-window' }
+            'brave.exe'   { '--new-window' }
+            'vivaldi.exe' { '--new-window' }
+            default       { $null }
+          }
+          if ($windowSwitch) {
+            Start-Process -FilePath $exePath -ArgumentList @($windowSwitch, $url)
+            $launched = $true
+            Write-Host "Opened in Windows default browser ($binaryName), new window."
+          }
         }
       }
+    } catch {
+      Write-Verbose "Could not resolve browser launch command: $_"
     }
-    if ($browser) {
-      Start-Process -FilePath $browser -ArgumentList @("--new-window", $url)
-    } else {
-      Write-Warning "Could not locate Edge/Chrome for forced new window; using system default browser."
+    if (-not $launched) {
+      # When Windows' chosen handler cannot be safely launched with a known
+      # new-window switch, preserve the default-browser choice over window mode.
       Start-Process $url
+      Write-Host "Opened via Windows default HTTP handler."
     }
   }
   & $npm run dev --prefix $frontend

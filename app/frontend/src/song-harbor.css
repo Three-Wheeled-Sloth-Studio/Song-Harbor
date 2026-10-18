@@ -103,3 +103,11 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .tws-dialog .dependency-choice{padding:10px 0 5px}
 .tws-dialog .dependency-inline{margin:6px 0}
 .tws-dialog .dependency-choice p{margin:6px 0}
+
+.ffmpeg-install-progress{margin-top:8px}
+.ffmpeg-install-progress p{margin:0 0 7px}
+.ffmpeg-install-progress progress,.ffmpeg-progress-track{display:block;width:100%;height:6px;appearance:none;border:0;border-radius:999px;overflow:hidden;background:var(--tws-color-border-normal)}
+.ffmpeg-install-progress progress::-webkit-progress-bar{background:var(--tws-color-border-normal);border-radius:999px}
+.ffmpeg-install-progress progress::-webkit-progress-value{background:var(--tws-color-action-primary);border-radius:999px}
+.ffmpeg-install-progress progress::-moz-progress-bar{background:var(--tws-color-action-primary);border-radius:999px}
+.ffmpeg-progress-track span{display:block;height:100%;width:28%;background:var(--tws-color-action-primary);border-radius:999px;animation:slide 1.4s ease-in-out infinite alternate}

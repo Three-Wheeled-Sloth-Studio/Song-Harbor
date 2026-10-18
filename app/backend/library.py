@@ -6,6 +6,7 @@ sidecar project JSON preserves recovery metadata if the library DB is rebuilt.
 """
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 import time
 import uuid
@@ -90,6 +91,15 @@ CREATE INDEX IF NOT EXISTS idx_collections_parent ON collections(parent_id);
 """
 
 
+def fingerprint(path: Path) -> str:
+    """Hash exact source bytes, not titles or paths; same media is one library song."""
+    h = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def database_path(data_root: Path) -> Path:
     return data_root / "library" / "library.sqlite"
 
@@ -137,11 +147,16 @@ def adopt_jobs(data_root: Path) -> dict:
             source = data_root / "jobs" / legacy_id / project["source_filename"]
             if not source.is_file():
                 continue
+            current = conn.execute("SELECT sha256 FROM sources WHERE id=?", (source_id,)).fetchone()
+            # Existing hashes are persistent; scanning library does not rehash each source.
+            source_hash = current["sha256"] if current and current["sha256"] else fingerprint(source)
             conn.execute("""
                 INSERT OR IGNORE INTO sources
-                (id,song_id,original_filename,storage_path,imported_at)
-                VALUES(?,?,?,?,?)
-            """, (source_id, song_id, project["source_filename"], str(source), created))
+                (id,song_id,original_filename,storage_path,sha256,imported_at)
+                VALUES(?,?,?,?,?,?)
+            """, (source_id, song_id, project["source_filename"], str(source), source_hash, created))
+            if current and not current["sha256"]:
+                conn.execute("UPDATE sources SET sha256=? WHERE id=?", (source_hash, source_id))
             separation_id = _id("separation", legacy_id)
             conn.execute("""
                 INSERT OR IGNORE INTO separations
@@ -174,27 +189,84 @@ def adopt_jobs(data_root: Path) -> dict:
 
 
 def list_songs(data_root: Path, collection_id: str | None = None,
-               query: str = "") -> list[dict]:
+               query: str = "", include_deleted: bool = False) -> list[dict]:
+    """One library row per identical source recording; separate jobs become variants."""
     with connect(data_root) as conn:
-        sql = """
-            SELECT s.id,s.legacy_job_id,s.title,s.imported_filename,s.created_at,
-                   COUNT(DISTINCT v.id) as version_count
-            FROM songs s
-            LEFT JOIN versions v ON v.song_id=s.id AND v.deleted_at IS NULL
-        """
-        args: list = []
-        clauses = ["s.deleted_at IS NULL"]
+        rows = [dict(x) for x in conn.execute("""
+            SELECT s.id, s.legacy_job_id, s.title, s.imported_filename, s.created_at,
+                   s.updated_at, s.deleted_at, src.sha256,
+                   (SELECT COUNT(*) FROM versions v WHERE v.song_id=s.id
+                    AND v.deleted_at IS NULL) AS own_versions
+            FROM songs s LEFT JOIN sources src ON src.song_id=s.id
+            ORDER BY s.created_at ASC, s.id ASC
+        """)]
+        membership = set()
         if collection_id:
-            sql += " JOIN collection_songs cs ON cs.song_id=s.id "
-            clauses.append("cs.collection_id=?")
-            args.append(collection_id)
-        if query:
-            clauses.append("(s.title LIKE ? OR s.imported_filename LIKE ?)")
-            escaped = "%" + query.replace("%", r"\%").replace("_", r"\_") + "%"
-            args.extend([escaped, escaped])
-        sql += " WHERE " + " AND ".join(clauses)
-        sql += " GROUP BY s.id ORDER BY s.updated_at DESC, s.title ASC"
-        return [dict(row) for row in conn.execute(sql, args)]
+            membership = {x[0] for x in conn.execute(
+                "SELECT song_id FROM collection_songs WHERE collection_id=?", (collection_id,))}
+    groups: dict[str, list[dict]] = {}
+    for song in rows:
+        # A missing fingerprint must never merge unrelated audio.
+        grouping = song["sha256"] or song["id"]
+        groups.setdefault(grouping, []).append(song)
+    result = []
+    for group in groups.values():
+        visible = [s for s in group if not s["deleted_at"]]
+        candidates = group if include_deleted else visible
+        if not candidates:
+            continue
+        if collection_id and not any(s["id"] in membership for s in group):
+            continue
+        # Earliest known copy is stable canonical identity; if removed, show next.
+        primary = candidates[0]
+        title = primary["title"]
+        if query and query.lower() not in (
+            title + " " + " ".join(s["imported_filename"] for s in group)
+        ).lower():
+            continue
+        result.append({
+            "id": primary["id"], "legacy_job_id": primary["legacy_job_id"],
+            "title": title, "imported_filename": primary["imported_filename"],
+            "created_at": primary["created_at"],
+            "version_count": sum(s["own_versions"] for s in group),
+            "variant_count": len(group),
+            "removed": not bool(visible),
+            "variants": [
+                {"id": s["id"], "legacy_job_id": s["legacy_job_id"],
+                 "filename": s["imported_filename"], "created_at": s["created_at"],
+                 "removed": bool(s["deleted_at"])}
+                for s in group
+            ],
+        })
+    result.sort(key=lambda item: item["created_at"], reverse=True)
+    return result
+
+
+def remove_song(data_root: Path, song_id: str) -> dict:
+    """Remove an entire source group from library, retaining all audio and stems."""
+    songs = list_songs(data_root, include_deleted=True)
+    item = next((s for s in songs if s["id"] == song_id), None)
+    if item is None:
+        raise ValueError("Library song not found")
+    with connect(data_root) as conn:
+        for variant in item["variants"]:
+            conn.execute("UPDATE songs SET deleted_at=? WHERE id=?",
+                         (time.time(), variant["id"]))
+        conn.commit()
+    return {"removed": True, "files_preserved": True, "variant_count": len(item["variants"])}
+
+
+def restore_song(data_root: Path, song_id: str) -> dict:
+    groups = list_songs(data_root, include_deleted=True)
+    item = next((s for s in groups if s["id"] == song_id), None)
+    if item is None:
+        raise ValueError("Library song not found")
+    with connect(data_root) as conn:
+        for variant in item["variants"]:
+            conn.execute("UPDATE songs SET deleted_at=NULL WHERE id=?", (variant["id"],))
+        conn.commit()
+    return {"restored": True, "files_preserved": True}
+
 
 
 def rename_song(data_root: Path, song_id: str, title: str) -> dict:

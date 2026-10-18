@@ -61,7 +61,7 @@ Write-Host "Models: $env:SONG_HARBOR_MODELS"
 Write-Host "UI/API (single server): $url"
 
 $backend = Start-Process -FilePath $python -ArgumentList @(
-  (Join-Path $PSScriptRoot 'backend\server.py')
+  ('"' + (Join-Path $PSScriptRoot 'backend\server.py') + '"')
 ) -WorkingDirectory $Root -PassThru -NoNewWindow
 try {
   $ready = $false

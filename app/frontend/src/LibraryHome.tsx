@@ -22,6 +22,11 @@ export function LibraryHome({onOpenSong, onImport}: {
   const [showTrash, setShowTrash] = useState(false);
   const [removedSong, setRemovedSong] = useState<Song | null>(null);
   const [helpSong, setHelpSong] = useState<Song | null>(null);
+  const [collectionSong, setCollectionSong] = useState<Song | null>(null);
+  const [combineSong, setCombineSong] = useState<Song | null>(null);
+  const [chosenCollection, setChosenCollection] = useState("");
+  const [chosenParent, setChosenParent] = useState("");
+  const [context, setContext] = useState<{song:Song;x:number;y:number} | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +40,15 @@ export function LibraryHome({onOpenSong, onImport}: {
     setSongs(result.songs);
     setCollections(result.collections);
   }
+
+  useEffect(() => {
+    if (!context) return;
+    const close = () => setContext(null);
+    const escape = (event: KeyboardEvent) => {if(event.key==="Escape")close();};
+    window.addEventListener("pointerdown",close);
+    window.addEventListener("keydown",escape);
+    return () => {window.removeEventListener("pointerdown",close);window.removeEventListener("keydown",escape);};
+  }, [context]);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,11 +95,39 @@ export function LibraryHome({onOpenSong, onImport}: {
     try {
       const action = restore ? "restore" : "remove";
       const response = await fetch(ROOT + "/songs/" + song.id + "/" + action, {method:"POST"});
-      if (!response.ok) throw new Error("Could not change Library status");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as {detail?:string};
+        throw new Error(body.detail || "Could not " + action + " this song (HTTP " + response.status + ")");
+      }
       setRemovedSong(restore ? null : song);
       await refresh(showTrash);
     } catch(e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
+  }
+
+  async function combine() {
+    if (!combineSong || !chosenParent) return;
+    setBusy(true);setError("");
+    try {
+      const response = await fetch(ROOT + "/songs/" + combineSong.id + "/combine",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({parent_song_id:chosenParent}),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as {detail?:string};
+        throw new Error(data.detail || "Could not combine takes");
+      }
+      setCombineSong(null);setChosenParent("");
+      await refresh();
+    } catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
+
+  function openContext(event: React.MouseEvent, song:Song) {
+    event.preventDefault();
+    setSelected(song.id);
+    setContext({song,x:Math.min(event.clientX,window.innerWidth-195),
+      y:Math.min(event.clientY,window.innerHeight-190)});
   }
 
   function toggleVariants(id: string) {

@@ -10,7 +10,8 @@ param(
   [switch]$NoBrowser,
   [switch]$SkipInstall,
   [switch]$InstallOnly,
-  [switch]$ShowRoot
+  [switch]$ShowRoot,
+  [switch]$NoUpdate
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -33,6 +34,30 @@ function Resolve-WorkRoot {
   }
   # New machine: default to a sibling work root instead of adding model weights to a source checkout.
   return [IO.Path]::GetFullPath((Join-Path $repoParent 'SongHarbor'))
+}
+# Developer checkout convenience: fast-forward only, no merges and no force.
+# Offline, detached HEAD, a dirty tree, or remote failures must not block app launch.
+if (-not $NoUpdate) {
+  $git = Get-Command git.exe -ErrorAction SilentlyContinue
+  if ($git -and (Test-Path -LiteralPath (Join-Path $repoRoot '.git'))) {
+    try {
+      $branch = (& $git.Source -C $repoRoot branch --show-current 2>$null).Trim()
+      $dirty = & $git.Source -C $repoRoot status --porcelain 2>$null
+      if ($branch -and -not $dirty) {
+        Write-Host "Checking for updates on $branch..."
+        & $git.Source -C $repoRoot fetch --quiet origin $branch 2>$null
+        if ($LASTEXITCODE -eq 0) {
+          & $git.Source -C $repoRoot merge --ff-only --quiet FETCH_HEAD 2>$null
+          if ($LASTEXITCODE -eq 0) { Write-Host "Checkout up to date." }
+          else { Write-Warning "Updates diverged or cannot be fast-forwarded; launching existing checkout." }
+        } else { Write-Warning "Update check unavailable (offline or remote issue); launching existing checkout." }
+      } else {
+        Write-Host 'Skipping auto-update (working tree changes or detached HEAD).'
+      }
+    } catch {
+      Write-Warning "Update check skipped: $($_.Exception.Message)"
+    }
+  }
 }
 $workRoot = Resolve-WorkRoot $Root
 $python = Join-Path $workRoot '.venv\Scripts\python.exe'

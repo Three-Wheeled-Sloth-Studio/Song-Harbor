@@ -18,6 +18,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -221,6 +222,97 @@ def download(ident: str, filename: str):
     if job is None or job["status"] != "complete" or filename not in job["files"]:
         raise HTTPException(404, "Stem not available")
     return FileResponse(job["output_path"] / filename, filename=filename, media_type="audio/wav")
+
+
+class StemMixSetting(BaseModel):
+    filename: str
+    gain: float = Field(ge=0, le=2)
+    mute: bool = False
+    solo: bool = False
+
+
+class MixRequest(BaseModel):
+    stems: list[StemMixSetting] = Field(min_length=6, max_length=6)
+
+
+def validate_mix(job: dict[str, Any], settings: list[StemMixSetting]) -> list[tuple[str, float]]:
+    """Produce the safe, ordered effective gains for exactly six known stems."""
+    known = set(job["files"])
+    received = [setting.filename for setting in settings]
+    if len(known) != 6 or len(received) != 6 or set(received) != known or len(set(received)) != 6:
+        raise ValueError("Mix must contain each of the six existing stems exactly once")
+    any_solo = any(setting.solo for setting in settings)
+    return [
+        (setting.filename, 0.0 if setting.mute or (any_solo and not setting.solo) else setting.gain)
+        for setting in settings
+    ]
+
+
+@app.post("/api/jobs/{ident}/mix")
+def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]:
+    require_local_origin(request)
+    job = jobs.get(ident)
+    if job is None or job["status"] != "complete":
+        raise HTTPException(409, "A completed separation is required before mixing")
+    try:
+        levels = validate_mix(job, body.stems)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    # Prevent simultaneous writes of the same output; don't block the audio workbench.
+    with lock:
+        if job.get("rendering", False):
+            raise HTTPException(409, "Mix export is already in progress")
+        job["rendering"] = True
+
+    target = job["output_path"] / "Song Harbor Mix.wav"
+    temporary = job["output_path"] / "Song Harbor Mix.partial.wav"
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        job["rendering"] = False
+        raise HTTPException(503, "FFmpeg not available on PATH")
+
+    command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
+    for filename, _ in levels:
+        command.extend(["-i", str(job["output_path"] / filename)])
+    filters = []
+    for index, (_, gain) in enumerate(levels):
+        filters.append(f"[{index}:a]volume={gain:.6f}[s{index}]")
+    inputs = "".join(f"[s{index}]" for index in range(len(levels)))
+    filters.append(f"{inputs}amix=inputs=6:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.98:level=0[mix]")
+    command.extend([
+        "-filter_complex", ";".join(filters),
+        "-map", "[mix]", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", str(temporary),
+    ])
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=1800,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr[-1200:] or f"FFmpeg exited {result.returncode}")
+        source_duration = job.get("source_duration_seconds") or probe_duration(job["input_path"])
+        rendered_duration = probe_duration(temporary)
+        if abs(rendered_duration - source_duration) > DURATION_TOLERANCE_SECONDS:
+            raise RuntimeError(f"Export length mismatch: {rendered_duration:.2f}s vs {source_duration:.2f}s")
+        temporary.replace(target)
+        return {"filename": target.name, "url": f"/api/jobs/{ident}/mix-file"}
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(500, f"Mix export failed: {exc}") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
+        job["rendering"] = False
+
+
+@app.get("/api/jobs/{ident}/mix-file")
+def download_mix(ident: str):
+    job = jobs.get(ident)
+    if job is None or job["status"] != "complete":
+        raise HTTPException(404, "Mix unavailable")
+    target = job["output_path"] / "Song Harbor Mix.wav"
+    if not target.is_file():
+        raise HTTPException(404, "Mix has not been exported")
+    return FileResponse(target, filename=target.name, media_type="audio/wav")
 
 
 @app.post("/api/jobs/{ident}/open-folder")

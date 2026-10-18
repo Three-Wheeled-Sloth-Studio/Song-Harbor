@@ -98,6 +98,18 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/runtime/status")
+def runtime_status() -> dict[str, Any]:
+    """Lightweight launcher-friendly status for avoiding mid-job restarts."""
+    with lock:
+        running = sum(job.get("status") in ("uploading", "queued", "running")
+                      or bool(job.get("rendering"))
+                      or bool(job.get("exporting_waveform"))
+                      for job in jobs.values())
+    return {"instance_token": os.environ.get("SONG_HARBOR_INSTANCE_TOKEN", ""),
+            "pid": os.getpid(), "busy": running > 0, "active_jobs": running}
+
+
 def dependency_tool(name: str) -> str:
     pair = dependencies.resolve(APP_ROOT)
     if not pair:

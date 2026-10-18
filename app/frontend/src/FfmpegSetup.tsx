@@ -4,7 +4,7 @@ import { Button, Dialog, Status } from "@tws-ui/core/react";
 type FfmpegPair = {directory: string; ffmpeg: string; ffprobe: string};
 type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: FfmpegPair | null; needs_setup?: string[] };
 type Settings = {found: FfmpegPair | null; suggested_install_directory: string; config_path: string};
-type InstallStatus = {id: string; status: string; message: string};
+type InstallStatus = {id: string; status: string; message: string; phase?: string; progress_percent?: number | null};
 const BASE = "/api/dependencies/ffmpeg";
 
 async function json<T>(url: string, options?: RequestInit): Promise<T> {
@@ -117,7 +117,12 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
           const result = await post<InstallStatus>(BASE + "/install", {path: installPath.trim()});
           setInstallJob(result);
         })}>Download and install here</Button>
-      {installJob && <p role="status">{installJob.message}</p>}
+      {installJob && <div className="ffmpeg-install-progress" role="status">
+        <p>{installJob.message}</p>
+        {installJob.status === "running" && (installJob.progress_percent == null
+          ? <div className="ffmpeg-progress-track indeterminate" aria-label="Installing FFmpeg"><span /></div>
+          : <progress aria-label="FFmpeg download progress" max={100} value={installJob.progress_percent} />)}
+      </div>}
     </div>
     {message && <p role="status">{message}</p>}
     {error && <div className="error-message" role="alert">{error}</div>}

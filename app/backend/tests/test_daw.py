@@ -1,5 +1,8 @@
 """DAW adapters: Audacity discovery, preserved Waveform config and portable export."""
 import json
+import os
+import subprocess
+import base64
 import sys
 import tempfile
 import unittest
@@ -105,6 +108,33 @@ class DawAdapterTests(unittest.TestCase):
             found = daw.resolve(self.root, target_id="audacity")
         self.assertEqual(str(shortcut_target.resolve()), found)
         self.assertEqual(found, daw.configured(self.root, "audacity"))
+
+    @unittest.skipUnless(os.name == "nt", "Start Menu shortcut COM test requires Windows")
+    def test_real_windows_start_menu_shortcut_resolution(self):
+        """Exercise WScript COM + PowerShell using a synthetic Audacity 4 shortcut."""
+        base = self.root / "Profile"
+        menu = base / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        menu.mkdir(parents=True)
+        app = self.root / "Audio Tools" / "Audacity 4"
+        app.mkdir(parents=True)
+        exe = app / "Audacity4.exe"
+        exe.write_bytes(b"fixture")
+        link = menu / "Audacity 4.lnk"
+        import unittest.mock as mock
+        script = (
+            "$s=New-Object -ComObject WScript.Shell;"
+            "$l=$s.CreateShortcut(" + json.dumps(str(link)) + ");"
+            "$l.TargetPath=" + json.dumps(str(exe)) + ";$l.Save()"
+        )
+        command = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-EncodedCommand", command],
+            capture_output=True, text=True, timeout=15, creationflags=creationflags)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        with mock.patch.dict(os.environ, {"APPDATA": str(base), "PROGRAMDATA": str(self.root / "NoSharedMenu")}):
+            targets = daw.windows_shortcut_locations("audacity")
+        self.assertIn(exe.resolve(), [p.resolve() for p in targets])
 
     def test_wrong_executable_rejected(self):
         with self.assertRaises(ValueError):

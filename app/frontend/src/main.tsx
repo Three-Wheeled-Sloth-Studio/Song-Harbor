@@ -18,7 +18,7 @@ type Job = {
   elapsed_seconds: number | null;
   source_duration_seconds?: number;
 };
-type Health = { ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
+type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
 function App() {
@@ -30,6 +30,7 @@ function App() {
   const [showDetails, setShowDetails] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const pendingSeparation = useRef(false);
+  const pendingMixRetry = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     fetch(API + "/health").then(r => r.ok ? r.json() : Promise.reject())
@@ -109,7 +110,7 @@ function App() {
   const running = job && ["queued", "running"].includes(job.status);
   const finished = job?.status === "complete";
   const statusTone = finished ? "success" : job?.status === "error" ? "danger" : running ? "info" : "neutral";
-  const canStart = !!file && !!health?.separator && !busy && !running;
+  const canStart = !!file && !!health?.separator_ready && !busy && !running;
   const missingCount = health?.needs_setup?.length ?? 0;
   function completedSetup(next: Health) {
     setHealth(next);
@@ -118,13 +119,18 @@ function App() {
       pendingSeparation.current = false;
       void startSeparation();
     }
+    if (next.ffmpeg && pendingMixRetry.current) {
+      const retry = pendingMixRetry.current;
+      pendingMixRetry.current = null;
+      retry();
+    }
   }
 
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden="true">◈</span><span>TWS STUDIOS</span><span className="brand-divider">/</span><strong>Song Harbor</strong></div>
       <div className="header-actions">
-        <Status tone={health?.separator ? "success" : "warning"}>{health?.separator ? "Local engine" : "Engine unavailable"}</Status>
+        <Status tone={health?.separator_ready ? "success" : "warning"}>{health?.separator_ready ? "Local engine" : "Engine unavailable"}</Status>
         <button type="button" className="dependency-indicator" title={missingCount ? `${missingCount} component(s) need setup` : "Component settings"}
           aria-label={missingCount ? `Components: ${missingCount} missing. Open setup.` : "Open component settings"}
           onClick={() => setSetupOpen(true)}>
@@ -138,7 +144,7 @@ function App() {
         <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
         <span className="edition">M1 · STEM MIXER</span>
       </section>
-      <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) pendingSeparation.current = false; }} onReady={completedSetup} />
+      <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
       <div className="workspace-grid">
         <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>
@@ -165,7 +171,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds} />
+            <StemMixer jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

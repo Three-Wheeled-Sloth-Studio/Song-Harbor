@@ -97,7 +97,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   return <Dialog open onOpenChange={next => { if (!next && !busy) onClose(); }}
-    title="Export to DAW" description="Choose a DAW, prepare aligned stems, and open it when ready.">
+    title="DAW handoff" description="Target, files, launch.">
     <div className="daw-setup">
       <div className="daw-controls">
         <select aria-label="DAW target" value={target} onChange={e => setTarget(e.target.value)}
@@ -116,15 +116,15 @@ export function DawHandoff({jobId, saveProject, onClose}: {
             const result = await post("/projects/" + jobId + "/daw/open-folder");
             if (result.status !== "opened") throw new Error(result.message || "Could not open export folder");
           });
-        }}>Open files</Button>}
+        }}>Files</Button>}
         {installed && <Button variant="secondary" disabled={busy} onClick={() => { void perform(launch); }}>
-          Open Waveform
+          Launch
         </Button>}
       </div>
       {folder && <p className="daw-path" title={folder}>{folder}</p>}
       {!installed && <>
         <div className="daw-section">
-          <div className="daw-section-heading"><strong>Find existing installation</strong>
+          <div className="daw-section-heading"><strong>Locate DAW</strong>
             <Button variant="subtle" size="compact" disabled={busy} onClick={() => { void perform(detect); }}>Detect</Button>
           </div>
           <div className="daw-controls">
@@ -141,11 +141,11 @@ export function DawHandoff({jobId, saveProject, onClose}: {
             <Button variant="secondary" disabled={busy} onClick={() => {
               window.open(catalog?.targets.find(item => item.id === target)?.download_url ||
                 "https://www.tracktion.com/products/waveform-free", "_blank", "noopener,noreferrer");
-            }}>Get Waveform Free</Button>
+            }}>Download</Button>
             <Button variant="subtle" disabled={busy} onClick={() => { void perform(async () => {
               const result = await post("/daws/waveform/browse-installer");
               if (result.path) setInstaller(result.path);
-            }); }}>Choose installer</Button>
+            }); }}>Find installer</Button>
             {installer && <Button variant="primary" disabled={busy} onClick={() => { void perform(runInstaller); }}>
               Run installer
             </Button>}

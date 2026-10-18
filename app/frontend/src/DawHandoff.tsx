@@ -135,13 +135,14 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   async function launch() {
-    const result = await post("/daws/" + target + "/launch");
+    if (!folder) throw new Error("Prepare stems before launching.");
+    const result = await post("/projects/" + jobId + "/daw/launch", {target, directory: folder});
     if (result.status === "setup_required") {
       await refresh();
       setMessage(targetName + " needs configuration. Find it or install below.");
       return;
     }
-    setMessage(targetName + " opened. Import the six WAVs as separate tracks at 0:00.");
+    setMessage(result.message || (targetName + " opened."));
   }
 
   return <Dialog open onOpenChange={next => { if (!next && !busy) onClose(); }}

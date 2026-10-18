@@ -6,6 +6,7 @@ either to export a portable stem bundle. No executable is run during discovery.
 from __future__ import annotations
 
 import json
+import base64
 import threading
 import time
 import os
@@ -32,7 +33,7 @@ TARGETS = {
 }
 EXECUTABLE_NAMES = {
     "waveform": ("Waveform.exe", "Waveform 14.exe", "Waveform 13.exe", "Waveform 12.exe", "Waveform Free.exe"),
-    "audacity": ("Audacity.exe",),
+    "audacity": ("Audacity.exe", "Audacity4.exe", "Audacity 4.exe", "Audacity3.exe", "Audacity 3.exe"),
 }
 
 
@@ -50,13 +51,15 @@ def verify_executable(target_id: str, chosen: Path) -> Path | None:
         candidates = [path / name for name in names]
         if target_id == "waveform":
             candidates.extend(path.glob("Waveform*.exe"))
+        elif target_id == "audacity":
+            candidates.extend(path.glob("Audacity*.exe"))
     else:
         candidates = [path]
     for candidate in candidates:
         if not candidate.is_file():
             continue
         basename = candidate.name.lower()
-        valid = (basename == "audacity.exe") if target_id == "audacity" else bool(re.fullmatch(r"Waveform.*\.exe", candidate.name, re.I))
+        valid = bool(re.fullmatch(r"audacity(?:[ _-]?\\d+(?:\\.\\d+)*)?\\.exe", basename, re.I)) if target_id == "audacity" else bool(re.fullmatch(r"Waveform.*\\.exe", candidate.name, re.I))
         if valid:
             return candidate.resolve()
     return None
@@ -138,20 +141,31 @@ def windows_shortcut_locations(target_id: str) -> list[Path]:
             continue
     if not shortcuts:
         return []
-    # Run this opt-in bounded shortcut resolution only with matching shortcut filenames.
-    script = (
-        "$s=(New-Object -ComObject WScript.Shell);"
-        "foreach($p in $args){try{$link=$s.CreateShortcut($p);"
-        "if($link.TargetPath){[Console]::WriteLine($link.TargetPath)}}catch{}}"
+    # PowerShell -Command trailing arguments are not a reliable $args array;
+    # embed the paths as JSON in a UTF-16LE encoded script instead. This also
+    # handles folders with spaces, quotes and non-ASCII Windows usernames.
+    paths = json.dumps([str(path) for path in shortcuts[:40]], ensure_ascii=False)
+    ps = (
+        "$ErrorActionPreference='Stop';"
+        "$paths=ConvertFrom-Json -InputObject '" + paths.replace("'", "''") + "';"
+        "$shell=New-Object -ComObject WScript.Shell;"
+        "foreach($p in $paths){"
+        "try {$link=$shell.CreateShortcut([string]$p);"
+        "if($link.TargetPath){[Console]::WriteLine($link.TargetPath)}}"
+        "catch {}}"
     )
+    encoded = base64.b64encode(ps.encode("utf-16le")).decode("ascii")
     try:
-        output = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-             script, *[str(x) for x in shortcuts[:30]]],
-            capture_output=True, text=True, timeout=10,
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive",
+             "-EncodedCommand", encoded],
+            capture_output=True, text=True, timeout=15,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        return [Path(s.strip().strip('"')) for s in output.stdout.splitlines() if s.strip()]
+        if result.returncode != 0:
+            return []
+        return [Path(line.strip().strip('"')) for line in result.stdout.splitlines()
+                if line.strip()]
     except (OSError, subprocess.TimeoutExpired):
         return []
 
@@ -165,7 +179,7 @@ def common_locations(target_id: str = "waveform") -> list[Path]:
             continue
         root = Path(value)
         if target_id == "audacity":
-            candidates.extend((root / "Audacity", root / "Audacity 4", root / "Audacity 3",
+            candidates.extend((root / "Audacity", root / "Audacity4", root / "Audacity 4", root / "Audacity3", root / "Audacity 3",
                                root / "Programs" / "Audacity",
                                root / "Microsoft" / "WinGet" / "Links",
                                root / "Microsoft" / "WindowsApps"))
@@ -180,7 +194,7 @@ def common_locations(target_id: str = "waveform") -> list[Path]:
         for drive in available_drives():
             for rootname in ("Apps", "Applications", "Tools", "PortableApps"):
                 base = drive / rootname
-                candidates.extend((base / "Audacity", base / "Audacity 3", base / "Audacity 4"))
+                candidates.extend((base / "Audacity", base / "Audacity3", base / "Audacity4", base / "Audacity 3", base / "Audacity 4"))
             candidates.extend((drive / "Audacity", drive / "Program Files" / "Audacity",
                                drive / "Program Files (x86)" / "Audacity"))
         candidates.extend((

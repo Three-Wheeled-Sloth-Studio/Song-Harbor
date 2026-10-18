@@ -599,6 +599,44 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
         job["exporting_waveform"] = False
 
 
+class DawLaunchRequest(BaseModel):
+    target: str = "waveform"
+    directory: str = Field(min_length=1, max_length=4096)
+
+
+@app.post("/api/projects/{ident}/daw/launch")
+def daw_launch_project(ident: str, request: Request, body: DawLaunchRequest) -> dict[str, Any]:
+    """Launch a validated, already-prepared song export in its selected editor."""
+    require_local_origin(request)
+    if body.target not in daw.TARGETS:
+        raise HTTPException(400, "Unsupported DAW target")
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(409, "Complete a song before DAW handoff")
+    base = (DATA_ROOT / "jobs" / ident / "exports").resolve()
+    folder = Path(body.directory).resolve()
+    if folder.parent != base or not folder.is_dir():
+        raise HTTPException(400, "Export folder does not belong to this song")
+    try:
+        manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, "Reprepare stems: export manifest missing") from exc
+    if manifest.get("source_project_id") != ident or manifest.get("target") != body.target:
+        raise HTTPException(400, "Export does not match the selected song and DAW")
+    executable = daw.resolve(APP_ROOT, target_id=body.target)
+    if not executable:
+        return {"status": "setup_required", "target": body.target}
+    try:
+        if body.target == "audacity":
+            return audacity_handoff.launch_audacity(executable, folder)
+        subprocess.Popen([executable], cwd=str(Path(executable).parent),
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return {"status": "started", "target": body.target,
+                "message": "Waveform launched; import the six WAVs as separate tracks."}
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, f"Could not launch DAW: {exc}") from exc
+
+
 @app.post("/api/projects/{ident}/daw/open-folder")
 def daw_open_folder(ident: str, request: Request) -> dict[str, Any]:
     require_local_origin(request)

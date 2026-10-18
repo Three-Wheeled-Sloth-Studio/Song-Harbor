@@ -17,11 +17,12 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialTitle }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialTitle, onSaved }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
   initialTitle?: string;
+  onSaved?: () => void;
 }) {
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
     const saved = savedStems?.find(stem => stem.filename === filename);
@@ -161,6 +162,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         throw new Error(detail.detail || "Could not save song project");
       }
       setNotice("Song project saved.");
+      onSaved?.();
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save song project");

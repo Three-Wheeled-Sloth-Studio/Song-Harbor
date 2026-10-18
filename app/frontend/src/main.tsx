@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
+import { StemMixer } from "./StemMixer";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
 import "./song-harbor.css";
@@ -14,6 +15,7 @@ type Job = {
   files: string[];
   logs: string[];
   elapsed_seconds: number | null;
+  source_duration_seconds?: number;
 };
 type Health = { ready: boolean; model: string; model_directory: string };
 const API = "/api";
@@ -97,7 +99,7 @@ function App() {
     <main className="workspace">
       <section className="workspace-heading">
         <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
-        <span className="edition">M0 · STEM SEPARATION</span>
+        <span className="edition">M1 · STEM MIXER</span>
       </section>
       <div className="workspace-grid">
         <Panel elevation="raised" className="task-panel">
@@ -123,12 +125,17 @@ function App() {
             <span>{job?.message || "Choose a recording to get started."}</span>
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
-          {finished && job && <div className="stems">
-            {job.files.map(name => <div className="stem" key={name}>
-              <div className="stem-symbol">♫</div><span title={name}>{name}</span>
-              <a href={API + "/jobs/" + job.id + "/files/" + encodeURIComponent(name)} download={name} title={"Download " + name}>Download</a>
-            </div>)}
-          </div>}
+          {finished && job && <>
+            <StemMixer jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds} />
+            <details className="stem-download-details"><summary>Individual stem files</summary>
+              <div className="stems">
+                {job.files.map(name => <div className="stem" key={name}>
+                  <div className="stem-symbol">♫</div><span title={name}>{name}</span>
+                  <a href={API + "/jobs/" + job.id + "/files/" + encodeURIComponent(name)} download={name} title={"Download " + name}>Download</a>
+                </div>)}
+              </div>
+            </details>
+          </>}
           {!finished && !running && <div className="empty-result"><div className="waveform" aria-hidden="true">▂▃▅▇▆▄▂▁▃▆▇▅▂</div><p>Your separated tracks will appear here.</p></div>}
           {job && <footer className="result-footer">
             {job.elapsed_seconds != null && <small>Elapsed: {job.elapsed_seconds.toFixed(2)} s</small>}

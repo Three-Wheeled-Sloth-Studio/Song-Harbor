@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
+import type { SavedStem } from "./StemMixer";
 import { FfmpegSetup } from "./FfmpegSetup";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
@@ -18,6 +19,8 @@ type Job = {
   elapsed_seconds: number | null;
   source_duration_seconds?: number;
 };
+type RecentSong = {id: string; title: string; filename: string; created_at: number; recovered?: boolean};
+type SongProject = {id: string; title: string; stems: SavedStem[]; source_duration_seconds?: number | null};
 type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
@@ -28,6 +31,10 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  const [recentSongs, setRecentSongs] = useState<RecentSong[]>([]);
+  const [recentChoice, setRecentChoice] = useState("");
+  const [openingSong, setOpeningSong] = useState(false);
+  const [project, setProject] = useState<SongProject | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const pendingSeparation = useRef(false);
   const pendingMixRetry = useRef<(() => void) | null>(null);
@@ -37,6 +44,47 @@ function App() {
       .then((data: Health) => setHealth(data))
       .catch(() => setError("Local Song Harbor backend is unavailable. Use the launcher to set up the application."));
   }, []);
+
+  async function refreshSongs() {
+    try {
+      const response = await fetch(API + "/projects");
+      if (!response.ok) return;
+      const data = await response.json() as {projects: RecentSong[]};
+      setRecentSongs(data.projects);
+    } catch { /* Recent songs are supplemental; keep current work available. */ }
+  }
+
+  useEffect(() => { void refreshSongs(); }, []);
+
+  useEffect(() => {
+    if (!job || job.status !== "complete") return;
+    let cancelled = false;
+    void fetch(API + "/projects/" + job.id)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: {project: SongProject}) => { if (!cancelled) setProject(data.project); })
+      .catch(() => { /* Song can still be mixed if the manifest is unavailable. */ });
+    void refreshSongs();
+    return () => { cancelled = true; };
+  }, [job?.id, job?.status]);
+
+  async function openSong() {
+    if (!recentChoice || openingSong) return;
+    setOpeningSong(true);
+    setError("");
+    try {
+      const response = await fetch(API + "/projects/" + recentChoice);
+      const payload = await response.json() as {job?: Job; project?: SongProject; detail?: string};
+      if (!response.ok || !payload.job || !payload.project) throw new Error(payload.detail || "Could not reopen song");
+      setJob(null); // release previous mixer and streams before restoring
+      setFile(null);
+      setProject(payload.project);
+      setJob(payload.job);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reopen song");
+    } finally {
+      setOpeningSong(false);
+    }
+  }
 
   useEffect(() => {
     if (!job || !["queued", "running"].includes(job.status)) return;
@@ -66,6 +114,7 @@ function App() {
     if (!file || busy) return;
     setBusy(true);
     setJob(null);
+    setProject(null);
     setError("");
     const body = new FormData();
     body.append("file", file);
@@ -148,9 +197,21 @@ function App() {
       <div className="workspace-grid">
         <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>
+          {recentSongs.length > 0 && <details className="recent-songs">
+            <summary>Open saved song ({recentSongs.length})</summary>
+            <div className="recent-song-controls">
+              <select aria-label="Saved songs" value={recentChoice} disabled={!!running || busy || openingSong}
+                onChange={e => setRecentChoice(e.target.value)}>
+                <option value="">Choose a saved song…</option>
+                {recentSongs.map(song => <option key={song.id} value={song.id}>{song.title}</option>)}
+              </select>
+              <Button variant="secondary" size="compact" disabled={!recentChoice || !!running || busy || openingSong}
+                onClick={openSong}>{openingSong ? "Opening…" : "Open"}</Button>
+            </div>
+          </details>}
           <FormField label="Choose a recording" hint="WAV, FLAC, MP3, M4A, AIFF, or OGG · Up to 1 GiB">
             <input className="source-picker" type="file" accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
-              disabled={!!running || busy} onChange={e => { setFile(e.target.files?.[0] || null); setJob(null); setError(""); }} />
+              disabled={!!running || busy} onChange={e => { setFile(e.target.files?.[0] || null); setJob(null); setProject(null); setError(""); }} />
           </FormField>
           {file && <div className="selected-file"><span title={file.name}>{file.name}</span><small>{(file.size / 1048576).toFixed(1)} MB</small></div>}
           <div className="separator-rule"/>
@@ -171,7 +232,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
+            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

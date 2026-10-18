@@ -117,17 +117,20 @@ def validated_stems(project: dict[str, Any], folder: Path) -> list[Path]:
     return [folder / "stems" / f for f in files]
 
 
-def export_waveform(data_root: Path, project: dict[str, Any]) -> Path:
-    """Portable Waveform import folder, NOT a fabricated .tracktionedit project."""
+def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path:
+    """Portable aligned WAV exchange for an explicit DAW target, never a guessed native session."""
+    if target_id not in ("waveform", "audacity"):
+        raise ValueError("Unsupported DAW target")
     folder = data_root / "jobs" / project["id"]
     originals = validated_stems(project, folder)
     export_parent = folder / "exports"
     export_parent.mkdir(parents=True, exist_ok=True)
-    target = export_parent / "Waveform"
+    label = "Waveform" if target_id == "waveform" else "Audacity"
+    target = export_parent / label
     # Unique exports preserve earlier bundles and any external edits.
     if target.exists():
-        target = export_parent / ("Waveform-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4])
-    staging = Path(tempfile.mkdtemp(prefix=".waveform-", dir=export_parent))
+        target = export_parent / (label + "-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4])
+    staging = Path(tempfile.mkdtemp(prefix="." + target_id + "-", dir=export_parent))
     try:
         tracks = []
         for index, p in enumerate(originals, start=1):
@@ -137,26 +140,45 @@ def export_waveform(data_root: Path, project: dict[str, Any]) -> Path:
             tracks.append({"name": name, "file": destination, "start_seconds": 0.0,
                            "gain": next((s["gain"] for s in project["stems"]
                                          if s["filename"] == p.name), 1.0)})
-        manifest = {"format": "song-harbor-waveform-exchange", "version": 1,
+        manifest = {"format": "song-harbor-daw-exchange", "target": target_id, "version": 1,
                     "song": project.get("title"), "source_project_id": project["id"],
                     "source_duration_seconds": project.get("source_duration_seconds"),
                     "sample_rate_hz": 48000, "track_count": 6, "tracks": tracks}
         (staging / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        (staging / "IMPORT-IN-WAVEFORM.txt").write_text(
-            "Song Harbor -> Waveform Free\n\n"
-            "1. Open Waveform Free and create/open a project and its Edit.\n"
-            "2. Import all six WAV files as SIX SEPARATE TRACKS, not end-to-end clips.\n"
-            "   Select files in Waveform's browser, then Ctrl-drag and choose separate tracks.\n"
-            "3. Ensure every clip starts at timeline 0:00; disable tempo sync/stretch and looping.\n"
-            "4. Check song duration and alignment before editing.\n"
-            "5. Keep this export folder intact as Waveform may refer to its audio files.\n\n"
-            "The six stems are copied unaltered from Song Harbor.\n"
-            "This is a portable audio exchange, not a native .tracktionedit file.\n"
-            "Mixer gains are in manifest.json as reference; apply levels in Waveform as desired.\n",
-            encoding="utf-8",
+        if target_id == "waveform":
+            instructions = (
+                "Song Harbor -> Waveform Free\n\n"
+                "1. Open Waveform and create/open a project and Edit.\n"
+                "2. Import all six WAV files as SIX SEPARATE TRACKS, not end-to-end clips.\n"
+                "3. Place every track at 0:00; disable stretching, loops and tempo sync.\n"
+                "4. Verify complete duration and alignment before editing.\n"
+                "5. Keep this folder intact while your DAW references its files.\n"
+            )
+        else:
+            instructions = (
+                "Song Harbor -> Audacity\n\n"
+                "1. Open Audacity and start a new project.\n"
+                "2. File > Import > Audio, then select all six numbered WAVs together.\n"
+                "   Each WAV should become its own audio track.\n"
+                "3. Ensure all six tracks start at 0:00 and keep their original tempo.\n"
+                "4. Check duration and alignment before processing or exporting.\n"
+                "5. Save the Audacity project to retain edits; keep this exchange folder.\n"
+            )
+        instructions += (
+            "\nStems are byte-for-byte copies, with no Song Harbor mix gain applied.\n"
+            "See manifest.json for track order and saved Song Harbor gains.\n"
+            "This is not a native DAW project; tracks must be imported.\n"
+        )
+        (staging / ("IMPORT-IN-" + label.upper() + ".txt")).write_text(
+            instructions, encoding="utf-8"
         )
         staging.rename(target)
         return target
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+
+
+def export_waveform(data_root: Path, project: dict[str, Any]) -> Path:
+    """Compatibility with existing Waveform exports and tests."""
+    return export_daw(data_root, project, "waveform")

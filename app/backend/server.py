@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import dependencies
 import projects
+import daw
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -339,6 +340,56 @@ def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, A
     record["stems"] = [s.model_dump() for s in body.stems]
     record["updated_at"] = time.time()
     return {"project": projects.write_project(DATA_ROOT, record)}
+
+
+class DawTargetRequest(BaseModel):
+    target: str = "waveform"
+
+
+class DawPathRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+
+
+@app.get("/api/daws")
+def daw_catalog() -> dict[str, Any]:
+    return {"targets": [daw.target("waveform")], "selected": "waveform",
+            "installed": {"waveform": daw.resolve(APP_ROOT)}}
+
+
+@app.post("/api/daws/waveform/detect")
+def daw_detect(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return {"executable": daw.resolve(APP_ROOT)}
+
+
+@app.post("/api/daws/waveform/browse")
+def daw_browse(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return {"path": daw.choose_executable("Select installed Waveform executable")}
+
+
+@app.post("/api/daws/waveform/locate")
+def daw_locate(request: Request, body: DawPathRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"executable": daw.set_location(APP_ROOT, body.path)}
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/daws/waveform/browse-installer")
+def daw_browse_installer(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return {"path": daw.choose_executable("Select downloaded Waveform installer", installer=True)}
+
+
+@app.post("/api/daws/waveform/run-installer")
+def daw_run_installer(request: Request, body: DawPathRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return daw.start_installer(body.path)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/projects/{ident}/waveform")

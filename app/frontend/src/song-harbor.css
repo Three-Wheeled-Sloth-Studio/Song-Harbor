@@ -211,3 +211,14 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 /* Works with already-installed versions of TWS-UI until the shared pencil update ships. */
 .lib-song-main .tws-editable-title__edit{font-size:0}
 .lib-song-main .tws-editable-title__edit::before{content:"✎";font-size:17px;line-height:1}
+
+/* Instrument icons must carry comparable visual weight to desktop music software. */
+.mixer-track{grid-template-columns:54px 88px minmax(150px,1fr) 54px;min-height:68px;gap:14px;padding:9px 14px}
+.stem-icon-name{display:flex;align-items:center;justify-content:center;min-width:45px;color:#c9e6e9}
+.audio-stem-pictogram{display:block;min-width:32px;min-height:32px}
+.mixer .tws-icon-button{min-width:46px;min-height:46px;border-radius:11px}
+.mixer .tws-icon-button>span{font-size:27px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.mixer .transport .tws-icon-button{min-width:50px;min-height:50px}
+.mixer .track-toggle{min-width:38px;min-height:37px;font-size:15px}
+.mixer .track-actions{gap:7px}
+@media(max-width:480px){.mixer-track{grid-template-columns:39px 75px minmax(55px,1fr) 40px;gap:5px;padding:7px}.audio-stem-pictogram{width:27px;height:27px;min-width:27px;min-height:27px}.mixer .track-toggle{min-width:32px;min-height:32px}}

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, IconButton, Status } from "@tws-ui/core/react";
 import { DawHandoff } from "./DawHandoff";
+import { AudioIcon } from "./AudioIcons";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
-const stemSymbols: Record<string,string> = { Vocals:"🎙", Drums:"🥁", Bass:"♭", Guitar:"🎸", Piano:"🎹", Other:"♫" };
+
 
 
 function labelOf(filename: string) {
@@ -258,7 +259,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     </div>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
-        <strong className="stem-icon-name" title={s.name} aria-label={s.name}>{stemSymbols[s.name] || "♫"}<span className="sr-only">{s.name}</span></strong>
+        <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>
         <div className="track-actions">
           <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
             aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>

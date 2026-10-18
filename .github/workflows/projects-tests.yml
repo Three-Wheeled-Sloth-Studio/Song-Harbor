@@ -18,6 +18,8 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check Python source syntax
-        run: python -m py_compile app/backend/server.py app/backend/projects.py app/backend/dependencies.py
-      - name: Verify persistence and DAW export without CUDA
+        run: python -m py_compile app/backend/server.py app/backend/projects.py app/backend/dependencies.py app/backend/daw.py app/backend/library.py
+      - name: Verify project recovery and DAW exchange
         run: python -m unittest discover -s app/backend/tests -p 'test_projects.py' -v
+      - name: Verify SQLite Library adoption and safe rename
+        run: python -m unittest discover -s app/backend/tests -p 'test_library.py' -v

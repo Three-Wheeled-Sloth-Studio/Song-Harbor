@@ -226,7 +226,11 @@ export function LibraryHome({onOpenSong, onImport}: {
           <div className="lib-song-group" key={song.id}><div role="listitem" className={"lib-song" + (selected === song.id?" selected":"")}
             onClick={() => setSelected(song.id)}
             onContextMenu={e => openContext(e,song)}
-            onKeyDown={e => {if(e.key==="ContextMenu" || e.shiftKey && e.key==="F10")openContext(e,song);}}
+            onKeyDown={e => {if(e.key==="ContextMenu" || e.shiftKey && e.key==="F10"){
+              e.preventDefault();const rect=e.currentTarget.getBoundingClientRect();
+              setContext({song,x:Math.min(rect.left+35,window.innerWidth-195),
+                y:Math.min(rect.bottom,window.innerHeight-190)});
+            }}}
             tabIndex={0}
             onDoubleClick={() => onOpenSong(song.legacy_job_id)}>
             <div className="lib-song-main">

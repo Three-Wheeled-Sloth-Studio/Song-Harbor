@@ -118,3 +118,23 @@ No user acceptance or end-to-end QA is claimed yet. M0 remains accepted; M1 is *
 ## Dependency UI correction (2026-10-18)
 
 The initial implementation showed a large persistent setup panel on page load, even if the user was not trying to use FFmpeg. This is explicitly **rejected**. Correct design: passive status icon/count in the thin header, no workspace takeover; modal recovery only on affected action or user-clicked component settings; replay interrupted task after configuration. Implementation uses shared `@tws-ui/core/react` Dialog, preserves file selection, and keeps core engine status separate from FFmpeg readiness. Canonical standards updated in TWS Design Principles sections 19–20 and Studio UI Style Guide. UI requires a local smoke test on Laptop Predator after pulling latest source.
+
+## M2: Persistent song workbench + Waveform Free-first handoff
+
+Song Harbor now saves a `song-harbor.json` manifest in the machine-local `<runtime>/data/jobs/<id>/` folder on completion. It includes the song name, source name, six source stems, and mix controls (gain, mute, solo). The mixer exposes **Save song**, and **Open saved song** restores an earlier session without running the model again, including stem mixing state. Existing older six-stem jobs with all original files can be discovered and recovered after restart, with their initial mixer state set to defaults until explicitly saved.
+
+The next step into a full DAW is **Export to Waveform** on a completed song. This copies the six **unaltered**, aligned 48 kHz WAV stems into a self-contained `exports/Waveform` folder (or a unique suffixed sibling for later exports), includes a `manifest.json` with track order and original mix gains for reference, and writes `IMPORT-IN-WAVEFORM.txt` with documented import steps. Press **Open export folder** and then in Waveform Free: create/open an Edit, select all six WAVs, **Ctrl-drag** to import on separate tracks, and check every track begins at timeline 0:00. Do not import clips consecutively or allow tempo stretch. Export intentionally is **not** a generated `.tracktionedit`: we have not yet validated a native project format against the installed current Waveform version. We do not attempt to install or force-launch any DAW.
+
+**Waveform Free is first priority because the project currently has no funding**. REAPER is the next target when practical, initially via the same generic aligned six-stem exchange, then potentially a native `.RPP` project validated against REAPER. A DAW plugin and embedded full DAW are explicitly deferred. No paid integration is required for core Song Harbor use.
+
+Automated checks: GitHub Actions [Song projects and Waveform exchange](https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/actions/workflows/projects-tests.yml) validates Python syntax, recovery, save/reload, a non-destructive six-stem export, and re-export into a distinct location. The frontend build workflow type-checks and bundles the UI. These checks do not prove the actual audio imports into Waveform or guarantee sample accuracy in browser preview; both require local acceptance testing.
+
+### Predator smoke test
+
+1. Pull main and relaunch; separate a song, adjust vocal gain and solo/mute, and click **Save song**.
+2. Close/relaunch Song Harbor; expand **Open saved song**, select the track, and confirm six stem controls retain their settings and playback works.
+3. Click **Export to Waveform** and **Open export folder**; verify six sequentially named WAVs, manifest, and import instructions. Original stem files must remain unchanged.
+4. Import all six WAVs as separate tracks starting at 0:00 in Waveform Free and verify full song alignment and audio.
+5. Re-export; confirm the first Waveform folder still exists and is not overwritten.
+
+M2 is committed and the code-level CI checks passed; **Waveform application import and Predator end-to-end smoke checks remain unverified**.

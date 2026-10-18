@@ -28,17 +28,19 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function refresh() {
+  async function refresh(closeAfterSetup = false) {
     const data = await json<Settings>(BASE);
     setSettings(data);
     setInstallPath(current => current || data.suggested_install_directory);
     if (data.found) {
       setMessage("FFmpeg detected and saved at " + data.found.directory);
-      const health = await json<Health>("/api/health");
-      onReady(health);
+      if (closeAfterSetup) {
+        const health = await json<Health>("/api/health");
+        onReady(health);
+      }
     }
   }
-  useEffect(() => { refresh().catch(e => setError(String(e))); }, []);
+  useEffect(() => { refresh(false).catch(e => setError(String(e))); }, []);
   useEffect(() => {
     if (!installJob || !["queued", "running"].includes(installJob.status)) return;
     const timer = window.setInterval(async () => {
@@ -46,7 +48,7 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
         const result = await json<InstallStatus>(BASE + "/install/" + installJob.id);
         setInstallJob(result);
         if (result.status === "complete") {
-          await refresh();
+          await refresh(true);
         } else if (result.status === "error") {
           setError(result.message);
         }
@@ -80,7 +82,7 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
       <div className="dependency-inline">
         <Button variant="primary" disabled={!path.trim() || !!action} onClick={() => perform("locate", async () => {
           await post(BASE + "/locate", {path: path.trim()});
-          await refresh();
+          await refresh(true);
         })}>Use this location</Button>
         <Button variant="secondary" disabled={!!action} onClick={() => perform("search", async () => {
           const result = await post<{matches: FfmpegPair[]}>(BASE + "/search");
@@ -89,7 +91,7 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
         })}>{action === "search" ? "Searching…" : "Search computer"}</Button>
       </div>
       {matches.length > 0 && <div className="dependency-matches">{matches.map(m => <button key={m.directory}
-        onClick={() => perform("locate", async () => { await post(BASE + "/locate", {path: m.directory}); await refresh(); })}>
+        onClick={() => perform("locate", async () => { await post(BASE + "/locate", {path: m.directory}); await refresh(true); })}>
         Use {m.directory}</button>)}</div>}
     </div>
 

@@ -9,16 +9,16 @@ if errorlevel 1 (
   exit /b 1
 )
 if "%~1"=="" (
-  pwsh.exe -NoProfile -File "%SCRIPT_DIR%start-song-harbor.ps1"
+  pwsh.exe -NoProfile -File "%SCRIPT_DIR%start-song-harbor.ps1" -InstallOnly
 ) else (
-  pwsh.exe -NoProfile -File "%SCRIPT_DIR%start-song-harbor.ps1" -Root "%~1"
+  pwsh.exe -NoProfile -File "%SCRIPT_DIR%start-song-harbor.ps1" -Root "%~1" -InstallOnly
 )
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 if not "%EXIT_CODE%"=="0" (
-  echo Song Harbor setup or launch failed with exit code %EXIT_CODE%.
+  echo Song Harbor setup failed with exit code %EXIT_CODE%.
 ) else (
-  echo Song Harbor exited normally.
+  echo Song Harbor setup completed.
 )
 pause
 exit /b %EXIT_CODE%

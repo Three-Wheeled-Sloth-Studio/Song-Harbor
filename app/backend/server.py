@@ -26,6 +26,7 @@ SEPARATOR = Path(sys.executable).with_name("audio-separator.exe")
 MODEL = "htdemucs_6s.yaml"
 MAX_UPLOAD = 1024 * 1024 * 1024
 ALLOWED = {".wav", ".flac", ".mp3", ".m4a", ".aiff", ".aif", ".ogg"}
+DURATION_TOLERANCE_SECONDS = 0.25
 for folder in (DATA_ROOT, MODEL_ROOT):
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -43,6 +44,33 @@ def safe_name(name: str) -> str:
     basename = Path(name.replace("\\", "/")).name
     stem = re.sub(r"[^a-zA-Z0-9_. -]", "_", Path(basename).stem).strip(". ")[:100] or "song"
     return stem + Path(basename).suffix.lower()
+
+
+def probe_duration(path: Path) -> float:
+    """Use the actual decoded-audio duration, never the UI's assumed duration."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        raise RuntimeError("ffprobe is required to validate complete stems; install FFmpeg on PATH")
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+        check=True, text=True, capture_output=True, timeout=30,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    value = float(result.stdout.strip())
+    if not 0 < value < float("inf"):
+        raise ValueError(f"Invalid audio duration: {path.name}")
+    return value
+
+
+def validate_stem_lengths(source_duration: float, durations: dict[str, float],
+                          tolerance: float = DURATION_TOLERANCE_SECONDS) -> list[str]:
+    """Return human-readable output mismatches for caller to reject."""
+    return [
+        f"{name}: {duration:.2f}s vs source {source_duration:.2f}s"
+        for name, duration in durations.items()
+        if abs(duration - source_duration) > tolerance
+    ]
 
 
 def require_local_origin(request: Request) -> None:
@@ -126,6 +154,8 @@ def run_job(job: dict[str, Any]) -> None:
     job["status"] = "running"
     job["message"] = "Separating six stems"
     try:
+        source_duration = probe_duration(job["input_path"])
+        job["source_duration_seconds"] = round(source_duration, 3)
         # No shell=True; all paths passed as distinct arguments.
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -144,8 +174,15 @@ def run_job(job: dict[str, Any]) -> None:
         if job["status"] == "cancelled":
             job["message"] = "Cancelled"
         elif rc == 0 and len(files) == 6:
-            job["status"] = "complete"
-            job["message"] = "Six stems ready"
+            durations = {name: probe_duration(output / name) for name in files}
+            job["stem_durations_seconds"] = {name: round(value, 3) for name, value in durations.items()}
+            mismatches = validate_stem_lengths(source_duration, durations)
+            if mismatches:
+                job["status"] = "error"
+                job["message"] = "Truncated or mismatched output: " + "; ".join(mismatches)
+            else:
+                job["status"] = "complete"
+                job["message"] = f"Six full-length stems ready ({source_duration:.1f}s)"
         else:
             job["status"] = "error"
             job["message"] = f"Separation exited with code {rc}; found {len(files)} of 6 stems"

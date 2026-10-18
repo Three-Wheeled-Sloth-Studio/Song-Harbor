@@ -196,6 +196,7 @@ function App() {
         </button>
       </div>
     </header>
+    <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
       onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className="workspace">
       <button className="back-to-library" title="Back to Library" onClick={() => setView("library")}>← Library</button>
@@ -203,7 +204,7 @@ function App() {
         <div className="session-breadcrumb">{job ? "LIBRARY / SONG" : "LIBRARY / IMPORT"}</div>
         <h1>{job ? (project?.title || job.filename.replace(/\\.[^.]+$/, "")) : "Import song"}</h1>
       </section>
-      <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
+
       <div className={"workspace-grid" + (job ? " is-session" : "")}>
         {!job && <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>

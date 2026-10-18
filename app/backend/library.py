@@ -44,6 +44,11 @@ CREATE TABLE IF NOT EXISTS collection_songs (
     added_at REAL NOT NULL,
     PRIMARY KEY (collection_id, song_id)
 );
+CREATE TABLE IF NOT EXISTS song_links (
+    child_song_id TEXT PRIMARY KEY REFERENCES songs(id) ON DELETE CASCADE,
+    parent_song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
     song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
@@ -204,11 +209,24 @@ def list_songs(data_root: Path, collection_id: str | None = None,
         if collection_id:
             membership = {x[0] for x in conn.execute(
                 "SELECT song_id FROM collection_songs WHERE collection_id=?", (collection_id,))}
+    with connect(data_root) as conn:
+        links = {row["child_song_id"]: row["parent_song_id"] for row in
+                 conn.execute("SELECT child_song_id,parent_song_id FROM song_links")}
+    # Manual grouping overrides file fingerprints. It never alters sources.
+    hash_leaders: dict[str, str] = {}
+    for song in rows:
+        if song["sha256"] and song["sha256"] not in hash_leaders:
+            hash_leaders[song["sha256"]] = song["id"]
+    def root_id(ident: str) -> str:
+        seen = set()
+        while ident in links and ident not in seen:
+            seen.add(ident)
+            ident = links[ident]
+        return ident
     groups: dict[str, list[dict]] = {}
     for song in rows:
-        # A missing fingerprint must never merge unrelated audio.
-        grouping = song["sha256"] or song["id"]
-        groups.setdefault(grouping, []).append(song)
+        ident = hash_leaders.get(song["sha256"], song["id"]) if song["sha256"] else song["id"]
+        groups.setdefault(root_id(ident), []).append(song)
     result = []
     for group in groups.values():
         visible = [s for s in group if not s["deleted_at"]]
@@ -218,7 +236,7 @@ def list_songs(data_root: Path, collection_id: str | None = None,
         if collection_id and not any(s["id"] in membership for s in group):
             continue
         # Earliest known copy is stable canonical identity; if removed, show next.
-        primary = candidates[0]
+        primary = next((s for s in candidates if root_id(s["id"]) == root_id(group[0]["id"])), candidates[0])
         title = primary["title"]
         if query and query.lower() not in (
             title + " " + " ".join(s["imported_filename"] for s in group)
@@ -230,6 +248,7 @@ def list_songs(data_root: Path, collection_id: str | None = None,
             "created_at": primary["created_at"],
             "version_count": sum(s["own_versions"] for s in group),
             "variant_count": len(group),
+            "fingerprint": (primary["sha256"] or "")[:12],
             "removed": not bool(visible),
             "variants": [
                 {"id": s["id"], "legacy_job_id": s["legacy_job_id"],
@@ -242,28 +261,80 @@ def list_songs(data_root: Path, collection_id: str | None = None,
     return result
 
 
-def remove_song(data_root: Path, song_id: str) -> dict:
-    """Remove an entire source group from library, retaining all audio and stems."""
-    songs = list_songs(data_root, include_deleted=True)
-    item = next((s for s in songs if s["id"] == song_id), None)
-    if item is None:
-        raise ValueError("Library song not found")
+def combine_takes(data_root: Path, parent_id: str, child_id: str) -> dict:
+    """Make a user-selected source a take of another song, even if bytes differ."""
+    if parent_id == child_id:
+        raise ValueError("Select two different songs")
     with connect(data_root) as conn:
-        for variant in item["variants"]:
-            conn.execute("UPDATE songs SET deleted_at=? WHERE id=?",
-                         (time.time(), variant["id"]))
+        ids = {row[0] for row in conn.execute(
+            "SELECT id FROM songs WHERE id IN (?,?) AND deleted_at IS NULL",
+            (parent_id, child_id))}
+        if ids != {parent_id, child_id}:
+            raise ValueError("Both songs must be available in the Library")
+        current = conn.execute(
+            "SELECT parent_song_id FROM song_links WHERE child_song_id=?", (parent_id,)
+        ).fetchone()
+        if current:
+            raise ValueError("Choose a parent song that is not already a linked take")
+        descendants = {row[0] for row in conn.execute(
+            "SELECT child_song_id FROM song_links WHERE parent_song_id=?", (child_id,)
+        )}
+        if parent_id in descendants:
+            raise ValueError("This link would create a cycle")
+        conn.execute("""INSERT INTO song_links(child_song_id,parent_song_id,created_at)
+                        VALUES(?,?,?)
+                        ON CONFLICT(child_song_id) DO UPDATE SET
+                          parent_song_id=excluded.parent_song_id""",
+                     (child_id, parent_id, time.time()))
         conn.commit()
-    return {"removed": True, "files_preserved": True, "variant_count": len(item["variants"])}
+    return {"combined": True, "source_files_preserved": True}
+
+
+def _group_ids(conn: sqlite3.Connection, song_id: str) -> set[str]:
+    """Find the requested song and all exact-hash/manual variants, even if hidden."""
+    row = conn.execute("""SELECT s.id,src.sha256 FROM songs s
+                          LEFT JOIN sources src ON src.song_id=s.id
+                          WHERE s.id=?""", (song_id,)).fetchone()
+    if not row:
+        raise ValueError("Library song not found")
+    parent = conn.execute(
+        "SELECT parent_song_id FROM song_links WHERE child_song_id=?", (song_id,)
+    ).fetchone()
+    anchor = parent[0] if parent else song_id
+    ids = {anchor}
+    hashes = {x[0] for x in conn.execute(
+        "SELECT sha256 FROM sources WHERE song_id=?", (anchor,)) if x[0]}
+    while True:
+        current = ids.copy()
+        if hashes:
+            placeholders = ",".join("?" for _ in hashes)
+            ids.update(x[0] for x in conn.execute(
+                f"SELECT song_id FROM sources WHERE sha256 IN ({placeholders})", tuple(hashes)))
+        parents = ",".join("?" for _ in ids)
+        ids.update(x[0] for x in conn.execute(
+            f"SELECT child_song_id FROM song_links WHERE parent_song_id IN ({parents})",
+            tuple(ids)))
+        if ids == current:
+            break
+    return ids
+
+
+def remove_song(data_root: Path, song_id: str) -> dict:
+    """Hide a song group in one transaction; never move or delete audio."""
+    with connect(data_root) as conn:
+        ids = _group_ids(conn, song_id)
+        now = time.time()
+        conn.executemany("UPDATE songs SET deleted_at=? WHERE id=?",
+                         [(now, ident) for ident in ids])
+        conn.commit()
+    return {"removed": True, "files_preserved": True, "variant_count": len(ids)}
 
 
 def restore_song(data_root: Path, song_id: str) -> dict:
-    groups = list_songs(data_root, include_deleted=True)
-    item = next((s for s in groups if s["id"] == song_id), None)
-    if item is None:
-        raise ValueError("Library song not found")
     with connect(data_root) as conn:
-        for variant in item["variants"]:
-            conn.execute("UPDATE songs SET deleted_at=NULL WHERE id=?", (variant["id"],))
+        ids = _group_ids(conn, song_id)
+        conn.executemany("UPDATE songs SET deleted_at=NULL WHERE id=?",
+                         [(ident,) for ident in ids])
         conn.commit()
     return {"restored": True, "files_preserved": True}
 

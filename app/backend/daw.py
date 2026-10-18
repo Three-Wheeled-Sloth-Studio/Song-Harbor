@@ -6,12 +6,15 @@ either to export a portable stem bundle. No executable is run during discovery.
 from __future__ import annotations
 
 import json
+import threading
+import time
 import os
 import re
 import shutil
 import subprocess
 import uuid
 from pathlib import Path
+from collections import deque
 
 import dependencies
 
@@ -108,6 +111,51 @@ def set_location(root: Path, chosen: str, target_id: str = "waveform") -> str:
     return str(executable)
 
 
+def available_drives() -> list[Path]:
+    if os.name != "nt":
+        return []
+    import ctypes
+    mask = ctypes.windll.kernel32.GetLogicalDrives()
+    return [Path(chr(65 + index) + ":/") for index in range(26) if mask & (1 << index)]
+
+
+def windows_shortcut_locations(target_id: str) -> list[Path]:
+    """Resolve registered Start Menu shortcut targets without opening applications."""
+    if os.name != "nt":
+        return []
+    dirs = [
+        Path(os.environ.get("APPDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+        Path(os.environ.get("PROGRAMDATA", "")) / "Microsoft/Windows/Start Menu/Programs",
+    ]
+    shortcuts = []
+    for base in dirs:
+        if not base.is_dir():
+            continue
+        try:
+            shortcuts.extend(p for p in base.rglob("*.lnk")
+                             if target_id in p.stem.lower())
+        except OSError:
+            continue
+    if not shortcuts:
+        return []
+    # Run this opt-in bounded shortcut resolution only with matching shortcut filenames.
+    script = (
+        "$s=(New-Object -ComObject WScript.Shell);"
+        "foreach($p in $args){try{$link=$s.CreateShortcut($p);"
+        "if($link.TargetPath){[Console]::WriteLine($link.TargetPath)}}catch{}}"
+    )
+    try:
+        output = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+             script, *[str(x) for x in shortcuts[:30]]],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return [Path(s.strip().strip('"')) for s in output.stdout.splitlines() if s.strip()]
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+
 def common_locations(target_id: str = "waveform") -> list[Path]:
     target(target_id)
     candidates: list[Path] = []
@@ -128,6 +176,13 @@ def common_locations(target_id: str = "waveform") -> list[Path]:
                 if parent.is_dir():
                     candidates.extend(p for p in parent.glob("Waveform*") if p.is_dir())
     if target_id == "audacity":
+        # Developer machines often install apps in C:\Apps rather than Program Files.
+        for drive in available_drives():
+            for rootname in ("Apps", "Applications", "Tools", "PortableApps"):
+                base = drive / rootname
+                candidates.extend((base / "Audacity", base / "Audacity 3", base / "Audacity 4"))
+            candidates.extend((drive / "Audacity", drive / "Program Files" / "Audacity",
+                               drive / "Program Files (x86)" / "Audacity"))
         candidates.extend((
             Path.home() / "scoop" / "apps" / "audacity" / "current",
             Path.home() / "scoop" / "shims",
@@ -190,6 +245,7 @@ def resolve(root: Path, remember: bool = True, target_id: str = "waveform") -> s
     candidates = [Path(saved)] if saved else []
     candidates.extend(windows_registry_locations(target_id))
     candidates.extend(common_locations(target_id))
+    candidates.extend(windows_shortcut_locations(target_id))
     for name in EXECUTABLE_NAMES[target_id]:
         found = shutil.which(name)
         if found:
@@ -201,6 +257,95 @@ def resolve(root: Path, remember: bool = True, target_id: str = "waveform") -> s
                 set_location(root, str(executable), target_id)
             return str(executable)
     return None
+
+
+
+# Deeper discovery is on-demand only. Never recurse all of C:\ without limits.
+scan_jobs: dict[str, dict] = {}
+scan_lock = threading.Lock()
+_SKIP_DIRS = {
+    "windows", "winsxs", "system volume information", "$recycle.bin",
+    "node_modules", ".git", ".venv", "cache", "caches", "temp",
+    "temporary internet files", "packages", "models", "datasets",
+}
+
+
+def search_roots(root: Path) -> list[Path]:
+    """Search likely application trees across drives, even without registry entries."""
+    roots = [root.parent, Path.home() / "AppData/Local/Programs"]
+    for drive in available_drives():
+        roots.extend(drive / name for name in
+                     ("Apps", "Applications", "Tools", "PortableApps", "Program Files",
+                      "Program Files (x86)", "Users"))
+    # Stable uniqueness on case-insensitive Windows.
+    return list({str(x).lower(): x for x in roots}.values())
+
+
+def scan_existing(root: Path, target_id: str, job: dict,
+                  max_directories: int = 14000, max_seconds: int = 35) -> None:
+    """BFS with explicit time/directory bounds; ignores symlinks and restricted folders."""
+    deadline = time.monotonic() + max_seconds
+    visited: set[str] = set()
+    count = 0
+    queue = deque(search_roots(root))
+    try:
+        while queue and count < max_directories and time.monotonic() < deadline:
+            directory = queue.popleft()
+            key = str(directory).lower()
+            if key in visited or directory.name.lower() in _SKIP_DIRS:
+                continue
+            visited.add(key)
+            try:
+                if not directory.is_dir() or directory.is_symlink():
+                    continue
+                count += 1
+                # Check executable without invoking it.
+                match = verify_executable(target_id, directory)
+                if match:
+                    configured_path = set_location(root, str(match), target_id)
+                    job.update(status="found", executable=configured_path,
+                               scanned=count, message="Installed DAW located and configured.")
+                    return
+                # Discover descendants in bounded batches; do not follow junctions.
+                with os.scandir(directory) as entries:
+                    children = []
+                    for entry in entries:
+                        if entry.is_dir(follow_symlinks=False) and entry.name.lower() not in _SKIP_DIRS:
+                            children.append(Path(entry.path))
+                queue.extend(children[:200])
+                if count % 80 == 0:
+                    job.update(scanned=count, message=f"Searching application folders ({count} checked)…")
+            except (OSError, PermissionError):
+                continue
+        job.update(status="not_found", scanned=count,
+                   message="No installation found in the searched application folders. Browse to Audacity.exe if installed elsewhere.")
+    except Exception as exc:
+        job.update(status="error", scanned=count, message=str(exc))
+
+
+def start_search(root: Path, target_id: str) -> dict:
+    target(target_id)
+    with scan_lock:
+        active = next((j for j in scan_jobs.values()
+                       if j["target"] == target_id and j["status"] == "running"), None)
+        if active:
+            return active.copy()
+        ident = uuid.uuid4().hex[:12]
+        job = {"id": ident, "target": target_id, "status": "running",
+               "scanned": 0, "message": "Searching common application folders…"}
+        scan_jobs[ident] = job
+        # Avoid unbounded in-memory accumulation of old search results.
+        for key in list(scan_jobs)[:-16]:
+            if scan_jobs[key]["status"] != "running":
+                scan_jobs.pop(key, None)
+    threading.Thread(target=scan_existing, args=(root, target_id, job), daemon=True).start()
+    return job.copy()
+
+
+def search_status(ident: str) -> dict | None:
+    with scan_lock:
+        item = scan_jobs.get(ident)
+        return item.copy() if item else None
 
 
 def choose_executable(title: str, installer: bool = False) -> str | None:

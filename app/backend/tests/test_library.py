@@ -73,6 +73,40 @@ class LibraryTests(unittest.TestCase):
         self.assertTrue(self.source.is_file())
         self.assertEqual(6, len(list((self.job / "stems").glob("*.wav"))))
 
+    def test_identical_source_jobs_group_as_takes_and_restore(self):
+        second_id = "123456abcdef"
+        folder = self.root / "jobs" / second_id
+        stems = folder / "stems"
+        stems.mkdir(parents=True)
+        source = folder / "Alternate Name.mp3"
+        source.write_bytes(self.source.read_bytes())
+        extra = []
+        for label in projects.ORDER:
+            name = "Alternate Name_(" + label + ")_htdemucs_6s.wav"
+            (stems / name).write_bytes(label.encode())
+            extra.append(name)
+        projects.write_project(self.root, {
+            "version": 1, "id": second_id, "filename": source.name,
+            "title": "Alternate Name", "source_filename": source.name,
+            "model": "htdemucs_6s.yaml", "files": extra,
+            "stems": projects.default_settings(extra), "created_at": 2.0,
+        })
+        library.adopt_jobs(self.root)
+        grouped = library.list_songs(self.root)
+        self.assertEqual(1, len(grouped))
+        self.assertEqual(2, grouped[0]["variant_count"])
+        self.assertEqual(2, grouped[0]["version_count"])
+        original = grouped[0]
+        library.remove_song(self.root, original["id"])
+        self.assertEqual([], library.list_songs(self.root))
+        self.assertTrue(self.source.is_file())
+        self.assertTrue(source.is_file())
+        library.adopt_jobs(self.root)
+        self.assertEqual([], library.list_songs(self.root))
+        library.restore_song(self.root, original["id"])
+        self.assertEqual(1, len(library.list_songs(self.root)))
+        self.assertEqual(6, len(list((self.job / "stems").glob("*.wav"))))
+
     def test_unrelated_names_remain_distinct(self):
         library.adopt_jobs(self.root)
         self.assertEqual([], library.list_songs(self.root, query="unknown"))

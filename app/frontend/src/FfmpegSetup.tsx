@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, Panel, Status } from "@tws-ui/core/react";
+import { Button, Dialog, Status } from "@tws-ui/core/react";
 
 type FfmpegPair = {directory: string; ffmpeg: string; ffprobe: string};
 type Health = { ready: boolean; model: string; model_directory: string; ffmpeg?: FfmpegPair | null; needs_setup?: string[] };
@@ -18,7 +18,11 @@ async function post<T>(url: string, payload?: object): Promise<T> {
     body: payload ? JSON.stringify(payload) : undefined});
 }
 
-export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
+export function FfmpegSetup({open, onOpenChange, onReady}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onReady: (health: Health) => void;
+}) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [path, setPath] = useState("");
   const [installPath, setInstallPath] = useState("");
@@ -40,7 +44,7 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
       }
     }
   }
-  useEffect(() => { refresh(false).catch(e => setError(String(e))); }, []);
+  useEffect(() => { if (open) refresh(false).catch(e => setError(String(e))); }, [open]);
   useEffect(() => {
     if (!installJob || !["queued", "running"].includes(installJob.status)) return;
     const timer = window.setInterval(async () => {
@@ -115,5 +119,5 @@ export function FfmpegSetup({onReady}: {onReady: (health: Health) => void}) {
     </div>
     {message && <p role="status">{message}</p>}
     {error && <div className="error-message" role="alert">{error}</div>}
-  </Panel>;
+    </div>\n  </Dialog>;
 }

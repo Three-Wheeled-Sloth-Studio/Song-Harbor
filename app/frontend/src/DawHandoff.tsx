@@ -4,7 +4,7 @@ import { Button, Dialog, Status } from "@tws-ui/core/react";
 type Catalog = {
   targets: {id: string; name: string; free: boolean; download_url: string}[];
   selected: string;
-  installed: {waveform: string | null};
+  installed: Record<string, string | null>;
 };
 type DawResponse = {detail?: string; directory?: string; executable?: string | null; path?: string | null;
   status?: string; message?: string};
@@ -33,7 +33,8 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const installed = catalog?.installed.waveform || null;
+  const installed = catalog?.installed[target] || null;
+  const targetName = catalog?.targets.find(item => item.id === target)?.name || target;
 
   async function refresh() {
     const response = await fetch(API + "/daws");
@@ -41,10 +42,22 @@ export function DawHandoff({jobId, saveProject, onClose}: {
     const data = await response.json() as Catalog;
     setCatalog(data);
     setTarget(data.selected || "waveform");
-    setLocation(data.installed.waveform || "");
+    setLocation(data.installed[data.selected] || "");
   }
 
   useEffect(() => { void refresh().catch(e => setError(String(e))); }, []);
+
+  async function chooseTarget(value: string) {
+    setTarget(value);
+    setLocation(catalog?.installed[value] || "");
+    setFolder("");
+    setInstaller("");
+    setError("");
+    setMessage("");
+    await perform(async () => {
+      await post("/daws/select", {target: value});
+    });
+  }
 
   async function perform(task: () => Promise<void>) {
     setBusy(true); setError(""); setMessage("");
@@ -62,22 +75,22 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   async function detect() {
-    const result = await post("/daws/waveform/detect");
+    const result = await post("/daws/" + target + "/detect");
     await refresh();
-    if (!result.executable) setMessage("Waveform not found in common installation locations. Browse or install below.");
-    else setMessage("Waveform found and configured.");
+    if (!result.executable) setMessage(targetName + " not found yet. Browse or install below.");
+    else setMessage(targetName + " found and configured.");
   }
 
   async function browseInstalled() {
-    const result = await post("/daws/waveform/browse");
+    const result = await post("/daws/" + target + "/browse");
     if (result.path) setLocation(result.path);
   }
 
   async function locate() {
-    const result = await post("/daws/waveform/locate", {path: location});
-    if (!result.executable) throw new Error("Waveform executable not found at that location");
+    const result = await post("/daws/" + target + "/locate", {path: location});
+    if (!result.executable) throw new Error(targetName + " not found at that location");
     await refresh();
-    setMessage("Waveform location saved.");
+    setMessage(targetName + " location saved.");
   }
 
   async function runInstaller() {
@@ -87,20 +100,20 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   async function launch() {
-    const result = await post("/daws/waveform/launch");
+    const result = await post("/daws/" + target + "/launch");
     if (result.status === "setup_required") {
       await refresh();
-      setMessage("Waveform needs configuration. Find it or use the installation options below.");
+      setMessage(targetName + " needs configuration. Find it or install below.");
       return;
     }
-    setMessage("Waveform opened. Import the six stems as separate tracks at 0:00.");
+    setMessage(targetName + " opened. Import the six WAVs as separate tracks at 0:00.");
   }
 
   return <Dialog open onOpenChange={next => { if (!next && !busy) onClose(); }}
     title="DAW handoff" description="Target, files, launch.">
     <div className="daw-setup">
       <div className="daw-controls">
-        <select aria-label="DAW target" value={target} onChange={e => setTarget(e.target.value)}
+        <select aria-label="DAW target" value={target} onChange={e => { void chooseTarget(e.target.value); }}
           disabled={busy || !catalog}>
           {(catalog?.targets || [{id:"waveform",name:"Waveform Free"}]).map(item =>
             <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -129,26 +142,29 @@ export function DawHandoff({jobId, saveProject, onClose}: {
           </div>
           <div className="daw-controls">
             <input value={location} onChange={e => setLocation(e.target.value)}
-              placeholder="Waveform.exe or installation folder" aria-label="Installed Waveform path"/>
+              placeholder={target === "audacity" ? "Audacity.exe or installation folder" : "Waveform.exe or installation folder"} aria-label="Installed Waveform path"/>
             <Button size="compact" variant="secondary" disabled={busy} onClick={() => { void perform(browseInstalled); }}>Browse</Button>
             <Button size="compact" variant="secondary" disabled={busy || !location.trim()} onClick={() => { void perform(locate); }}>Use</Button>
           </div>
         </div>
         <div className="daw-section">
-          <strong>Install Waveform Free</strong>
-          <p>Waveform's publisher handles its account and license steps. Song Harbor can launch the downloaded, signed installer, then detect the result.</p>
+          <strong>Install {targetName}</strong>
+          <p>{target === "audacity" ? "Use the official Audacity installer, then Detect. Your song stays here." : "Tracktion handles account and license steps. Song Harbor can run a verified installer."}</p>
           <div className="daw-controls">
             <Button variant="secondary" disabled={busy} onClick={() => {
-              window.open(catalog?.targets.find(item => item.id === target)?.download_url ||
-                "https://www.tracktion.com/products/waveform-free", "_blank", "noopener,noreferrer");
+              const address = catalog?.targets.find(item => item.id === target)?.download_url;
+              if (address) window.open(address, "_blank", "noopener,noreferrer");
             }}>Download</Button>
-            <Button variant="subtle" disabled={busy} onClick={() => { void perform(async () => {
-              const result = await post("/daws/waveform/browse-installer");
-              if (result.path) setInstaller(result.path);
-            }); }}>Find installer</Button>
-            {installer && <Button variant="primary" disabled={busy} onClick={() => { void perform(runInstaller); }}>
-              Run installer
-            </Button>}
+            {target === "waveform" && <>
+              <Button variant="subtle" disabled={busy} onClick={() => { void perform(async () => {
+                const result = await post("/daws/waveform/browse-installer");
+                if (result.path) setInstaller(result.path);
+              }); }}>Find installer</Button>
+              {installer && <Button variant="primary" disabled={busy} onClick={() => { void perform(runInstaller); }}>
+                Run installer
+              </Button>}
+            </>}
+            <Button variant="secondary" disabled={busy} onClick={() => { void perform(detect); }}>Detect again</Button>
           </div>
           {installer && <p className="daw-path">{installer}</p>}
         </div>

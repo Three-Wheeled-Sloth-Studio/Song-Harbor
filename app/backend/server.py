@@ -486,6 +486,23 @@ def daw_detect_target(target_id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.post("/api/daws/{target_id}/search")
+def daw_search_target(target_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return daw.start_search(APP_ROOT, target_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/daws/search/{search_id}")
+def daw_search_progress(search_id: str) -> dict[str, Any]:
+    item = daw.search_status(search_id)
+    if not item:
+        raise HTTPException(404, "Discovery search no longer available")
+    return item
+
+
 @app.post("/api/daws/{target_id}/browse")
 def daw_browse_target(target_id: str, request: Request) -> dict[str, Any]:
     require_local_origin(request)

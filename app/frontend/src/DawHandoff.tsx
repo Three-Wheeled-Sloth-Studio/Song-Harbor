@@ -67,9 +67,9 @@ export function DawHandoff({jobId, saveProject, onClose}: {
         if (active) {setSearchJob(null);setError(e instanceof Error ? e.message : String(e));}
       }
     };
-    const timer = setTimeout(() => {void poll();}, 700);
-    return () => {active = false;clearTimeout(timer);};
-  }, [searchJob?.id, searchJob?.status, searchJob?.scanned]);
+    const timer = setInterval(() => {void poll();}, 900);
+    return () => {active = false;clearInterval(timer);};
+  }, [searchJob?.id, searchJob?.status]);
 
   async function searchComputer() {
     setError("");setMessage("");
@@ -187,7 +187,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
               {searchJob?.status === "running" ? "Searching…" : "Search this PC"}
             </Button>
             {searchJob && <span role="status" className="daw-scan-status">
-              {searchJob.status === "running" ? searchJob.message : searchJob.message}
+              {searchJob.message}
             </span>}
           </div>
         </div>

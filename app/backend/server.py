@@ -20,6 +20,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import dependencies
+import projects
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -252,6 +253,14 @@ def run_job(job: dict[str, Any]) -> None:
             else:
                 job["status"] = "complete"
                 job["message"] = f"Six full-length stems ready ({source_duration:.1f}s)"
+                projects.write_project(DATA_ROOT, {
+                    "version": projects.PROJECT_VERSION, "id": job["id"],
+                    "filename": job["filename"], "title": Path(job["filename"]).stem,
+                    "source_filename": job["filename"], "created_at": job["created_at"],
+                    "model": MODEL, "files": files,
+                    "stems": projects.default_settings(files),
+                    "source_duration_seconds": job["source_duration_seconds"],
+                })
         else:
             job["status"] = "error"
             job["message"] = f"Separation exited with code {rc}; found {len(files)} of 6 stems"

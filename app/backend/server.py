@@ -6,6 +6,7 @@ No external network binding, no destructive source operations.
 from __future__ import annotations
 
 import os
+import json
 import re
 import shutil
 import subprocess
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 import dependencies
 import projects
 import daw
+import audacity_handoff
 import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()

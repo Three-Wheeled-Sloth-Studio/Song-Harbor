@@ -96,3 +96,7 @@ User ran ffprobe on Laptop Omen's most recent job, `Salt in the Circuit`: import
 
 ### Follow-up: suspected Audacity timeline artifact (2026-10-17)
 User withdrew the four-minute cutoff report after realizing a 4:00 song was previously imported into Audacity and the next song likely shared that timeline. The inspected Song Harbor job had source and all six stems at exactly 240 seconds. **No Song Harbor truncation has been demonstrated.** Reclassify this as a probable Audacity session/timeline issue rather than a confirmed application regression. Keep the new source-to-stem duration validation as useful defensive QA; it does not compare against the user's external original.
+
+## Predator launcher / TSX regression fix (2026-10-18)
+
+User requested the launcher open the local UI in a **new browser window** rather than reusing a tab and reported Vite Babel parser error in `FfmpegSetup.tsx` line 122 caused by literal `\\n` characters inserted during a JSX edit. Fixed literal characters and an additional mismatched opening `<Panel>`/closing `</Dialog>` tag in `FfmpegSetup.tsx`. Modified `app/run.ps1` to start Edge or Chrome using `--new-window` (fallback to default browser URL opener if no supported executable found). Added GitHub Actions frontend type-check/build workflow. GitHub Actions run **39116679928** for corrected commit `7a3ad824` completed **successfully**, including `npm run build --prefix app/frontend`. Browser-new-window behavior still requires local Windows verification on Predator.

@@ -16,8 +16,9 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg }: {
   jobId: string; files: string[]; expectedDuration?: number;
+  onMissingFfmpeg?: (retry: () => void) => void;
 }) {
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => ({
     filename, name: labelOf(filename), gain: 100, mute: false, solo: false,
@@ -146,7 +147,13 @@ export function StemMixer({ jobId, files, expectedDuration }: {
         })) }),
       });
       const data = await response.json() as MixResponse & { detail?: string };
-      if (!response.ok) throw new Error(data.detail || "Mix export failed");
+      if (!response.ok) {
+        if (response.status === 409 && /ffmpeg/i.test(data.detail || "") && onMissingFfmpeg) {
+          onMissingFfmpeg(() => { void exportMix(); });
+          return;
+        }
+        throw new Error(data.detail || "Mix export failed");
+      }
       setMixUrl(data.url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Mix export failed");

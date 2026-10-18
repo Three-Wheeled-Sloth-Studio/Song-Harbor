@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Dialog, EditableTitle, IconButton, Menu } from "@tws-ui/core/react";
 
 type Song = {id: string; legacy_job_id: string; title: string; imported_filename: string;
-  created_at: number; version_count: number; variant_count: number; removed?: boolean;
+  created_at: number; version_count: number; variant_count: number; removed?: boolean; fingerprint?: string;
   variants: {id:string;legacy_job_id:string;filename:string;created_at:number;removed:boolean}[]};
 type Collection = {id: string; parent_id: string | null; title: string;
   sort_order: number; song_count: number};
@@ -236,7 +236,7 @@ export function LibraryHome({onOpenSong, onImport}: {
             <div className="lib-song-main">
               <EditableTitle value={song.title} label={"Rename " + song.title}
                 disabled={busy || showTrash} onCommit={title => {void rename(song.id,title);}}/>
-              <small title={song.imported_filename}>{song.imported_filename}</small>
+              <small title={song.imported_filename + (song.fingerprint ? " · SHA-256 " + song.fingerprint : "")}>{song.imported_filename}</small>
             </div>
             <span className="lib-song-count">{song.variant_count > 1 ? song.variant_count + " takes" : song.version_count}</span>
             <div className="lib-song-actions">

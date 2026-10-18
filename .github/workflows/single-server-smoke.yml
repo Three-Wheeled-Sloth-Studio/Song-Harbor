@@ -26,10 +26,11 @@ jobs:
           python-version: '3.11'
       - name: Build static application
         shell: pwsh
+        working-directory: app/frontend
         run: |
-          npm install --prefix app/frontend
+          npm install
           if ($LASTEXITCODE -ne 0) { throw 'npm install failed' }
-          npm run build --prefix app/frontend
+          npm run build
           if ($LASTEXITCODE -ne 0) { throw 'UI build failed' }
       - name: Install minimum backend API dependencies
         run: python -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3"

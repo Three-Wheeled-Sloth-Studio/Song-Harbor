@@ -163,7 +163,7 @@ export function LibraryHome({onOpenSong, onImport}: {
       <div className="lib-table-head"><span>SONG</span><span>VERSIONS</span><span>ACTIONS</span></div>
       <div className="lib-rows" role="list">
         {displayed.map(song =>
-          <div role="listitem" key={song.id} className={"lib-song" + (selected === song.id?" selected":"")}
+          <div className="lib-song-group" key={song.id}><div role="listitem" className={"lib-song" + (selected === song.id?" selected":"")}
             onClick={() => setSelected(song.id)}
             onDoubleClick={() => onOpenSong(song.legacy_job_id)}>
             <div className="lib-song-main">
@@ -173,24 +173,45 @@ export function LibraryHome({onOpenSong, onImport}: {
             </div>
             <span className="lib-song-count">{song.variant_count > 1 ? song.variant_count + " takes" : song.version_count}</span>
             <div className="lib-song-actions">
-              <IconButton icon="▶" label={"Open " + song.title}
-                onClick={e => {e.stopPropagation();onOpenSong(song.legacy_job_id);}}/>
+              {song.variant_count > 1 && <IconButton
+                icon={expanded.includes(song.id) ? "▾" : "▸"}
+                label={expanded.includes(song.id) ? "Collapse takes" : "Show takes"}
+                onClick={e => {e.stopPropagation();toggleVariants(song.id);}}/>}
+              {!showTrash && <IconButton icon="▶" label={"Open " + song.title}
+                onClick={e => {e.stopPropagation();onOpenSong(song.legacy_job_id);}}/>}
               <Menu label={"Actions for " + song.title} trigger={<button className="lib-kebab"
                 aria-label={"Options for " + song.title} title="More actions">⋯</button>}
                 items={[
-                  {id:"open",label:"Open",onSelect:()=>onOpenSong(song.legacy_job_id)},
-                  ...collections.map(folder => ({id:folder.id,label:"Add to " + folder.title,
-                    onSelect:()=>{void assign(song.id,folder.id);}})),
+                  ...(!showTrash ? [{id:"open",label:"Open",onSelect:()=>onOpenSong(song.legacy_job_id)}] : []),
+                  ...(!showTrash ? collections.map(folder => ({id:folder.id,label:"Add to " + folder.title,
+                    onSelect:()=>{void assign(song.id,folder.id);}})) : []),
+                  {id:showTrash ? "restore" : "remove",
+                   label:showTrash ? "Restore to Library" : "Remove from Library · keep files",
+                   onSelect:()=>{void changeAvailability(song,showTrash);}},
                   {id:"help",label:"Help",onSelect:()=>window.open(
                     "https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/blob/main/docs/library-first-architecture.md",
                     "_blank","noopener,noreferrer")},
                 ]}/>
             </div>
+          </div>
+          {expanded.includes(song.id) && <div className="lib-variants">
+            {song.variants.map((take,index) => <div className="lib-variant" key={take.id}>
+              <span title={take.filename}>↳ Take {index+1} · {take.filename}</span>
+              {!showTrash && <IconButton label={"Open take " + (index+1)} icon="▶"
+                onClick={()=>onOpenSong(take.legacy_job_id)} />}
+            </div>)}
+          </div>}
           </div>)}
       </div>
       {displayed.length === 0 && <div className="lib-empty">
         {songs.length ? "No matching songs." : "Your library is empty."}
         {!songs.length && <Button variant="primary" onClick={onImport}>Import song</Button>}
+      </div>}
+      {removedSong && !showTrash && <div className="lib-undo" role="status">
+        Removed from Library; files preserved.
+        <Button size="compact" variant="subtle" onClick={() => {
+          void changeAvailability(removedSong,true);
+        }}>Undo</Button>
       </div>}
       {error && <p role="alert" className="error-message">{error}</p>}
     </section>

@@ -111,3 +111,18 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .ffmpeg-install-progress progress::-webkit-progress-value{background:var(--tws-color-action-primary);border-radius:999px}
 .ffmpeg-install-progress progress::-moz-progress-bar{background:var(--tws-color-action-primary);border-radius:999px}
 .ffmpeg-progress-track span{display:block;height:100%;width:28%;background:var(--tws-color-action-primary);border-radius:999px;animation:slide 1.4s ease-in-out infinite alternate}
+
+/* Durable song workbench / DAW handoff: subordinate controls, no homepage takeover. */
+.recent-songs{margin:0 0 17px;border:1px solid var(--tws-color-border-normal);border-radius:8px;padding:9px 10px;background:var(--tws-color-surface-inset)}
+.recent-songs summary{font-size:12px;color:var(--tws-color-text-muted);cursor:pointer}
+.recent-song-controls{display:flex;gap:9px;align-items:center;margin-top:10px}
+.recent-song-controls select{min-width:0;flex:1;border:1px solid var(--tws-color-border-strong);border-radius:7px;padding:8px;color:var(--tws-color-text-primary);background:var(--tws-color-surface-panel)}
+.song-project-controls{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.song-project-controls label{font-size:11px;color:var(--tws-color-text-muted)}
+.song-project-controls input{flex:1;min-width:120px;padding:8px 9px;border-radius:7px;border:1px solid var(--tws-color-border-normal);background:var(--tws-color-surface-panel);color:var(--tws-color-text-primary)}
+.daw-handoff{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;border-top:1px solid var(--tws-color-border-normal);margin-top:13px;padding-top:13px}
+.daw-handoff>div{flex:1;min-width:160px}
+.daw-handoff strong{font-size:12px}
+.daw-handoff p{margin:4px 0 0;color:var(--tws-color-text-muted);font-size:11px;line-height:1.4}
+.handoff-path{font-size:11px;color:var(--tws-color-text-muted);overflow-wrap:anywhere;margin:9px 0 0}
+.song-save-notice{font-size:12px;color:#9ed7b2;margin:10px 0 0}

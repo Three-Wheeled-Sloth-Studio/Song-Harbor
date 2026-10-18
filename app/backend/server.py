@@ -463,8 +463,62 @@ class DawPathRequest(BaseModel):
 
 @app.get("/api/daws")
 def daw_catalog() -> dict[str, Any]:
-    return {"targets": [daw.target("waveform")], "selected": "waveform",
-            "installed": {"waveform": daw.resolve(APP_ROOT)}}
+    return {"targets": [daw.target(item) for item in daw.TARGETS],
+            "selected": daw.selected_target(APP_ROOT),
+            "installed": {item: daw.resolve(APP_ROOT, target_id=item) for item in daw.TARGETS}}
+
+
+@app.post("/api/daws/select")
+def daw_select_target(body: DawTargetRequest, request: Request) -> dict[str, str]:
+    require_local_origin(request)
+    try:
+        return {"selected": daw.select_target(APP_ROOT, body.target)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/daws/{target_id}/detect")
+def daw_detect_target(target_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"executable": daw.resolve(APP_ROOT, target_id=target_id)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/daws/{target_id}/browse")
+def daw_browse_target(target_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"path": daw.choose_executable("Locate " + daw.target(target_id)["name"] + " executable")}
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/daws/{target_id}/locate")
+def daw_locate_target(target_id: str, body: DawPathRequest, request: Request) -> dict[str, str]:
+    require_local_origin(request)
+    try:
+        return {"executable": daw.set_location(APP_ROOT, body.path, target_id)}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/daws/{target_id}/launch")
+def daw_launch_target(target_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        executable = daw.resolve(APP_ROOT, target_id=target_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not executable:
+        return {"status": "setup_required", "target": target_id}
+    try:
+        subprocess.Popen([executable], cwd=str(Path(executable).parent),
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except OSError as exc:
+        raise HTTPException(400, f"Could not launch {daw.target(target_id)['name']}: {exc}") from exc
+    return {"status": "started", "target": target_id}
 
 
 @app.post("/api/daws/waveform/detect")
@@ -517,7 +571,7 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
             raise HTTPException(409, "An export is already running")
         job["exporting_waveform"] = True
     try:
-        folder = projects.export_waveform(DATA_ROOT, record)
+        folder = projects.export_daw(DATA_ROOT, record, body.target)
         job["last_daw_export"] = str(folder)
         return {"target": body.target, "directory": str(folder), "message": "DAW stems ready"}
     except (OSError, ValueError) as exc:
@@ -533,14 +587,18 @@ def daw_open_folder(ident: str, request: Request) -> dict[str, Any]:
     if not job or job["status"] != "complete":
         raise HTTPException(409, "Select a completed song first")
     root = DATA_ROOT / "jobs" / ident / "exports"
-    candidates = sorted((p for p in root.glob("Waveform*") if p.is_dir()),
-                        key=lambda p: p.stat().st_mtime, reverse=True) if root.is_dir() else []
-    if not candidates:
+    candidate = Path(job["last_daw_export"]) if job.get("last_daw_export") else None
+    if not candidate or not candidate.is_dir() or root.resolve() not in candidate.resolve().parents:
+        candidates = sorted((p for p in root.iterdir()
+                             if p.is_dir() and (p.name.startswith("Waveform") or p.name.startswith("Audacity"))),
+                            key=lambda p: p.stat().st_mtime, reverse=True) if root.is_dir() else []
+        candidate = candidates[0] if candidates else None
+    if candidate is None:
         return {"status": "export_required", "message": "Prepare DAW files first"}
     if os.name != "nt":
         raise HTTPException(501, "Opening folders requires Windows")
-    os.startfile(str(candidates[0]))  # type: ignore[attr-defined]
-    return {"status": "opened", "directory": str(candidates[0])}
+    os.startfile(str(candidate))  # type: ignore[attr-defined]
+    return {"status": "opened", "directory": str(candidate)}
 
 
 @app.post("/api/daws/waveform/launch")

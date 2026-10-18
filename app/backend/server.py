@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+import dependencies
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -49,9 +50,7 @@ def safe_name(name: str) -> str:
 
 def probe_duration(path: Path) -> float:
     """Use the actual decoded-audio duration, never the UI's assumed duration."""
-    ffprobe = shutil.which("ffprobe")
-    if ffprobe is None:
-        raise RuntimeError("ffprobe is required to validate complete stems; install FFmpeg on PATH")
+    ffprobe = dependency_tool("ffprobe")
     result = subprocess.run(
         [ffprobe, "-v", "error", "-show_entries", "format=duration",
          "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
@@ -82,17 +81,81 @@ def require_local_origin(request: Request) -> None:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    ffmpeg = dependencies.resolve(APP_ROOT)
     return {
-        "ready": SEPARATOR.is_file(),
+        "ready": SEPARATOR.is_file() and bool(ffmpeg),
+        "ffmpeg": ffmpeg,
+        "needs_setup": ["ffmpeg"] if not ffmpeg else [],
         "model": MODEL,
         "model_directory": str(MODEL_ROOT),
         "separator": str(SEPARATOR),
     }
 
 
+def dependency_tool(name: str) -> str:
+    pair = dependencies.resolve(APP_ROOT)
+    if not pair:
+        raise RuntimeError("FFmpeg setup is required. Use the app's Configure FFmpeg action.")
+    return pair[name]
+
+
+class FfmpegLocation(BaseModel):
+    path: str = Field(min_length=1, max_length=2048)
+
+
+@app.get("/api/dependencies/ffmpeg")
+def ffmpeg_status() -> dict[str, Any]:
+    return {"found": dependencies.resolve(APP_ROOT),
+            "suggested_install_directory": str(APP_ROOT / "tools" / "ffmpeg"),
+            "config_path": str(dependencies.config_file(APP_ROOT))}
+
+
+@app.post("/api/dependencies/ffmpeg/locate")
+def ffmpeg_locate(body: FfmpegLocation, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"found": {k: str(v) for k, v in dependencies.save_binary(APP_ROOT, Path(body.path)).items()}}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/dependencies/ffmpeg/browse")
+def ffmpeg_browse(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"path": dependencies.browse()}
+    except (RuntimeError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/dependencies/ffmpeg/search")
+def ffmpeg_search(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return {"matches": dependencies.search(APP_ROOT)}
+
+
+@app.post("/api/dependencies/ffmpeg/install")
+def ffmpeg_install(body: FfmpegLocation, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return dependencies.start_install(APP_ROOT, body.path)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/dependencies/ffmpeg/install/{ident}")
+def ffmpeg_install_status(ident: str) -> dict[str, Any]:
+    job = dependencies.jobs.get(ident)
+    if job is None:
+        raise HTTPException(404, "Installation not found")
+    return job.copy()
+
+
 @app.post("/api/jobs")
 async def submit(request: Request, file: UploadFile = File(...)) -> dict[str, Any]:
     require_local_origin(request)
+    if not dependencies.resolve(APP_ROOT):
+        raise HTTPException(409, "Configure FFmpeg in Song Harbor before separating audio")
     name = safe_name(file.filename or "song.wav")
     if Path(name).suffix not in ALLOWED:
         raise HTTPException(400, "Unsupported audio format")
@@ -157,11 +220,15 @@ def run_job(job: dict[str, Any]) -> None:
     try:
         source_duration = probe_duration(job["input_path"])
         job["source_duration_seconds"] = round(source_duration, 3)
+        # Inject the selected FFmpeg bin directory into subprocess environment,
+        # because audio-separator also invokes FFmpeg internally.
+        env = os.environ.copy()
+        env["PATH"] = str(dependencies.resolve(APP_ROOT)["directory"]) + os.pathsep + env.get("PATH", "")
         # No shell=True; all paths passed as distinct arguments.
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, errors="replace", bufsize=1,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=env,
         )
         job["process"] = proc
         assert proc.stdout is not None
@@ -267,10 +334,11 @@ def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]
 
     target = job["output_path"] / "Song Harbor Mix.wav"
     temporary = job["output_path"] / "Song Harbor Mix.partial.wav"
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
+    try:
+        ffmpeg = dependency_tool("ffmpeg")
+    except RuntimeError as exc:
         job["rendering"] = False
-        raise HTTPException(503, "FFmpeg not available on PATH")
+        raise HTTPException(409, str(exc)) from exc
 
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
     for filename, _ in levels:

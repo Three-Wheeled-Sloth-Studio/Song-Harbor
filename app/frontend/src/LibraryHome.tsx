@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, EditableTitle, IconButton, Menu } from "@tws-ui/core/react";
 
 type Song = {id: string; legacy_job_id: string; title: string; imported_filename: string;
-  created_at: number; version_count: number};
+  created_at: number; version_count: number; variant_count: number; removed?: boolean;
+  variants: {id:string;legacy_job_id:string;filename:string;created_at:number;removed:boolean}[]};
 type Collection = {id: string; parent_id: string | null; title: string;
   sort_order: number; song_count: number};
 type LibraryIndex = {songs: Song[]; collections: Collection[]};
@@ -18,12 +19,15 @@ export function LibraryHome({onOpenSong, onImport}: {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [newCollection, setNewCollection] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const [removedSong, setRemovedSong] = useState<Song | null>(null);
+  const [expanded, setExpanded] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function refresh() {
-    const response = await fetch(ROOT);
+  async function refresh(trash = showTrash) {
+    const response = await fetch(trash ? ROOT + "/trash" : ROOT);
     if (!response.ok) throw new Error("Library is unavailable. Reopen Song Harbor to reconnect.");
     const result = await response.json() as LibraryIndex;
     setSongs(result.songs);
@@ -34,7 +38,7 @@ export function LibraryHome({onOpenSong, onImport}: {
 
   const visible = useMemo(() => songs.filter(song => {
     const text = (song.title + " " + song.imported_filename).toLowerCase();
-    return text.includes(search.trim().toLowerCase());
+    return text.includes(search.trim().toLowerCase()) || song.variants.some(v => v.filename.toLowerCase().includes(search.trim().toLowerCase()));
   }), [songs, search]);
   const [members, setMembers] = useState<string[]>([]);
   useEffect(() => {
@@ -47,6 +51,28 @@ export function LibraryHome({onOpenSong, onImport}: {
     return () => {active=false;};
   }, [collection, songs]);
   const displayed = collection ? visible.filter(song => members.includes(song.id)) : visible;
+
+  async function toggleTrash() {
+    const next = !showTrash;
+    setShowTrash(next); setCollection(null); setRemovedSong(null);
+    try { await refresh(next); } catch(e) { setError(String(e)); }
+  }
+
+  async function changeAvailability(song: Song, restore = false) {
+    setBusy(true); setError("");
+    try {
+      const action = restore ? "restore" : "remove";
+      const response = await fetch(ROOT + "/songs/" + song.id + "/" + action, {method:"POST"});
+      if (!response.ok) throw new Error("Could not change Library status");
+      setRemovedSong(restore ? null : song);
+      await refresh(showTrash);
+    } catch(e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  }
+
+  function toggleVariants(id: string) {
+    setExpanded(previous => previous.includes(id) ? previous.filter(x=>x!==id) : [...previous,id]);
+  }
 
   async function rename(id: string, title: string) {
     setBusy(true); setError("");
@@ -114,6 +140,10 @@ export function LibraryHome({onOpenSong, onImport}: {
         onClick={() => setCollection(null)}><span aria-hidden="true">♫</span>
         <span>All songs</span><small>{songs.length}</small></button>
       {childrenOf(null)}
+      <button className={"lib-folder" + (showTrash ? " active" : "")}
+        onClick={() => {void toggleTrash();}} title="Toggle removed songs">
+        <span aria-hidden="true">♻</span><span>{showTrash ? "Back to Library" : "Removed"}</span>
+      </button>
       {newCollection && <form className="lib-new-folder" onSubmit={e => {e.preventDefault();void createCollection();}}>
         <input autoFocus value={newName} aria-label="New collection name" maxLength={120}
           onChange={e => setNewName(e.target.value)}
@@ -123,7 +153,7 @@ export function LibraryHome({onOpenSong, onImport}: {
     </aside>
     <section className="lib-content">
       <div className="lib-topline">
-        <h1>Library</h1>
+        <h1>{showTrash ? "Removed" : "Library"}</h1>
         <div className="lib-actions">
           <input type="search" aria-label="Search songs" placeholder="Search songs"
             value={search} onChange={e => setSearch(e.target.value)}/>
@@ -138,10 +168,10 @@ export function LibraryHome({onOpenSong, onImport}: {
             onDoubleClick={() => onOpenSong(song.legacy_job_id)}>
             <div className="lib-song-main">
               <EditableTitle value={song.title} label={"Rename " + song.title}
-                disabled={busy} onCommit={title => {void rename(song.id,title);}}/>
+                disabled={busy || showTrash} onCommit={title => {void rename(song.id,title);}}/>
               <small title={song.imported_filename}>{song.imported_filename}</small>
             </div>
-            <span className="lib-song-count">{song.version_count}</span>
+            <span className="lib-song-count">{song.variant_count > 1 ? song.variant_count + " takes" : song.version_count}</span>
             <div className="lib-song-actions">
               <IconButton icon="▶" label={"Open " + song.title}
                 onClick={e => {e.stopPropagation();onOpenSong(song.legacy_job_id);}}/>

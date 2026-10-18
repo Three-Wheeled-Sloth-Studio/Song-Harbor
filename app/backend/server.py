@@ -84,6 +84,7 @@ def health() -> dict[str, Any]:
     ffmpeg = dependencies.resolve(APP_ROOT)
     return {
         "ready": SEPARATOR.is_file() and bool(ffmpeg),
+        "separator_ready": SEPARATOR.is_file(),
         "ffmpeg": ffmpeg,
         "needs_setup": ["ffmpeg"] if not ffmpeg else [],
         "model": MODEL,

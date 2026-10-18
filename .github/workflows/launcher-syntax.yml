@@ -21,7 +21,7 @@ jobs:
       - name: Validate PowerShell syntax without executing installations
         shell: pwsh
         run: |
-          $targets = @('scripts/start-song-harbor.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
+          $targets = @('scripts/start-song-harbor.ps1','scripts/update-checkout.ps1','scripts/prepare-local-ports.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
           foreach ($path in $targets) {
             $tokens = $null
             $errors = $null
@@ -32,3 +32,47 @@ jobs:
             }
             Write-Host "Parsed $path"
           }
+      - name: Validate dirty-checkout fast-forward safety
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:RUNNER_TEMP 'songharbor-launcher-test'
+          New-Item -ItemType Directory -Force $base | Out-Null
+          $bare = Join-Path $base 'origin.git'
+          $seed = Join-Path $base 'seed'
+          $work = Join-Path $base 'work'
+          git init --bare $bare | Out-Null
+          git -C $bare symbolic-ref HEAD refs/heads/main
+          git init -b main $seed | Out-Null
+          git -C $seed config user.email 'ci@example.org'
+          git -C $seed config user.name 'Song Harbor CI'
+          'local base' | Set-Content (Join-Path $seed 'local.txt')
+          'upstream base' | Set-Content (Join-Path $seed 'upstream.txt')
+          git -C $seed add .
+          git -C $seed commit -m 'Initial' | Out-Null
+          git -C $seed remote add origin $bare
+          git -C $seed push -u origin main | Out-Null
+          git clone $bare $work | Out-Null
+          'local modified' | Set-Content (Join-Path $work 'local.txt')
+          'upstream v2' | Set-Content (Join-Path $seed 'upstream.txt')
+          git -C $seed commit -am 'Upstream update' | Out-Null
+          git -C $seed push origin main | Out-Null
+          & ./scripts/update-checkout.ps1 -Repository $work
+          if ((Get-Content (Join-Path $work 'local.txt') -Raw).Trim() -ne 'local modified') {
+            throw 'Local edits were lost during safe update'
+          }
+          if ((Get-Content (Join-Path $work 'upstream.txt') -Raw).Trim() -ne 'upstream v2') {
+            throw 'Dirty checkout did not fast-forward unrelated upstream change'
+          }
+          'upstream conflict' | Set-Content (Join-Path $seed 'local.txt')
+          git -C $seed commit -am 'Conflicting upstream update' | Out-Null
+          git -C $seed push origin main | Out-Null
+          $before = (git -C $work rev-parse HEAD).Trim()
+          & ./scripts/update-checkout.ps1 -Repository $work
+          if ((git -C $work rev-parse HEAD).Trim() -ne $before) {
+            throw 'Conflicting update modified the checkout revision'
+          }
+          if ((Get-Content (Join-Path $work 'local.txt') -Raw).Trim() -ne 'local modified') {
+            throw 'Conflicting update clobbered local work'
+          }
+          Write-Host 'Dirty safe-update and conflict-protection tests passed.'

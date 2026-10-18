@@ -7,7 +7,7 @@ type Catalog = {
   installed: Record<string, string | null>;
 };
 type DawResponse = {detail?: string; directory?: string; executable?: string | null; path?: string | null;
-  status?: string; message?: string};
+  status?: string; message?: string; id?: string; scanned?: number};
 const API = "/api";
 
 async function post(url: string, body?: object): Promise<DawResponse> {
@@ -31,6 +31,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   const [installer, setInstaller] = useState("");
   const [folder, setFolder] = useState("");
   const [busy, setBusy] = useState(false);
+  const [searchJob, setSearchJob] = useState<{id:string;target:string;status:string;message:string;scanned:number}|null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const installed = catalog?.installed[target] || null;
@@ -46,12 +47,46 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   useEffect(() => { void refresh().catch(e => setError(String(e))); }, []);
+  useEffect(() => {
+    if (!searchJob || searchJob.status !== "running") return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const response = await fetch(API + "/daws/search/" + searchJob.id);
+        if (!response.ok) throw new Error("Search status is unavailable");
+        const data = await response.json() as {id:string;target:string;status:string;message:string;scanned:number;executable?:string};
+        if (!active) return;
+        setSearchJob(data);
+        if (data.status === "found") {
+          setMessage(data.message);
+          await refresh();
+        } else if (data.status === "not_found" || data.status === "error") {
+          setMessage(data.message);
+        }
+      } catch (e) {
+        if (active) {setSearchJob(null);setError(e instanceof Error ? e.message : String(e));}
+      }
+    };
+    const timer = setTimeout(() => {void poll();}, 700);
+    return () => {active = false;clearTimeout(timer);};
+  }, [searchJob?.id, searchJob?.status, searchJob?.scanned]);
+
+  async function searchComputer() {
+    setError("");setMessage("");
+    const result = await post("/daws/" + target + "/search");
+    if (!result.id) throw new Error("DAW search could not start");
+    setSearchJob({id:result.id,target,status:result.status || "running",
+      scanned:result.scanned || 0,message:result.message || "Searching…"});
+  }
+
+
 
   async function chooseTarget(value: string) {
     setTarget(value);
     setLocation(catalog?.installed[value] || "");
     setFolder("");
     setInstaller("");
+    setSearchJob(null);
     setError("");
     setMessage("");
     await perform(async () => {
@@ -145,6 +180,15 @@ export function DawHandoff({jobId, saveProject, onClose}: {
               placeholder={target === "audacity" ? "Audacity.exe or installation folder" : "Waveform.exe or installation folder"} aria-label={"Installed " + targetName + " path"}/>
             <Button size="compact" variant="secondary" disabled={busy} onClick={() => { void perform(browseInstalled); }}>Browse</Button>
             <Button size="compact" variant="secondary" disabled={busy || !location.trim()} onClick={() => { void perform(locate); }}>Use</Button>
+          </div>
+          <div className="daw-controls">
+            <Button variant="secondary" disabled={busy || searchJob?.status === "running"}
+              onClick={() => {void perform(searchComputer);}}>
+              {searchJob?.status === "running" ? "Searching…" : "Search this PC"}
+            </Button>
+            {searchJob && <span role="status" className="daw-scan-status">
+              {searchJob.status === "running" ? searchJob.message : searchJob.message}
+            </span>}
           </div>
         </div>
         <div className="daw-section">

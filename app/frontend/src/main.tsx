@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
+import { FfmpegSetup } from "./FfmpegSetup";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
 import "./song-harbor.css";
@@ -17,7 +18,7 @@ type Job = {
   elapsed_seconds: number | null;
   source_duration_seconds?: number;
 };
-type Health = { ready: boolean; model: string; model_directory: string };
+type Health = { ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
 function App() {
@@ -31,7 +32,7 @@ function App() {
   useEffect(() => {
     fetch(API + "/health").then(r => r.ok ? r.json() : Promise.reject())
       .then((data: Health) => setHealth(data))
-      .catch(() => setError("Local separator service unavailable. Start the backend first."));
+      .catch(() => setError("Local Song Harbor backend is unavailable. Use the launcher to set up the application."));
   }, []);
 
   useEffect(() => {
@@ -90,6 +91,7 @@ function App() {
   const finished = job?.status === "complete";
   const statusTone = finished ? "success" : job?.status === "error" ? "danger" : running ? "info" : "neutral";
   const canStart = !!file && !!health?.ready && !busy && !running;
+  const ffmpegMissing = !!health && !health.ffmpeg;
 
   return <div className="app-shell">
     <header className="topbar">
@@ -101,6 +103,7 @@ function App() {
         <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
         <span className="edition">M1 · STEM MIXER</span>
       </section>
+      {ffmpegMissing && <FfmpegSetup onReady={setHealth} />}
       <div className="workspace-grid">
         <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>
@@ -117,6 +120,7 @@ function App() {
             {running && <Button variant="secondary" onClick={cancel}>Cancel</Button>}
           </div>
           {error && <div className="error-message" role="alert">{error}</div>}
+          {health?.ffmpeg && <div className="dependency-configured"><span>FFmpeg: {health.ffmpeg.directory}</span><Button size="compact" variant="subtle" onClick={() => setHealth({...health, ffmpeg: null})}>Change</Button></div>}
         </Panel>
         <Panel elevation="raised" className="results-panel">
           <div className="section-label"><span>03</span><h2>Output stems</h2></div>

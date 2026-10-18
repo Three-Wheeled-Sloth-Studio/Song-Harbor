@@ -21,6 +21,8 @@ $frontend = Join-Path $PSScriptRoot "frontend"
 if (-not (Test-Path (Join-Path $frontend "node_modules"))) { throw "Frontend dependencies missing. Run npm install in $frontend" }
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
 $vite = $null
+$instanceToken = [guid]::NewGuid().ToString("N")
+$env:SONG_HARBOR_INSTANCE_TOKEN = $instanceToken
 $backend = Start-Process -FilePath $python -ArgumentList @((Join-Path $PSScriptRoot "backend\server.py")) -WorkingDirectory $Root -PassThru -NoNewWindow
 try {
   $backendReady = $false
@@ -28,10 +30,20 @@ try {
     if ($backend.HasExited) { throw "Song Harbor backend exited before reporting healthy (code $($backend.ExitCode))." }
     try {
       $response = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 1
-      if ($null -ne $response.separator_ready) { $backendReady = $true; break }
+      if ($response.instance_token -eq $instanceToken -and $null -ne $response.separator_ready) {
+        $backendReady = $true
+        break
+      }
+      if ($response.instance_token -ne $instanceToken) {
+        if ($backend.HasExited) {
+          throw "Another Song Harbor backend is already running on port 8765. Close earlier Song Harbor windows/launchers, then retry."
+        }
+      }
     } catch { Start-Sleep -Milliseconds 350 }
   }
-  if (-not $backendReady) { throw "Song Harbor backend did not become ready. Check the console for errors." }
+  if (-not $backendReady) {
+    throw "Could not reach the newly launched Song Harbor backend. An earlier instance may still own port 8765. Close prior Song Harbor launchers and retry."
+  }
   # Start the Vite server before opening the browser. Otherwise first launch can
   # briefly display a 404/connection error while frontend dependencies load.
   $viteCommand = '""' + $npm + '" run dev --prefix "' + $frontend + '""'

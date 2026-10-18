@@ -88,9 +88,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       const player = audio.current.get(s.filename);
       if (player) player.volume = Math.min(1, Math.max(0, effectiveGain(s, anySolo) * monitorVolume / 100));
     }
-    // Any level adjustment makes the previously exported file stale.
-    setMixUrl(null);
   }, [stems, anySolo, monitorVolume]);
+
+  // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
+  useEffect(() => { setMixUrl(null); }, [stems]);
 
   useEffect(() => {
     if (!playing) return;

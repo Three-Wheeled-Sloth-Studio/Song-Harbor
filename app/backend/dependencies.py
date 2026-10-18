@@ -192,16 +192,26 @@ def install(root: Path, target_directory: Path, job: dict) -> None:
             hasher = hashlib.sha256()
             size = 0
             with urllib.request.urlopen(ARCHIVE_URL, timeout=90) as response, archive.open("wb") as dest:
+                length_header = response.headers.get("Content-Length")
+                total_bytes = int(length_header) if length_header and length_header.isdigit() else 0
+                if total_bytes > MAX_ARCHIVE_BYTES:
+                    raise ValueError("FFmpeg archive exceeded safety limit")
+                job.update(phase="download", downloaded_bytes=0, total_bytes=total_bytes or None, progress_percent=0 if total_bytes else None)
                 while data := response.read(1024 * 1024):
                     size += len(data)
                     if size > MAX_ARCHIVE_BYTES:
                         raise ValueError("FFmpeg archive exceeded safety limit")
                     hasher.update(data)
                     dest.write(data)
-                    job["message"] = f"Downloading FFmpeg ({size // 1048576} MiB)"
+                    job["downloaded_bytes"] = size
+                    if total_bytes:
+                        job["progress_percent"] = min(99, round(size / total_bytes * 100))
+                        job["message"] = f"Downloading FFmpeg ({size // 1048576} / {total_bytes // 1048576} MiB)"
+                    else:
+                        job["message"] = f"Downloading FFmpeg ({size // 1048576} MiB)"
             if hasher.hexdigest() != expected_hash:
                 raise ValueError("Publisher SHA-256 verification failed; archive rejected")
-            job.update(message="Verified download; extracting FFmpeg and FFprobe")
+            job.update(phase="extract", progress_percent=None, message="Verified download; extracting FFmpeg and FFprobe")
             target_directory.mkdir(parents=True, exist_ok=True)
             binaries = {}
             with zipfile.ZipFile(archive) as zf:
@@ -222,7 +232,7 @@ def install(root: Path, target_directory: Path, job: dict) -> None:
                     with zf.open(entry) as source, (bindir / name).open("wb") as dest:
                         shutil.copyfileobj(source, dest)
             pair = save_binary(root, target_directory)
-            job.update(status="complete", message=f"FFmpeg configured: {pair['directory']}")
+            job.update(status="complete", phase="complete", progress_percent=100, message=f"FFmpeg configured: {pair['directory']}")
     except Exception as exc:
         job.update(status="error", message=str(exc))
     finally:
@@ -238,7 +248,7 @@ def start_install(root: Path, directory: str) -> dict:
     if not install_lock.acquire(blocking=False):
         raise ValueError("An FFmpeg installation is already running")
     key = uuid.uuid4().hex[:12]
-    job = {"id": key, "status": "queued", "message": "Preparing installation"}
+    job = {"id": key, "status": "queued", "phase": "prepare", "progress_percent": None, "message": "Preparing installation"}
     jobs[key] = job
     threading.Thread(target=install, args=(root, target, job), daemon=True).start()
     return job.copy()

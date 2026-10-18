@@ -25,7 +25,34 @@ try {
   for ($i=0; $i -lt 30; $i++) {
     try { $null = Invoke-RestMethod -Uri "http://127.0.0.1:8765/api/health" -TimeoutSec 1; break } catch { Start-Sleep -Milliseconds 300 }
   }
-  if (-not $NoBrowser) { Start-Process "http://127.0.0.1:5173" }
+  if (-not $NoBrowser) {
+    $url = "http://127.0.0.1:5173"
+    # Ask a supported browser for a separate window instead of an existing tab.
+    # Prefer a discoverable Edge/Chrome installation; otherwise honor the system URL handler.
+    $browser = $null
+    foreach ($name in @("msedge.exe", "chrome.exe")) {
+      $found = Get-Command $name -ErrorAction SilentlyContinue
+      if ($found) { $browser = $found.Source; break }
+    }
+    if (-not $browser) {
+      foreach ($candidate in @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:ProgramFiles "Microsoft\Edge\Application\msedge.exe"),
+        (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe"),
+        (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe")
+      )) {
+        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+          $browser = $candidate; break
+        }
+      }
+    }
+    if ($browser) {
+      Start-Process -FilePath $browser -ArgumentList @("--new-window", $url)
+    } else {
+      Write-Warning "Could not locate Edge/Chrome for forced new window; using system default browser."
+      Start-Process $url
+    }
+  }
   & $npm run dev --prefix $frontend
 }
 finally {

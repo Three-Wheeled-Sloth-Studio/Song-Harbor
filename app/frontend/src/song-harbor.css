@@ -126,3 +126,17 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .daw-handoff p{margin:4px 0 0;color:var(--tws-color-text-muted);font-size:11px;line-height:1.4}
 .handoff-path{font-size:11px;color:var(--tws-color-text-muted);overflow-wrap:anywhere;margin:9px 0 0}
 .song-save-notice{font-size:12px;color:#9ed7b2;margin:10px 0 0}
+
+/* Generic DAW dialog and output-volume UX. Compact, context-triggered only. */
+.master-monitor{display:flex;align-items:center;gap:5px;min-width:100px}
+.master-monitor span{font-size:14px}
+.master-monitor input[type=range]{width:80px;accent-color:var(--tws-color-action-primary)}
+.daw-setup{display:flex;flex-direction:column;gap:10px}
+.daw-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.daw-controls select,.daw-controls input{min-width:0;flex:1;border:1px solid var(--tws-color-border-strong);border-radius:7px;padding:8px;background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);font-size:12px}
+.daw-section{border-top:1px solid var(--tws-color-border-normal);padding-top:10px;display:flex;flex-direction:column;gap:7px}
+.daw-section-heading{display:flex;align-items:center;justify-content:space-between}
+.daw-section strong{font-size:12px}
+.daw-section p{font-size:11px;color:var(--tws-color-text-muted);margin:0;line-height:1.4}
+.daw-path{font-size:11px;color:var(--tws-color-text-muted);overflow-wrap:anywhere;margin:3px 0}
+@media(max-width:550px){.master-monitor{min-width:65px}.master-monitor input[type=range]{width:46px}}

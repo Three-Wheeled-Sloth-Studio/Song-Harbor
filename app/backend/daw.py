@@ -245,7 +245,6 @@ def resolve(root: Path, remember: bool = True, target_id: str = "waveform") -> s
     candidates = [Path(saved)] if saved else []
     candidates.extend(windows_registry_locations(target_id))
     candidates.extend(common_locations(target_id))
-    candidates.extend(windows_shortcut_locations(target_id))
     for name in EXECUTABLE_NAMES[target_id]:
         found = shutil.which(name)
         if found:
@@ -254,6 +253,14 @@ def resolve(root: Path, remember: bool = True, target_id: str = "waveform") -> s
         executable = verify_executable(target_id, candidate)
         if executable:
             if remember and str(executable) != saved:
+                set_location(root, str(executable), target_id)
+            return str(executable)
+    # Shortcut resolution invokes PowerShell/COM and is only needed if regular
+    # discovery fails. Keep the default DAW dialog fast.
+    for candidate in windows_shortcut_locations(target_id):
+        executable = verify_executable(target_id, candidate)
+        if executable:
+            if remember:
                 set_location(root, str(executable), target_id)
             return str(executable)
     return None

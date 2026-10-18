@@ -38,6 +38,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [handoffFolder, setHandoffFolder] = useState("");
   const [notice, setNotice] = useState("");
   const [playing, setPlaying] = useState(false);
+  const [monitorVolume, setMonitorVolume] = useState(75);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
@@ -83,11 +84,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(() => {
     for (const s of stems) {
       const player = audio.current.get(s.filename);
-      if (player) player.volume = Math.min(1, Math.max(0, effectiveGain(s, anySolo)));
+      if (player) player.volume = Math.min(1, Math.max(0, effectiveGain(s, anySolo) * monitorVolume / 100));
     }
     // Any level adjustment makes the previously exported file stale.
     setMixUrl(null);
-  }, [stems, anySolo]);
+  }, [stems, anySolo, monitorVolume]);
 
   useEffect(() => {
     if (!playing) return;
@@ -246,6 +247,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <input type="range" aria-label="Playback position" min={0} max={Math.max(duration, 1)}
         step={0.05} value={Math.min(position, duration || 1)} onChange={e => seek(Number(e.target.value))} />
       <span className="timecode">{timecode(duration)}</span>
+      <label className="master-monitor" title="Monitoring volume; does not change your exported mix">
+        <span aria-hidden="true">🔊</span>
+        <input type="range" min="0" max="100" step="1" value={monitorVolume}
+          aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
+      </label>
     </div>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>

@@ -107,6 +107,41 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(1, len(library.list_songs(self.root)))
         self.assertEqual(6, len(list((self.job / "stems").glob("*.wav"))))
 
+    def test_manual_combine_different_source_bytes(self):
+        second_id = "deadbeef0001"
+        folder = self.root / "jobs" / second_id
+        stems = folder / "stems"
+        stems.mkdir(parents=True)
+        original = folder / "Raise the Neon Black.wav"
+        original.write_bytes(b"new audio revision with same filename")
+        files = []
+        for label in projects.ORDER:
+            filename = f"Raise the Neon Black_({label})_htdemucs_6s.wav"
+            (stems / filename).write_bytes(label.encode())
+            files.append(filename)
+        projects.write_project(self.root, {
+            "version": 1, "id": second_id, "filename": original.name,
+            "title": "Raise the Neon Black", "source_filename": original.name,
+            "model": "htdemucs_6s.yaml", "files": files,
+            "stems": projects.default_settings(files), "created_at": 2.0,
+        })
+        library.adopt_jobs(self.root)
+        rows = library.list_songs(self.root)
+        self.assertEqual(2, len(rows))
+        parent = next(s for s in rows if s["legacy_job_id"] == self.job_id)
+        child = next(s for s in rows if s["legacy_job_id"] == second_id)
+        library.combine_takes(self.root, parent["id"], child["id"])
+        rows = library.list_songs(self.root)
+        self.assertEqual(1, len(rows))
+        self.assertEqual(2, rows[0]["variant_count"])
+        library.remove_song(self.root, parent["id"])
+        self.assertEqual([], library.list_songs(self.root))
+        self.assertTrue(original.is_file())
+        library.restore_song(self.root, parent["id"])
+        self.assertEqual(1, len(library.list_songs(self.root)))
+        library.adopt_jobs(self.root)
+        self.assertEqual(1, len(library.list_songs(self.root)))
+
     def test_unrelated_names_remain_distinct(self):
         library.adopt_jobs(self.root)
         self.assertEqual([], library.list_songs(self.root, query="unknown"))

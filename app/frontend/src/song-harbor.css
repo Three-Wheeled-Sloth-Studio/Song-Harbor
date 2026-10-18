@@ -201,3 +201,9 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .lib-picker select,.lib-picker input{background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);border:1px solid var(--tws-color-border-normal);border-radius:7px;padding:9px}
 .lib-picker-items{display:flex;flex-direction:column;gap:2px;overflow:auto;max-height:37vh}
 @media(max-width:480px){.mixer-track{grid-template-columns:32px 67px minmax(60px,1fr) 38px;gap:5px;padding:7px}.stem-icon-name{font-size:20px}.mixer .tws-icon-button{min-width:34px;min-height:34px}}
+
+/* Library item identity must be compact and use the application typeface. */
+.lib-song-main .tws-editable-title__value{font-family:inherit;font-size:14px;font-weight:600;line-height:1.25}
+.lib-song-main .tws-editable-title__edit{font-family:inherit;font-size:13px;min-width:26px;min-height:26px;padding:2px 5px}
+.lib-song-main .tws-editable-title{gap:6px;align-items:center}
+.lib-song-actions .tws-icon-button{min-width:34px;min-height:34px;font-size:17px}

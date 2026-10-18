@@ -75,3 +75,18 @@ h1{font-size:clamp(25px,2.5vw,34px);font-weight:650;letter-spacing:-.04em;margin
 .stem-download-details summary{font-size:12px;color:var(--tws-color-text-muted);cursor:pointer;margin-bottom:9px}
 input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8dd7d4;outline-offset:2px}
 @media(max-width:480px){.mixer{padding:9px}.mixer-track{grid-template-columns:65px auto minmax(58px,1fr) 37px;gap:5px;padding:7px}.transport{gap:6px}.workspace-heading p:last-child{font-size:12px}}
+
+/* User-guided installation of shared tools */
+.dependency-panel{padding:20px;margin-bottom:16px;border-color:#718c90}
+.dependency-intro{font-size:13px;color:var(--tws-color-text-muted);line-height:1.5;margin:0 0 14px}
+.dependency-choice{border-top:1px solid var(--tws-color-border-normal);padding:14px 0 6px}
+.dependency-choice h3{margin:0 0 10px;font-size:14px}
+.dependency-choice p{font-size:12px;line-height:1.5;color:var(--tws-color-text-muted)}
+.dependency-inline{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0}
+.dependency-inline input{flex:1;min-width:240px;background:var(--tws-color-surface-inset);border:1px solid var(--tws-color-border-strong);color:var(--tws-color-text-primary);padding:9px;border-radius:7px}
+.dependency-found{display:flex;align-items:center;gap:12px;font-size:12px;overflow-wrap:anywhere;margin-bottom:12px}
+.dependency-matches{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.dependency-matches button{background:var(--tws-color-surface-inset);border:1px solid var(--tws-color-border-normal);border-radius:7px;color:var(--tws-color-text-primary);cursor:pointer;text-align:left;padding:9px;overflow-wrap:anywhere}
+.dependency-matches button:hover{border-color:var(--tws-color-border-strong)}
+.dependency-configured{margin-top:16px;border-top:1px solid var(--tws-color-border-normal);padding-top:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:var(--tws-color-text-muted)}
+.dependency-configured span{overflow-wrap:anywhere;min-width:0}

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Button, Dialog, Status } from "@tws-ui/core/react";
 
 type FfmpegPair = {directory: string; ffmpeg: string; ffprobe: string};
-type Health = { ready: boolean; model: string; model_directory: string; ffmpeg?: FfmpegPair | null; needs_setup?: string[] };
+type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: FfmpegPair | null; needs_setup?: string[] };
 type Settings = {found: FfmpegPair | null; suggested_install_directory: string; config_path: string};
 type InstallStatus = {id: string; status: string; message: string};
 const BASE = "/api/dependencies/ffmpeg";

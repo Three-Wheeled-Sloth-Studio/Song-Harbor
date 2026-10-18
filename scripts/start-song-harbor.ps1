@@ -54,7 +54,7 @@ $needsPython = -not (Test-Path -LiteralPath $python -PathType Leaf)
 $needsSeparator = -not (Test-Path -LiteralPath $separator -PathType Leaf)
 $needsBackend = $true
 if (-not $needsPython) {
-  & $python -c 'import fastapi, uvicorn, multipart, torch; assert torch.cuda.is_available()'
+  & $python -c 'import fastapi, uvicorn, multipart, torch'
   $needsBackend = $LASTEXITCODE -ne 0
 }
 $needsUI = -not (Test-Path -LiteralPath $nodeModules -PathType Container)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FormField, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
@@ -28,6 +28,8 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const pendingSeparation = useRef(false);
 
   useEffect(() => {
     fetch(API + "/health").then(r => r.ok ? r.json() : Promise.reject())
@@ -51,6 +53,16 @@ function App() {
 
   async function separate() {
     if (!file || busy || job && ["queued", "running"].includes(job.status)) return;
+    if (!health?.ffmpeg) {
+      pendingSeparation.current = true;
+      setSetupOpen(true);
+      return;
+    }
+    await startSeparation();
+  }
+
+  async function startSeparation() {
+    if (!file || busy) return;
     setBusy(true);
     setJob(null);
     setError("");
@@ -60,6 +72,13 @@ function App() {
       const response = await fetch(API + "/jobs", { method: "POST", body });
       if (!response.ok) {
         const detail = await response.json().catch(() => ({})) as { detail?: string };
+        if (response.status === 409 && /ffmpeg/i.test(detail.detail || "")) {
+          pendingSeparation.current = true;
+          setSetupOpen(true);
+          const latest = await fetch(API + "/health").then(r => r.json() as Promise<Health>);
+          setHealth(latest);
+          return;
+        }
         throw new Error(detail.detail || "Could not start separation");
       }
       setJob(await response.json() as Job);
@@ -90,20 +109,36 @@ function App() {
   const running = job && ["queued", "running"].includes(job.status);
   const finished = job?.status === "complete";
   const statusTone = finished ? "success" : job?.status === "error" ? "danger" : running ? "info" : "neutral";
-  const canStart = !!file && !!health?.ready && !busy && !running;
-  const ffmpegMissing = !!health && !health.ffmpeg;
+  const canStart = !!file && !!health?.separator && !busy && !running;
+  const missingCount = health?.needs_setup?.length ?? 0;
+  function completedSetup(next: Health) {
+    setHealth(next);
+    setSetupOpen(false);
+    if (pendingSeparation.current && next.ffmpeg) {
+      pendingSeparation.current = false;
+      void startSeparation();
+    }
+  }
 
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden="true">◈</span><span>TWS STUDIOS</span><span className="brand-divider">/</span><strong>Song Harbor</strong></div>
-      <Status tone={health?.ready ? "success" : "warning"}>{health?.ready ? "Local engine ready" : "Engine unavailable"}</Status>
+      <div className="header-actions">
+        <Status tone={health?.separator ? "success" : "warning"}>{health?.separator ? "Local engine" : "Engine unavailable"}</Status>
+        <button type="button" className="dependency-indicator" title={missingCount ? `${missingCount} component(s) need setup` : "Component settings"}
+          aria-label={missingCount ? `Components: ${missingCount} missing. Open setup.` : "Open component settings"}
+          onClick={() => setSetupOpen(true)}>
+          <span aria-hidden="true">⚙</span>
+          {missingCount > 0 && <span className="dependency-count">{missingCount}</span>}
+        </button>
+      </div>
     </header>
     <main className="workspace">
       <section className="workspace-heading">
         <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
         <span className="edition">M1 · STEM MIXER</span>
       </section>
-      {ffmpegMissing && <FfmpegSetup onReady={setHealth} />}
+      <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) pendingSeparation.current = false; }} onReady={completedSetup} />
       <div className="workspace-grid">
         <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>
@@ -120,7 +155,7 @@ function App() {
             {running && <Button variant="secondary" onClick={cancel}>Cancel</Button>}
           </div>
           {error && <div className="error-message" role="alert">{error}</div>}
-          {health?.ffmpeg && <div className="dependency-configured"><span>FFmpeg: {health.ffmpeg.directory}</span><Button size="compact" variant="subtle" onClick={() => setHealth({...health, ffmpeg: null})}>Change</Button></div>}
+
         </Panel>
         <Panel elevation="raised" className="results-panel">
           <div className="section-label"><span>03</span><h2>Output stems</h2></div>

@@ -98,9 +98,9 @@ class DawAdapterTests(unittest.TestCase):
     def test_shortcut_candidate_can_be_saved_for_audacity4(self):
         shortcut_target = self.root / "Audacity4.exe"
         shortcut_target.write_bytes(b"fixture")
-        with patch.object(daw, "windows_registry_locations", return_value=[]), \\
-             patch.object(daw, "common_locations", return_value=[]), \\
-             patch.object(daw, "windows_shortcut_locations", return_value=[shortcut_target]), \\
+        with patch.object(daw, "windows_registry_locations", return_value=[]), \
+             patch.object(daw, "common_locations", return_value=[]), \
+             patch.object(daw, "windows_shortcut_locations", return_value=[shortcut_target]), \
              patch.object(daw.shutil, "which", return_value=None):
             found = daw.resolve(self.root, target_id="audacity")
         self.assertEqual(str(shortcut_target.resolve()), found)

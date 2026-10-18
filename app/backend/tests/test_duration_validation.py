@@ -1,8 +1,10 @@
 """Regression checks for full-song output duration validation."""
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 SPEC = importlib.util.spec_from_file_location("song_harbor_server", Path(__file__).resolve().parents[1] / "server.py")
 assert SPEC and SPEC.loader
 server = importlib.util.module_from_spec(SPEC)

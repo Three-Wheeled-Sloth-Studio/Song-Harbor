@@ -79,6 +79,33 @@ class DawAdapterTests(unittest.TestCase):
             daw.scan_existing(self.root, "audacity", job, max_directories=20, max_seconds=3)
         self.assertEqual("not_found", job["status"])
 
+    def test_audacity4_executable_names_and_folders(self):
+        for filename in ("Audacity4.exe", "Audacity 4.exe", "Audacity3.exe",
+                         "Audacity 3.exe", "Audacity.exe"):
+            with self.subTest(filename=filename):
+                candidate = self.root / filename
+                candidate.write_bytes(b"fixture")
+                self.assertEqual(candidate.resolve(),
+                                 daw.verify_executable("audacity", candidate))
+                self.assertEqual(candidate.resolve(),
+                                 daw.verify_executable("audacity", self.root)
+                                 if filename == "Audacity.exe" else candidate.resolve())
+                candidate.unlink()
+        invalid = self.root / "audacity-installer.exe"
+        invalid.write_bytes(b"fixture")
+        self.assertIsNone(daw.verify_executable("audacity", invalid))
+
+    def test_shortcut_candidate_can_be_saved_for_audacity4(self):
+        shortcut_target = self.root / "Audacity4.exe"
+        shortcut_target.write_bytes(b"fixture")
+        with patch.object(daw, "windows_registry_locations", return_value=[]), \\
+             patch.object(daw, "common_locations", return_value=[]), \\
+             patch.object(daw, "windows_shortcut_locations", return_value=[shortcut_target]), \\
+             patch.object(daw.shutil, "which", return_value=None):
+            found = daw.resolve(self.root, target_id="audacity")
+        self.assertEqual(str(shortcut_target.resolve()), found)
+        self.assertEqual(found, daw.configured(self.root, "audacity"))
+
     def test_wrong_executable_rejected(self):
         with self.assertRaises(ValueError):
             daw.set_location(self.root, str(self.waveform), "audacity")

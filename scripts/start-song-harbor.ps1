@@ -9,6 +9,7 @@ param(
   [string]$Root = "",
   [switch]$NoBrowser,
   [switch]$SkipInstall,
+  [switch]$InstallOnly,
   [switch]$ShowRoot
 )
 $ErrorActionPreference = 'Stop'
@@ -59,6 +60,10 @@ if ($needsInstall) {
   Write-Host 'Missing runtime or UI dependencies; performing one-time bootstrap.'
   & (Join-Path $PSScriptRoot 'bootstrap-windows.ps1') -Root $workRoot
   if (-not $?) { throw 'Bootstrap did not complete successfully.' }
+}
+if ($InstallOnly) {
+  Write-Host 'Song Harbor dependencies are available.'
+  return
 }
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) {
   throw "Python environment unavailable after setup: $python"

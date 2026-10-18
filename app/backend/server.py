@@ -331,6 +331,31 @@ def library_index(query: str = "", collection_id: str | None = None) -> dict[str
             "collections": library.list_collections(DATA_ROOT)}
 
 
+@app.get("/api/library/trash")
+def library_trash() -> dict[str, Any]:
+    library.adopt_jobs(DATA_ROOT)
+    return {"songs": [item for item in library.list_songs(DATA_ROOT, include_deleted=True)
+                      if item["removed"]]}
+
+
+@app.post("/api/library/songs/{song_id}/remove")
+def library_remove(song_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return library.remove_song(DATA_ROOT, song_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/library/songs/{song_id}/restore")
+def library_restore(song_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return library.restore_song(DATA_ROOT, song_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.patch("/api/library/songs/{song_id}")
 def library_rename(song_id: str, body: RenameLibrarySong, request: Request) -> dict[str, Any]:
     require_local_origin(request)

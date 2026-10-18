@@ -1,8 +1,10 @@
 """Mix requests must never escape the six source stems or silently overwrite them."""
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 SPEC = importlib.util.spec_from_file_location(
     "song_harbor_server", Path(__file__).resolve().parents[1] / "server.py"
 )

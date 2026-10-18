@@ -207,3 +207,7 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .lib-song-main .tws-editable-title__edit{font-family:inherit;font-size:13px;min-width:26px;min-height:26px;padding:2px 5px}
 .lib-song-main .tws-editable-title{gap:6px;align-items:center}
 .lib-song-actions .tws-icon-button{min-width:34px;min-height:34px;font-size:17px}
+
+/* Works with already-installed versions of TWS-UI until the shared pencil update ships. */
+.lib-song-main .tws-editable-title__edit{font-size:0}
+.lib-song-main .tws-editable-title__edit::before{content:"✎";font-size:17px;line-height:1}

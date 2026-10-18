@@ -119,5 +119,6 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
     </div>
     {message && <p role="status">{message}</p>}
     {error && <div className="error-message" role="alert">{error}</div>}
-    </div>\n  </Dialog>;
+    </div>
+  </Dialog>;
 }

@@ -119,7 +119,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
             });
           }}>Files</Button>
           <Button variant="subtle" disabled={busy} onClick={() => { void perform(prepare); }}>Reprepare</Button>
-        </>}}
+        </>}
       </div>
       {folder && <p className="daw-path" title={folder}>{folder}</p>}
       {!installed && <>

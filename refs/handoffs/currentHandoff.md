@@ -143,3 +143,15 @@ Corrections committed:
 - Frontend and backend automated build/tests passed after changes. Real Predator acceptance test pending.
 
 Caveat: do not claim exact duplicates exist merely based on filename. Exact SHA-256 is authoritative for byte-identical copies; manual grouping is a safe way to link genuinely related but nonidentical encodes. Current take grouping is metadata only; independent version editing, take deletion and full artifact lifecycle are future work.
+
+## Launcher fixes after Predator port collision (2026-10-18)
+
+User reports portable launcher never auto-pulled due detected dirty checkout and failed with backend `Errno 10048` at 127.0.0.1:8765 (old Song Harbor service still bound).
+
+Fixed in source:
+- New `scripts/update-checkout.ps1` attempts safe fetch + fast-forward on the current branch **even when local edits exist**, letting Git refuse only actual file conflicts. Never reset/clean/stash/force. Handles detached HEAD, offline or diverged branches gracefully. `start-song-harbor.ps1` invokes it; `-NoUpdate` bypasses.
+- New `scripts/prepare-local-ports.ps1` checks owners of 8765 and 5173 before creating child processes; only confirmed Song Harbor processes whose commands contain the same repo path may be stopped. An existing runtime with active jobs is protected; older runtime without job-state endpoint requires explicit restart confirmation. Unknown apps are never terminated.
+- `app/run.ps1` invokes safe port preflight before backend launch. Backend now exposes `GET /api/runtime/status` with active job status.
+- Expanded Windows CI to parse new PowerShell scripts and test real Git fast-forward behavior with unrelated dirty and conflicting tracked files. Windows CI run 39134418037 passed both syntax and updater integration tests.
+
+**Pending Predator smoke:** one-time manual git pull to obtain the updater, relaunch, accept prompt if an older verified Song Harbor backend cannot report job activity, confirm healthy API/UI and subsequent double-click updates. If Git still refuses due overlapping tracked changes, console should explain protected local checkout; inspect `git status --short` and resolve manually. This is developer checkout behavior, not public auto-update mechanism.

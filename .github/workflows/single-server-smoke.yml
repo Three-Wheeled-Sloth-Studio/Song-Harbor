@@ -33,7 +33,7 @@ jobs:
           npm run build
           if ($LASTEXITCODE -ne 0) { throw 'UI build failed' }
       - name: Install minimum backend API dependencies
-        run: python -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3"
+        run: python -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3" "httpx2"
       - name: Verify Windows Audacity4 Start Menu shortcut discovery
         shell: pwsh
         run: |

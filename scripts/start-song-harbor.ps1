@@ -71,8 +71,13 @@ if ($needsInstall) {
   } else {
     Write-Host 'Python/CUDA backend is ready. Installing missing UI dependencies only.'
     $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-    & $npm install --prefix $frontend
-    if ($LASTEXITCODE -ne 0) { throw "UI dependency install failed (exit $LASTEXITCODE)" }
+    Push-Location $frontend
+    try {
+      & $npm install
+      if ($LASTEXITCODE -ne 0) { throw "UI dependency install failed (exit $LASTEXITCODE)" }
+    } finally {
+      Pop-Location
+    }
   }
 }
 if ($InstallOnly) {

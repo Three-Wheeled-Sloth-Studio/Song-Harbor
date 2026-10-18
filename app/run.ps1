@@ -30,14 +30,19 @@ $env:TMP = $env:TEMP
 # before a broken browser page appears. npm/Vite is never left running.
 $frontend = Join-Path $PSScriptRoot 'frontend'
 $npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-if (-not (Test-Path -LiteralPath (Join-Path $frontend 'node_modules') -PathType Container)) {
-  Write-Host 'Installing frontend dependencies...'
-  & $npm install --prefix $frontend
-  if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed (exit $LASTEXITCODE)" }
+Push-Location $frontend
+try {
+  if (-not (Test-Path -LiteralPath 'node_modules' -PathType Container)) {
+    Write-Host 'Installing frontend dependencies...'
+    & $npm install
+    if ($LASTEXITCODE -ne 0) { throw "Frontend dependency install failed (exit $LASTEXITCODE)" }
+  }
+  Write-Host 'Building Song Harbor interface...'
+  & $npm run build
+  if ($LASTEXITCODE -ne 0) { throw "Frontend build failed (exit $LASTEXITCODE)" }
+} finally {
+  Pop-Location
 }
-Write-Host 'Building Song Harbor interface...'
-& $npm run build --prefix $frontend
-if ($LASTEXITCODE -ne 0) { throw "Frontend build failed (exit $LASTEXITCODE)" }
 $index = Join-Path $frontend 'dist\index.html'
 if (-not (Test-Path -LiteralPath $index -PathType Leaf)) {
   throw "Frontend build did not produce $index"

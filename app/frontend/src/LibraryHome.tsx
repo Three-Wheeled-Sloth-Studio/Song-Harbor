@@ -34,8 +34,14 @@ export function LibraryHome({onOpenSong, onImport}: {
   const [loading, setLoading] = useState(true);
 
   async function refresh(trash = showTrash) {
+    const health = await fetch("/api/health").then(r => r.ok ? r.json() as Promise<{api_features?:string[]}> : null).catch(()=>null);
+    if (!health || !health.api_features?.includes("library-remove")) {
+      throw new Error("Song Harbor is connected to an older backend. Close all Song Harbor launchers and reopen the app to load the updated Library.");
+    }
     const response = await fetch(trash ? ROOT + "/trash" : ROOT);
-    if (!response.ok) throw new Error("Library is unavailable. Reopen Song Harbor to reconnect.");
+    if (!response.ok) throw new Error(response.status === 404
+      ? "The Library API is outdated. Close earlier Song Harbor launchers and restart."
+      : "Library could not load (HTTP " + response.status + "). Retry.");
     const result = await response.json() as LibraryIndex;
     setSongs(result.songs);
     setCollections(result.collections);
@@ -97,7 +103,9 @@ export function LibraryHome({onOpenSong, onImport}: {
       const response = await fetch(ROOT + "/songs/" + song.id + "/" + action, {method:"POST"});
       if (!response.ok) {
         const body = await response.json().catch(() => ({})) as {detail?:string};
-        throw new Error(body.detail || "Could not " + action + " this song (HTTP " + response.status + ")");
+        throw new Error(response.status === 404
+          ? "Your backend is missing this Library action. Close older Song Harbor launchers and restart."
+          : (body.detail || "Could not " + action + " this song (HTTP " + response.status + ")"));
       }
       setRemovedSong(restore ? null : song);
       await refresh(showTrash);

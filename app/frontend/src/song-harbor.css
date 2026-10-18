@@ -222,3 +222,14 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .mixer .track-toggle{min-width:38px;min-height:37px;font-size:15px}
 .mixer .track-actions{gap:7px}
 @media(max-width:480px){.mixer-track{grid-template-columns:39px 75px minmax(55px,1fr) 40px;gap:5px;padding:7px}.audio-stem-pictogram{width:27px;height:27px;min-width:27px;min-height:27px}.mixer .track-toggle{min-width:32px;min-height:32px}}
+
+/* Feature-specific setup: never disable separation solely because FFmpeg is absent. */
+.separator-action{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.separator-trigger.tws-icon-button{width:52px;height:52px;min-width:52px;min-height:52px;border:1px solid var(--tws-color-border-strong);border-radius:12px;background:var(--tws-color-action-primary);color:#132029;cursor:pointer}
+.separator-trigger.tws-icon-button>span{display:inline-flex;align-items:center;justify-content:center}
+.separator-trigger.tws-icon-button:hover:not(:disabled){background:var(--tws-color-action-primary-hover)}
+.separator-trigger.tws-icon-button:disabled{cursor:not-allowed;opacity:.45}
+.separator-action.needs-setup .separator-trigger.tws-icon-button{border:2px solid #dba259;background:#3f3326;color:#ffd49b}
+.separator-action.needs-setup .separator-trigger.tws-icon-button:hover{background:#57422a}
+.separator-requirement{position:absolute;top:-7px;right:-7px;display:flex;align-items:center;justify-content:center;min-width:19px;height:19px;border-radius:50%;border:2px solid var(--tws-color-surface-panel);background:#dba259;color:#161d22;font-size:12px;font-weight:800;pointer-events:none}
+.separator-trigger.tws-icon-button:focus-visible{outline:2px solid #f7c27e;outline-offset:3px}

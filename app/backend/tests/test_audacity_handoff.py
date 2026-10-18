@@ -40,7 +40,7 @@ class AudacityHandoffTests(unittest.TestCase):
         self.assertEqual(8, len(lines))
         for track, line in zip(self.tracks, lines[2:]):
             path = self.directory / track["file"]
-            self.assertEqual(f'file "{path.resolve()}" offset 0', line)
+            self.assertEqual(f'file "{path.name}" offset 0', line)
         for track in self.tracks:
             self.assertEqual(track["name"].encode(),
                              (self.directory / track["file"]).read_bytes())

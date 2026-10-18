@@ -171,3 +171,19 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .back-to-library{background:transparent;border:0;padding:0 0 12px;color:var(--tws-color-text-muted);font-size:12px;cursor:pointer}
 .back-to-library:hover{color:var(--tws-color-text-primary)}
 @media(max-width:640px){.library-home{grid-template-columns:minmax(110px,33%) minmax(0,1fr)}.lib-sidebar{padding:10px 4px}.lib-content{padding:10px}.lib-actions input{width:115px}.lib-table-head,.lib-song{grid-template-columns:minmax(0,1fr) 25px 63px;gap:5px}.lib-folder{font-size:11px}}
+
+/* Context-dense library variants, reversible removal, compact session chrome */
+.lib-song-group{border-bottom:1px solid var(--tws-color-border-normal)}
+.lib-song-group .lib-song{border-bottom:0}
+.lib-variants{padding:0 10px 8px 22px;display:flex;flex-direction:column;gap:3px}
+.lib-variant{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 8px;border-left:1px solid var(--tws-color-border-strong);font-size:11px;color:var(--tws-color-text-muted)}
+.lib-variant span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-undo{display:flex;align-items:center;gap:10px;font-size:11px;padding:9px;color:var(--tws-color-text-muted)}
+.workspace-grid.is-session{grid-template-columns:minmax(0,1fr)}
+.song-session-heading{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.song-session-heading h1{font-size:18px;line-height:1.2;margin:0;font-weight:600}
+.session-breadcrumb{font-size:10px;letter-spacing:.08em;color:var(--tws-color-text-muted)}
+.stem-icon-name{display:flex;align-items:center;justify-content:flex-start;font-size:18px;line-height:1}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.daw-handoff{justify-content:flex-end}
+.lib-song-count{white-space:nowrap}

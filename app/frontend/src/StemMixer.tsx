@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Status } from "@tws-ui/core/react";
+import { DawHandoff } from "./DawHandoff";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
@@ -35,6 +36,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [title, setTitle] = useState(initialTitle || "Untitled song");
   const [saving, setSaving] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [dawOpen, setDawOpen] = useState(false);
   const [handoffFolder, setHandoffFolder] = useState("");
   const [notice, setNotice] = useState("");
   const [playing, setPlaying] = useState(false);
@@ -277,15 +279,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
     </div>
     <div className="daw-handoff">
-      <div><strong>Continue in Waveform Free</strong>
-        <p>Copy six aligned WAVs and an import guide. Free DAW; no purchase needed.</p>
-      </div>
-      <Button variant="secondary" disabled={handoffBusy || saving} onClick={handoffWaveform}>
-        {handoffBusy ? "Preparing…" : "Export to Waveform"}
+      <strong>DAW handoff</strong>
+      <Button variant="secondary" onClick={() => setDawOpen(true)}>
+        Export to DAW
       </Button>
-      {handoffFolder && <Button variant="subtle" onClick={openWaveformFolder}>Open export folder</Button>}
     </div>
-    {handoffFolder && <p className="handoff-path" title={handoffFolder}>{handoffFolder}</p>}
+    {dawOpen && <DawHandoff jobId={jobId} saveProject={saveProject} onClose={() => setDawOpen(false)} />}
     {notice && <p role="status" className="song-save-notice">{notice}</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
     <p className="mixer-note">Preview uses browser audio streams with periodic synchronization. WAV export is rendered sample-aligned by FFmpeg and preserves the original stems.</p>

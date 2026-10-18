@@ -199,13 +199,13 @@ function App() {
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
       onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className="workspace">
       <button className="back-to-library" title="Back to Library" onClick={() => setView("library")}>← Library</button>
-      <section className="workspace-heading">
-        <div><p className="eyebrow">AUDIO WORKBENCH / SEPARATION</p><h1>Make room for every instrument.</h1><p>Turn a finished recording into six editable stems, right here on your machine.</p></div>
-        <span className="edition">M1 · STEM MIXER</span>
+      <section className="song-session-heading">
+        <div className="session-breadcrumb">{job ? "LIBRARY / SONG" : "LIBRARY / IMPORT"}</div>
+        <h1>{job ? (project?.title || job.filename.replace(/\\.[^.]+$/, "")) : "Import song"}</h1>
       </section>
       <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
-      <div className="workspace-grid">
-        <Panel elevation="raised" className="task-panel">
+      <div className={"workspace-grid" + (job ? " is-session" : "")}>
+        {!job && <Panel elevation="raised" className="task-panel">
           <div className="section-label"><span>01</span><h2>Source audio</h2></div>
           {recentSongs.length > 0 && <details className="recent-songs">
             <summary>Open saved song ({recentSongs.length})</summary>
@@ -233,9 +233,9 @@ function App() {
           </div>
           {error && <div className="error-message" role="alert">{error}</div>}
 
-        </Panel>
+        </Panel>}
         <Panel elevation="raised" className="results-panel">
-          <div className="section-label"><span>03</span><h2>Output stems</h2></div>
+          <div className="section-label"><span>♫</span><h2>{finished ? "Stem workspace" : "Session"}</h2></div>
           <div className="job-status" role="status" aria-live="polite">
             <Status tone={statusTone}>{job ? job.status : "Ready for a song"}</Status>
             <span>{job?.message || "Choose a recording to get started."}</span>
@@ -252,7 +252,7 @@ function App() {
               </div>
             </details>
           </>}
-          {!finished && !running && <div className="empty-result"><div className="waveform" aria-hidden="true">▂▃▅▇▆▄▂▁▃▆▇▅▂</div><p>Your separated tracks will appear here.</p></div>}
+          {!finished && !running && !job && <div className="empty-result"><div className="waveform" aria-hidden="true">▂▃▅▇▆▄▂▁▃▆▇▅▂</div><p>Your separated tracks will appear here.</p></div>}
           {job && <footer className="result-footer">
             {job.elapsed_seconds != null && <small>Elapsed: {job.elapsed_seconds.toFixed(2)} s</small>}
             <div className="result-actions">
@@ -263,7 +263,7 @@ function App() {
           {showDetails && job && <pre className="job-logs">{job.logs.length ? job.logs.join("\n") : "No logs yet."}</pre>}
         </Panel>
       </div>
-      <p className="footnote">Local processing · Original recording preserved · Six-stem Demucs baseline</p>
+
     </main>}
   </div>;
 }

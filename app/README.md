@@ -51,7 +51,7 @@ Opens local interface at http://127.0.0.1:5173. Backend listens only on 127.0.0.
 
 ## Scope boundaries
 
-One job at a time. Basic local-only progress state rather than fabricated percent; model downloads may delay startup. No multitrack editor, instrument playback, packaging, model selector, job persistence across app restarts, or deep licensing approval in this slice. No claims of tested production readiness before validation.
+One job at a time. Basic local-only progress state rather than fabricated percent; model downloads may delay startup. M1 adds an in-app mixer for the six separated stems. Still no clip editing, packaging, model selector, job persistence across restarts, or deep licensing approval. No claims of tested production readiness before validation.
 
 The source code sits in `app/`; generated assets, caches, model weights and imported music must remain local and untracked. The TWS design repo remains canonical rather than copying design-system source into Song Harbor.
 
@@ -70,3 +70,21 @@ User ran ffprobe on Laptop Omen's most recent job, `Salt in the Circuit`: import
 
 ### Follow-up: suspected Audacity timeline artifact (2026-10-17)
 User withdrew the four-minute cutoff report after realizing a 4:00 song was previously imported into Audacity and the next song likely shared that timeline. The inspected Song Harbor job had source and all six stems at exactly 240 seconds. **No Song Harbor truncation has been demonstrated.** Reclassify this as a probable Audacity session/timeline issue rather than a confirmed application regression. Keep the new source-to-stem duration validation as useful defensive QA; it does not compare against the user's external original.
+
+
+## M1: In-app stem mixer (implemented; awaiting local QA)
+
+The separation results now include a compact mixer with **Play/Pause**, a seekable timeline, separate **Mute / Solo / Gain (0-100%)** per stem, **Reset mix**, and **Export mix WAV**. Individual stems remain downloadable. After exporting, use the in-app download link or Open folder. The backend uses FFmpeg's six aligned WAV inputs, applies each stem's effective gain and a peak limiter, writes 24-bit stereo PCM WAV to the job output folder, validates duration against the original source, and leaves source stems unchanged. The export is not an unaltered null reconstruction due to limiting and mixing. Gain/solo/mute API input is validated to prevent arbitrary file access. A separate inline stream endpoint supports media playback via range requests.
+
+**Preview caveat:** browser media elements are independently decoded and corrected for observable drift; this is a low-memory audition surface, **not guaranteed sample-accurate synchronized DAW playback**. The backend renders the export with FFmpeg using sample-aligned input stem files. Assess any flamming/phasing in the preview separately from the exported WAV. We should migrate transport to a shared Web Audio clock if audible drift is unacceptable.
+
+**Test plan on Laptop Omen** (run a completed separation after pulling latest source):
+
+1. Playback starts and stops; seek to middle/end and verify the timeline is correct.
+2. Solo vocals; solo drums; mute both; move volume sliders and check responsiveness.
+3. Reset mix; export WAV; download and audition it independently; compare duration with original using ffprobe.
+4. Re-export with vocals muted and verify the resulting mix audibly omits vocals. The exported source stems must remain unchanged.
+5. Run backend tests from the installed environment: `& C:\\Apps\\SongHarbor\\.venv\\Scripts\\python.exe -m unittest discover -s app\\backend\\tests -v`.
+6. Validate the frontend: `npm run build --prefix app/frontend`.
+
+No user acceptance or end-to-end QA is claimed yet. M0 remains accepted; M1 is **implemented, unverified on the workstation**.

@@ -3,6 +3,7 @@ import { Button, Status } from "@tws-ui/core/react";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
+export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
 function labelOf(filename: string) {
@@ -16,13 +17,25 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialTitle }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
+  savedStems?: SavedStem[];
+  initialTitle?: string;
 }) {
-  const [stems, setStems] = useState<Stem[]>(() => files.map(filename => ({
-    filename, name: labelOf(filename), gain: 100, mute: false, solo: false,
-  })).sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name)));
+  const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
+    const saved = savedStems?.find(stem => stem.filename === filename);
+    return {
+      filename, name: labelOf(filename),
+      gain: saved ? Math.round(saved.gain * 100) : 100,
+      mute: saved?.mute ?? false, solo: saved?.solo ?? false,
+    };
+  }).sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name)));
+  const [title, setTitle] = useState(initialTitle || "Untitled song");
+  const [saving, setSaving] = useState(false);
+  const [handoffBusy, setHandoffBusy] = useState(false);
+  const [handoffFolder, setHandoffFolder] = useState("");
+  const [notice, setNotice] = useState("");
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);
@@ -133,6 +146,55 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg }: {
     setStems(current => current.map(s => s.filename === filename ? { ...s, ...changes } : s));
   }
 
+  async function saveProject(): Promise<boolean> {
+    setSaving(true); setError(""); setNotice("");
+    try {
+      const result = await fetch("/api/projects/" + jobId, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), stems: stemsRef.current.map(s => ({
+          filename: s.filename, gain: s.gain / 100, mute: s.mute, solo: s.solo,
+        })) }),
+      });
+      if (!result.ok) {
+        const detail = await result.json().catch(() => ({})) as {detail?: string};
+        throw new Error(detail.detail || "Could not save song project");
+      }
+      setNotice("Song project saved.");
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save song project");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handoffWaveform() {
+    setHandoffBusy(true); setError(""); setNotice("");
+    try {
+      if (!(await saveProject())) return;
+      const response = await fetch("/api/projects/" + jobId + "/waveform", {method: "POST"});
+      const result = await response.json() as {directory?: string;detail?: string};
+      if (!response.ok || !result.directory) throw new Error(result.detail || "Waveform export failed");
+      setHandoffFolder(result.directory);
+      setNotice("Waveform folder ready. Import the six WAVs on separate tracks at 0:00.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Waveform export failed");
+    } finally {
+      setHandoffBusy(false);
+    }
+  }
+
+  async function openWaveformFolder() {
+    try {
+      const response = await fetch("/api/projects/" + jobId + "/waveform/open", {method: "POST"});
+      if (!response.ok) throw new Error("Could not open Waveform folder");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open folder");
+    }
+  }
+
   async function exportMix() {
     stop();
     setExporting(true);
@@ -163,6 +225,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg }: {
   }
 
   return <section className="mixer" aria-label="Stem mixer">
+    <div className="song-project-controls">
+      <label htmlFor="song-project-name">Song project</label>
+      <input id="song-project-name" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} />
+      <Button variant="secondary" size="compact" disabled={saving || !title.trim()} onClick={() => { void saveProject(); }}>
+        {saving ? "Saving…" : "Save song"}
+      </Button>
+    </div>
     <div className="mixer-heading">
       <div><h3>Stem mixer</h3><p>Audition the arrangement before exporting a new mix.</p></div>
       <Button variant="subtle" size="compact" onClick={() => {
@@ -199,6 +268,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg }: {
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
     </div>
+    <div className="daw-handoff">
+      <div><strong>Continue in Waveform Free</strong>
+        <p>Copy six aligned WAVs and an import guide. Free DAW; no purchase needed.</p>
+      </div>
+      <Button variant="secondary" disabled={handoffBusy || saving} onClick={handoffWaveform}>
+        {handoffBusy ? "Preparing…" : "Export to Waveform"}
+      </Button>
+      {handoffFolder && <Button variant="subtle" onClick={openWaveformFolder}>Open export folder</Button>}
+    </div>
+    {handoffFolder && <p className="handoff-path" title={handoffFolder}>{handoffFolder}</p>}
+    {notice && <p role="status" className="song-save-notice">{notice}</p>}
     {error && <p role="alert" className="error-message">{error}</p>}
     <p className="mixer-note">Preview uses browser audio streams with periodic synchronization. WAV export is rendered sample-aligned by FFmpeg and preserves the original stems.</p>
   </section>;

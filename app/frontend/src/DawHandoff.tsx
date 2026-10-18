@@ -142,7 +142,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
           </div>
           <div className="daw-controls">
             <input value={location} onChange={e => setLocation(e.target.value)}
-              placeholder={target === "audacity" ? "Audacity.exe or installation folder" : "Waveform.exe or installation folder"} aria-label="Installed Waveform path"/>
+              placeholder={target === "audacity" ? "Audacity.exe or installation folder" : "Waveform.exe or installation folder"} aria-label={"Installed " + targetName + " path"}/>
             <Button size="compact" variant="secondary" disabled={busy} onClick={() => { void perform(browseInstalled); }}>Browse</Button>
             <Button size="compact" variant="secondary" disabled={busy || !location.trim()} onClick={() => { void perform(locate); }}>Use</Button>
           </div>

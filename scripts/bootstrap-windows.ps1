@@ -5,7 +5,8 @@
 .EXAMPLE
   ./scripts/bootstrap-windows.ps1 -Root 'D:\Apps\SongHarbor'
 .NOTES
-  Python 3.11 x64, NVIDIA CUDA driver >=12.6, FFmpeg, Git and npm are prerequisites.
+  Python 3.11 x64, NVIDIA CUDA driver >=12.6, Git and npm are prerequisites.
+  FFmpeg is configured via the Song Harbor UI if not already detected.
   If Python 3.11 is not installed, uv can supply it (the script will not install system software).
 #>
 [CmdletBinding()]
@@ -46,7 +47,6 @@ Write-Host "Models: $modelDir"
 Write-Host "Cache:  $env:PIP_CACHE_DIR"
 Write-Host "Venv:   $venvDir"
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw "Git is required to fetch TWS UI. Install Git first." }
-if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) { throw "FFmpeg not found in PATH. Install it before continuing." }
 if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { throw "No NVIDIA driver utility found. CUDA GPU bootstrap cannot continue." }
 if (-not $SkipUI -and -not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) {
   throw "Node.js/npm is needed for the UI. Install Node.js, or run with -SkipUI."
@@ -123,6 +123,9 @@ print("PyTorch", torch.__version__, "ONNX", ort.__version__, "CUDA provider visi
 '@)
 $separator = Join-Path $venvDir "Scripts\audio-separator.exe"
 Run $separator @("--env_info")
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+  Write-Warning "FFmpeg not on PATH. Song Harbor will offer Locate / Search / Install on first launch."
+}
 if (-not $SkipModel) {
   # Download only; weights' commercial redistribution terms are not yet approved.
   Run $separator @("--download_model_only","--model_filename","htdemucs_6s.yaml","--model_file_dir",$modelDir)

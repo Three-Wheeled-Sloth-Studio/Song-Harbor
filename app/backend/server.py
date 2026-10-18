@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 import dependencies
 import projects
 import daw
+import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -308,6 +309,55 @@ class StemState(BaseModel):
 class SaveProject(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     stems: list[StemState] = Field(min_length=6, max_length=6)
+
+
+class RenameLibrarySong(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
+class NewCollection(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    parent_id: str | None = None
+
+
+class AssignCollection(BaseModel):
+    song_id: str
+
+
+@app.get("/api/library")
+def library_index(query: str = "", collection_id: str | None = None) -> dict[str, Any]:
+    library.adopt_jobs(DATA_ROOT)
+    return {"songs": library.list_songs(DATA_ROOT, collection_id, query),
+            "collections": library.list_collections(DATA_ROOT)}
+
+
+@app.patch("/api/library/songs/{song_id}")
+def library_rename(song_id: str, body: RenameLibrarySong, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    library.adopt_jobs(DATA_ROOT)
+    try:
+        return library.rename_song(DATA_ROOT, song_id, body.title)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/library/collections")
+def library_create_collection(body: NewCollection, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return library.create_collection(DATA_ROOT, body.title, body.parent_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/library/collections/{collection_id}/songs")
+def library_add_song(collection_id: str, body: AssignCollection, request: Request) -> dict[str, bool]:
+    require_local_origin(request)
+    try:
+        library.assign_song(DATA_ROOT, body.song_id, collection_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"added": True}
 
 
 @app.get("/api/projects")

@@ -2,11 +2,28 @@
 
 This is a **local vertical slice**, not a bundled standalone installer yet. The frontend consumes components from [TWS-UI](https://github.com/Three-Wheeled-Sloth-Studio/TWS-UI), which implements the canonical [TWS Design Principles](https://github.com/Three-Wheeled-Sloth-Studio/TWS-Design-Principles). Product-specific deep blue-green theme overrides are semantic; shared controls are imported.
 
+## Portable Windows launch (all supported machines)
+
+The recommended entry point is **`scripts/launch-song-harbor.bat`**. It invokes `scripts/start-song-harbor.ps1` and locates the isolated runtime, without assuming C:, D:, or G:. Runtime resolution order: explicit first BAT argument (`-Root` in PowerShell), `SONG_HARBOR_HOME`, an existing `.venv` in/next to the source checkout (including a sibling `SongHarbor` runtime directory), then a new sibling `SongHarbor` directory. It prints the resolved source and runtime directories on launch.
+
+If the runtime is missing, it calls `scripts/bootstrap-windows.ps1` to set it up; if only Node/UI dependencies are missing, it installs only those. `scripts/bootstrap-windows.bat` performs install-only without launching the UI. Existing working CUDA environments are not reinstalled for routine launches. A Windows NVIDIA driver compatible with CUDA 12.6, Git, FFmpeg, Node/npm, PowerShell 7 and a 64-bit Python 3.11 interpreter (or `uv`/Python launcher support) are required; the launcher diagnoses missing system prerequisites rather than silently installing drivers or system apps.
+
+Examples:
+
+```bat
+scripts\launch-song-harbor.bat
+scripts\launch-song-harbor.bat G:\Apps\SongHarbor
+```
+
+**Predator:** `G:\Apps\Song-Harbor` source checkout can discover the existing `G:\Apps\SongHarbor\.venv`. **Skynet:** a checkout under `D:\Apps\SongHarbor\source` detects `D:\Apps\SongHarbor\.venv`. **Omen:** separate checkout and `C:\Apps\SongHarbor\.venv` are supported. Explicit arguments or `SONG_HARBOR_HOME` override autodetection for atypical layouts.
+
+The portable launch change is committed but **requires a user smoke test on Predator**; previous Omen success predates this change.
+
 ## Automated Windows bootstrap (recommended for Laptop Omen)
 
 The reusable installer is [`scripts/bootstrap-windows.ps1`](../scripts/bootstrap-windows.ps1). It performs GPU, free-space, Python 3.11 x64, FFmpeg, Git, and npm checks, creates an isolated Python virtual environment, moves transient caches to the chosen work drive, pins CUDA PyTorch and compatible ONNX Runtime versions, installs the six-stem separator and UI, and verifies dependencies plus CUDA arithmetic.
 
-**Laptop Omen uses C: as its only work drive.** The double-click launchers therefore default to `C:\Apps\SongHarbor` for Python, models, and runtime data. Generated data is stored outside the source checkout when the repo is cloned to a separate folder; this C: placement is an explicit hardware-driven exception to the preferred separate-drive policy.
+**Laptop Omen uses C: as its only work drive.** The installed runtime on Omen uses `C:\Apps\SongHarbor` for Python, models, and runtime data; launchers no longer hard-code this path. Generated data is stored outside the source checkout when the repo is cloned to a separate folder; this C: placement is an explicit hardware-driven exception to the preferred separate-drive policy.
 
 From the cloned repository, double-click `scripts/bootstrap-windows.bat` to install dependencies, then `scripts/launch-song-harbor.bat` to start the UI. The first launcher keeps the console open and prints any failure. Both accept an optional custom root path as their first argument.
 

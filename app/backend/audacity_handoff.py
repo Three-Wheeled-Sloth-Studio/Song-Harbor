@@ -57,9 +57,9 @@ def make_lof(folder: Path) -> Path:
     for path in stem_paths:
         if any(char in str(path) for char in ('"', '\r', '\n')):
             raise ValueError("Unsupported path character in Audacity import")
-    # Use full paths so Audacity can resolve them regardless of working directory.
+    # LOF paths relative to its folder avoid non-ASCII Windows path encoding issues.
     lines = ["# Song Harbor six-stem Audacity handoff", "window"]
-    lines.extend(f'file "{path}" offset 0' for path in stem_paths)
+    lines.extend(f'file "{path.name}" offset 0' for path in stem_paths)
     output = folder / "Song Harbor - Import six stems.lof"
     from tempfile import NamedTemporaryFile
     with NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",

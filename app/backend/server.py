@@ -338,6 +338,19 @@ def library_trash() -> dict[str, Any]:
                       if item["removed"]]}
 
 
+class CombineTakesRequest(BaseModel):
+    parent_song_id: str
+
+
+@app.post("/api/library/songs/{song_id}/combine")
+def library_combine(song_id: str, body: CombineTakesRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return library.combine_takes(DATA_ROOT, body.parent_song_id, song_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/library/songs/{song_id}/remove")
 def library_remove(song_id: str, request: Request) -> dict[str, Any]:
     require_local_origin(request)

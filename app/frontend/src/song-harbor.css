@@ -187,3 +187,17 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .daw-handoff{justify-content:flex-end}
 .lib-song-count{white-space:nowrap}
+
+/* Dense stem channel layout: no flexible empty label column */
+.mixer-track{grid-template-columns:42px 70px minmax(150px,1fr) 48px;gap:12px;padding:10px 13px}
+.stem-icon-name{font-size:24px;justify-content:center;min-width:32px}
+.mixer .tws-icon-button{min-width:40px;min-height:40px;font-size:21px}
+.mixer .transport .tws-icon-button{min-width:44px;min-height:44px;font-size:23px}
+.mixer .track-toggle{min-width:32px;height:32px;font-size:13px}
+.lib-context-menu{position:fixed;z-index:1600;min-width:180px;padding:5px;border:1px solid var(--tws-color-border-strong);border-radius:8px;background:#1b2831;box-shadow:0 8px 25px #0009;display:flex;flex-direction:column}
+.lib-context-menu button,.lib-picker-items button{border:0;border-radius:5px;background:transparent;color:var(--tws-color-text-primary);padding:8px 10px;text-align:left;font-size:12px;cursor:pointer}
+.lib-context-menu button:hover,.lib-picker-items button:hover{background:var(--tws-color-surface-raised)}
+.lib-picker{display:flex;gap:10px;flex-direction:column;max-height:52vh}
+.lib-picker select,.lib-picker input{background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);border:1px solid var(--tws-color-border-normal);border-radius:7px;padding:9px}
+.lib-picker-items{display:flex;flex-direction:column;gap:2px;overflow:auto;max-height:37vh}
+@media(max-width:480px){.mixer-track{grid-template-columns:32px 67px minmax(60px,1fr) 38px;gap:5px;padding:7px}.stem-icon-name{font-size:20px}.mixer .tws-icon-button{min-width:34px;min-height:34px}}

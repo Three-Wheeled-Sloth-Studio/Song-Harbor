@@ -272,9 +272,117 @@ def run_job(job: dict[str, Any]) -> None:
         job["process"] = None
 
 
+def get_job(ident: str) -> dict[str, Any] | None:
+    """Recover completed jobs on demand after backend restart."""
+    if not re.fullmatch(r"[a-f0-9]{12}", ident):
+        return None
+    if ident in jobs:
+        return jobs[ident]
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or len(record.get("files", [])) != 6:
+        return None
+    folder = DATA_ROOT / "jobs" / ident
+    if not all((folder / "stems" / f).is_file() for f in record["files"]):
+        return None
+    recovered = {
+        "id": ident, "filename": record["filename"], "model": record.get("model", MODEL),
+        "status": "complete", "message": "Saved song ready",
+        "created_at": record.get("created_at"), "elapsed_seconds": None,
+        "files": record["files"], "logs": [],
+        "source_duration_seconds": record.get("source_duration_seconds"),
+        "input_path": folder / record["source_filename"],
+        "output_path": folder / "stems", "process": None,
+    }
+    with lock:
+        return jobs.setdefault(ident, recovered)
+
+
+class StemState(BaseModel):
+    filename: str
+    gain: float = Field(ge=0, le=2)
+    mute: bool = False
+    solo: bool = False
+
+
+class SaveProject(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    stems: list[StemState] = Field(min_length=6, max_length=6)
+
+
+@app.get("/api/projects")
+def recent_projects() -> dict[str, Any]:
+    return {"projects": projects.list_projects(DATA_ROOT)}
+
+
+@app.get("/api/projects/{ident}")
+def load_project(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident) if re.fullmatch(r"[a-f0-9]{12}", ident) else None
+    job = get_job(ident)
+    if not record or not job:
+        raise HTTPException(404, "Saved song unavailable; verify its six stem files")
+    return {"project": record, "job": snapshot(job)}
+
+
+@app.put("/api/projects/{ident}")
+def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not job or job["status"] != "complete" or not record:
+        raise HTTPException(404, "Saved song not found")
+    received = [s.filename for s in body.stems]
+    if len(set(received)) != 6 or set(received) != set(job["files"]):
+        raise HTTPException(400, "Settings must contain exactly the six source stems")
+    record["title"] = body.title.strip()
+    if not record["title"]:
+        raise HTTPException(400, "Song title cannot be blank")
+    record["stems"] = [s.model_dump() for s in body.stems]
+    record["updated_at"] = time.time()
+    return {"project": projects.write_project(DATA_ROOT, record)}
+
+
+@app.post("/api/projects/{ident}/waveform")
+def waveform_handoff(ident: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not job or job["status"] != "complete" or not record:
+        raise HTTPException(404, "Saved song not found")
+    with lock:
+        if job.get("exporting_waveform"):
+            raise HTTPException(409, "Waveform export already running")
+        job["exporting_waveform"] = True
+    try:
+        output = projects.export_waveform(DATA_ROOT, record)
+        return {"directory": str(output), "message": "Waveform import folder ready"}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(500, f"Waveform export failed: {exc}") from exc
+    finally:
+        job["exporting_waveform"] = False
+
+
+@app.post("/api/projects/{ident}/waveform/open")
+def waveform_open(ident: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    if not job or job["status"] != "complete":
+        raise HTTPException(404, "Song not found")
+    folder = DATA_ROOT / "jobs" / ident / "exports"
+    candidates = sorted(
+        (p for p in folder.glob("Waveform*") if p.is_dir()),
+        key=lambda p: p.stat().st_mtime, reverse=True,
+    ) if folder.exists() else []
+    if not candidates:
+        raise HTTPException(404, "Export stems to Waveform first")
+    if os.name != "nt":
+        raise HTTPException(501, "Opening folders requires Windows")
+    os.startfile(str(candidates[0]))  # type: ignore[attr-defined]
+    return {"opened": True, "directory": str(candidates[0])}
+
+
 @app.get("/api/jobs/{ident}")
 def status(ident: str) -> dict[str, Any]:
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None:
         raise HTTPException(404, "Job not found")
     return snapshot(job)
@@ -283,7 +391,7 @@ def status(ident: str) -> dict[str, Any]:
 @app.post("/api/jobs/{ident}/cancel")
 def cancel(ident: str, request: Request) -> dict[str, Any]:
     require_local_origin(request)
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None:
         raise HTTPException(404, "Job not found")
     proc = job.get("process")
@@ -295,7 +403,7 @@ def cancel(ident: str, request: Request) -> dict[str, Any]:
 
 @app.get("/api/jobs/{ident}/files/{filename}")
 def download(ident: str, filename: str):
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None or job["status"] != "complete" or filename not in job["files"]:
         raise HTTPException(404, "Stem not available")
     return FileResponse(job["output_path"] / filename, filename=filename, media_type="audio/wav")
@@ -328,7 +436,7 @@ def validate_mix(job: dict[str, Any], settings: list[StemMixSetting]) -> list[tu
 @app.post("/api/jobs/{ident}/mix")
 def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]:
     require_local_origin(request)
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None or job["status"] != "complete":
         raise HTTPException(409, "A completed separation is required before mixing")
     try:
@@ -384,7 +492,7 @@ def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]
 
 @app.get("/api/jobs/{ident}/mix-file")
 def download_mix(ident: str):
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None or job["status"] != "complete":
         raise HTTPException(404, "Mix unavailable")
     target = job["output_path"] / "Song Harbor Mix.wav"
@@ -395,7 +503,7 @@ def download_mix(ident: str):
 
 @app.get("/api/jobs/{ident}/stream/{filename}")
 def stream_stem(ident: str, filename: str):
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None or job["status"] != "complete" or filename not in job["files"]:
         raise HTTPException(404, "Stem not available")
     # Inline streaming supports browser media playback, including seeking via byte ranges.
@@ -405,7 +513,7 @@ def stream_stem(ident: str, filename: str):
 @app.post("/api/jobs/{ident}/open-folder")
 def open_folder(ident: str, request: Request) -> dict[str, bool]:
     require_local_origin(request)
-    job = jobs.get(ident)
+    job = get_job(ident)
     if job is None or job["status"] != "complete":
         raise HTTPException(404, "Output folder not available")
     if os.name == "nt":

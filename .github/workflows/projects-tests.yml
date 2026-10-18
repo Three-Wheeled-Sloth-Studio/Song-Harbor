@@ -27,3 +27,5 @@ jobs:
         run: python -m unittest discover -s app/backend/tests -p 'test_library.py' -v
       - name: Verify live HTTP Library actions
         run: python -m unittest discover -s app/backend/tests -p 'test_library_routes.py' -v
+      - name: Verify DAW target discovery and exchange
+        run: python -m unittest discover -s app/backend/tests -p 'test_daw.py' -v

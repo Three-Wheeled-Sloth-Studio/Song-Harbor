@@ -60,3 +60,9 @@ Persist separate immutable source/stem/analysis artifacts, a versioned **process
 - Which measurable detectors yield genuinely useful, low-false-positive suggestions on AI-generated music?
 - How should song-level, album-profile and user-level taste models be separated and reset?
 - Which manual Waveform/Audacity processes in the first two album tracks provide the highest value for implementation?
+
+## Section annotation contract (2026-10-19 implementation increment)
+User can manually mark in/out points on the transport and label a non-overlapping audio range with a section type and optional number. Backend persists typed sections in the existing song manifest through `PUT /api/projects/{ident}/sections`. The display notation is inspired by timed YuE2-style sections, e.g. `[Chorus 1:15-1:45]` or `[Verse 2 0:10.25-0:35.5]`, but stored canonical timestamps are numeric seconds and section IDs. Parsing engine-specific staging is deliberately not part of the canonical annotation. Boundary validations reject overlap, non-finite ranges and out-of-duration sections. No editing of media.
+
+**Important status:** Markers are metadata only today, not a waveform selection or procedural effect automation engine. Next increment is synchronized, near-instant loudness-matched A/B and per-stem pan/EQ with persistent processing graph, then section-scoped recommendation and automation. Map section kinds to engine-specific YuE2/ACE prompt formats through adapters, never reuse their divergent stage-direction syntax indiscriminately. The current browser six-element playback is not guaranteed sample-accurate; do not promise click-free A/B or preview/export DSP parity until an audio engine spike proves it.
+

@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import dependencies
 import projects
+import sections
 import daw
 import audacity_handoff
 import library
@@ -453,6 +454,39 @@ def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, A
             library.rename_song(DATA_ROOT, song["id"], record["title"])
             break
     return {"project": saved}
+
+
+class SectionRecord(BaseModel):
+    id: str | None = None
+    kind: str
+    number: int | None = None
+    start_seconds: float
+    end_seconds: float
+
+
+class SectionsRequest(BaseModel):
+    sections: list[SectionRecord] = Field(max_length=256)
+
+
+@app.put("/api/projects/{ident}/sections")
+def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[str, Any]:
+    """Persist editor-owned section boundaries; do not touch source media or stems."""
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not job or job.get("status") != "complete" or not record:
+        raise HTTPException(404, "Completed song not found")
+    try:
+        proposed = sections.validate_sections(
+            [item.model_dump() for item in body.sections],
+            duration=record.get("source_duration_seconds") or job.get("source_duration_seconds"),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    record["sections"] = proposed
+    record["updated_at"] = time.time()
+    projects.write_project(DATA_ROOT, record)
+    return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}
 
 
 class DawTargetRequest(BaseModel):

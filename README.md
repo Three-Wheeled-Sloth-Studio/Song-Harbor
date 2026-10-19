@@ -4,9 +4,9 @@
 
 Song Harbor combines structured composition, section-level direction, stem-level editing, multiple interchangeable music models, audio processing, remixing, and reconstruction of imported music. The project owns its arrangement data; no generator owns the project format.
 
-Status: M0 six-stem separation feasibility validated on the primary desktop by user listening tests. Initial local UI/backend vertical slice implemented in `app/` and **user smoke-tested successfully on Laptop Omen (2026-10-17)**. The limited M0 entry UI + working six-stem splitter milestone is accepted. The next M1 in-app stem mixer is implemented in source, pending validation on Laptop Omen. Production packaging, broader QA, and model-weight licensing remain open.
+**Current status (2026-10-19):** Local six-stem separation, song Library, saved mixer/projects, and optional Waveform Free/Audacity DAW handoff are implemented. The safe Windows launcher compiles the frontend then runs one Python/FastAPI server on a dynamically selected localhost port; Omen has confirmed launcher operation and Audacity4 detection. The latest Audacity **Launch** implementation requests automatic import of six aligned stems through an Audacity LOF file and attempts to focus Audacity. **Actual Audacity4 LOF import and foreground focus are NOT yet user-verified.** Next QA is on Omen; see the top of [Current handoff](refs/handoffs/currentHandoff.md). Broader testing, true standalone packaging, and DAW-independent in-app editing remain planned.
 
-**Try the M0 entry UI:** [setup and acceptance checks](app/README.md). The frontend consumes [TWS UI](https://github.com/Three-Wheeled-Sloth-Studio/TWS-UI), whose canonical guidance is [TWS Design Principles](https://github.com/Three-Wheeled-Sloth-Studio/TWS-Design-Principles).
+**Run Song Harbor:** [setup and acceptance checks](app/README.md). The frontend consumes [TWS UI](https://github.com/Three-Wheeled-Sloth-Studio/TWS-UI), whose canonical guidance is [TWS Design Principles](https://github.com/Three-Wheeled-Sloth-Studio/TWS-Design-Principles).
 
 Start here:
 - [Product vision](refs/product/vision.md)

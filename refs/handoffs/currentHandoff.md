@@ -1,11 +1,38 @@
 ---
 type: Handoff
 title: Current Song Harbor Handoff
-description: Discovery-phase baseline and next bounded implementation slice.
-status: draft
+description: Current audited handoff, QA status, and next-thread starting point.
+status: active
 tags: [handoff]
 ---
 # Current Handoff
+
+## NEXT THREAD — Song Harbor Audacity Handoff QA (2026-10-19)
+
+**Start here. This section supersedes older historical "pending" statements below.**
+
+**Product direction:** Song Harbor is a local-first standalone music workbench. Current accepted vertical slice: Library/song projects, six-stem separation and mixer, non-destructive export, and optional DAW handoff. **Audacity and Waveform Free remain supporting external editors, while priority gradually shifts toward building useful stem editing tools directly into Song Harbor.** Maintain common TWS-UI design standards (dense, icon-first, clear hover/help and recovery actions), original source/stem immutability, and zero-cost-first operation.
+
+**Machines / current QA:** Omen laptop is the immediate test bench. User confirmed the new **single-server launcher works**, Waveform installer worked, and **Audacity4 automatic discovery now works** after executable-name and shortcut handling fixes. FFmpeg was already discovered on Omen, so the amber warning and guided FFmpeg-not-found workflow remains **untested** there. Predator and Skynet remain secondary test environments; don't assume Omen's paths/drives match other machines.
+
+**Most recent code, ready for Omen test:** Audacity's DAW dialog **Prepare stems → Launch** now calls `POST /api/projects/{ident}/daw/launch` with the explicit prepared folder/target. The backend checks that the requested bundle belongs to the selected completed song and contains the expected manifest. For Audacity it calls `app/backend/audacity_handoff.py`, validates six numbered source-preserving WAV copies and zero-offset manifest entries, writes `Song Harbor - Import six stems.lof`, launches the discovered `Audacity4.exe` (or other verified Audacity executable) with that LOF as **one argument**, and starts a daemon attempt to foreground only windows owned by that actual Audacity executable, including an already-running instance. For Waveform, Launch still opens Waveform and **manual track import remains required**. No scripting pipe, keystroke automation, synthesized .aup3 projects, source file edits, or certainty about successful import.
+
+**Implementation detail correction:** The final LOF contains `window` then six lines `file "01 - Vocals.wav" offset 0` through `file "06 - Other.wav" offset 0`, using **relative ASCII filenames** in the export folder (not the older absolute paths stated in the historical section below), to avoid Unicode Windows folder encoding problems. The export folder also holds `manifest.json`, instructions and the six untouched WAV copies.
+
+**Verification completed:** Latest Linux backend CI, run [39161294330](https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/actions/runs/39161294330), **passed** including LOF order/content, missing/path-escape rejection, process argument and focus-request mocks, and API folder/target isolation. Latest Windows single-server smoke, run [39161294241](https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor/actions/runs/39161294241), **passed** including frontend compilation and Windows setup checks. CI validates the request/implementation, **not that Audacity4 accepts LOF** or that Windows permits foreground activation on Omen.
+
+**Priority 0 next-thread Omen smoke:**
+1. Pull latest clean checkout if needed and use `scripts/launch-song-harbor.bat`. Open any completed six-stem song; select Audacity (should already say Ready).
+2. With Audacity **closed**, click **Prepare stems → Launch**; inspect whether Audacity opens **one project with exactly six synchronized tracks at 0:00**, and whether Audacity receives foreground focus. Note any unsupported-file dialog, empty project, duplicate windows, failed focus, or other behavior.
+3. Repeat with **Audacity already open**; ensure it handles a fresh six-track import without destroying an existing session, and foreground focus selects the correct application.
+4. If LOF isn't supported in Omen's Audacity4, **do not claim success** and don't add unsafe generic UI keystroke automation. Evaluate a verified Audacity4-supported import protocol; fall back cleanly to **Files** and six-wave manual import, with accurate UI message until a real automated method is proven.
+5. If focus fails, capture whether Audacity opened/new vs reused process and whether window is visible; Windows `SetForegroundWindow` restrictions make focus best-effort. Address with supported OS behavior rather than stealing arbitrary application focus.
+
+**Other tracked follow-ups:** make prepared-export state durable across dialog reopen (currently state lives inside the dialog); check Audacity import reliability and usability; consider target-aware Auto Import on Launch when supported; revisit source dedup and Library Remove regression on Predator if reappearing; FFmpeg dependency recovery needs no-FFmpeg smoke; future named versions/subcollections and in-product surgical waveform/stem editing. No new external DAW engine is an immediate priority.
+
+**Key files:** `app/backend/audacity_handoff.py`, `app/backend/daw.py`, `app/backend/projects.py`, `app/backend/server.py`, `app/frontend/src/DawHandoff.tsx`, `app/backend/tests/test_audacity_handoff.py`, `app/backend/tests/test_daw.py`, `app/README.md`, `scripts/start-song-harbor.ps1`, `app/run.ps1`. GitHub repo: https://github.com/Three-Wheeled-Sloth-Studio/Song-Harbor.
+
+---
 
 ## Accepted Baseline
 

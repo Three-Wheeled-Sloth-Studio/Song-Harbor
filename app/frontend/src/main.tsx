@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Button, FormField, IconButton, Panel, Status } from "@tws-ui/core/react";
 import { StemMixer } from "./StemMixer";
 import type { SavedStem } from "./StemMixer";
+import type { SongSection } from "./SectionEditor";
 import { FfmpegSetup } from "./FfmpegSetup";
 import { LibraryHome } from "./LibraryHome";
 import "@tws-ui/core/tokens.css";
@@ -21,7 +22,7 @@ type Job = {
   source_duration_seconds?: number;
 };
 type RecentSong = {id: string; title: string; filename: string; created_at: number; recovered?: boolean};
-type SongProject = {id: string; title: string; stems: SavedStem[]; source_duration_seconds?: number | null};
+type SongProject = {id: string; title: string; stems: SavedStem[]; sections?: SongSection[]; source_duration_seconds?: number | null};
 type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
@@ -264,7 +265,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
+            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

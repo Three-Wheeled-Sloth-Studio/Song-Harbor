@@ -7,6 +7,11 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## Planning update — Adaptive Production Workbench (2026-10-19)
+
+User is currently on **Predator**, not doing live QA. Audacity Omen smoke remains pending; do not request Omen testing as a prerequisite to planning. User intends to finish the first one or two *Voices Below the Deck* tracks manually in Waveform/Audacity while using observations to drive **product-first Song Harbor development**. Approved direction documented at [docs/adaptive-production-workbench.md](../../docs/adaptive-production-workbench.md): non-destructive production graph, analysis with scoped evidence/expected value, fast matched-loudness A/B, Better/Worse/Reroll, locally inspectable preference learning, optional male/female voice and instrument subdivision. Album profile: organic/human bias left, mechanical/impersonal bias right, orchestra/environment wider and central anchors preserved, with deliberate motion. Added industrial sound design is later, not first-track release-blocking. No production implementation or on-machine tests were performed for this planning update. Avoid naming this slice M3 without reconciling existing roadmap's M3 First Surgery.
+
+
 ## NEXT THREAD — Song Harbor Audacity Handoff QA (2026-10-19)
 
 **Start here. This section supersedes older historical "pending" statements below.**

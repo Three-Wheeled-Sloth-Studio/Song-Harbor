@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, IconButton, Status } from "@tws-ui/core/react";
 import { DawHandoff } from "./DawHandoff";
 import { AudioIcon } from "./AudioIcons";
+import { SectionEditor } from "./SectionEditor";
+import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
@@ -21,10 +23,11 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialTitle, onSaved }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialSections, initialTitle, onSaved }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
+  initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
 }) {
@@ -271,6 +274,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <span className="track-percent">{s.gain}%</span>
       </div>)}
     </div>
+    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections} onSeek={seek}/>
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}

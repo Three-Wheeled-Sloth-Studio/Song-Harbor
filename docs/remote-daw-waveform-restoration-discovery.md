@@ -58,3 +58,16 @@ Capture noisy/noisy-control fixtures, dry and processed stem fixtures, authentic
 5. Guided effects, learning/reroll, deeper arrangement and stem regeneration later.
 
 No new application code is implied by this research note; commit is a design/reference update.
+
+## 2026-10-20 incremental implementation and decisions
+
+A **first playable-workspace waveform overview** is now implemented: `app/backend/waveform_peaks.py` obtains bounded 2048-bin min/max waveform previews using FFmpeg decoding and caches them under `jobs/<id>/waveforms`, keyed to source size/mtime. `GET /api/jobs/{ident}/waveform/{filename}` exposes previews only for validated original stem filenames. `app/frontend/src/StemWaveforms.tsx` displays six aligned waveform rows with a shared playback cursor and click-to-seek, mounted within `StemMixer.tsx`. Regression tests cover shape/cache invalidation in `test_waveform_peaks.py`. **Not yet**: integrated section overlay, independent L/R child rows, zoom/scroll/detail pyramid, true DAW shared-clock transport, waveform editing, beat snapping or render parity; no Windows build/CI verification yet.
+
+A compact exploratory section-spatial grammar is also committed in `app/backend/production_cues.py`, with tests. Example:
+```
+[Chorus 1:15-1:45 Vocal1:Expansive-Left Drums:Narrow-Right Bass:Moderate]
+[Verse 2 1:45-2:10 Vocal1:Narrow-Left Machines:Moderate-Right]
+```
+Its parser only returns typed **proposals** for an arranger/processor; it has no audio side effects, is not connected to the UI and uses track aliases pending a real stable-ID resolver. In particular, `Expansive-Left` means independent perceptual *width* and leftward *bias*, not hard pan. The bracket grammar is Song Harbor's proposed production language, not YuE2/ACE's native section instruction format; adapters must translate canonical sections and effect cues separately. Timeline editing must round-trip these objects without requiring users to type strings.
+
+**Ardour demo clarification:** Official Ardour free/demo binaries periodically silence playback after 10 minutes running. A legitimate locally compiled Ardour from GPL source does not inherit this demo-binary restriction. However, official MSVC Windows build steps are explicitly unsupported and may require fixes: https://ardour.org/building_msvc.html . Official unrestricted binaries are available for a small payment at https://community.ardour.org/download ; compare cost to engineering time before embarking on a build. Source build/licensing considerations still apply to redistribution. OSC can manipulate strips and transport; don't assume arbitrary Lua calls with arguments through OSC. Ardour scripting docs: https://manual.ardour.org/lua-scripting/ . REAPER trial can remain unstarted while waveform and grammar foundations are built.

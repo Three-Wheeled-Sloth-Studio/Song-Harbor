@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import dependencies
+import workspace_settings
 import projects
 import sections
 import daw
@@ -121,6 +122,38 @@ def dependency_tool(name: str) -> str:
     if not pair:
         raise RuntimeError("FFmpeg setup is required. Use the app's Configure FFmpeg action.")
     return pair[name]
+
+
+class WorkingDirectoryRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
+@app.get("/api/settings/working-files")
+def working_files_status() -> dict[str, Any]:
+    return workspace_settings.status(APP_ROOT, DATA_ROOT)
+
+
+@app.post("/api/settings/working-files/browse")
+def browse_working_files(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"path": workspace_settings.choose_directory()}
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.put("/api/settings/working-files")
+def configure_working_files(body: WorkingDirectoryRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy:
+        raise HTTPException(409, "Finish active processing jobs before changing the working files location")
+    try:
+        return workspace_settings.stage(APP_ROOT, body.path)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class FfmpegLocation(BaseModel):

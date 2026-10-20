@@ -28,6 +28,7 @@ import sections
 import daw
 import audacity_handoff
 import channel_split
+import waveform_peaks
 import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
@@ -949,6 +950,25 @@ def download_mix(ident: str):
     if not target.is_file():
         raise HTTPException(404, "Mix has not been exported")
     return FileResponse(target, filename=target.name, media_type="audio/wav")
+
+
+@app.get("/api/jobs/{ident}/waveform/{filename}")
+def stem_waveform(ident: str, filename: str) -> dict[str, Any]:
+    """Read-only cached overview; no media changes and no browser-size PCM arrays."""
+    job = get_job(ident)
+    if not job or job.get("status") != "complete" or filename not in job["files"]:
+        raise HTTPException(404, "Stem unavailable")
+    folder = DATA_ROOT / "jobs" / ident
+    path = folder / "stems" / filename
+    try:
+        length = job.get("source_duration_seconds")
+        if not length:
+            length = probe_duration(path)
+        return waveform_peaks.get_or_create(
+            path, folder / "waveforms" / (filename + ".json"), float(length),
+            dependency_tool("ffmpeg"))
+    except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, f"Waveform unavailable: {exc}") from exc
 
 
 @app.get("/api/jobs/{ident}/stream/{filename}")

@@ -5,6 +5,7 @@ import { StemMixer } from "./StemMixer";
 import type { SavedStem } from "./StemMixer";
 import type { SongSection } from "./SectionEditor";
 import { FfmpegSetup } from "./FfmpegSetup";
+import { AppSettings } from "./AppSettings";
 import { LibraryHome } from "./LibraryHome";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
@@ -39,6 +40,7 @@ function App() {
   const [openingSong, setOpeningSong] = useState(false);
   const [project, setProject] = useState<SongProject | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const pendingSeparation = useRef(false);
   const pendingMixRetry = useRef<(() => void) | null>(null);
 
@@ -199,14 +201,15 @@ function App() {
       <div className="brand"><span className="brand-mark" aria-hidden="true">◈</span><span>TWS STUDIOS</span><span className="brand-divider">/</span><strong>Song Harbor</strong></div>
       <div className="header-actions">
         <Status tone={health?.separator_ready ? "success" : "warning"}>{health?.separator_ready ? "Local engine" : "Engine unavailable"}</Status>
-        <button type="button" className="dependency-indicator" title={missingCount ? `${missingCount} component(s) need setup` : "Component settings"}
-          aria-label={missingCount ? `Components: ${missingCount} missing. Open setup.` : "Open component settings"}
-          onClick={() => setSetupOpen(true)}>
+        <button type="button" className="dependency-indicator" title={missingCount ? `${missingCount} component(s) need setup. Open settings.` : "Settings"}
+          aria-label={missingCount ? `Settings, ${missingCount} missing component(s)` : "Open settings"}
+          onClick={() => setSettingsOpen(true)}>
           <span aria-hidden="true">⚙</span>
           {missingCount > 0 && <span className="dependency-count">{missingCount}</span>}
         </button>
       </div>
     </header>
+    <AppSettings open={settingsOpen} onOpenChange={setSettingsOpen} health={health} onReady={next => setHealth(next)} />
     <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
       onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className="workspace">

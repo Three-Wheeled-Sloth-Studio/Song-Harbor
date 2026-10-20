@@ -3,7 +3,7 @@ import {Button,Dialog,Status} from "@tws-ui/core/react";
 import {FfmpegSetup} from "./FfmpegSetup";
 
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
-type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string;ffmpeg:string;ffprobe:string}|null;needs_setup?:string[]};
+type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
 
 export function AppSettings({open,onOpenChange,health,onReady}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;

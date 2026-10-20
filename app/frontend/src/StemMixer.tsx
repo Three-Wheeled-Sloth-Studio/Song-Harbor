@@ -59,6 +59,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [channels,setChannels]=useState<ChannelSets>({});
   const [routingVersion,setRoutingVersion]=useState(0);
   const [channelBusy,setChannelBusy]=useState(false);
+  const [zoom,setZoom]=useState(1);
+  const [viewportOffset,setViewportOffset]=useState(0);
   const [loopEnabled,setLoopEnabled]=useState(false);
   const [loopIn,setLoopIn]=useState<number|null>(null);
   const [loopOut,setLoopOut]=useState<number|null>(null);
@@ -69,6 +71,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
+  const visibleSeconds=duration>0?duration/zoom:0;
+  const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
+  const viewEnd=duration>0?viewStart+visibleSeconds:0;
 
   const refreshChannels=useCallback(async()=>{
     const r=await fetch("/api/projects/"+jobId+"/channels");
@@ -326,7 +331,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
       <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
     </div>
-    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections} onSeek={seek}/>
+    <div className="timeline-zoom-controls">
+      <label>Zoom <select value={zoom} onChange={e=>{setZoom(Number(e.target.value));setViewportOffset(0);}}>
+        {[1,2,4,8,16].map(v=><option key={v} value={v}>{v}×</option>)}
+      </select></label>
+      <input type="range" aria-label="Scroll timeline" min="0" max="1" step=".001"
+        value={viewportOffset} disabled={zoom===1} onChange={e=>setViewportOffset(Number(e.target.value))}/>
+      <span>{timecode(viewStart)} – {timecode(viewEnd)}</span>
+    </div>
+    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections}
+      onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}/>
 
     <StemWaveforms jobId={jobId} files={stems.map(s=>({
       filename:s.filename,label:s.name,
@@ -334,7 +348,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
         waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
       })):[]
-    }))} duration={duration} position={position} onSeek={seek}/>
+    }))} duration={duration} position={position} onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}/>
 
     </section>
     <div className="mixer-tracks">

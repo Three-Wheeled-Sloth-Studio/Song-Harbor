@@ -3,6 +3,7 @@ import { Button, IconButton, Status } from "@tws-ui/core/react";
 import { DawHandoff } from "./DawHandoff";
 import { AudioIcon } from "./AudioIcons";
 import { SectionEditor } from "./SectionEditor";
+import { ChannelSplitter } from "./ChannelSplitter";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -283,6 +284,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
     </div>
+    <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} />
     <div className="daw-handoff">
       <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
     </div>

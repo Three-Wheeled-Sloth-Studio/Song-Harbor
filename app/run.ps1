@@ -14,7 +14,25 @@ $python = Join-Path $Root '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python -PathType Leaf)) { throw "Python environment not found: $python" }
 
 $env:SONG_HARBOR_HOME = $Root
-$env:SONG_HARBOR_DATA = Join-Path $Root 'data'
+# Working media location is machine-local; models, caches and dependencies remain
+# on the runtime drive. Existing projects are never moved automatically.
+$dataFolder = Join-Path $Root 'data'
+$configPath = Join-Path $Root 'config\settings.json'
+if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+  try {
+    $prefs = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    if ($prefs.working_files_directory) {
+      $candidate = [IO.Path]::GetFullPath([string]$prefs.working_files_directory)
+      if (-not [IO.Path]::IsPathFullyQualified($candidate)) {
+        throw 'Working files directory must be absolute.'
+      }
+      $dataFolder = $candidate
+    }
+  } catch {
+    throw "Invalid Song Harbor storage settings at $configPath : $_. Edit settings.json or correct the location before launching."
+  }
+}
+$env:SONG_HARBOR_DATA = $dataFolder
 $env:SONG_HARBOR_MODELS = Join-Path $Root 'models'
 $env:PIP_CACHE_DIR = Join-Path $Root 'cache\pip'
 $env:HF_HOME = Join-Path $Root 'cache\huggingface'

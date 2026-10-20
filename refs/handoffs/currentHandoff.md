@@ -7,6 +7,10 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## MorningDAW and stereo-channel split utilities (2026-10-20)
+
+User requested (1) MorningDAW support and (2) a utility to extract L/R tracks from existing stereo stems. Implemented MorningDAW as third optional DAW target with common Windows detection, explicit selection, vendor download and *manual* six-WAV import exchange (no unverified .mdproject automation). Implemented `channel_split.py`, POST `/api/projects/{ident}/channels/split`, and compact collapsed `ChannelSplitter.tsx` in the stem mixer. Selected two-channel stem files produce unique exports containing separate aligned left/right 32-bit float mono WAVs, manifest and README. Originals untouched; failed jobs clear staging. Regression tests in `test_channel_split.py`, updated `test_daw.py`. See `docs/morningdaw-channel-split.md`. **CI/local Windows build unverified**: ensure TypeScript build and backend tests before claiming acceptance. The utility does not perform further instrument separation or stereo widening. MorningDAW import remains manual.
+
 ## Working files Settings and compact component setup (2026-10-20)
 
 User requested machine-specific selection of Song Harbor working-file directory, intending to use Google Drive local sync between Predator/Omen/Skynet; and removal of oversized one-component setup UI. Added `app/backend/workspace_settings.py` + guarded settings API, `app/run.ps1` respects configured location after relaunch, header gear opens compact `AppSettings.tsx` (Working files + collapsed Components), FFmpeg locate/install sections now collapsed, contextual FFmpeg recovery preserved. Tests in `app/backend/tests/test_workspace_settings.py`; guide `docs/working-files-settings.md`.

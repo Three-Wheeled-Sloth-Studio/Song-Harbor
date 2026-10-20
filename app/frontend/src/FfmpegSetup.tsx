@@ -71,12 +71,12 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
   const installing = !!installJob && ["queued", "running"].includes(installJob.status);
   return <Dialog open={open} onOpenChange={next => { if (!installing) onOpenChange(next); }}
     title={settings?.found ? "FFmpeg settings" : "FFmpeg not found"}
-    description="Required for separation and mix export. Locate an existing copy or choose where to install it.">
+    description="Used for separation and mix export. Expand only the action you need.">
     <div className="dependency-panel">
     {settings?.found && <div className="dependency-found"><Status tone="success">Configured</Status><span>{settings.found.directory}</span></div>}
 
-    <div className="dependency-choice">
-      <h3>Use an existing installation</h3>
+    <details className="dependency-choice" open={undefined}>
+      <summary>Locate existing installation</summary>
       <div className="dependency-inline">
         <input aria-label="Existing FFmpeg folder" value={path} onChange={e => setPath(e.target.value)}
           placeholder="Paste the FFmpeg folder or path to ffmpeg.exe" />
@@ -99,10 +99,10 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
       {matches.length > 0 && <div className="dependency-matches">{matches.map(m => <button key={m.directory}
         onClick={() => perform("locate", async () => { await post(BASE + "/locate", {path: m.directory}); await refresh(true); })}>
         Use {m.directory}</button>)}</div>}
-    </div>
+    </details>
 
-    <div className="dependency-choice">
-      <h3>Install FFmpeg</h3>
+    <details className="dependency-choice">
+      <summary>Install FFmpeg</summary>
       <p>Installs the Windows essentials build to a folder you choose. Download requires your confirmation, and the archive is checked against its publisher's SHA-256.</p>
       <div className="dependency-inline">
         <input aria-label="FFmpeg installation folder" value={installPath} onChange={e => setInstallPath(e.target.value)}
@@ -123,7 +123,7 @@ export function FfmpegSetup({open, onOpenChange, onReady}: {
           ? <div className="ffmpeg-progress-track indeterminate" aria-label="Installing FFmpeg"><span /></div>
           : <progress aria-label="FFmpeg download progress" max={100} value={installJob.progress_percent} />)}
       </div>}
-    </div>
+    </details>
     {message && <p role="status">{message}</p>}
     {error && <div className="error-message" role="alert">{error}</div>}
     </div>

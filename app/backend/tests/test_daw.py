@@ -142,8 +142,8 @@ class DawAdapterTests(unittest.TestCase):
     def test_morningdaw_discovery_configuration_and_portable_export(self):
         self.assertEqual(self.morningdaw.resolve(), daw.verify_executable("morningdaw", self.morningdaw))
         self.assertIsNone(daw.verify_executable("morningdaw", self.audacity))
-        with patch.object(daw, "windows_registry_locations", return_value=[self.morningdaw.parent]), \\
-             patch.object(daw, "common_locations", return_value=[]), \\
+        with patch.object(daw, "windows_registry_locations", return_value=[self.morningdaw.parent]), \
+             patch.object(daw, "common_locations", return_value=[]), \
              patch.object(daw.shutil, "which", return_value=None):
             self.assertEqual(str(self.morningdaw.resolve()), daw.resolve(self.root, target_id="morningdaw"))
         self.assertEqual(str(self.morningdaw.resolve()), daw.configured(self.root, "morningdaw"))

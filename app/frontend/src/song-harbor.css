@@ -268,3 +268,21 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .waveform-seek svg{display:block}
 .waveform-loading{position:absolute;top:50%;left:8px;transform:translateY(-50%);color:var(--tws-color-text-muted);font-size:10px}
 .waveform-playhead{position:absolute;top:0;bottom:0;width:2px;background:#e2b66b;pointer-events:none}
+
+/* Integrated editing foundation: common time axis, deliberately compact. */
+.integrated-timeline{border:1px solid var(--tws-color-border-normal);background:var(--tws-color-surface-panel);border-radius:9px;padding:12px;margin:10px 0 13px}
+.integrated-timeline-heading{display:flex;justify-content:space-between;align-items:center;gap:9px;font-size:12px}
+.integrated-timeline-heading span{color:var(--tws-color-text-muted);font-size:11px}
+.integrated-timeline .section-editor{border-top:0!important;padding:7px 0!important}
+.integrated-timeline .section-editor h3{display:none}
+.integrated-timeline .section-editor [data-section-lane]{margin-left:85px!important}
+.integrated-timeline .waveform-overview{border:0;margin:0;padding:0;background:transparent}
+.integrated-timeline .waveform-overview-heading{padding:2px 0 7px}
+.timeline-loop-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:8px 0;font-size:11px;color:var(--tws-color-text-muted)}
+.timeline-loop-controls strong{color:var(--tws-color-text-primary)}
+.timeline-loop-controls button,.derived-route-toggle{border:1px solid var(--tws-color-border-normal);border-radius:5px;background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);font-size:11px;padding:4px 7px;cursor:pointer}
+.timeline-loop-controls button:hover,.derived-route-toggle:hover{border-color:var(--tws-color-border-strong)}
+.derived-route-toggle{grid-column:1/-1;text-align:left;width:max-content}
+.derived-routing-note{font-size:11px;color:var(--tws-color-text-muted)}
+.waveform-child-row{padding-left:13px;border-left:2px solid var(--tws-color-border-strong);margin:1px 0 1px 16px}
+.waveform-child-row .waveform-seek{height:29px;color:#98c5c8}

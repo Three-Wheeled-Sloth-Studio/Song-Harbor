@@ -729,6 +729,23 @@ def set_channel_routing(ident: str, body: ChannelRoutingRequest, request: Reques
         raise HTTPException(400, str(exc)) from exc
 
 
+@app.get("/api/projects/{ident}/channels/waveform/{filename}/{channel}")
+def child_waveform(ident: str, filename: str, channel: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    job = get_job(ident)
+    if not record or not job or job.get("status") != "complete":
+        raise HTTPException(404, "Song unavailable")
+    try:
+        path = track_routing.child_path(DATA_ROOT, record, filename, channel)
+        duration = job.get("source_duration_seconds") or probe_duration(path)
+        return waveform_peaks.get_or_create(
+            path, DATA_ROOT / "jobs" / ident / "waveforms" /
+            (filename + "." + channel + "." + path.parent.name + ".json"),
+            float(duration), dependency_tool("ffmpeg"))
+    except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, f"Channel waveform unavailable: {exc}") from exc
+
+
 @app.get("/api/projects/{ident}/channels/stream/{filename}/{channel}")
 def stream_channel(ident: str, filename: str, channel: str):
     record = projects.read_project(DATA_ROOT, ident)

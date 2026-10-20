@@ -314,7 +314,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
       </label>
     </div>
-    <StemWaveforms jobId={jobId} files={stems.map(s => ({filename:s.filename,label:s.name}))} duration={duration} position={position} onSeek={seek}/>
+    <StemWaveforms jobId={jobId} files={stems.map(s=>({
+      filename:s.filename,label:s.name,
+      children:channels[s.filename]?.active? (["left","right"] as const).map(channel=>({
+        filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
+        waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
+      })):[]
+    }))} duration={duration} position={position} onSeek={seek}/>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
         <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>

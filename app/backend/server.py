@@ -27,6 +27,7 @@ import projects
 import sections
 import daw
 import audacity_handoff
+import channel_split
 import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
@@ -664,6 +665,57 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
         raise HTTPException(400, f"Could not prepare DAW files: {exc}") from exc
     finally:
         job["exporting_waveform"] = False
+
+
+class ChannelSplitRequest(BaseModel):
+    filenames: list[str] = Field(min_length=1, max_length=6)
+
+
+@app.post("/api/projects/{ident}/channels/split")
+def split_stereo_channels(ident: str, request: Request, body: ChannelSplitRequest) -> dict[str, Any]:
+    """Export derived L/R mono WAV files; never replace source stems or an existing export."""
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not job or job.get("status") != "complete" or not record:
+        raise HTTPException(409, "Complete a six-stem song before splitting stereo channels")
+    with lock:
+        if job.get("splitting_channels"):
+            raise HTTPException(409, "A channel split is already running")
+        job["splitting_channels"] = True
+    try:
+        folder = channel_split.split_stems(
+            DATA_ROOT, record, body.filenames, dependency_tool("ffmpeg"),
+            dependency_tool("ffprobe"))
+        job["last_channel_split_export"] = str(folder)
+        return {"directory": str(folder), "track_count": 2 * len(body.filenames),
+                "message": "Mono left/right channel files exported; originals preserved"}
+    except RuntimeError as exc:
+        if "FFmpeg setup" in str(exc):
+            raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(400, f"Channel split failed: {exc}") from exc
+    except (ValueError, OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            json.JSONDecodeError, KeyError) as exc:
+        raise HTTPException(400, f"Channel split failed: {exc}") from exc
+    finally:
+        job["splitting_channels"] = False
+
+
+@app.post("/api/projects/{ident}/channels/open-folder")
+def open_channel_split_folder(ident: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(404, "Completed song not found")
+    root = DATA_ROOT / "jobs" / ident / "exports"
+    candidates = sorted((p for p in root.glob("Channels-*") if p.is_dir()),
+                        key=lambda p: p.stat().st_mtime, reverse=True) if root.is_dir() else []
+    if not candidates:
+        raise HTTPException(404, "Split stereo channels first")
+    if os.name != "nt":
+        raise HTTPException(501, "Opening export folders requires Windows")
+    os.startfile(str(candidates[0]))  # type: ignore[attr-defined]
+    return {"status": "opened", "directory": str(candidates[0])}
 
 
 class DawLaunchRequest(BaseModel):

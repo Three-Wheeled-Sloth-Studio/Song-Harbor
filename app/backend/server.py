@@ -966,10 +966,16 @@ def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]
         raise HTTPException(409, str(exc)) from exc
 
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
-    record = projects.read_project(DATA_ROOT, ident)
-    inputs = track_routing.audio_inputs(DATA_ROOT, record, body.stems) if record else []
-    if not inputs:
-        raise HTTPException(409, "Saved project is needed to render")
+    try:
+        record = projects.read_project(DATA_ROOT, ident)
+        if not record:
+            raise ValueError("Saved project is needed to render")
+        inputs = track_routing.audio_inputs(DATA_ROOT, record, body.stems)
+        if not inputs:
+            raise ValueError("No renderable audio tracks")
+    except (ValueError, OSError, KeyError) as exc:
+        job["rendering"] = False
+        raise HTTPException(409, f"Cannot prepare mix: {exc}") from exc
     for path, _, _ in inputs:
         command.extend(["-i", str(path)])
     filters = []

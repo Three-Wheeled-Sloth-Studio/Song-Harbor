@@ -29,6 +29,7 @@ import daw
 import audacity_handoff
 import channel_split
 import waveform_peaks
+import track_routing
 import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
@@ -688,6 +689,7 @@ def split_stereo_channels(ident: str, request: Request, body: ChannelSplitReques
         folder = channel_split.split_stems(
             DATA_ROOT, record, body.filenames, dependency_tool("ffmpeg"),
             dependency_tool("ffprobe"))
+        track_routing.attach(DATA_ROOT, record, folder, body.filenames)
         job["last_channel_split_export"] = str(folder)
         return {"directory": str(folder), "track_count": 2 * len(body.filenames),
                 "message": "Mono left/right channel files exported; originals preserved"}
@@ -700,6 +702,43 @@ def split_stereo_channels(ident: str, request: Request, body: ChannelSplitReques
         raise HTTPException(400, f"Channel split failed: {exc}") from exc
     finally:
         job["splitting_channels"] = False
+
+
+class ChannelRoutingRequest(BaseModel):
+    filename: str
+    active: bool
+
+
+@app.get("/api/projects/{ident}/channels")
+def channel_tracks(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or get_job(ident) is None:
+        raise HTTPException(404, "Song unavailable")
+    return {"channels": track_routing.valid_children(DATA_ROOT, record)}
+
+
+@app.put("/api/projects/{ident}/channels")
+def set_channel_routing(ident: str, body: ChannelRoutingRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or get_job(ident) is None:
+        raise HTTPException(404, "Song unavailable")
+    try:
+        return {"channels": track_routing.switch(DATA_ROOT, record, body.filename, body.active)}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/channels/stream/{filename}/{channel}")
+def stream_channel(ident: str, filename: str, channel: str):
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or get_job(ident) is None:
+        raise HTTPException(404, "Song unavailable")
+    try:
+        path = track_routing.child_path(DATA_ROOT, record, filename, channel)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(path, media_type="audio/wav")
 
 
 @app.post("/api/projects/{ident}/channels/open-folder")
@@ -910,13 +949,22 @@ def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]
         raise HTTPException(409, str(exc)) from exc
 
     command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y"]
-    for filename, _ in levels:
-        command.extend(["-i", str(job["output_path"] / filename)])
+    record = projects.read_project(DATA_ROOT, ident)
+    inputs = track_routing.audio_inputs(DATA_ROOT, record, body.stems) if record else []
+    if not inputs:
+        raise HTTPException(409, "Saved project is needed to render")
+    for path, _, _ in inputs:
+        command.extend(["-i", str(path)])
     filters = []
-    for index, (_, gain) in enumerate(levels):
-        filters.append(f"[{index}:a]volume={gain:.6f}[s{index}]")
-    inputs = "".join(f"[s{index}]" for index in range(len(levels)))
-    filters.append(f"{inputs}amix=inputs=6:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.98:level=0[mix]")
+    for index, (_, gain, channel) in enumerate(inputs):
+        if channel == "left":
+            filters.append(f"[{index}:a]pan=stereo|c0=c0|c1=0,volume={gain:.6f}[s{index}]")
+        elif channel == "right":
+            filters.append(f"[{index}:a]pan=stereo|c0=0|c1=c0,volume={gain:.6f}[s{index}]")
+        else:
+            filters.append(f"[{index}:a]volume={gain:.6f}[s{index}]")
+    audio_links = "".join(f"[s{index}]" for index in range(len(inputs)))
+    filters.append(f"{audio_links}amix=inputs={len(inputs)}:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.98:level=0[mix]")
     command.extend([
         "-filter_complex", ";".join(filters),
         "-map", "[mix]", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", str(temporary),

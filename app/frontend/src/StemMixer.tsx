@@ -4,6 +4,7 @@ import { DawHandoff } from "./DawHandoff";
 import { AudioIcon } from "./AudioIcons";
 import { SectionEditor } from "./SectionEditor";
 import { ChannelSplitter } from "./ChannelSplitter";
+import { StemWaveforms } from "./StemWaveforms";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -261,6 +262,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
       </label>
     </div>
+    <StemWaveforms jobId={jobId} files={stems.map(s => ({filename:s.filename,label:s.name}))} duration={duration} position={position} onSeek={seek}/>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
         <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>

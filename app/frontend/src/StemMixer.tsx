@@ -327,7 +327,24 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <input type="range" min="0" max="100" step="1" value={s.gain}
           aria-label={s.name + " volume"} onChange={e => update(s.filename, {gain: Number(e.target.value)})} />
         <span className="track-percent">{s.gain}%</span>
-      </div>)}
+        {channels[s.filename]&&<button type="button" className="derived-route-toggle"
+          disabled={channelBusy} onClick={()=>{void toggleChannel(s.filename);}}
+          title="Switch between stereo original and left/right derived children">
+          {channels[s.filename].active?"L/R active":"Stereo active"}
+        </button>}
+      </div>)}<div className="derived-routing-note">{Object.values(channels).some(c=>c.active)
+        ?"Split channels replace their parent originals in playback and mix export."
+        :"Original stereo stems active. Expand split channels with their track buttons."}</div>
+    </div>
+    <div className="timeline-loop-controls">
+      <strong>Region loop</strong>
+      <button type="button" onClick={()=>setLoopIn(position)}>Mark in</button>
+      <button type="button" onClick={()=>setLoopOut(position)}>Mark out</button>
+      <label><input type="checkbox" checked={loopEnabled}
+        disabled={loopIn===null||loopOut===null||loopOut<=loopIn+0.1}
+        onChange={e=>setLoopEnabled(e.target.checked)}/> Loop</label>
+      <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
+      <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
     </div>
     <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections} onSeek={seek}/>
     <div className="mix-footer">
@@ -338,7 +355,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
     </div>
-    <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} />
+    <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />
     <div className="daw-handoff">
       <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
     </div>

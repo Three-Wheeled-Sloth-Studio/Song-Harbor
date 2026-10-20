@@ -314,6 +314,20 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
       </label>
     </div>
+    <section className="integrated-timeline" aria-label="Integrated production timeline">
+      <div className="integrated-timeline-heading"><strong>Production timeline</strong><span>Sections · audio waveforms · derived channels · loop</span></div>
+    <div className="timeline-loop-controls">
+      <strong>Region loop</strong>
+      <button type="button" onClick={()=>setLoopIn(position)}>Mark in</button>
+      <button type="button" onClick={()=>setLoopOut(position)}>Mark out</button>
+      <label><input type="checkbox" checked={loopEnabled}
+        disabled={loopIn===null||loopOut===null||loopOut<=loopIn+0.1}
+        onChange={e=>setLoopEnabled(e.target.checked)}/> Loop</label>
+      <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
+      <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
+    </div>
+    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections} onSeek={seek}/>
+
     <StemWaveforms jobId={jobId} files={stems.map(s=>({
       filename:s.filename,label:s.name,
       children:channels[s.filename]?.active? (["left","right"] as const).map(channel=>({
@@ -321,6 +335,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
       })):[]
     }))} duration={duration} position={position} onSeek={seek}/>
+
+    </section>
     <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
         <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>
@@ -342,17 +358,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         ?"Split channels replace their parent originals in playback and mix export."
         :"Original stereo stems active. Expand split channels with their track buttons."}</div>
     </div>
-    <div className="timeline-loop-controls">
-      <strong>Region loop</strong>
-      <button type="button" onClick={()=>setLoopIn(position)}>Mark in</button>
-      <button type="button" onClick={()=>setLoopOut(position)}>Mark out</button>
-      <label><input type="checkbox" checked={loopEnabled}
-        disabled={loopIn===null||loopOut===null||loopOut<=loopIn+0.1}
-        onChange={e=>setLoopEnabled(e.target.checked)}/> Loop</label>
-      <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
-      <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
-    </div>
-    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections} onSeek={seek}/>
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}

@@ -247,3 +247,11 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .setting-tool-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0}
 .dependency-choice summary{cursor:pointer;font-size:12px;font-weight:600;padding:5px 0}
 .tws-dialog .dependency-choice{padding:6px 0}
+
+/* Small opt-in utility; never crowd the stem mixer. */
+.channel-split-tool{border-top:1px solid var(--tws-color-border-normal);margin-top:12px;padding-top:8px}
+.channel-split-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;background:none;border:0;color:var(--tws-color-text-primary);font-weight:600;font-size:12px;padding:6px 2px;text-align:left;cursor:pointer}
+.channel-split-hint{font-size:11px;color:var(--tws-color-text-muted);margin:5px 0 9px}
+.channel-split-options{display:flex;gap:8px 14px;flex-wrap:wrap;font-size:12px;margin:0 0 10px}
+.channel-split-options label{display:inline-flex;gap:5px;align-items:center}
+.channel-split-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}

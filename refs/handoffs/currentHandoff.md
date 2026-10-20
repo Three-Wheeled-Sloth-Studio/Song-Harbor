@@ -7,6 +7,12 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## Working files Settings and compact component setup (2026-10-20)
+
+User requested machine-specific selection of Song Harbor working-file directory, intending to use Google Drive local sync between Predator/Omen/Skynet; and removal of oversized one-component setup UI. Added `app/backend/workspace_settings.py` + guarded settings API, `app/run.ps1` respects configured location after relaunch, header gear opens compact `AppSettings.tsx` (Working files + collapsed Components), FFmpeg locate/install sections now collapsed, contextual FFmpeg recovery preserved. Tests in `app/backend/tests/test_workspace_settings.py`; guide `docs/working-files-settings.md`.
+
+**Safety / honest limits:** Changing location **does not move existing files** or reconcile old and new libraries; stored per machine under runtime `config/settings.json`. Current SQLite WAL library lives inside the selected data folder and tracks absolute paths. Google Drive sync of a live SQLite DB is not safe for concurrent multi-machine use; sequential single-computer use only with sync completed, backup recommended. Different machine path layouts may require index rebuild/relink; ideal future design is local SQLite plus portable synced song manifests/media. Do not claim automatic seamless sync. Code committed to main, CI and Windows smoke verification still pending. No local user testing requested.
+
 ## Timeline-first section UX follow-up (2026-10-19)
 User wants YouTube-style editing: visually align section blocks with the audio and stems; drag blocks to move, drag edges to stretch. Commit `76e728ab` upgrades `SectionEditor.tsx` from static blocks to pointer-draggable/resizable section blocks with playback cursor, adjacent-section constraints, and arrow-key nudging. See `docs/adaptive-production-workbench.md`. **This is an aligned annotation lane, not yet integrated multi-stem waveform visualization or snapping.** Next prioritize waveform rendering + timeline zoom/beat snapping, then synchronized per-stem pan/EQ, loudness-matched A/B and better/worse/reroll. No Predator/Omen QA performed and CI outcome not yet verified.
 

@@ -119,13 +119,13 @@ def validated_stems(project: dict[str, Any], folder: Path) -> list[Path]:
 
 def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path:
     """Portable aligned WAV exchange for an explicit DAW target, never a guessed native session."""
-    if target_id not in ("waveform", "audacity"):
+    if target_id not in ("waveform", "audacity", "morningdaw"):
         raise ValueError("Unsupported DAW target")
     folder = data_root / "jobs" / project["id"]
     originals = validated_stems(project, folder)
     export_parent = folder / "exports"
     export_parent.mkdir(parents=True, exist_ok=True)
-    label = "Waveform" if target_id == "waveform" else "Audacity"
+    label = {"waveform": "Waveform", "audacity": "Audacity", "morningdaw": "MorningDAW"}[target_id]
     target = export_parent / label
     # Unique exports preserve earlier bundles and any external edits.
     if target.exists():
@@ -153,6 +153,15 @@ def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path
                 "3. Place every track at 0:00; disable stretching, loops and tempo sync.\n"
                 "4. Verify complete duration and alignment before editing.\n"
                 "5. Keep this folder intact while your DAW references its files.\n"
+            )
+        elif target_id == "morningdaw":
+            instructions = (
+                "Song Harbor -> MorningDAW\n\n"
+                "1. Open MorningDAW and start or open a song.\n"
+                "2. Drag the six numbered WAV files onto SEPARATE audio tracks in the arrangement.\n"
+                "3. Align every clip at the song start (0:00); do not stretch audio or tempo-sync clips.\n"
+                "4. Confirm full-length audio and timing alignment before processing.\n"
+                "5. MorningDAW refers to imported source files by path; preserve this exchange folder.\n"
             )
         else:
             instructions = (

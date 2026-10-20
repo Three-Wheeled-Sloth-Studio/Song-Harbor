@@ -9,6 +9,8 @@ import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type MixResponse = { url: string; filename: string };
+type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
+type ChannelSets = Record<string,ChildSet>;
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -54,6 +56,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [exporting, setExporting] = useState(false);
   const [mixUrl, setMixUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [channels,setChannels]=useState<ChannelSets>({});
+  const [routingVersion,setRoutingVersion]=useState(0);
+  const [channelBusy,setChannelBusy]=useState(false);
+  const [loopEnabled,setLoopEnabled]=useState(false);
+  const [loopIn,setLoopIn]=useState<number|null>(null);
+  const [loopOut,setLoopOut]=useState<number|null>(null);
+  const context=useRef<AudioContext|null>(null);
   const audio = useRef<Map<string, HTMLAudioElement>>(new Map());
   const playRef = useRef(false);
   const seekRef = useRef(0);
@@ -61,6 +70,24 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
 
+  const refreshChannels=useCallback(async()=>{
+    const r=await fetch("/api/projects/"+jobId+"/channels");
+    if(r.ok){const data=await r.json() as {channels:ChannelSets};setChannels(data.channels||{});setRoutingVersion(v=>v+1);}
+  },[jobId]);
+  useEffect(()=>{void refreshChannels();},[refreshChannels]);
+  async function toggleChannel(filename:string){
+    const entry=channels[filename];
+    if(!entry||channelBusy)return;
+    stop();setChannelBusy(true);setError("");
+    try{
+      const r=await fetch("/api/projects/"+jobId+"/channels",{method:"PUT",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify({filename,active:!entry.active})});
+      const data=await r.json() as {channels?:ChannelSets;detail?:string};
+      if(!r.ok||!data.channels)throw Error(data.detail||"Routing update failed");
+      setChannels(data.channels);setRoutingVersion(v=>v+1);setMixUrl(null);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setChannelBusy(false);}
+  }
   const stop = useCallback(() => {
     playRef.current = false;
     setPlaying(false);

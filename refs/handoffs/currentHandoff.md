@@ -7,6 +7,10 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## Stereo production planning (2026-10-20)
+
+User confirmed the current L/R channels have extremely high correlation; goal is **intelligent, dynamically changing stereo differentiation**, not merely channel extraction. User observed that channel-split exports are not reflected in the six-stem player. Root cause verified: current mixer hardcodes six original audio players, derived L/R files are export-only. Recorded engineering plan at `docs/stereo-production-effects-plan.md`: introduce persistent parent/child track routing, enable L/R children in playback/export **instead of** the parent (avoid double-summing), unify timeline/DSP clock, stereo analyzer, human/machine asymmetric semantic placement, section-driven pan/ambience automation, A/B preference capture. MorningDAW and Waveform are useful for manual pan and plugin automation, Audacity for cleanup; no verified general remote DAW control. This is **planning/documentation only**, not a completed player integration. Next code task: child-track routing + view + persistence + export and channel-reconstruction tests.
+
 ## MorningDAW and stereo-channel split utilities (2026-10-20)
 
 User requested (1) MorningDAW support and (2) a utility to extract L/R tracks from existing stereo stems. Implemented MorningDAW as third optional DAW target with common Windows detection, explicit selection, vendor download and *manual* six-WAV import exchange (no unverified .mdproject automation). Implemented `channel_split.py`, POST `/api/projects/{ident}/channels/split`, and compact collapsed `ChannelSplitter.tsx` in the stem mixer. Selected two-channel stem files produce unique exports containing separate aligned left/right 32-bit float mono WAVs, manifest and README. Originals untouched; failed jobs clear staging. Regression tests in `test_channel_split.py`, updated `test_daw.py`. See `docs/morningdaw-channel-split.md`. **CI/local Windows build unverified**: ensure TypeScript build and backend tests before claiming acceptance. The utility does not perform further instrument separation or stereo widening. MorningDAW import remains manual.

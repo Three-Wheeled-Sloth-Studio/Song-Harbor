@@ -255,3 +255,16 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .channel-split-options{display:flex;gap:8px 14px;flex-wrap:wrap;font-size:12px;margin:0 0 10px}
 .channel-split-options label{display:inline-flex;gap:5px;align-items:center}
 .channel-split-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* Synchronized time-axis waveform overviews; full integrated timeline is still planned. */
+.waveform-overview{display:grid;gap:3px;margin:10px 0 12px;padding:10px;background:var(--tws-color-surface-panel);border-radius:8px;border:1px solid var(--tws-color-border-normal)}
+.waveform-overview-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:11px;padding-bottom:4px}
+.waveform-overview-heading span{color:var(--tws-color-text-muted);font-size:10px}
+.waveform-row{display:grid;grid-template-columns:75px minmax(0,1fr);align-items:center;gap:10px}
+.waveform-row-label{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--tws-color-text-muted)}
+.waveform-seek{display:block;position:relative;width:100%;height:37px;padding:0;margin:0;border:1px solid var(--tws-color-border-normal);border-radius:3px;background:var(--tws-color-surface-inset);color:#82b5bd;cursor:crosshair;overflow:hidden}
+.waveform-seek:hover{border-color:var(--tws-color-border-strong)}
+.waveform-seek:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:1px}
+.waveform-seek svg{display:block}
+.waveform-loading{position:absolute;top:50%;left:8px;transform:translateY(-50%);color:var(--tws-color-text-muted);font-size:10px}
+.waveform-playhead{position:absolute;top:0;bottom:0;width:2px;background:#e2b66b;pointer-events:none}

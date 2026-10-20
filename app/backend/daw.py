@@ -30,10 +30,16 @@ TARGETS = {
         "download_url": "https://www.audacityteam.org/download/windows/",
         "format": "six-stem-wav-folder",
     },
+    "morningdaw": {
+        "name": "MorningDAW", "free": True,
+        "download_url": "https://edu.morningdewmedia.com/pages/morningdaw/",
+        "format": "six-stem-wav-folder",
+    },
 }
 EXECUTABLE_NAMES = {
     "waveform": ("Waveform.exe", "Waveform 14.exe", "Waveform 13.exe", "Waveform 12.exe", "Waveform Free.exe"),
     "audacity": ("Audacity.exe", "Audacity4.exe", "Audacity 4.exe", "Audacity3.exe", "Audacity 3.exe"),
+    "morningdaw": ("MorningDAW.exe", "MorningDAW Studio.exe", "Morning DAW.exe"),
 }
 
 
@@ -53,13 +59,17 @@ def verify_executable(target_id: str, chosen: Path) -> Path | None:
             candidates.extend(path.glob("Waveform*.exe"))
         elif target_id == "audacity":
             candidates.extend(path.glob("Audacity*.exe"))
+        elif target_id == "morningdaw":
+            candidates.extend(path.glob("MorningDAW*.exe"))
     else:
         candidates = [path]
     for candidate in candidates:
         if not candidate.is_file():
             continue
         basename = candidate.name.lower()
-        valid = bool(re.fullmatch(r"audacity(?:[ _-]?\d+(?:\.\d+)*)?\.exe", basename, re.I)) if target_id == "audacity" else bool(re.fullmatch(r"Waveform.*\.exe", candidate.name, re.I))
+        valid = (bool(re.fullmatch(r"audacity(?:[ _-]?\d+(?:\.\d+)*)?\.exe", basename, re.I)) if target_id == "audacity"
+                 else bool(re.fullmatch(r"morning\s?daw(?:[ _-]?(?:studio|\d+(?:\.\d+)*))?\.exe", basename, re.I)) if target_id == "morningdaw"
+                 else bool(re.fullmatch(r"Waveform.*\.exe", candidate.name, re.I)))
         if valid:
             return candidate.resolve()
     return None
@@ -183,6 +193,8 @@ def common_locations(target_id: str = "waveform") -> list[Path]:
                                root / "Programs" / "Audacity",
                                root / "Microsoft" / "WinGet" / "Links",
                                root / "Microsoft" / "WindowsApps"))
+        elif target_id == "morningdaw":
+            candidates.extend((root / "MorningDAW", root / "Morningdew Media", root / "Programs" / "MorningDAW", root / "Programs" / "Morningdew Media"))
         else:
             candidates.extend((root / "Tracktion", root / "Tracktion Software",
                                root / "Waveform", root / "Waveform Free"))
@@ -201,6 +213,9 @@ def common_locations(target_id: str = "waveform") -> list[Path]:
             Path.home() / "scoop" / "apps" / "audacity" / "current",
             Path.home() / "scoop" / "shims",
         ))
+    if target_id == "morningdaw":
+        for drive in available_drives():
+            candidates.extend((drive / "Apps" / "MorningDAW", drive / "Programs" / "MorningDAW", drive / "Program Files" / "MorningDAW"))
     return candidates
 
 
@@ -339,7 +354,7 @@ def scan_existing(root: Path, target_id: str, job: dict,
             except (OSError, PermissionError):
                 continue
         job.update(status="not_found", scanned=count,
-                   message="No installation found in the searched application folders. Browse to Audacity.exe if installed elsewhere.")
+                   message="No installation found in the searched application folders. Browse to the DAW executable if installed elsewhere.")
     except Exception as exc:
         job.update(status="error", scanned=count, message=str(exc))
 

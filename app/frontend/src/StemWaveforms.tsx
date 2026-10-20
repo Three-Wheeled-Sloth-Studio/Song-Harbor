@@ -15,8 +15,8 @@ function pathFor(peaks:Peaks):string {
   }
   return parts.join("");
 }
-function WaveRow({jobId,row,duration,position,onSeek}:{
-  jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;
+function WaveRow({jobId,row,duration,position,onSeek,viewStart,viewEnd}:{
+  jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;viewStart:number;viewEnd:number;
 }){
   const [peaks,setPeaks]=useState<Peaks|null>(null);
   const [failed,setFailed]=useState(false);
@@ -32,27 +32,27 @@ function WaveRow({jobId,row,duration,position,onSeek}:{
   function seekAt(e:MouseEvent<HTMLButtonElement>){
     if(duration<=0)return;
     const bounds=e.currentTarget.getBoundingClientRect();
-    onSeek(Math.max(0,Math.min(duration,(e.clientX-bounds.left)/bounds.width*duration)));
+    onSeek(Math.max(0,Math.min(duration,viewStart+(e.clientX-bounds.left)/bounds.width*(viewEnd-viewStart))));
   }
   return <div className="waveform-row">
     <span className="waveform-row-label" title={row.label}>{row.label}</span>
     <button type="button" className="waveform-seek" onClick={seekAt}
       aria-label={`Seek within ${row.label} waveform`} title={`Seek within ${row.label}`}>
-      {peaks?<svg viewBox="0 0 1000 40" preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
+      {peaks?<svg viewBox={`${duration>0?1000*viewStart/duration:0} 0 ${duration>0?Math.max(0.01,1000*(viewEnd-viewStart)/duration):1000} 40`} preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
         <path d={d} stroke="currentColor" strokeWidth="0.7" strokeOpacity=".8" fill="none"/>
       </svg>:<span className="waveform-loading">{failed?"Waveform preview unavailable":"Loading waveform…"}</span>}
-      {duration>0&&<span className="waveform-playhead" style={{left:`${100*Math.min(position,duration)/duration}%`}}/>}
+      {viewEnd>viewStart && position>=viewStart && position<=viewEnd &&<span className="waveform-playhead" style={{left:`${100*(position-viewStart)/(viewEnd-viewStart)}%`}}/>}
     </button>
   </div>;
 }
 
-export function StemWaveforms({jobId,files,duration,position,onSeek}:{
-  jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;
+export function StemWaveforms({jobId,files,duration,position,onSeek,viewStart,viewEnd}:{
+  jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;viewStart:number;viewEnd:number;
 }){
   return <section className="waveform-overview" aria-label="Aligned stem waveforms">
     <div className="waveform-overview-heading"><strong>Stem waveforms</strong><span>Click to seek · split channels appear below their stem</span></div>
     {files.map(row=><div key={row.filename}>
-      <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek}/>
+      <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd}/>
       {row.children?.map(child=><div className="waveform-child-row" key={child.filename}>
         <WaveRow jobId={jobId} row={child} duration={duration} position={position} onSeek={onSeek}/>
       </div>)}

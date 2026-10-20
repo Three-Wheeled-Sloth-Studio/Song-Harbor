@@ -14,8 +14,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void;
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number;
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -70,7 +70,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek}:{
   function moveDrag(e:ReactPointerEvent<HTMLDivElement>) {
     const d=drag.current;
     if(!d) return;
-    const delta=(e.clientX-d.x)/d.width*duration;
+    const delta=(e.clientX-d.x)/d.width*(viewEnd-viewStart);
     const next=reposition(d.original,d.mode,delta,d.limits);
     d.changed=d.changed||next.start_seconds!==d.original.start_seconds||next.end_seconds!==d.original.end_seconds;
     setSections(items=>items.map(s=>s.id===d.id?next:s));
@@ -110,7 +110,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek}:{
         onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}>Add section</button>
     </div>
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
-      {sections.map(s=><div key={s.id} style={{position:"absolute",left:`${100*s.start_seconds/duration}%`,width:`${100*(s.end_seconds-s.start_seconds)/duration}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
+      {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
           title="Drag to resize start. Arrow keys adjust by 0.1s."
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"start",e.key==="ArrowLeft"?-1:1);}}}
@@ -129,7 +129,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek}:{
           onPointerDown={e=>beginDrag(e,s,"end")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{drag.current=null;}}
           style={{width:9,height:"100%",cursor:"ew-resize",background:"#ffffff55",flexShrink:0}}/>
       </div>)}
-      <div aria-hidden="true" style={{position:"absolute",left:`${100*Math.min(duration,Math.max(0,position))/duration}%`,top:0,bottom:0,borderLeft:"2px solid #f2c46c",pointerEvents:"none"}}/>
+      <div aria-hidden="true" style={{position:"absolute",left:`${100*(position-viewStart)/(viewEnd-viewStart)}%`,top:0,bottom:0,borderLeft:"2px solid #f2c46c",pointerEvents:"none"}}/>
     </div>}
     {selectedSection&&<div style={{fontSize:12}}>Selected: [{selectedSection.kind}{selectedSection.number===null?"":` ${selectedSection.number}`} {stamp(selectedSection.start_seconds)}-{stamp(selectedSection.end_seconds)}]</div>}
     <div style={{display:"flex",flexDirection:"column",gap:4}}>

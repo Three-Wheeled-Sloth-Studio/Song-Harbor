@@ -95,35 +95,56 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }, []);
 
   useEffect(() => {
-    const players = new Map<string, HTMLAudioElement>();
-    for (const name of files) {
-      const element = new Audio("/api/jobs/" + jobId + "/stream/" + encodeURIComponent(name));
-      element.preload = "metadata";
-      element.addEventListener("loadedmetadata", () => {
-        if (Number.isFinite(element.duration)) setDuration(current => Math.max(current, element.duration));
-      });
-      element.addEventListener("error", () => {
-        setError("One of the audio streams could not be loaded. Check the backend and try again.");
-        stop();
-      });
-      players.set(name, element);
+    const players=new Map<string,HTMLAudioElement>();
+    const ctx=new AudioContext();
+    context.current=ctx;
+    for(const filename of files){
+      const split=channels[filename];
+      const sources=split?.active
+        ? [{key:filename+":left",url:split.tracks.left.url,pan:-1},
+           {key:filename+":right",url:split.tracks.right.url,pan:1}]
+        : [{key:filename,url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0}];
+      for(const item of sources){
+        const player=new Audio(item.url);
+        player.preload="metadata";
+        player.addEventListener("loadedmetadata",()=>{
+          if(Number.isFinite(player.duration))setDuration(current=>Math.max(current,player.duration));
+        });
+        player.addEventListener("error",()=>{
+          setError("An audio stream failed. Verify the derived channel files.");
+          stop();
+        });
+        const source=ctx.createMediaElementSource(player);
+        if(item.pan===0)source.connect(ctx.destination);
+        else {
+          const panner=ctx.createStereoPanner();
+          panner.pan.value=item.pan;
+          source.connect(panner).connect(ctx.destination);
+        }
+        players.set(item.key,player);
+      }
     }
-    audio.current = players;
-    setDuration(expectedDuration || 0);
-    setPosition(0);
-    setPlaying(false);
-    playRef.current = false;
-    setMixUrl(null);
-    setError("");
-    return () => { players.forEach(element => { element.pause(); element.removeAttribute("src"); element.load(); }); players.clear(); };
-  }, [files, jobId, expectedDuration, stop]);
+    audio.current=players;
+    setDuration(expectedDuration||0);
+    setPosition(0);setPlaying(false);playRef.current=false;
+    return ()=>{
+      players.forEach(p=>{p.pause();p.removeAttribute("src");p.load();});
+      players.clear();
+      void ctx.close();
+      if(context.current===ctx)context.current=null;
+    };
+  },[files,jobId,expectedDuration,stop,routingVersion]);
 
-  useEffect(() => {
-    for (const s of stems) {
-      const player = audio.current.get(s.filename);
-      if (player) player.volume = Math.min(1, Math.max(0, effectiveGain(s, anySolo) * monitorVolume / 100));
+  useEffect(()=>{
+    for(const stem of stems){
+      const entry=channels[stem.filename];
+      const keys=entry?.active?[stem.filename+":left",stem.filename+":right"]:[stem.filename];
+      for(const key of keys){
+        const player=audio.current.get(key);
+        if(player)player.volume=Math.min(1,Math.max(0,effectiveGain(stem,anySolo)*monitorVolume/100));
+      }
     }
-  }, [stems, anySolo, monitorVolume]);
+  },[stems,anySolo,monitorVolume,channels,routingVersion]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -136,6 +157,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if (!master) return;
       const current = master.currentTime;
       setPosition(current);
+      if(loopEnabled && loopIn!==null && loopOut!==null && loopOut>loopIn+0.1 && current>=loopOut-0.02){
+        players.forEach(p=>{p.currentTime=loopIn;});setPosition(loopIn);return;
+      }
       if (master.ended || (duration > 0 && current >= duration - 0.03)) {
         stop();
         return;
@@ -148,7 +172,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       }
     }, 120);
     return () => window.clearInterval(timer);
-  }, [playing, duration, stop]);
+  }, [playing, duration, stop,loopEnabled,loopIn,loopOut]);
 
   async function togglePlayback() {
     if (playRef.current) {
@@ -157,7 +181,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
     setError("");
     const players = [...audio.current.values()];
-    if (players.length !== 6) { setError("Six stems are required for audition."); return; }
+    if(players.length<6){setError("Audio tracks have not loaded.");return;}
+    await context.current?.resume();
     const time = position >= duration - 0.05 && duration > 0 ? 0 : position;
     players.forEach(player => {
       player.pause();

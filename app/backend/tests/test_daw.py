@@ -27,6 +27,9 @@ class DawAdapterTests(unittest.TestCase):
         self.waveform = self.root / "Installed" / "Waveform" / "Waveform 14.exe"
         self.waveform.parent.mkdir(parents=True)
         self.waveform.write_bytes(b"test-fixture")
+        self.morningdaw = self.root / "Installed" / "MorningDAW" / "MorningDAW.exe"
+        self.morningdaw.parent.mkdir(parents=True)
+        self.morningdaw.write_bytes(b"test-fixture")
 
     def test_saved_target_paths_independent(self):
         daw.set_location(self.root, str(self.waveform), "waveform")
@@ -136,6 +139,32 @@ class DawAdapterTests(unittest.TestCase):
             targets = daw.windows_shortcut_locations("audacity")
         self.assertIn(exe.resolve(), [p.resolve() for p in targets])
 
+    def test_morningdaw_discovery_configuration_and_portable_export(self):
+        self.assertEqual(self.morningdaw.resolve(), daw.verify_executable("morningdaw", self.morningdaw))
+        self.assertIsNone(daw.verify_executable("morningdaw", self.audacity))
+        with patch.object(daw, "windows_registry_locations", return_value=[self.morningdaw.parent]), \\
+             patch.object(daw, "common_locations", return_value=[]), \\
+             patch.object(daw.shutil, "which", return_value=None):
+            self.assertEqual(str(self.morningdaw.resolve()), daw.resolve(self.root, target_id="morningdaw"))
+        self.assertEqual(str(self.morningdaw.resolve()), daw.configured(self.root, "morningdaw"))
+        ident = "abcdef012345"
+        folder = self.root / "jobs" / ident / "stems"
+        folder.mkdir(parents=True)
+        files = []
+        for name in projects.ORDER:
+            filename = f"song_({name})_htdemucs_6s.wav"
+            (folder / filename).write_bytes(name.encode())
+            files.append(filename)
+        record = {"id": ident, "files": files, "title": "A Song",
+                  "stems": projects.default_settings(files)}
+        exported = projects.export_daw(self.root, record, "morningdaw")
+        manifest = json.loads((exported / "manifest.json").read_text())
+        self.assertEqual("morningdaw", manifest["target"])
+        self.assertEqual(6, manifest["track_count"])
+        self.assertTrue((exported / "IMPORT-IN-MORNINGDAW.txt").exists())
+        for index, name in enumerate(projects.ORDER, 1):
+            self.assertEqual(name.encode(), (exported / f"{index:02d} - {name}.wav").read_bytes())
+
     def test_wrong_executable_rejected(self):
         with self.assertRaises(ValueError):
             daw.set_location(self.root, str(self.waveform), "audacity")
@@ -149,7 +178,7 @@ class DawAdapterTests(unittest.TestCase):
             client = TestClient(server.app)
             result = client.get("/api/daws")
             self.assertEqual(200, result.status_code, result.text)
-            self.assertEqual({"audacity", "waveform"},
+            self.assertEqual({"audacity", "waveform", "morningdaw"},
                              {item["id"] for item in result.json()["targets"]})
             located = client.post("/api/daws/audacity/locate",
                                   json={"path": str(self.audacity)})

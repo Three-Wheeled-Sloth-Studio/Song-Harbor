@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import type {MouseEvent} from "react";
 
 type Peaks={bins:number;duration_seconds:number;min:number[];max:number[]};
-type Row={filename:string;label:string};
+export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[]};
 function pathFor(peaks:Peaks):string {
   const count=Math.min(peaks.bins,peaks.min.length,peaks.max.length);
   if(count<=0)return "";
@@ -16,18 +16,18 @@ function pathFor(peaks:Peaks):string {
   return parts.join("");
 }
 function WaveRow({jobId,row,duration,position,onSeek}:{
-  jobId:string;row:Row;duration:number;position:number;onSeek:(time:number)=>void;
+  jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;
 }){
   const [peaks,setPeaks]=useState<Peaks|null>(null);
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();
     setPeaks(null);setFailed(false);
-    void fetch(`/api/jobs/${jobId}/waveform/${encodeURIComponent(row.filename)}`,{signal:controller.signal})
+    void fetch(row.waveUrl||`/api/jobs/${jobId}/waveform/${encodeURIComponent(row.filename)}`,{signal:controller.signal})
       .then(r=>r.ok?r.json() as Promise<Peaks>:Promise.reject(Error("Waveform unavailable")))
       .then(setPeaks).catch(()=>{if(!controller.signal.aborted)setFailed(true);});
     return ()=>controller.abort();
-  },[jobId,row.filename]);
+  },[jobId,row.filename,row.waveUrl]);
   const d=useMemo(()=>peaks?pathFor(peaks):"",[peaks]);
   function seekAt(e:MouseEvent<HTMLButtonElement>){
     if(duration<=0)return;
@@ -47,11 +47,15 @@ function WaveRow({jobId,row,duration,position,onSeek}:{
 }
 
 export function StemWaveforms({jobId,files,duration,position,onSeek}:{
-  jobId:string;files:Row[];duration:number;position:number;onSeek:(time:number)=>void;
+  jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;
 }){
   return <section className="waveform-overview" aria-label="Aligned stem waveforms">
-    <div className="waveform-overview-heading"><strong>Waveform overview</strong><span>Click to seek · same time axis on all stems</span></div>
-    {files.map(row=><WaveRow key={row.filename} jobId={jobId} row={row}
-      duration={duration} position={position} onSeek={onSeek}/>)}
+    <div className="waveform-overview-heading"><strong>Stem waveforms</strong><span>Click to seek · split channels appear below their stem</span></div>
+    {files.map(row=><div key={row.filename}>
+      <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek}/>
+      {row.children?.map(child=><div className="waveform-child-row" key={child.filename}>
+        <WaveRow jobId={jobId} row={child} duration={duration} position={position} onSeek={onSeek}/>
+      </div>)}
+    </div>)}
   </section>;
 }

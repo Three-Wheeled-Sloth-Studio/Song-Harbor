@@ -3,8 +3,8 @@ import {Button,Status} from "@tws-ui/core/react";
 
 const LABELS=["Vocals","Drums","Bass","Guitar","Piano","Other"];
 function label(filename:string){return LABELS.find(x=>filename.includes("("+x+")"))||filename;}
-export function ChannelSplitter({jobId,files,onMissingFfmpeg}:{
-  jobId:string;files:string[];onMissingFfmpeg?:(retry:()=>void)=>void;
+export function ChannelSplitter({jobId,files,onMissingFfmpeg,onCompleted}:{
+  jobId:string;files:string[];onMissingFfmpeg?:(retry:()=>void)=>void;onCompleted?:()=>void;
 }) {
   const [expanded,setExpanded]=useState(false);
   const [chosen,setChosen]=useState<string[]>(files);
@@ -29,6 +29,7 @@ export function ChannelSplitter({jobId,files,onMissingFfmpeg}:{
         throw Error(result.detail||"Could not split channels");
       }
       setFolder(result.directory||"");
+      onCompleted?.();
       setNotice(`${result.track_count} mono WAV files exported. Original stereo stems unchanged.`);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}

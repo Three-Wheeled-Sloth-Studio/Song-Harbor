@@ -79,7 +79,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
     const d=drag.current;
     if(!d) return;
     moveDrag(e);
-    const delta=(e.clientX-d.x)/d.width*duration;
+    const delta=(e.clientX-d.x)/d.width*(viewEnd-viewStart);
     const next=reposition(d.original,d.mode,delta,d.limits);
     drag.current=null;
     if(next.start_seconds!==d.original.start_seconds||next.end_seconds!==d.original.end_seconds) {

@@ -9,7 +9,7 @@ import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { compileSectionAutomation } from "./SectionAutomation";
-import { SharedClockAudition, type AuditionSource } from "./SharedClockAudition";
+import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -58,6 +58,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
+  const [masterTrimDb,setMasterTrimDb]=useState(0);
+  const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
+  const [mixBytes,setMixBytes]=useState<number|null>(null);
   const [mixUrl, setMixUrl] = useState<string | null>(null);
   const renderedUrl=useRef<string|null>(null);
   useEffect(()=>()=>{if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);},[]);
@@ -90,6 +93,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
+  useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb);},[masterTrimDb,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
   const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
   const viewEnd=duration>0?viewStart+visibleSeconds:0;
@@ -205,6 +209,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       const solo=settings.some(stem=>stem.solo);
       for(const stem of settings)levels[stem.filename]={gain:effectiveGain(stem,solo)};
       engine.setLevels(levels,monitorRef.current/100);
+      engine.setOutputTrimDb(masterTrimDb);
       setDuration(engine.duration);
       setAudioReady(true);
       setAudioLoad(null);
@@ -419,24 +424,46 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
   }
 
-  async function exportMix() {
+  async function exportMix(overrideTrimDb?:number) {
     const engine=audio.current;
     if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
     stop();
     setExporting(true);
     setMixUrl(null);
+    setMixBytes(null);
     setError("");
+    setNotice("");
+    setHeadroomIssue(null);
     try{
+      if(overrideTrimDb!==undefined){
+        engine.setOutputTrimDb(overrideTrimDb);
+        setMasterTrimDb(overrideTrimDb);
+      }
       const blob=await engine.renderWav24();
       if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);
       renderedUrl.current=URL.createObjectURL(blob);
       setMixUrl(renderedUrl.current);
-      setNotice("Rendered 24-bit WAV using the audition routing and section automation. Monitoring volume excluded.");
+      setMixBytes(blob.size);
+      setNotice("Mix rendered without clipping. Use Download WAV below to save it to your browser's configured download location.");
     }catch(e){
-      setError(e instanceof Error?e.message:"Processed WAV export failed");
+      if(e instanceof MixHeadroomError){
+        setHeadroomIssue({peakDbfs:e.measuredPeakDbfs,additionalTrimDb:e.recommendedAdditionalTrimDb});
+      }else{
+        setError(e instanceof Error?e.message:"Processed WAV export failed");
+      }
     }finally{
       setExporting(false);
     }
+  }
+
+  function applyHeadroomFix(){
+    if(!headroomIssue||exporting)return;
+    const corrected=Math.round((masterTrimDb+headroomIssue.additionalTrimDb)*10)/10;
+    if(corrected< -60){
+      setError("Required headroom exceeds the -60 dB master trim range. Inspect individual tracks and effects.");
+      return;
+    }
+    void exportMix(corrected);
   }
 
   return <section className="mixer" aria-label="Stem mixer">
@@ -552,10 +579,27 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
-          disabled={exporting} onClick={exportMix}/>
+          disabled={exporting} onClick={()=>{void exportMix();}}/>
         {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">⇩ WAV</a>}
       </div>
-      {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready</Status> : null}
+      {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready to download</Status> : null}
+      <div className="mix-master-headroom">
+        <label htmlFor="song-master-trim">Master output trim</label>
+        <input id="song-master-trim" aria-label="Master output trim decibels"
+          type="range" min="-60" max="0" step="0.1" value={masterTrimDb}
+          onChange={e=>{setMasterTrimDb(Number(e.target.value));setMixUrl(null);setMixBytes(null);setHeadroomIssue(null);}}/>
+        <output htmlFor="song-master-trim">{masterTrimDb.toFixed(1)} dB</output>
+        <small>Output only. Stem balances, section automation, and source files are unchanged. The same trim is used in playback and WAV export.</small>
+      </div>
+      {headroomIssue&&<section className="mix-headroom-fix" role="alert" aria-label="Resolve mix clipping">
+        <strong>Mix needs output headroom</strong>
+        <p>The full mix peaks at {headroomIssue.peakDbfs.toFixed(1)} dBFS before the output trim. Export has not created a WAV yet.</p>
+        <p>Recommended: reduce the master output by {Math.abs(headroomIssue.additionalTrimDb).toFixed(1)} dB more for a -1 dBFS peak ceiling. This preserves the relative stem balance and dynamics without a limiter.</p>
+        <button type="button" disabled={exporting||masterTrimDb+headroomIssue.additionalTrimDb< -60}
+          onClick={applyHeadroomFix}>Apply safe output trim and re-render</button>
+        <button type="button" disabled={exporting} onClick={()=>setHeadroomIssue(null)}>Review master trim manually</button>
+      </section>}
+      {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click ⇩ WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>
     </div>
     <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />
     <div className="daw-handoff">

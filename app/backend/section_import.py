@@ -154,6 +154,13 @@ def apply(project: dict[str, Any], content: str, mode: str,
     imported = parse(content)
     old = project.get("sections", [])
     imported, distributed, end_terminator = assign_initial_times(imported, mode, old, duration)
+    # Editing the timed text of the existing arrangement should preserve stable
+    # section IDs when section order and identities are unchanged.
+    if mode == "replace" and len(imported) == len(old):
+        for current, prior in zip(imported, old):
+            if (not current.get("id") and current["kind"] == prior.get("kind")
+                    and current.get("number") == prior.get("number")):
+                current["id"] = prior["id"]
     combined = (old if mode == "append" else []) + imported
     validated = sections.validate_sections(combined, duration=duration)
     old_proposals = project.get("section_spatial_proposals", {})

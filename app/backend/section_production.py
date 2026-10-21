@@ -13,6 +13,11 @@ TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
+EQ_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.eq(?P<band>[123]):"
+    r"(?P<freq>\d{2,5}),(?P<q>\d+(?:\.\d{1,2})?),(?P<gain>[+-]?\d+(?:\.\d)?)"
+    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+)
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
@@ -25,6 +30,28 @@ def parse_block(text: str) -> list[dict[str, Any]]:
     directives = []
     touched = set()
     for token in tokens:
+        eq=EQ_TOKEN.fullmatch(token)
+        if eq:
+            canonical=next((a for a in ALIASES if a.lower()==eq.group("track").lower()),None)
+            if not canonical:
+                raise ValueError(f"Unknown EQ stem: {eq.group('track')}")
+            band=int(eq.group("band"))
+            frequency=int(eq.group("freq"))
+            q=float(eq.group("q"))
+            gain=float(eq.group("gain"))
+            transition=float(eq.group("seconds") or 1)
+            if not (30<=frequency<=16000 and .3<=q<=12 and -12<=gain<=12):
+                raise ValueError("EQ frequency 30-16000 Hz, Q 0.3-12, gain -12 to +12 dB")
+            if not .05<=transition<=30:
+                raise ValueError("EQ transition must be .05-30 seconds")
+            key=f"{canonical.lower()}.eq{band}"
+            if key in touched or "all" in touched or canonical.lower() in touched:
+                raise ValueError("Duplicate or conflicting EQ band")
+            touched.add(key)
+            directives.append({"kind":"eq","track":canonical,"band":band,
+                               "frequency":frequency,"q":q,"gain_db":gain,
+                               "transition_seconds":transition,"curve":(eq.group("curve") or "smooth").lower()})
+            continue
         finishing = FINISH.fullmatch(token)
         if finishing:
             action, duration, curve = finishing.groups()
@@ -110,6 +137,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
+        elif d["kind"] == "eq":
+            head = f"{d['track']}.eq{d['band']}:{d['frequency']},{float(d['q']):g},{float(d['gain_db']):+g}"
         elif d["kind"] == "space":
             head = f"{d['track']}.space:{d['amount']}"
         elif d["kind"] == "width":
@@ -144,7 +173,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -170,7 +199,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -229,6 +258,33 @@ def materialize_space(sections: list[dict[str, Any]],
                                "amount":d["amount"] if d["kind"]=="space" else 0,
                                "transition_seconds":d["transition_seconds"], "curve":d["curve"]})
     return output
+
+
+def materialize_eq(sections: list[dict[str, Any]],
+                   blocks: dict[str, list[dict[str, Any]]],
+                   files: list[str]) -> list[dict[str, Any]]:
+    stems={alias:filename for filename in files for alias in ALIASES
+           if "(" + alias + ")" in filename}
+    out=[]
+    for section in sorted(sections,key=lambda s:s["start_seconds"]):
+        for d in blocks.get(section["id"],[]):
+            if d["kind"] not in ("eq","reset"):
+                continue
+            targets=(list(stems) if d["kind"]=="reset" and d["track"]=="all"
+                     else [d["track"]])
+            for alias in targets:
+                if alias not in stems:
+                    raise ValueError(f"EQ target {alias} not found")
+                bands=range(1,4) if d["kind"]=="reset" else [d["band"]]
+                for band in bands:
+                    out.append({"section_id":section["id"],"source_key":stems[alias],
+                                "band":band,
+                                "frequency":d["frequency"] if d["kind"]=="eq" else 1000,
+                                "q":d["q"] if d["kind"]=="eq" else 1.0,
+                                "gain_db":d["gain_db"] if d["kind"]=="eq" else 0.0,
+                                "transition_seconds":d["transition_seconds"],
+                                "curve":d["curve"]})
+    return out
 
 
 def materialize_ending(sections: list[dict[str, Any]],

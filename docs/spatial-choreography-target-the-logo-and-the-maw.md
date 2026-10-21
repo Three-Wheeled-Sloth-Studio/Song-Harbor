@@ -1,6 +1,6 @@
 # Future spatial choreography - The Logo and the Maw
 
-Status: **creative direction recorded; mid/side width is now implemented, perceptual widening and the full song choreography remain untested**. This is the target for the next section-notation generation and width/delay development slice. Width directives now parse and render (0-150%, with 100% meaning original width). Start with a small QA subset before applying the whole-song choreography.
+Status (2026-10-21): **Spatial choreography implemented and positively evaluated by user listening QA**, including a complete 13-section drop-in script at `docs/qa-full-spatial-the-logo-and-the-maw.txt`. Pan, mid/side width, 13/19ms cross-channel spatial reflections, reverb and ending fade/tail are currently executable and carried into the WAV export. The user described the full treatment as **“very good and epic”**, and subsequently confirmed processed playback and export sounded good after fade correction. Earlier staged notes below are preserved for engineering history; where they say widening/script/audio QA is still pending, that statement has been superseded by these later user reports. Precise stereo-correlation, mono-compatibility and quantitative waveform comparison remain open checks.
 
 ## Per-stem narrative motion
 
@@ -77,3 +77,9 @@ The full sheet's planned contrasts:
 - Master Outro: 4s dry fade + 3s wet post-roll. The 4-minute project should yield an approximately 4:03 exported WAV. Existing master headroom recovery still applies after widening.
 
 **Acceptance:** Verify clean startup, import/GET round trip, re-open sheet, proper left-right route count, section changes and inheritance, stereo headphones, mono fold-down, 2:28 Instrumental opening, 3:13 final Chorus, and export/playback match. Short reflections can cause comb filtering in mono and are not a mastering limiter. No user sound QA nor independent Windows build has been completed for this slice yet.
+
+## 2026-10-21 latest user outcome
+
+The initial spatial export sounded epic but its ending fade was not audible enough; the fade-excitation fix now attenuates both the dry bus and reverb **input**, without cutting off accumulated wet decay. User subsequently reported both in-app processed sound and exported WAV sounding good. The song is the main reference for the next EQ/compression/ducking slices; **do not regenerate or replace the saved 13-section sheet by default.** EQ was added afterward and was reported as **“subtle, but good.”** Existing `docs/qa-full-spatial-the-logo-and-the-maw.txt` is the baseline before EQ additions.
+
+Current priorities and Windows verification specifics are maintained at `refs/handoffs/currentHandoff.md`, START HERE; this document remains the artistic test spec and historical engineering background.

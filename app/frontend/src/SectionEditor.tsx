@@ -14,8 +14,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onSectionsImported}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onSectionsImported?:()=>void;
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onSectionsImported,onPersisted,onSectionDoubleClick,externalSections}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onSectionsImported?:()=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[];
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -44,6 +44,13 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
     if(!localRevision.current)setSections(initialSections||[]);
   },[jobId,initialSections]);
   useEffect(()=>{onSectionsChange?.(sections);},[sections,onSectionsChange]);
+  useEffect(()=>{
+    if(externalSections){
+      localRevision.current=true;
+      setSections(externalSections);
+      setSelected(null);
+    }
+  },[externalSections]);
 
   async function persist(next:SongSection[],rollback:SongSection[]=sectionsRef.current) {
     setBusy(true);setError("");setMessage("");
@@ -56,6 +63,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       localRevision.current=true;
       setSections(result.sections);setStart(null);setEnd(null);
       setMessage("Sections saved");
+      onPersisted?.();
     } catch(e) {setSections(rollback);setError(e instanceof Error?e.message:"Could not save sections");}
     finally {setBusy(false);}
   }
@@ -179,57 +187,26 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const b=Math.max(start??position,end??position);
   const selectedSection=sections.find(s=>s.id===selected);
 
-  return <section className="section-editor" aria-label="Song sections" style={{padding:"12px 0",borderTop:"1px solid var(--color-border, #6665)"}}>
-    <h3 style={{margin:"0 0 8px"}}>Song sections</h3>
-    <div className="section-toolbar" aria-label="Section tools">
-      <button type="button" title="Paste or import section tags" aria-label="Import sections"
-        aria-expanded={showImport} onClick={()=>{setShowImport(v=>!v);setError("");}}>⇪ <span>Import</span></button>
-      <button type="button" disabled={busy} title="Edit saved tags" aria-label="Edit saved section tags"
-        onClick={()=>{void loadSectionText();}}>✎</button>
-      <label className="section-file-label" title="Load .txt or .json section file" aria-label="Load section file">▣
-        <input type="file" accept=".txt,.json,text/plain,application/json" aria-label="Choose sections file"
-          onChange={e=>{void readSectionFile(e.target.files?.[0]);e.target.value="";}} />
-      </label>
-      <details className="section-manual-controls">
-        <summary title="Create individual section markers">＋ <span>Manual</span></summary>
-        <div className="section-manual-inner">
-          <button type="button" onClick={()=>setStart(position)} title="Mark section start at playhead">In</button>
-          <button type="button" onClick={()=>setEnd(position)} title="Mark section end at playhead">Out</button>
-          <span className="section-time-range">{start===null?"—":stamp(start)} – {end===null?"—":stamp(end)}</span>
-          <select aria-label="Section type" value={kind} onChange={e=>setKind(e.target.value)}>
-            {kinds.map(x=><option key={x}>{x}</option>)}
-          </select>
-          <input aria-label="Section number" type="number" min="1" max="99" value={number}
-            placeholder="#" onChange={e=>setNumber(e.target.value)} style={{width:54}}/>
-          <button type="button" disabled={busy||start===null||end===null||b-a<MIN_LENGTH||b>duration+0.005}
-            onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}
-            title="Add section marker">＋</button>
-        </div>
-      </details>
-      <details className="section-help">
-        <summary aria-label="Supported section types and import help" title="Section help">?</summary>
-        <div className="section-help-content">
-          <strong>Section tags</strong>
-          <p>Supported: {kinds.join(", ")}. Optional numbers: [Verse 2].</p>
-          <p>Times are optional. Untimed sections are spaced across the audio as editable estimates. A final [End] closes the list. Timed and untimed tags must be imported separately.</p>
-        </div>
-      </details>
-      {sections.length>0&&<span className="section-marker-summary" role="status">
-        {sections.length} section{sections.length===1?"":"s"}
-      </span>}
-    </div>
-    {showImport&&<div className="section-import-panel">
-      <textarea aria-label="Section tags" spellCheck={false} rows={5} value={importText}
-        placeholder={"[Intro]\\n[Verse 1]\\n[Chorus]\\n[Verse 2]\\n[Chorus]\\n[Outro]"}
-        onChange={e=>setImportText(e.target.value)}/>
-      <div className="section-import-footer">
-        <label><input type="radio" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/> Replace</label>
-        <label><input type="radio" checked={importMode==="append"} onChange={()=>setImportMode("append")}/> Append</label>
-        <button type="button" disabled={busy||!importText.trim()} onClick={()=>{void importSections();}}>
-          {busy?"…":"Apply"}
-        </button>
+  return <section className="section-editor section-editor-rail" aria-label="Song sections">
+    <div className="section-inline-row">
+      <div className="section-inline-tools">
+        <details className="section-manual-controls" title="Create section at playhead">
+          <summary aria-label="Manual section tools" title="Section tools">≡</summary>
+          <div className="section-manual-popover">
+            <button type="button" onClick={()=>setStart(position)} title="Mark start">In</button>
+            <button type="button" onClick={()=>setEnd(position)} title="Mark end">Out</button>
+            <span>{start===null?"—":stamp(start)} – {end===null?"—":stamp(end)}</span>
+            <select value={kind} aria-label="Section type" onChange={e=>setKind(e.target.value)}>
+              {kinds.map(x=><option key={x}>{x}</option>)}
+            </select>
+            <input type="number" min="1" max="99" placeholder="#" aria-label="Section number" value={number}
+              onChange={e=>setNumber(e.target.value)}/>
+            <button type="button" title="Add section" disabled={busy||start===null||end===null||b-a<MIN_LENGTH||b>duration+0.005}
+              onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,
+                number:number?Number(number):null,start_seconds:a,end_seconds:b}])}>＋</button>
+          </div>
+        </details>
       </div>
-    </div>}
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
@@ -240,6 +217,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         <div role="slider" tabIndex={0} aria-label={`Move ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={bounds(s.id)[1]-(s.end_seconds-s.start_seconds)} aria-valuenow={s.start_seconds}
           title={`${s.kind} ${stamp(s.start_seconds)}-${stamp(s.end_seconds)}. Drag to move, arrow keys 0.1s.`}
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"move",e.key==="ArrowLeft"?-1:1);}}}
+          onDoubleClick={()=>onSectionDoubleClick?.(s)}
           onPointerDown={e=>beginDrag(e,s,"move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{if(drag.current)setSections(drag.current.originals);drag.current=null;}}
           style={{flex:1,minWidth:0,height:"100%",cursor:"grab",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",whiteSpace:"nowrap",fontSize:11}}>
           {s.kind}{s.number===null?"":` ${s.number}`}
@@ -252,16 +230,8 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       </div>)}
       <div aria-hidden="true" style={{position:"absolute",left:`${100*(position-viewStart)/(viewEnd-viewStart)}%`,top:0,bottom:0,borderLeft:"2px solid #f2c46c",pointerEvents:"none"}}/>
     </div>}
-    {selectedSection&&<div style={{fontSize:12}}>Selected: [{selectedSection.kind}{selectedSection.number===null?"":` ${selectedSection.number}`} {stamp(selectedSection.start_seconds)}-{stamp(selectedSection.end_seconds)}]</div>}
-    {sections.length>0&&<details className="section-list-details"><summary>Sections · {sections.length}</summary>
-    <div style={{display:"flex",flexDirection:"column",gap:4}}>
-      {sections.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8}}>
-        <button type="button" onClick={()=>onSeek(s.start_seconds)} title="Seek to section start">▶</button>
-        <span style={{flex:1,fontVariantNumeric:"tabular-nums"}}>[{s.kind}{s.number===null?"":` ${s.number}`} {stamp(s.start_seconds)}-{stamp(s.end_seconds)}]</span>
-        <button type="button" disabled={busy} onClick={()=>void persist(sections.filter(x=>x.id!==s.id))} aria-label={`Remove ${s.kind} section`} title="Remove marker only">×</button>
-      </div>)}
-    </div></details>}
-    {message&&<p role="status">{message}</p>}
-    {error&&<p role="alert">{error}</p>}
+    </div>
+    {error&&<small role="alert">{error}</small>}
+    {message&&<small role="status">{message}</small>}
   </section>;
 }

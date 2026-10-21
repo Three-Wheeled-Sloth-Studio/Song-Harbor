@@ -48,13 +48,72 @@ class SectionImportTests(unittest.TestCase):
             "[Verse 0:50-1:30]",
             "[Chorus 0:20-0:10]",
             "[Chorus 0:20-0:40 Guitars:Expansive-Nowhere]",
-            "[Verse]",
+            "[Verse UnknownCue]",
             "[Chorus 0:15-0:45] extra text",
         ):
             with self.subTest(invalid=invalid):
                 with self.assertRaises(ValueError):
                     section_import.apply(self.project,invalid,"append",60)
                 self.assertEqual(original,self.project)
+
+    def test_untimed_sections_fill_track_evenly(self):
+        content="[Intro]\\n[Verse 1]\\n[Chorus]\\n[Verse 2]\\n[Chorus]\\n[Outro]\\n[End]"
+        result=section_import.apply(self.project,content,"replace",180.0)
+        self.assertTrue(result["auto_distributed"])
+        self.assertTrue(result["end_terminator_ignored"])
+        self.assertEqual(6,result["imported_count"])
+        self.assertEqual(["Intro","Verse","Chorus","Verse","Chorus","Outro"],
+                         [x["kind"] for x in result["sections"]])
+        self.assertEqual([0,30,60,90,120,150],
+                         [x["start_seconds"] for x in result["sections"]])
+        self.assertEqual(180.0,result["sections"][-1]["end_seconds"])
+        self.assertEqual(1,result["sections"][1]["number"])
+        self.assertEqual(2,result["sections"][3]["number"])
+        self.assertTrue(all(a["end_seconds"]==b["start_seconds"]
+                            for a,b in zip(result["sections"],result["sections"][1:])))
+
+    def test_untimed_sections_accept_lyrics_and_spatial_proposals(self):
+        text="""[Intro]
+        instrumental lead in
+        [Verse 1]
+        words on a line
+        [Chorus Vocal1:Expansive-Left Drums:Narrow-Right]
+        more lyrics
+        [Outro]
+        [End]"""
+        result=section_import.apply(self.project,text,"replace",100)
+        self.assertEqual(4,len(result["sections"]))
+        chorus=result["sections"][2]
+        self.assertEqual(50,chorus["start_seconds"])
+        self.assertEqual("expansive",result["section_spatial_proposals"][chorus["id"]][0]["width"])
+
+    def test_untimed_append_uses_remaining_song_duration(self):
+        first=section_import.apply(self.project,"[Intro 0:00-0:20]","replace",80)
+        self.project.update({k:v for k,v in first.items() if k!="imported_count"})
+        result=section_import.apply(self.project,"[Verse]\\n[Chorus]","append",80)
+        self.assertEqual([0,20,50],[x["start_seconds"] for x in result["sections"]])
+        self.assertEqual(80,result["sections"][-1]["end_seconds"])
+
+    def test_reject_mixed_timed_and_untimed_with_atomic_state(self):
+        original=copy.deepcopy(self.project)
+        for content in (
+            "[Intro]\\n[Verse 0:20-0:40]",
+            "[Verse 0:00-0:20]\\n[Chorus]",
+            "[End]",
+            "[Verse]\\n[End]\\n[Chorus]",
+            "[Unknown]",
+        ):
+            with self.subTest(content=content):
+                with self.assertRaises(ValueError):
+                    section_import.apply(self.project,content,"replace",90)
+                self.assertEqual(original,self.project)
+
+    def test_json_without_times_is_evenly_distributed(self):
+        raw=json.dumps({"sections":[{"kind":"Intro"},{"kind":"Verse","number":1},
+                                    {"kind":"Chorus"}]})
+        result=section_import.apply(self.project,raw,"replace",91.5)
+        self.assertEqual([0,30.5,61.0],[x["start_seconds"] for x in result["sections"]])
+        self.assertEqual(91.5,result["sections"][-1]["end_seconds"])
 
     def test_validate_json_spatial(self):
         raw=json.dumps([{

@@ -21,7 +21,7 @@ jobs:
       - name: Validate PowerShell syntax without executing installations
         shell: pwsh
         run: |
-          $targets = @('scripts/start-song-harbor.ps1','scripts/update-checkout.ps1','scripts/prepare-local-ports.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
+          $targets = @('scripts/start-song-harbor.ps1','scripts/relaunch-song-harbor.ps1','scripts/update-checkout.ps1','scripts/prepare-local-ports.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
           foreach ($path in $targets) {
             $tokens = $null
             $errors = $null

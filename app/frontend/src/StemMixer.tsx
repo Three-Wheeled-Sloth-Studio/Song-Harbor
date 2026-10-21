@@ -261,7 +261,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>;dynamics?:{compressor?:{threshold:ReturnType<typeof compileSectionAutomation>;ratio:ReturnType<typeof compileSectionAutomation>};duck?:{depthDb:ReturnType<typeof compileSectionAutomation>;keyFilename:string}}}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -335,10 +335,37 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         }catch(e){setError(e instanceof Error?e.message:"Invalid EQ automation");return;}
       }
     }
+    const vocal=files.find(name=>name.includes("(Vocals)"));
+    for(const filename of files){
+      const settings=dynamicsTargets.filter(item=>item.source_key===filename);
+      if(!settings.length)continue;
+      const compile=(kind:"comp"|"duck",field:"threshold_db"|"ratio"|"depth_db",initial:number,min:number,max:number)=>{
+        const desired=settings.filter(item=>item.kind===kind).flatMap(item=>{
+          const section=sectionById.get(item.section_id);
+          return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+            value:item[field],transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+        });
+        return compileSectionAutomation(desired,initial,{min,max});
+      };
+      try{
+        const hasComp=settings.some(item=>item.kind==="comp");
+        const hasDuck=settings.some(item=>item.kind==="duck");
+        const dynamics={
+          ...(hasComp?{compressor:{
+            threshold:compile("comp","threshold_db",-18,-60,0),
+            ratio:compile("comp","ratio",1,1,4)
+          }}:{}),
+          ...(hasDuck&&vocal?{duck:{
+            keyFilename:vocal,depthDb:compile("duck","depth_db",0,0,12).map(point=>({...point,value:-point.value}))
+          }}:{})
+        };
+        byFile[filename]={...(byFile[filename]||{}),dynamics};
+      }catch(e){setError(e instanceof Error?e.message:"Invalid dynamics automation");return;}
+    }
     engine.setAutomation(byFile);
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,ending,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);

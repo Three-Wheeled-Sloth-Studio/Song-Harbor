@@ -35,6 +35,8 @@ export class SharedClockAudition {
   private widthStages=new Map<string,StereoWidthStage>();
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
+  private reverbDrive:GainNode;
+  private originalComparison=false;
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
@@ -58,6 +60,8 @@ export class SharedClockAudition {
     this.reverb.normalize=false;
     this.reverb.buffer=createRoomImpulse(this.context);
     this.reverb.connect(this.master);
+    this.reverbDrive=this.context.createGain();
+    this.reverbDrive.connect(this.reverb);
   }
   get duration(){return this.durationSeconds;}
   get ready(){return this.prepared&&this.tracks.length>0&&!this.disposed;}
@@ -109,7 +113,7 @@ export class SharedClockAudition {
           bus.connect(this.dryMaster);
           const send=this.context.createGain();
           send.gain.value=0;
-          bus.connect(send).connect(this.reverb);
+          bus.connect(send).connect(this.reverbDrive);
           this.reverbSends.set(src.filename,send);
           this.groupPanners.set(src.filename,bus);
         }
@@ -172,6 +176,34 @@ export class SharedClockAudition {
     }
     return points;
   }
+  /** Original A/B bypass is audition-only: saved mix and export remain processed. */
+  setOriginalComparison(enabled:boolean){
+    if(this.originalComparison===enabled)return;
+    this.originalComparison=enabled;
+    if(this.running)this.seek(this.position);
+    else this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
+  }
+  get comparingOriginal(){return this.originalComparison;}
+  private configurePreviewNodes(at:number,offset:number){
+    const bypass=this.originalComparison;
+    for(const [filename,bus] of this.groupPanners){
+      scheduleAutomation(bus.pan,
+        !bypass&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
+      const width=this.widthStages.get(filename);
+      if(width)scheduleStereoWidth(width,
+        !bypass&&this.automation[filename]?.width||[{time:0,value:1}],offset,at);
+      const reflection=this.spaceStages.get(filename);
+      if(reflection)scheduleSpatialReflection(reflection,
+        !bypass&&this.automation[filename]?.space||[{time:0,value:0}],offset,at);
+      const send=this.reverbSends.get(filename);
+      if(send)scheduleAutomation(send.gain,
+        !bypass&&this.automation[filename]?.reverb||[{time:0,value:0}],offset,at);
+    }
+    scheduleAutomation(this.dryMaster.gain,
+      bypass?[{time:0,value:1}]:this.fadePoints(),offset,at);
+    scheduleAutomation(this.reverbDrive.gain,
+      bypass?[{time:0,value:0}]:this.fadePoints(),offset,at);
+  }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){
     this.automation=curves;
@@ -192,9 +224,12 @@ export class SharedClockAudition {
     const dry=offline.createGain();
     dry.connect(offline.destination);
     scheduleAutomation(dry.gain,this.fadePoints(),0,0);
+    const reverbDrive=offline.createGain();
+    scheduleAutomation(reverbDrive.gain,this.fadePoints(),0,0);
     const convolver=offline.createConvolver();
     convolver.normalize=false;
     convolver.buffer=createRoomImpulse(offline);
+    reverbDrive.connect(convolver);
     convolver.connect(offline.destination);
     const sends=new Map<string,GainNode>();
     const widths=new Map<string,StereoWidthStage>();
@@ -214,7 +249,7 @@ export class SharedClockAudition {
         bus.connect(dry);
         const send=offline.createGain();
         send.gain.value=0;
-        bus.connect(send).connect(convolver);
+        bus.connect(send).connect(reverbDrive);
         sends.set(track.source.filename,send);
         group.set(track.source.filename,bus);
       }
@@ -275,28 +310,7 @@ export class SharedClockAudition {
         node.connect(track.gain);
         made.push(node);
       }
-      for(const [filename,bus] of this.groupPanners){
-        const curve=this.automation[filename]?.pan;
-        if(curve)scheduleAutomation(bus.pan,curve,offset,startAt);
-        else{
-          bus.pan.cancelScheduledValues(startAt);
-          bus.pan.setValueAtTime(0,startAt);
-        }
-        const width=this.automation[filename]?.width;
-        const stage=this.widthStages.get(filename);
-        if(width&&stage)scheduleStereoWidth(stage,width,offset,startAt);
-        else if(stage)scheduleStereoWidth(stage,[{time:0,value:1}],offset,startAt);
-        const space=this.automation[filename]?.space;
-        const reflection=this.spaceStages.get(filename);
-        if(reflection)scheduleSpatialReflection(reflection,space||[{time:0,value:0}],offset,startAt);
-        const send=this.reverbSends.get(filename);
-        if(send){
-          const wet=this.automation[filename]?.reverb;
-          if(wet)scheduleAutomation(send.gain,wet,offset,startAt);
-          else{send.gain.cancelScheduledValues(startAt);send.gain.setValueAtTime(0,startAt);}
-        }
-      }
-      scheduleAutomation(this.dryMaster.gain,this.fadePoints(),offset,startAt);
+      this.configurePreviewNodes(startAt,offset);
       for(const node of made)node.start(startAt,offset);
       this.nodes=made;
       this.offset=offset;
@@ -311,6 +325,7 @@ export class SharedClockAudition {
   private stopSources(){
     this.running=false;
     this.dryMaster.gain.cancelScheduledValues(this.context.currentTime);
+    this.reverbDrive.gain.cancelScheduledValues(this.context.currentTime);
     for(const bus of this.groupPanners.values())bus.pan.cancelScheduledValues(this.context.currentTime);
     for(const send of this.reverbSends.values())send.gain.cancelScheduledValues(this.context.currentTime);
     for(const stage of this.widthStages.values()){
@@ -350,6 +365,7 @@ export class SharedClockAudition {
     this.loadController?.abort();
     this.clearTracks();
     this.reverb.disconnect();
+    this.reverbDrive.disconnect();
     this.dryMaster.disconnect();
     this.master.disconnect();
     await this.context.close().catch(()=>{});

@@ -40,9 +40,9 @@ class ProductionNotationTests(unittest.TestCase):
                          result["section_reverb_automation"])
 
     def test_final_section_fade_and_tail(self):
-        script = ("[Verse 0:00-0:10]\\n"
-                  "[Outro 0:10-0:20]\\n"
-                  "{Vocals.reverb:40@2s:smooth Master.fade:6s:smooth Master.tail:3s}\\n")
+        script = ("[Verse 0:00-0:10]\n"
+                  "[Outro 0:10-0:20]\n"
+                  "{Vocals.reverb:40@2s:smooth Master.fade:6s:smooth Master.tail:3s}\n")
         project = {"sections": [], "files": FILES}
         result = section_import.apply(project, script, "replace", 20)
         self.assertEqual(result["section_ending"], {
@@ -54,9 +54,9 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_ending_rejects_nonterminal_and_excessive_fade(self):
         for script in (
-            "[Verse 0:00-0:10]\\n{Master.fade:2s:smooth}\\n[Outro 0:10-0:20]",
-            "[Verse 0:00-0:10]\\n[Outro 0:10-0:20]\\n{Master.fade:12s:smooth}",
-            "[Verse 0:00-0:10]\\n[Outro 0:10-0:20]\\n{Master.tail:11s}",
+            "[Verse 0:00-0:10]\n{Master.fade:2s:smooth}\n[Outro 0:10-0:20]",
+            "[Verse 0:00-0:10]\n[Outro 0:10-0:20]\n{Master.fade:12s:smooth}",
+            "[Verse 0:00-0:10]\n[Outro 0:10-0:20]\n{Master.tail:11s}",
         ):
             with self.subTest(script=script), self.assertRaises(ValueError):
                 section_import.apply({"sections": [], "files": FILES}, script, "replace", 20)

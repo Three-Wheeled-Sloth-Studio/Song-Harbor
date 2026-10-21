@@ -31,8 +31,18 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const [importMode,setImportMode]=useState<"replace"|"append">("replace");
   const drag=useRef<Drag|null>(null);
   const sectionsRef=useRef(sections);
+  const localRevision=useRef(false);
+  const currentJob=useRef(jobId);
   sectionsRef.current=sections;
-  useEffect(()=>{setSections(initialSections||[]);setStart(null);setEnd(null);setSelected(null);setImportText("");setShowImport(false);},[jobId,initialSections]);
+  useEffect(()=>{
+    if(currentJob.current!==jobId){
+      currentJob.current=jobId;
+      localRevision.current=false;
+      setStart(null);setEnd(null);setSelected(null);setImportText("");setShowImport(false);
+    }
+    // A delayed parent project refresh must never overwrite sections just imported.
+    if(!localRevision.current)setSections(initialSections||[]);
+  },[jobId,initialSections]);
   useEffect(()=>{onSectionsChange?.(sections);},[sections,onSectionsChange]);
 
   async function persist(next:SongSection[],rollback:SongSection[]=sectionsRef.current) {
@@ -43,6 +53,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       });
       const result=await response.json() as {sections?:SongSection[],detail?:string};
       if(!response.ok||!result.sections) throw new Error(result.detail||"Could not save sections");
+      localRevision.current=true;
       setSections(result.sections);setStart(null);setEnd(null);
       setMessage("Section boundaries saved. Audio is unchanged.");
     } catch(e) {setSections(rollback);setError(e instanceof Error?e.message:"Could not save sections");}
@@ -58,6 +69,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       });
       const data=await response.json() as {sections?:SongSection[];imported_count?:number;auto_distributed?:boolean;end_terminator_ignored?:boolean;detail?:string};
       if(!response.ok||!data.sections)throw Error(data.detail||"Could not import sections");
+      localRevision.current=true;
       setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
       onSectionsImported?.();
       setMessage(data.auto_distributed

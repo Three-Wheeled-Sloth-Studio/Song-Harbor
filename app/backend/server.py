@@ -493,6 +493,42 @@ def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, A
     return {"project": saved}
 
 
+def resolved_song_duration(record: dict[str, Any], job: dict[str, Any]) -> float:
+    """Recover legacy song duration from local audio and persist it once.
+
+    The browser is not an authority for media length. Old project manifests
+    lacked duration even when recovered WAVs already played successfully.
+    """
+    known = record.get("source_duration_seconds") or job.get("source_duration_seconds")
+    try:
+        value = float(known)
+        if 0 < value < float("inf"):
+            if not record.get("source_duration_seconds"):
+                record["source_duration_seconds"] = round(value, 3)
+                projects.write_project(DATA_ROOT, record)
+            job["source_duration_seconds"] = value
+            return value
+    except (ValueError, TypeError):
+        pass
+    folder = DATA_ROOT / "jobs" / record["id"]
+    source = folder / str(record.get("source_filename") or record.get("filename") or "")
+    candidates = [source] + [folder / "stems" / name for name in record.get("files", [])]
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            value = probe_duration(candidate)
+        except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError,
+                subprocess.TimeoutExpired):
+            continue
+        if 0 < value < float("inf"):
+            record["source_duration_seconds"] = round(value, 3)
+            job["source_duration_seconds"] = round(value, 3)
+            projects.write_project(DATA_ROOT, record)
+            return value
+    raise ValueError("Could not read this song's audio duration. Check the source or stems and FFprobe setup.")
+
+
 class SectionRecord(BaseModel):
     id: str | None = None
     kind: str
@@ -516,7 +552,7 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     try:
         proposed = sections.validate_sections(
             [item.model_dump() for item in body.sections],
-            duration=record.get("source_duration_seconds") or job.get("source_duration_seconds"),
+            duration=resolved_song_duration(record, job),
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -549,7 +585,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     try:
         changed = section_import.apply(
             record, body.content, body.mode,
-            record.get("source_duration_seconds") or job.get("source_duration_seconds"))
+            resolved_song_duration(record, job))
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, f"Import rejected: {exc}") from exc
     record.update({"sections": changed["sections"],

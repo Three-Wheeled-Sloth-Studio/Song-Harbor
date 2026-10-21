@@ -640,6 +640,9 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             resolved_song_duration(record, job))
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, f"Import rejected: {exc}") from exc
+    retained_ids = {section["id"] for section in changed["sections"]}
+    record["section_pan_automation"] = [target for target in record.get("section_pan_automation", [])
+                                        if target.get("section_id") in retained_ids]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],

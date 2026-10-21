@@ -33,6 +33,11 @@ export function EndingTool({jobId,sections,ending,onChange}:Props){
     <div className="timeline-loop-controls">
       <p>Fade the dry mix into the final section boundary, preserving the reverb return into optional post-roll.</p>
       <small>Final section: {final?final.kind+" ("+final.end_seconds.toFixed(3)+"s)":"None yet"}</small>
+      <div className="production-tool-actions" aria-label="Ending treatment starting points">
+        <button type="button" onClick={()=>{setFade(Math.min(6,maxFade));setTail(0);setCurve("smooth");}}>Clean fade</button>
+        <button type="button" onClick={()=>{setFade(Math.min(4,maxFade));setTail(3);setCurve("smooth");}}>Atmospheric tail</button>
+        <button type="button" onClick={()=>{setFade(0);setTail(0);}}>Clear treatment</button>
+      </div>
       <label>Dry fade duration (seconds)
         <input aria-label="Ending dry fade seconds" type="number" min="0" max={maxFade} step=".1"
           value={fade} onChange={e=>setFade(Number(e.target.value))}/>
@@ -48,7 +53,7 @@ export function EndingTool({jobId,sections,ending,onChange}:Props){
       </label>
       <button type="button" disabled={saving||!final||!Number.isFinite(fade)||!Number.isFinite(tail)||fade<0||fade>maxFade||tail<0||tail>10}
         onClick={()=>{void save();}}>Save ending</button>
-      <small>Tail length extends the rendered WAV. Existing stems and original song audio remain unchanged.</small>
+      <small>Presets change these editable values only; choose Save ending to apply. The tail extends the rendered WAV. Original stems remain unchanged.</small>
       {message&&<p role="status">{message}</p>}
       {error&&<p role="alert">{error}</p>}
     </div>

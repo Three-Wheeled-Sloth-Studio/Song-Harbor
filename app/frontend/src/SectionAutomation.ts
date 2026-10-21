@@ -40,10 +40,13 @@ export function compileSectionAutomation(
     const transition=target.transitionSeconds??defaultTransitionSeconds;
     if(!Number.isFinite(transition)||transition<0)
       throw Error("Invalid section transition");
-    const rampEnd=Math.min(target.end,target.start+transition);
+    const rampEnd=target.start+transition;
     // Anchor at the actual previous value, including when a transition is
     // interrupted by a short section. No discontinuity at the boundary.
     const anchor=valueAt(points,target.start);
+    // Future ramp points belong to the old section and must be truncated.
+    // Otherwise an interrupted transition can resume unexpectedly later.
+    while(points.length>1 && points[points.length-1].time>target.start)points.pop();
     points.push({time:target.start,value:anchor});
     if(rampEnd>target.start+EPSILON){
       if(target.curve==="smooth"){

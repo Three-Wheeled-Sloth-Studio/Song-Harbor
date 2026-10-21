@@ -88,3 +88,18 @@ Every original stem, whether played as a stereo source or as active L/R children
 Dedicated 4:00 production-script fixture for this track: `docs/qa-vocal-pan-the-logo-and-the-maw.md`. The 60% pan extremes are deliberately exaggerated test settings, not recommended mastering positions.
 
 Remaining gate: real Windows headphones listening QA, including perceptual stereo quality, stem alignment, seek/resume/loop, and export blocked while automation is active.
+
+
+## 2026-10-21 processed WAV export implementation (main)
+The previous guard preventing export when pan curves exist has been replaced with `SharedClockAudition.renderWav24()`. It constructs an `OfflineAudioContext` from the *same decoded buffers*, per-stem level settings, active original-versus-split-child routing, child hard-L/R positioning, shared per-stem stereo bus pan automation and output sample rate as the live audition. Export is a browser-side 24-bit stereo PCM WAV; monitor volume is excluded. No backend FFmpeg mix endpoint changes were required; that endpoint remains a separate legacy route and does not represent the processed export.
+
+A clipping render fails with a clear error rather than silently applying a mismatched limiter or normalizer. The offline path does not yet include reverb, width, creative processing or a tail extension. This is an implementation and build gate, not proof of audio parity without listening tests.
+
+### Export parity smoke
+1. In the 4:00 split-channel test track, preserve the saved vocal pan directives; run the usual `scripts/launch-song-harbor.bat` checkout of `main`.
+2. Play 0:30-1:12 and verify vocal center-to-right movement. Export mix WAV from Tools, open the downloaded WAV in another player/DAW, and listen to the same times at matched loudness.
+3. Compare split-L/R vocal center image to preview and check 2:05 Bridge reset and 3:48 Outro reset.
+4. Ensure the mix export does not contain doubled parent + child stems and that playback was not timing-modified by rendering.
+5. Reduce stem gains if the export detects peaks over full scale. Such a warning is deliberate, not a request to bypass headroom protection.
+6. Change a section's pan, re-export and verify the new render differs accordingly. Monitor slider changes must not affect export amplitude.
+7. Repeat a seek/pause/replay in the shared-clock player after export; confirm no drift.

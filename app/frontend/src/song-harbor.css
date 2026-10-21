@@ -401,3 +401,6 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   .workspace--song-session .waveform-row{grid-template-columns:65px minmax(0,1fr)}
   .workspace--song-session .section-inline-row{grid-template-columns:65px minmax(0,1fr)}
 }
+
+/* Library inventory is a working surface too; no arbitrary 1450px letterbox. */
+.library-home{max-width:none;width:100%;margin:0}

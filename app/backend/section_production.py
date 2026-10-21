@@ -13,7 +13,7 @@ TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
-FINISH = re.compile(r"(?i)^Master\\.(fade|tail):(\\d+(?:\\.\\d{1,3})?)s(?::(smooth|linear))?$")
+FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
 def parse_block(text: str) -> list[dict[str, Any]]:

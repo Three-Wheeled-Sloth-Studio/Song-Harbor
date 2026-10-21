@@ -1597,6 +1597,14 @@ if UI_DIST.is_dir():
         app.mount("/assets", StaticFiles(directory=str(assets)), name="ui-assets")
 
 
+@app.get("/favicon.svg", include_in_schema=False)
+def ui_favicon():
+    icon=UI_DIST / "favicon.svg"
+    if not icon.is_file():
+        raise HTTPException(404,"Icon unavailable")
+    return FileResponse(icon,media_type="image/svg+xml")
+
+
 @app.get("/", include_in_schema=False)
 def ui_index():
     index = UI_DIST / "index.html"

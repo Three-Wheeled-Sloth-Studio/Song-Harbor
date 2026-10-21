@@ -371,64 +371,48 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <input id="song-project-name" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} />
       <IconButton icon="▣" label="Save song" disabled={saving || !title.trim()} onClick={() => { void saveProject(); }}/>
     </div>
-    <div className="mixer-heading">
-      <div><h3>Stem mixer</h3></div>
-      <IconButton icon="↶" label="Reset mix" onClick={() => {
-        setStems(current => current.map(s => ({ ...s, gain: 100, mute: false, solo: false })));
-      }}/>
-    </div>
-    <div className="transport">
-      <IconButton icon={playing ? "⏸" : "▶"} label={playing ? "Pause" : "Play"} onClick={togglePlayback}/>
-      <span className="timecode">{timecode(position)}</span>
-      <input type="range" aria-label="Playback position" min={0} max={Math.max(duration, 1)}
-        step={0.05} value={Math.min(position, duration || 1)} onChange={e => seek(Number(e.target.value))} />
-      <span className="timecode">{timecode(duration)}</span>
-      <label className="master-monitor" title="Monitoring volume; does not change your exported mix">
-        <span aria-hidden="true">🔊</span>
-        <input type="range" min="0" max="100" step="1" value={monitorVolume}
-          aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
-      </label>
-    </div>
-    <section ref={timelineRef} className="integrated-timeline" aria-label="Integrated production timeline">
-      <div className="integrated-timeline-heading"><strong>Production timeline</strong><span>Sections · audio waveforms · derived channels · loop</span></div>
-    <div className="timeline-loop-controls">
-      <strong>Region loop</strong>
-      <button type="button" onClick={()=>setLoopIn(position)}>Mark in</button>
-      <button type="button" onClick={()=>setLoopOut(position)}>Mark out</button>
-      <label><input type="checkbox" checked={loopEnabled}
-        disabled={loopIn===null||loopOut===null||loopOut<=loopIn+0.1}
-        onChange={e=>setLoopEnabled(e.target.checked)}/> Loop</label>
-      <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
-      <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
-    </div>
-    <div className="timeline-zoom-controls">
-      <label>Zoom <select value={zoom} onChange={e=>setZoom(Number(e.target.value))}>
-        {[1,2,4,8,16].map(v=><option key={v} value={v}>{v}×</option>)}
-      </select></label>
-      <input type="range" aria-label="Timeline zoom" min="0" max="4" step="1"
-        value={Math.log2(zoom)} onChange={e=>setZoom(2**Number(e.target.value))}/>
-      {zoom>1&&<label className="timeline-pan-label">Pan
-        <input type="range" aria-label="Pan timeline horizontally" min="0" max="1" step=".001"
-          value={viewportOffset} onChange={e=>setViewportOffset(Number(e.target.value))}/>
-      </label>}
-      <span>{timecode(viewStart)} – {timecode(viewEnd)}</span>
-      <small>Wheel: zoom · Shift+wheel: pan</small>
-    </div>
-    <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections}
-      onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
-      onSectionsChange={setTimelineSections}
-      onSectionsImported={()=>{setZoom(1);setViewportOffset(0);}}/>
-
-    <StemWaveforms jobId={jobId} files={stems.map(s=>({
-      filename:s.filename,label:s.name,
-      children:channels[s.filename]?.active? (["left","right"] as const).map(channel=>({
-        filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
-        waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
-      })):[]
-    }))} duration={duration} position={position} onSeek={seek} viewStart={viewStart} viewEnd={viewEnd} sections={timelineSections}/>
-
-    </section>
-    <div className="mixer-tracks">
+    <div className="production-workspace">
+      <main className="production-main">
+        <div className="transport production-playline" aria-label="Playback transport">
+          <button type="button" title="Rewind 5 seconds; right click to start" aria-label="Rewind five seconds"
+            onClick={()=>skip(-5)}
+            onContextMenu={e=>{e.preventDefault();seek(0);}}>⏪</button>
+          <IconButton icon={playing?"⏸":"▶"} label={playing?"Pause":"Play"} onClick={togglePlayback}/>
+          <button type="button" title="Stop and return to start" aria-label="Stop" onClick={stopAndReset}>■</button>
+          <button type="button" title="Forward 5 seconds" aria-label="Forward five seconds" onClick={()=>skip(5)}>⏩</button>
+          <span className="timecode">{timecode(position)}</span>
+          <input type="range" aria-label="Playback position" min={0} max={Math.max(duration,1)}
+            step={0.05} value={Math.min(position,duration||1)} onChange={e=>seek(Number(e.target.value))}/>
+          <span className="timecode">{timecode(duration)}</span>
+          <label className="master-monitor" title="Monitoring volume; does not change exported mixes">
+            <span aria-hidden="true">🔊</span>
+            <input type="range" min="0" max="100" step="1" value={monitorVolume}
+              aria-label="Playback monitoring volume" onChange={e=>setMonitorVolume(Number(e.target.value))}/>
+          </label>
+        </div>
+        <section ref={timelineRef} className="integrated-timeline" aria-label="Integrated production timeline">
+          <SectionEditor jobId={jobId} duration={duration} position={position}
+            initialSections={initialSections} externalSections={externalSections}
+            onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
+            onSectionsChange={setTimelineSections}
+            onPersisted={()=>setScriptRevision(v=>v+1)}
+            onSectionDoubleClick={section=>{setScriptFocus(section);setScriptOpen(true);}}/>
+          <StemWaveforms jobId={jobId} files={stems.map(s=>({
+            filename:s.filename,label:s.name,
+            children:channels[s.filename]?.active?(["left","right"] as const).map(channel=>({
+              filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
+              waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
+            })):[]
+          }))} duration={duration} position={position} onSeek={seek}
+            viewStart={viewStart} viewEnd={viewEnd} sections={timelineSections}/>
+        </section>
+        <div className="mixer-heading">
+          <div><h3>Stems</h3></div>
+          <IconButton icon="↶" label="Reset mix" onClick={()=>{
+            setStems(current=>current.map(s=>({...s,gain:100,mute:false,solo:false})));
+          }}/>
+        </div>
+        <div className="mixer-tracks">
       {stems.map(s => <div className="mixer-track" key={s.filename}>
         <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>
         <div className="track-actions">
@@ -449,6 +433,39 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         ?"Split channels replace their parent originals in playback and mix export."
         :"Original stereo stems active. Expand split channels with their track buttons."}</div>
     </div>
+      </main>
+      <aside className="production-tools" aria-label="Production tools">
+        <div className="production-tools-heading"><strong>Tools</strong><span aria-hidden="true">⚙</span></div>
+        <button type="button" className="production-tool-open" aria-expanded={scriptOpen}
+          onClick={()=>{setScriptFocus(null);setScriptOpen(v=>!v);}}
+          title="Open canonical time-stamped arrangement text">≡ Sections</button>
+        <SectionsTool jobId={jobId} open={scriptOpen}
+          onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
+          onApplied={items=>{
+            setExternalSections(items);setTimelineSections(items);
+            setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
+          }}/>
+        <div className="production-tools-zoom">
+          <strong>Zoom</strong>
+          <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>
+            {[1,2,4,8,16].map(v=><option value={v} key={v}>{v}×</option>)}
+          </select>
+          <input type="range" aria-label="Timeline zoom slider" min="0" max="4" step="1"
+            value={Math.log2(zoom)} onChange={e=>setZoom(2**Number(e.target.value))}/>
+          {zoom>1&&<input type="range" aria-label="Timeline horizontal position" min="0" max="1" step=".001"
+            value={viewportOffset} onChange={e=>setViewportOffset(Number(e.target.value))}/>}
+        </div>
+        <details className="production-tool-detail"><summary>⇥ Region loop</summary>
+          <div className="timeline-loop-controls">
+            <button type="button" onClick={()=>setLoopIn(position)}>In</button>
+            <button type="button" onClick={()=>setLoopOut(position)}>Out</button>
+            <label><input type="checkbox" checked={loopEnabled}
+              disabled={loopIn===null||loopOut===null||loopOut<=loopIn+0.1}
+              onChange={e=>setLoopEnabled(e.target.checked)}/> Loop</label>
+            <span>{loopIn===null?"—":timecode(loopIn)} – {loopOut===null?"—":timecode(loopOut)}</span>
+            <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>×</button>
+          </div>
+        </details>
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
@@ -460,6 +477,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />
     <div className="daw-handoff">
       <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
+    </div>
+      </aside>
     </div>
     {dawOpen && <DawHandoff jobId={jobId} saveProject={saveProject} onClose={() => setDawOpen(false)} />}
     {notice && <p role="status" className="song-save-notice">{notice}</p>}

@@ -579,6 +579,10 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         target for target in record.get("section_width_automation", [])
         if target.get("section_id") in keep
     ]
+    record["section_space_automation"] = [
+        target for target in record.get("section_space_automation", [])
+        if target.get("section_id") in keep
+    ]
     record["section_lyrics"] = {
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
@@ -639,7 +643,7 @@ def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> d
     blocks = dict(record.get("section_production", {}))
     for section in record.get("sections", []):
         sid = section["id"]
-        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "reverb", "width", "fade", "tail")]
+        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "reverb", "width", "space", "fade", "tail")]
         for item in targets:
             if item["section_id"] != sid:
                 continue
@@ -699,7 +703,7 @@ def save_section_reverb(ident: str, request: Request, body: SectionReverbRequest
     blocks = dict(record.get("section_production", {}))
     for section in record.get("sections", []):
         sid = section["id"]
-        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "pan", "width", "fade", "tail")]
+        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "pan", "width", "space", "fade", "tail")]
         for item in targets:
             if item["section_id"] != sid:
                 continue
@@ -847,6 +851,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_pan_automation"] = changed["section_pan_automation"]
     record["section_reverb_automation"] = changed["section_reverb_automation"]
     record["section_width_automation"] = changed["section_width_automation"]
+    record["section_space_automation"] = changed["section_space_automation"]
     record["section_ending"] = changed["section_ending"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
@@ -857,6 +862,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "pan_targets": changed["section_pan_automation"],
             "reverb_targets": changed["section_reverb_automation"],
             "width_targets": changed["section_width_automation"],
+            "space_targets": changed["section_space_automation"],
             "ending": changed["section_ending"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
@@ -876,6 +882,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "section_production": record.get("section_production", {}),
             "reverb_targets": record.get("section_reverb_automation", []),
             "width_targets": record.get("section_width_automation", []),
+            "space_targets": record.get("section_space_automation", []),
             "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}
 
 

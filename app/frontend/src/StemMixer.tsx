@@ -84,7 +84,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     function wheel(event:WheelEvent){
       if(!duration)return;
       const source=event.target;
-      if(source instanceof Element && source.closest("input,select,textarea,button,[contenteditable=true]"))return;
+      if(source instanceof Element && source.closest("input,select,textarea,[contenteditable=true],button:not(.waveform-seek)"))return;
       const amount=event.deltaY||event.deltaX;
       if(!amount)return;
       event.preventDefault();

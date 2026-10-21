@@ -13,6 +13,14 @@ type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;panner?:Ste
 type ActiveNode = AudioBufferSourceNode;
 
 export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
+export const SAFE_EXPORT_CEILING_DBFS=-1;
+export class MixHeadroomError extends Error{
+  constructor(readonly measuredPeakDbfs:number,readonly recommendedAdditionalTrimDb:number){
+    super("Mix exceeds 0 dBFS ("+measuredPeakDbfs.toFixed(1)+" dBFS). Apply "+Math.abs(recommendedAdditionalTrimDb).toFixed(1)+" dB of master output trim to target "+SAFE_EXPORT_CEILING_DBFS+" dBFS.");
+    this.name="MixHeadroomError";
+  }
+}
+
 
 export class SharedClockAudition {
   readonly context:AudioContext;
@@ -22,6 +30,8 @@ export class SharedClockAudition {
   private reverb:ConvolverNode;
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
+  private monitorLevel=0.75;
+  private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
   private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
@@ -105,11 +115,23 @@ export class SharedClockAudition {
     }
   }
   setLevels(levels:Record<string,AuditionLevel>,monitor:number){
-    this.master.gain.value=Math.max(0,Math.min(1,monitor));
+    this.monitorLevel=Math.max(0,Math.min(1,monitor));
+    this.updateMasterOutput();
     this.renderedLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
     for(const track of this.tracks){
       track.gain.gain.value=Math.max(0,Math.min(2,levels[track.source.filename]?.gain??0));
     }
+  }
+  /** Non-destructive master trim, downstream of all stem and effect sends. */
+  setOutputTrimDb(value:number){
+    if(!Number.isFinite(value)||value>0||value< -60)throw Error("Master trim must be between -60 and 0 dB");
+    this.outputTrimDb=value;
+    this.updateMasterOutput();
+  }
+  private updateMasterOutput(){
+    this.master.gain.setTargetAtTime(
+      this.monitorLevel*Math.pow(10,this.outputTrimDb/20),
+      this.context.currentTime,0.015);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){
@@ -161,7 +183,7 @@ export class SharedClockAudition {
       if(wet)scheduleAutomation(sends.get(filename)!.gain,wet,0,0);
     }
     const rendered=await offline.startRendering();
-    return encodeWav24(rendered);
+    return encodeWav24(rendered,this.outputTrimDb);
   }
 
   async play(){
@@ -255,7 +277,7 @@ export class SharedClockAudition {
 }
 
 /** Stereo 24-bit PCM WAV. No normalizer/limiter: audible mix and export match. */
-function encodeWav24(buffer:AudioBuffer):Blob{
+function encodeWav24(buffer:AudioBuffer,outputTrimDb:number):Blob{
   const left=buffer.getChannelData(0),right=buffer.getChannelData(1);
   const frames=buffer.length;
   const bytes=44+frames*6;
@@ -273,12 +295,19 @@ function encodeWav24(buffer:AudioBuffer):Blob{
   for(let i=0;i<frames;i++){
     peak=Math.max(peak,Math.abs(left[i]),Math.abs(right[i]));
   }
-  if(!Number.isFinite(peak)||peak>1.00001)
-    throw Error("Rendered mix peaks above 0 dBFS. Lower stem gains and retry to avoid clipping.");
+  if(!Number.isFinite(peak))throw Error("Rendered audio contains invalid samples; export cancelled.");
+  const gain=Math.pow(10,outputTrimDb/20);
+  if(peak*gain>1){
+    const dbfs=20*Math.log10(peak);
+    const needed=SAFE_EXPORT_CEILING_DBFS-dbfs-outputTrimDb;
+    // Round safely toward more attenuation, not toward clipping.
+    const additional=Math.floor((needed-0.05)*10)/10;
+    throw new MixHeadroomError(dbfs,additional);
+  }
   for(let i=0;i<frames;i++){
     const samples=[left[i],right[i]];
     for(let ch=0;ch<2;ch++){
-      const sample=Math.max(-1,Math.min(1,samples[ch]));
+      const sample=Math.max(-1,Math.min(1,samples[ch]*gain));
       const signed=Math.round(sample<0?sample*8388608:sample*8388607);
       const off=44+i*6+ch*3;
       view.setUint8(off,signed&255);

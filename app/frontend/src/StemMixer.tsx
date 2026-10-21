@@ -226,7 +226,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const byFile:Record<string,{pan:ReturnType<typeof compileSectionAutomation>}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
-      if(channels[filename]?.active)continue;
       const saved=panTargets.filter(item=>item.source_key===filename);
       if(!saved.length)continue;
       const desired=saved.flatMap(item=>{
@@ -244,7 +243,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       }
     }
     engine.setAutomation(byFile);
-  },[audioReady,panLoaded,panTargets,timelineSections,files,channels]);
+  },[audioReady,panLoaded,panTargets,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -518,7 +517,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
-          splitFiles={files.filter(filename=>Boolean(channels[filename]?.active))}
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>

@@ -311,3 +311,7 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .timeline-zoom-controls small{color:var(--tws-color-text-muted);font-size:10px}
 .timeline-pan-label{display:flex;align-items:center;gap:5px}
 .timeline-pan-label input{width:110px}
+
+/* Imported arrangement boundaries remain visible across every waveform row. */
+.waveform-section-boundary{position:absolute;top:0;bottom:0;border-left:1px solid rgba(220,177,105,.65);z-index:1;pointer-events:none}
+.section-marker-summary{font-size:11px;font-weight:600;color:var(--tws-color-text-primary);margin:8px 0 1px}

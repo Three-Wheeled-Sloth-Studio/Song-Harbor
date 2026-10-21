@@ -8,6 +8,7 @@ import { StemWaveforms } from "./StemWaveforms";
 import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
+import { SectionWidthTool, type SavedWidthTarget } from "./SectionWidthTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
@@ -76,6 +77,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
+  const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
     fade_seconds:0,tail_seconds:0,curve:"smooth"
@@ -146,17 +148,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setPanLoaded(false);
     setPanTargets([]);
     setReverbTargets([]);
+    setWidthTargets([]);
     setEnding({fade_seconds:0,tail_seconds:0,curve:"smooth"});
     void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{reverb_targets:typeof reverbTargets;ending:typeof ending}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];ending:typeof ending}>;
       })
       .then(async data=>{
         const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
         if(!panResponse.ok)throw Error("Could not load pan automation");
         const panData=await panResponse.json() as {targets:SavedPanTarget[]};
-        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
       })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
@@ -244,7 +247,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -274,10 +277,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),reverb:compileSectionAutomation(desired,0,{min:0,max:1})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid reverb automation");return;}
     }
+    for(const filename of files){
+      const desired=widthTargets.filter(item=>item.source_key===filename).flatMap(item=>{
+        const section=sectionById.get(item.section_id);
+        return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+          value:item.width/100,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+      });
+      if(!desired.length)continue;
+      try{
+        byFile[filename]={...(byFile[filename]||{}),width:compileSectionAutomation(desired,1,{min:0,max:1.5})};
+      }catch(e){setError(e instanceof Error?e.message:"Invalid width automation");return;}
+    }
     engine.setAutomation(byFile);
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,ending,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,ending,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -554,9 +568,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,finish)=>{
+          onApplied={(items,targets,reverb,width,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
+            setWidthTargets(width);
             setEnding(finish);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
@@ -565,6 +580,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
         <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
           targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
+        <SectionWidthTool jobId={jobId} sections={timelineSections} files={files}
+          targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <div className="production-tools-zoom">

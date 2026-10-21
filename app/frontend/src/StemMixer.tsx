@@ -7,6 +7,7 @@ import { ChannelSplitter } from "./ChannelSplitter";
 import { StemWaveforms } from "./StemWaveforms";
 import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
+import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, type AuditionSource } from "./SharedClockAudition";
 import type { SongSection } from "./SectionEditor";
@@ -69,7 +70,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [viewportOffset,setViewportOffset]=useState(0);
   const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
-  const [reverbTargets,setReverbTargets]=useState<{section_id:string;source_key:string;wet:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
+  const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [scriptOpen,setScriptOpen]=useState(false);
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
@@ -525,6 +526,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
+        <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
+          targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>
           <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>

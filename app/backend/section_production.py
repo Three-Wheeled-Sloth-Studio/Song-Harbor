@@ -1,6 +1,6 @@
 """Song Harbor production block notation, deliberately separate from section tags.
 
-MVP executes pan, reverb send and reset. Other effects are rejected explicitly, not silently
+MVP executes pan, mid/side width, reverb send and reset. Other effects are rejected explicitly, not silently
 accepted or misrepresented as applied audio processing.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 TOKEN = re.compile(
-    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
+    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb|width):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
     r"|(?P<reset>all\.reset|[A-Za-z][A-Za-z0-9_-]*\.reset))"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
@@ -43,7 +43,7 @@ def parse_block(text: str) -> list[dict[str, Any]]:
             continue
         match = TOKEN.fullmatch(token)
         if not match:
-            raise ValueError(f"Unsupported production directive: {token}. Pan, reverb send and reset only for this release")
+            raise ValueError(f"Unsupported production directive: {token}. Pan, width, reverb send and reset only for this release")
         name = match.group("track")
         reset = match.group("reset")
         if name:
@@ -52,7 +52,11 @@ def parse_block(text: str) -> list[dict[str, Any]]:
                 raise ValueError(f"Unknown stem alias: {name}")
             value = match.group("value").lower()
             parameter = match.group("parameter").lower()
-            if parameter == "reverb":
+            if parameter == "width":
+                if not value.isdigit() or int(value) > 150:
+                    raise ValueError("Width must be 0-150 percent (100 is original width)")
+                directive = {"kind": "width", "track": canonical, "width": int(value)}
+            elif parameter == "reverb":
                 if not value.isdigit() or int(value)>100:
                     raise ValueError("Reverb send must be 0-100 percent")
                 directive = {"kind": "reverb", "track": canonical, "wet": int(value)/100}
@@ -102,6 +106,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
                 head += ":" + d["curve"]
             rendered.append(head)
             continue
+        elif d["kind"] == "width":
+            head = f"{d['track']}.width:{d['width']}"
         elif d["kind"] == "reverb":
             head = f"{d['track']}.reverb:{round(float(d['wet'])*100)}"
         else:
@@ -132,7 +138,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "fade", "tail"):
+            if d["kind"] in ("reverb", "width", "fade", "tail"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -158,7 +164,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "fade", "tail"):
+            if directive["kind"] in ("pan", "width", "fade", "tail"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -172,6 +178,32 @@ def materialize_reverb(sections: list[dict[str, Any]],
                 })
     return output
 
+
+
+def materialize_width(sections: list[dict[str, Any]],
+                      blocks: dict[str, list[dict[str, Any]]],
+                      files: list[str]) -> list[dict[str, Any]]:
+    """Compile explicit width changes; omitted sections inherit previous value."""
+    stems = {alias: filename for filename in files for alias in ALIASES
+             if "(" + alias + ")" in filename}
+    output = []
+    for section in sorted(sections, key=lambda s: s["start_seconds"]):
+        for directive in blocks.get(section["id"], []):
+            kind = directive["kind"]
+            if kind not in ("width", "reset"):
+                continue
+            targets = (list(stems) if kind == "reset" and directive["track"] == "all"
+                       else [directive["track"]])
+            for alias in targets:
+                if alias not in stems:
+                    raise ValueError(f"Width target {alias} not in project")
+                output.append({
+                    "section_id": section["id"], "source_key": stems[alias],
+                    "width": directive["width"] if kind == "width" else 100,
+                    "transition_seconds": directive["transition_seconds"],
+                    "curve": directive["curve"],
+                })
+    return output
 
 def materialize_ending(sections: list[dict[str, Any]],
                        blocks: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:

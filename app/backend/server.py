@@ -25,6 +25,7 @@ import dependencies
 import workspace_settings
 import projects
 import sections
+import section_import
 import daw
 import audacity_handoff
 import channel_split
@@ -523,6 +524,44 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}
+
+
+class SectionImportRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=100000)
+    mode: str = "replace"
+
+
+@app.post("/api/projects/{ident}/sections/import")
+def import_song_sections(ident: str, request: Request, body: SectionImportRequest) -> dict[str, Any]:
+    """Validate every imported line before changing the project manifest."""
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not job or job.get("status") != "complete" or not record:
+        raise HTTPException(404, "Completed song not found")
+    try:
+        changed = section_import.apply(
+            record, body.content, body.mode,
+            record.get("source_duration_seconds") or job.get("source_duration_seconds"))
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(400, f"Import rejected: {exc}") from exc
+    record.update({"sections": changed["sections"],
+                   "section_spatial_proposals": changed["section_spatial_proposals"],
+                   "updated_at": time.time()})
+    projects.write_project(DATA_ROOT, record)
+    return {"sections": changed["sections"],
+            "spatial_proposals": changed["section_spatial_proposals"],
+            "imported_count": changed["imported_count"]}
+
+
+@app.get("/api/projects/{ident}/sections/export")
+def export_song_sections(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    return {"content": section_import.render_tags(record),
+            "sections": record.get("sections", []),
+            "spatial_proposals": record.get("section_spatial_proposals", {})}
 
 
 class DawTargetRequest(BaseModel):

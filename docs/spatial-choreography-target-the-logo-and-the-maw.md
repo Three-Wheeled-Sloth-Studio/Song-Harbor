@@ -1,6 +1,6 @@
 # Future spatial choreography - The Logo and the Maw
 
-Status: **accepted creative direction, not yet implemented**. This is the target for the next section-notation generation and width/delay development slice. Do not insert width directives into a currently active section script while width parsing is unsupported.
+Status: **creative direction recorded; mid/side width is now implemented, perceptual widening and the full song choreography remain untested**. This is the target for the next section-notation generation and width/delay development slice. Width directives now parse and render (0-150%, with 100% meaning original width). Start with a small QA subset before applying the whole-song choreography.
 
 ## Per-stem narrative motion
 
@@ -30,3 +30,34 @@ Status: **accepted creative direction, not yet implemented**. This is the target
 - 2:38 Verse 3: baseline tighter and closer to center, drums broader.
 - 3:13 final Chorus: most expansive culmination.
 - 3:48 Outro: drums reach environmental/full-width; vocals and melodic elements retain the convergent direction. Check final fade/ambience treatments independently.
+
+## 2026-10-21: first width implementation QA
+
+Width notation: `Vocals.width:140@2s:smooth`. Native mid/side values 0-150%; 100% exactly passes through the existing left/right stereo image, 0% sums it to mono, 140-150% boosts existing side signal. The matrix is applied **after split-child reconstruction and before the stem pan and reverb send**, identically in Web Audio audition and offline export. It does **not** create artificial stereo width in a near-mono stem. A later decorrelated spatial delay/early-reflection option will supply perceptual widening when side energy is absent.
+
+**Start small, without replacing the entire lyric sheet:**
+
+```text
+[Intro 0:00-0:12.323]
+{Vocals.pan:left.45@2s:smooth Vocals.width:135@2s:smooth Drums.width:35@2s:smooth}
+
+[Chorus 0:45.409-1:09.278]
+{Vocals.width:150@2s:smooth Guitar.width:145@2s:smooth Drums.width:110@2s:smooth}
+
+[Verse 2 1:09.278-1:31.339]
+{Vocals.pan:left.30@3s:smooth Vocals.width:105@3s:smooth Drums.width:70@3s:smooth}
+```
+
+These example blocks are *selected test sections only*, not a complete paste-ready replacement. Preserve other section headers, all lyrics, and existing reverb/fade/tail instructions. An instruction omitted in subsequent sections inherits the previous setting; reset instructions return width to 100%. Avoid `all.reset` unless intending to reset pan and reverb as well.
+
+### Listening and export acceptance
+
+1. Run the normal launcher on `main`. All six stems remain split L/R, with child and original-parent audio mutually exclusive.
+2. Open **Section stereo width** under Tools and set Vocals width for Intro to 35%, Save. Audition a few seconds, then change to 100%, Save. The narrow/mono behavior should be unmistakable; 100% should return to the original image without changing center location.
+3. Set 140% and compare with 100%. A detectable increase depends on true stereo content; if not audible, do **not** assume the control is malfunctioning—check side energy before adding a false widening effect.
+4. Apply `Vocals.width:140@2s:smooth` beneath one existing section header, making sure other directives for that section stay in the **same** brace line. Check the section change and subsequent inheritance.
+5. Export WAV with automation and compare the same segment at matched loudness. Invert/mono-check L/R in a DAW if available; no missing tracks, left-right swaps, or unexpected phase cancellation should occur. Wider settings can increase peaks—use the existing master headroom remediation if needed.
+6. Save/reload, confirm width instructions survive, and edit width in the structured sidebar to confirm the text round-trip remains current. A reset should return width to 100%, not 0%.
+7. Important: confirmation of native mid/side behavior does **not** establish satisfaction of the user's desired dramatic width for nearly mono stems. Perceptual decorrelation and stereo delay remain the next slice.
+
+**QA gate:** code committed to `main`; a real browser/WebAudio listening test and independent full Windows build have not yet been confirmed.

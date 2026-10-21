@@ -36,3 +36,17 @@ Status: code committed to default branch, **not runtime/build verified on Window
 - On narrow display, ensure tool panel moves below main timeline without making the waveform unusably narrow.
 
 Avoid advertising completed sample-accurate rendering, automated lyric alignment, or insert/merge controls yet.
+
+## 2026-10-21 playback and screen-utilization QA fixes
+
+User reported Space often activated the last-focused button, audio stuttering, and a cramped mixer despite unused wide outer margins. Root causes found by code inspection:
+
+- Global keyboard handler intentionally **excluded every button**, so focused buttons received the browser's native Space-to-click action rather than play/pause. `StemMixer.tsx` keyboard listener now runs in capture phase, prevents default Space when focus is on a button/waveform, and routes to playback. Text fields, selects, contenteditable regions, native range inputs and accessible section sliders still keep ordinary typing/arrow behavior.
+- Independently streaming six (or more) HTML media elements used **hard seeks whenever drift >90ms, on every 120ms interval**, likely causing repeated decoder flushing and audible stutter. Changed audio `preload` to `auto`; transport retains position on resume without unnecessary seeking; gentle 0.975/1.025x playback-rate correction handles modest follower drift, with hard resync reserved for gross >1.5s desync on ready media, throttled to once per 4s. Playback start/stop uses generation IDs to avoid late `Promise.all(play())` completion reviving a stopped transport.
+- Active song was still constrained by global `.workspace{max-width:1440px;margin:auto}`. `main.tsx` marks active song sessions `workspace--song-session`; CSS unsets this cap, fills viewport with responsive outer gutters and bounded 245–350px tools inspector alongside flexible main timeline. Below ~900px the inspector stacks. Standard home/import/read pages may remain intentionally bounded.
+
+**Architectural caution:** reduced stutter is a mitigation, not verified sample-accurate multi-stem playback. Long-term fix remains one shared-clock Web Audio/native transport with prebuffered chunks and preview/export parity; do not promise sample alignment on HTMLMediaElement implementation. Actual user hearing test essential.
+
+Studio-level principle updates (not just local CSS) committed to `Three-Wheeled-Sloth-Studio/TWS-Design-Principles`: `apps/App-Design-Principles.md` and `apps/Studio-UI-Style-Guide.md` now explicitly forbid letterboxed active editing surfaces and require two desktop width QA checks (1366px and 1920px); sidebars consume unused outer space **before** taking width from the primary editor. This elevates repeated user QA feedback to enforceable cross-project acceptance criterion.
+
+Smoke test after syncing launcher: open at full display width, verify timeline fills wide space with small outer gutters and inspector beside it. Click a random toolbar button, then press Space: playback toggles, button does not react again. Click waveform, then press Space: playback toggles. Test arrows with browser focus on waveform versus section script text, verify text editing retains native caret movement. Play uninterrupted for 2–3 minutes, repeatedly pause/resume, seek and loop; note any stuttering/offsets. On 1366px and 1920px/resized browser check flexible width and correct inspector stacking. Frontend build and real Windows audio behavior **not yet verified**.

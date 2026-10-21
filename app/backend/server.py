@@ -568,6 +568,9 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         target for target in record.get("section_pan_automation", [])
         if target.get("section_id") in keep
     ]
+    record["section_production"] = {
+        key: value for key, value in record.get("section_production", {}).items() if key in keep
+    }
     record["section_lyrics"] = {
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
@@ -616,6 +619,25 @@ def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> d
         seen.add(key)
         targets.append(target.model_dump())
     record["section_pan_automation"] = targets
+    # Legacy structured pan editor remains authoritative for its pan instructions.
+    # Remove stale inline block pan for affected sections; preserve reset events.
+    import section_production
+    blocks = dict(record.get("section_production", {}))
+    for section in record.get("sections", []):
+        sid = section["id"]
+        base = [d for d in blocks.get(sid, []) if d["kind"] == "reset"]
+        for item in targets:
+            if item["section_id"] != sid:
+                continue
+            alias = next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]), None)
+            if alias and not any(d["track"] in ("all", alias) for d in base):
+                base.append({"kind": "pan", "track": alias, "pan": item["pan"],
+                             "transition_seconds": item["transition_seconds"], "curve": item["curve"]})
+        if base:
+            blocks[sid] = base
+        else:
+            blocks.pop(sid, None)
+    record["section_production"] = blocks
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"targets": targets}
@@ -641,14 +663,15 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, f"Import rejected: {exc}") from exc
     retained_ids = {section["id"] for section in changed["sections"]}
-    record["section_pan_automation"] = [target for target in record.get("section_pan_automation", [])
-                                        if target.get("section_id") in retained_ids]
+    record["section_production"] = changed["section_production"]
+    record["section_pan_automation"] = changed["section_pan_automation"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],
                    "updated_at": time.time()})
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
+            "pan_targets": changed["section_pan_automation"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
             "auto_distributed": changed["auto_distributed"],
@@ -663,7 +686,8 @@ def export_song_sections(ident: str) -> dict[str, Any]:
     return {"content": section_import.render_tags(record),
             "sections": record.get("sections", []),
             "spatial_proposals": record.get("section_spatial_proposals", {}),
-            "section_lyrics": record.get("section_lyrics", {})}
+            "section_lyrics": record.get("section_lyrics", {}),
+            "section_production": record.get("section_production", {})}
 
 
 class DawTargetRequest(BaseModel):

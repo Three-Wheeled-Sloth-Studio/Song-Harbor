@@ -69,6 +69,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [viewportOffset,setViewportOffset]=useState(0);
   const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
+  const [reverbTargets,setReverbTargets]=useState<{section_id:string;source_key:string;wet:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [scriptOpen,setScriptOpen]=useState(false);
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
@@ -133,12 +134,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     let cancelled=false;
     setPanLoaded(false);
     setPanTargets([]);
-    void fetch("/api/projects/"+jobId+"/section-pan")
+    setReverbTargets([]);
+    void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{targets:SavedPanTarget[]}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets}>;
       })
-      .then(data=>{if(!cancelled){setPanTargets(data.targets||[]);setPanLoaded(true);}})
+      .then(async data=>{
+        const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
+        if(!panResponse.ok)throw Error("Could not load pan automation");
+        const panData=await panResponse.json() as {targets:SavedPanTarget[]};
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setPanLoaded(true);}
+      })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
   },[jobId]);
@@ -224,7 +231,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan:ReturnType<typeof compileSectionAutomation>}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -243,8 +250,19 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         return;
       }
     }
+    for(const filename of files){
+      const desired=reverbTargets.filter(item=>item.source_key===filename).flatMap(item=>{
+        const section=sectionById.get(item.section_id);
+        return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+          value:item.wet,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+      });
+      if(!desired.length)continue;
+      try{
+        byFile[filename]={...(byFile[filename]||{}),reverb:compileSectionAutomation(desired,0,{min:0,max:1})};
+      }catch(e){setError(e instanceof Error?e.message:"Invalid reverb automation");return;}
+    }
     engine.setAutomation(byFile);
-  },[audioReady,panLoaded,panTargets,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -499,8 +517,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets)=>{
+          onApplied={(items,targets,reverb)=>{
             setPanTargets(targets);
+            setReverbTargets(reverb);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>

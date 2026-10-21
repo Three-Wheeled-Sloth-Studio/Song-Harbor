@@ -60,6 +60,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [exporting, setExporting] = useState(false);
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
+  const headroomFixRef=useRef<HTMLElement|null>(null);
   const [mixBytes,setMixBytes]=useState<number|null>(null);
   const [mixUrl, setMixUrl] = useState<string | null>(null);
   const renderedUrl=useRef<string|null>(null);
@@ -93,6 +94,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
+  useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb);},[masterTrimDb,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
   const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
@@ -580,7 +582,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
           disabled={exporting} onClick={()=>{void exportMix();}}/>
-        {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">⇩ WAV</a>}
+        {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">Download WAV</a>}
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready to download</Status> : null}
       <div className="mix-master-headroom">
@@ -591,7 +593,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <output htmlFor="song-master-trim">{masterTrimDb.toFixed(1)} dB</output>
         <small>Output only. Stem balances, section automation, and source files are unchanged. The same trim is used in playback and WAV export.</small>
       </div>
-      {headroomIssue&&<section className="mix-headroom-fix" role="alert" aria-label="Resolve mix clipping">
+      {headroomIssue&&<section ref={headroomFixRef} className="mix-headroom-fix" role="alert" aria-label="Resolve mix clipping">
         <strong>Mix needs output headroom</strong>
         <p>The full mix peaks at {headroomIssue.peakDbfs.toFixed(1)} dBFS before the output trim. Export has not created a WAV yet.</p>
         <p>Recommended: reduce the master output by {Math.abs(headroomIssue.additionalTrimDb).toFixed(1)} dB more for a -1 dBFS peak ceiling. This preserves the relative stem balance and dynamics without a limiter.</p>
@@ -599,7 +601,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onClick={applyHeadroomFix}>Apply safe output trim and re-render</button>
         <button type="button" disabled={exporting} onClick={()=>setHeadroomIssue(null)}>Review master trim manually</button>
       </section>}
-      {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click ⇩ WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>
+      {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click Download WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>
     </div>
     <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />
     <div className="daw-handoff">

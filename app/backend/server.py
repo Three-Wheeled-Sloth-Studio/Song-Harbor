@@ -521,6 +521,13 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     record["sections"] = proposed
+    # Moving a marker preserves its proposal by stable ID; removing a marker
+    # also drops its now-orphaned automation proposal.
+    keep = {item["id"] for item in proposed}
+    record["section_spatial_proposals"] = {
+        ident: value for ident, value in
+        record.get("section_spatial_proposals", {}).items() if ident in keep
+    }
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}

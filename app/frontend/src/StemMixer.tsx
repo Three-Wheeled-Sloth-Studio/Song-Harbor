@@ -76,6 +76,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
+  const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
+    fade_seconds:0,tail_seconds:0,curve:"smooth"
+  });
   const [scriptOpen,setScriptOpen]=useState(false);
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
   const [scriptRevision,setScriptRevision]=useState(0);
@@ -142,16 +145,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setPanLoaded(false);
     setPanTargets([]);
     setReverbTargets([]);
+    setEnding({fade_seconds:0,tail_seconds:0,curve:"smooth"});
     void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{reverb_targets:typeof reverbTargets}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets;ending:typeof ending}>;
       })
       .then(async data=>{
         const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
         if(!panResponse.ok)throw Error("Could not load pan automation");
         const panData=await panResponse.json() as {targets:SavedPanTarget[]};
-        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setPanLoaded(true);}
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
       })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
@@ -270,7 +274,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       }catch(e){setError(e instanceof Error?e.message:"Invalid reverb automation");return;}
     }
     engine.setAutomation(byFile);
-  },[audioReady,panLoaded,panTargets,reverbTargets,timelineSections,files]);
+    engine.setEnding(ending);
+    setDuration(engine.duration);
+  },[audioReady,panLoaded,panTargets,reverbTargets,ending,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -547,9 +553,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb)=>{
+          onApplied={(items,targets,reverb,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
+            setEnding(finish);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>

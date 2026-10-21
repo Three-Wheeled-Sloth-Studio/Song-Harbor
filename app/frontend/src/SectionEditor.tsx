@@ -72,7 +72,8 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       localRevision.current=true;
       setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
       onSectionsImported?.();
-      setMessage(data.auto_distributed ? `${data.imported_count} sections placed · drag to align` : `${data.imported_count} sections imported`);\n    }catch(e){setError(e instanceof Error?e.message:String(e));}
+      setMessage(data.auto_distributed ? `${data.imported_count} sections placed · drag to align` : `${data.imported_count} sections imported`);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
   async function loadSectionText() {

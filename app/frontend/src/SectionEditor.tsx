@@ -183,40 +183,54 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
 
   return <section className="section-editor" aria-label="Song sections" style={{padding:"12px 0",borderTop:"1px solid var(--color-border, #6665)"}}>
     <h3 style={{margin:"0 0 8px"}}>Song sections</h3>
-    <p style={{fontSize:12,margin:"0 0 8px"}}>Paste section headings without times for a quick starting layout, then drag boundaries on the waveform. Or mark in/out manually. Source audio is never modified.</p>
-    <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-      <button type="button" onClick={()=>setStart(position)} title="Mark start at playback cursor">Mark in</button>
-      <button type="button" onClick={()=>setEnd(position)} title="Mark end at playback cursor">Mark out</button>
-      <span style={{fontVariantNumeric:"tabular-nums"}}>{start===null?"--:--":stamp(start)} to {end===null?"--:--":stamp(end)}</span>
-      <label>Type <select value={kind} onChange={e=>setKind(e.target.value)}>{kinds.map(x=><option key={x}>{x}</option>)}</select></label>
-      <label>Number <input aria-label="Section number" type="number" min="1" max="99" value={number} placeholder="optional" onChange={e=>setNumber(e.target.value)} style={{width:65}}/></label>
-      <button type="button" disabled={busy||start===null||end===null||b-a<MIN_LENGTH||b>duration+0.005}
-        onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}>Add section</button>
-    </div>
-    <div className="section-import-actions">
-      <button type="button" onClick={()=>{setShowImport(v=>!v);setError("");}}>{showImport?"Hide section list":"Paste / import section list"}</button>
-      <button type="button" disabled={busy} onClick={()=>{void loadSectionText();}}>Edit saved tags</button>
-      <label className="section-file-label">Open .txt / .json
+    <div className="section-toolbar" aria-label="Section tools">
+      <button type="button" title="Paste or import section tags" aria-label="Import sections"
+        aria-expanded={showImport} onClick={()=>{setShowImport(v=>!v);setError("");}}>⇪ <span>Import</span></button>
+      <button type="button" disabled={busy} title="Edit saved tags" aria-label="Edit saved section tags"
+        onClick={()=>{void loadSectionText();}}>✎</button>
+      <label className="section-file-label" title="Load .txt or .json section file" aria-label="Load section file">▣
         <input type="file" accept=".txt,.json,text/plain,application/json" aria-label="Choose sections file"
           onChange={e=>{void readSectionFile(e.target.files?.[0]);e.target.value="";}} />
       </label>
+      <details className="section-manual-controls">
+        <summary title="Create individual section markers">＋ <span>Manual</span></summary>
+        <div className="section-manual-inner">
+          <button type="button" onClick={()=>setStart(position)} title="Mark section start at playhead">In</button>
+          <button type="button" onClick={()=>setEnd(position)} title="Mark section end at playhead">Out</button>
+          <span className="section-time-range">{start===null?"—":stamp(start)} – {end===null?"—":stamp(end)}</span>
+          <select aria-label="Section type" value={kind} onChange={e=>setKind(e.target.value)}>
+            {kinds.map(x=><option key={x}>{x}</option>)}
+          </select>
+          <input aria-label="Section number" type="number" min="1" max="99" value={number}
+            placeholder="#" onChange={e=>setNumber(e.target.value)} style={{width:54}}/>
+          <button type="button" disabled={busy||start===null||end===null||b-a<MIN_LENGTH||b>duration+0.005}
+            onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}
+            title="Add section marker">＋</button>
+        </div>
+      </details>
+      <details className="section-help">
+        <summary aria-label="Supported section types and import help" title="Section help">?</summary>
+        <div className="section-help-content">
+          <strong>Section tags</strong>
+          <p>Supported: {kinds.join(", ")}. Optional numbers: [Verse 2].</p>
+          <p>Times are optional. Untimed sections are spaced across the audio as editable estimates. A final [End] closes the list. Timed and untimed tags must be imported separately.</p>
+        </div>
+      </details>
+      {sections.length>0&&<span className="section-marker-summary" role="status">
+        {sections.length} section{sections.length===1?"":"s"}
+      </span>}
     </div>
     {showImport&&<div className="section-import-panel">
-      <p>Paste a list such as [Intro], [Verse 1], [Chorus], [Outro]. If no times are present, each section gets an equal share of the available song duration. These are estimates, not detected transitions; drag shared boundaries afterward. Timed tags still work. Spatial cues are stored as proposals only.</p>
-      <textarea aria-label="Timed section tags" spellCheck={false} rows={5} value={importText}
-        placeholder={"[Intro]\\n[Verse 1]\\n[Chorus Vocal1:Expansive-Left]\\n[Verse 2]\\n[Chorus]\\n[Outro]\\n[End]"}
+      <textarea aria-label="Section tags" spellCheck={false} rows={5} value={importText}
+        placeholder={"[Intro]\\n[Verse 1]\\n[Chorus]\\n[Verse 2]\\n[Chorus]\\n[Outro]"}
         onChange={e=>setImportText(e.target.value)}/>
       <div className="section-import-footer">
-        <label><input type="radio" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/> Replace existing</label>
+        <label><input type="radio" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/> Replace</label>
         <label><input type="radio" checked={importMode==="append"} onChange={()=>setImportMode("append")}/> Append</label>
         <button type="button" disabled={busy||!importText.trim()} onClick={()=>{void importSections();}}>
-          {busy?"Validating…":"Apply timed sections"}
+          {busy?"…":"Apply"}
         </button>
       </div>
-      <small>Untimed sections receive equal initial durations; adjust interactively afterward. A final [End] is a terminator, not a section. Import timed and untimed tags separately. Existing sections remain safe if validation fails.</small>
-    </div>}
-    {sections.length>0&&<div className="section-marker-summary" role="status">
-      {sections.length} section{sections.length===1?"":"s"} saved · {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).length} in current view
     </div>}
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
@@ -241,13 +255,14 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       <div aria-hidden="true" style={{position:"absolute",left:`${100*(position-viewStart)/(viewEnd-viewStart)}%`,top:0,bottom:0,borderLeft:"2px solid #f2c46c",pointerEvents:"none"}}/>
     </div>}
     {selectedSection&&<div style={{fontSize:12}}>Selected: [{selectedSection.kind}{selectedSection.number===null?"":` ${selectedSection.number}`} {stamp(selectedSection.start_seconds)}-{stamp(selectedSection.end_seconds)}]</div>}
+    {sections.length>0&&<details className="section-list-details"><summary>Sections · {sections.length}</summary>
     <div style={{display:"flex",flexDirection:"column",gap:4}}>
       {sections.map(s=><div key={s.id} style={{display:"flex",alignItems:"center",gap:8}}>
         <button type="button" onClick={()=>onSeek(s.start_seconds)} title="Seek to section start">▶</button>
         <span style={{flex:1,fontVariantNumeric:"tabular-nums"}}>[{s.kind}{s.number===null?"":` ${s.number}`} {stamp(s.start_seconds)}-{stamp(s.end_seconds)}]</span>
         <button type="button" disabled={busy} onClick={()=>void persist(sections.filter(x=>x.id!==s.id))} aria-label={`Remove ${s.kind} section`} title="Remove marker only">×</button>
       </div>)}
-    </div>
+    </div></details>}
     {message&&<p role="status">{message}</p>}
     {error&&<p role="alert">{error}</p>}
   </section>;

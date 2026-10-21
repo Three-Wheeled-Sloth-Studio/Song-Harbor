@@ -304,8 +304,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         seekRefFunction.current(Math.min(durationRef.current,positionRef.current+5));
       }
     }
+    function keyup(event:KeyboardEvent){
+      if(event.code!=="Space"||event.altKey||event.ctrlKey||event.metaKey)return;
+      const source=event.target;
+      if(source instanceof Element &&
+        source.closest('input,textarea,select,[contenteditable="true"],[role="slider"],[role="textbox"]'))return;
+      // Native button activation usually happens on Space keyup.
+      event.preventDefault();
+      event.stopPropagation();
+    }
     window.addEventListener("keydown",keydown,true);
-    return ()=>window.removeEventListener("keydown",keydown,true);
+    window.addEventListener("keyup",keyup,true);
+    return ()=>{
+      window.removeEventListener("keydown",keydown,true);
+      window.removeEventListener("keyup",keyup,true);
+    };
   },[]);
   function stopAndReset(){stop();seek(0);}
   function skip(seconds:number){seek(Math.max(0,Math.min(duration,position+seconds)));}

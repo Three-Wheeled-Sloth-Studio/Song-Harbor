@@ -7,6 +7,13 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-21 follow-up: updater acceptance, version badge, scoped Outro correction
+
+User reports soft update/relaunch apparently successful on Windows. This is preliminary user acceptance for the main happy path only; conflict protection and busy-job refusal remain separate checks. Added compact always-visible `main@<8-char-sha>` badge alongside the in-app update icon. `GET /api/runtime/version` uses local Git commands only, no network fetch, and falls back to `local` when unavailable. Badge refreshes on relaunch and after an explicit update check. No invented semver.
+
+The submitted 13-section Salt in the Circuit sheet contained a specific Outro conflict: `Other.reset@2s:smooth` appears with `Other.pan`, `Other.width`, and `Other.space` in the same production block. This is correctly forbidden by the reset grammar. Replace ONLY `Other.reset@2s:smooth` with `Other.comp:-18,1@2s:smooth` to restore neutral compression without clearing explicitly set spatial effects. `Guitar.duck:0@1s:smooth` stays. Do not change lyrics, durations, master fade 4s, or tail 3s. Parser now returns a specific actionable reset-conflict diagnostic; regression test verifies correction, dynamics and ending. This does not silently rewrite existing saved user song content.
+
+
 ## Development checkpoint - 2026-10-21 dynamics on main
 
 Section compressor and vocal-keyed ducking are wired through the shared playback/offline engine, with import/export persistence, validated production scripts, and neutral legacy defaults. See `docs/section-dynamics-implementation.md` for exact grammar, implementation and QA gaps. Backend CI passed at `830c4f53`; latest frontend/Windows checks remain pending. Do not mark update/relaunch, EQ persistence, fade/tail or listening parity as user-accepted.

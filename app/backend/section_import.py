@@ -81,7 +81,7 @@ def parse(content: str) -> list[dict[str, Any]]:
             continue
         try:
             # Any explicit timecode means this is a timed cue, validated strictly.
-            if re.search(r"\\d{1,3}:\\d{2}(?:\\.\\d{1,3})?-", line):
+            if re.search(r"\d{1,3}:\d{2}(?:\.\d{1,3})?-", line):
                 cue = production_cues.parse_cue(line)
                 result.append({**cue["section"], "spatial": cue["spatial"]})
             else:

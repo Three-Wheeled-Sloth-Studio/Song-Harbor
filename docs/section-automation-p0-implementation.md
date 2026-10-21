@@ -78,3 +78,13 @@ The existing structured pan editor is still available; the Section script editor
 9. Confirm mix export warns that section automation is preview-only rather than delivering a mismatched WAV.
 
 Limitations: this is a pan-only initial smoke test. Width/reverb are deliberately not active. Automated tests are committed but have not run in this environment. Review the results before enabling processing export or merging.
+
+
+## 2026-10-21: split L/R stems and launcher branch correction
+The supported launcher is `scripts/launch-song-harbor.bat`, which calls `start-song-harbor.ps1` then `update-checkout.ps1`. The updater fetches `origin/<currently checked-out branch>` and fast-forwards only. The expected normal installation is checked out on **main**. P0 was merged and further split-routing work committed directly to main; do not require switching to a feature branch for QA.
+
+Every original stem, whether played as a stereo source or as active L/R children, routes through one stereo group pan control after its individual channel routing. Parent and split children remain mutually exclusive. The canonical `Vocals.pan` instruction pans this reconstructed vocal bus as one group, with neutral pan leaving existing split L/R positions intact. The structured pan editor now permits editing split parent stems.
+
+Dedicated 4:00 production-script fixture for this track: `docs/qa-vocal-pan-the-logo-and-the-maw.md`. The 60% pan extremes are deliberately exaggerated test settings, not recommended mastering positions.
+
+Remaining gate: real Windows headphones listening QA, including perceptual stereo quality, stem alignment, seek/resume/loop, and export blocked while automation is active.

@@ -1,6 +1,6 @@
 """Song Harbor production block notation, deliberately separate from section tags.
 
-MVP executes PAN only. Other effects are rejected explicitly, not silently
+MVP executes pan, reverb send and reset. Other effects are rejected explicitly, not silently
 accepted or misrepresented as applied audio processing.
 """
 from __future__ import annotations
@@ -8,9 +8,9 @@ import re
 from typing import Any
 
 TOKEN = re.compile(
-    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.pan:(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset)"
-    r"|(?P<reset>all\.reset|[A-Za-z][A-Za-z0-9_-]*\.reset))"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.(?P<parameter>pan|reverb):(?P<value>center|left(?:\\.\\d{1,3})?|right(?:\\.\\d{1,3})?|reset|\\d{1,3})"
+    r"|(?P<reset>all\\.reset|[A-Za-z][A-Za-z0-9_-]*\\.reset))"
+    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
 
@@ -26,7 +26,7 @@ def parse_block(text: str) -> list[dict[str, Any]]:
     for token in tokens:
         match = TOKEN.fullmatch(token)
         if not match:
-            raise ValueError(f"Unsupported production directive: {token}. Pan and reset only for this release")
+            raise ValueError(f"Unsupported production directive: {token}. Pan, reverb send and reset only for this release")
         name = match.group("track")
         reset = match.group("reset")
         if name:
@@ -39,7 +39,7 @@ def parse_block(text: str) -> list[dict[str, Any]]:
                 if not value.isdigit() or int(value)>100:
                     raise ValueError("Reverb send must be 0-100 percent")
                 directive = {"kind": "reverb", "track": canonical, "wet": int(value)/100}
-            elif value in ("center", "reset"):
+            elif parameter == "pan" and value in ("center", "reset"):
                 pan = 0.0
             elif parameter == "pan":
                 direction, _, amount = value.partition(".")

@@ -91,6 +91,24 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(section_production.parse_block("{Vocals.width:0}")[0]["width"], 0)
         self.assertEqual(section_production.parse_block("{Vocals.width:100}")[0]["width"], 100)
 
+    def test_space_send_inherits_and_resets(self):
+        script = ("[Intro 0:00-0:10]\\n"
+                  "{Vocals.pan:left.40 Vocals.width:130 Vocals.space:20@2s:smooth}\\n"
+                  "[Chorus 0:10-0:20]\\n{Vocals.space:35}\\n"
+                  "[Outro 0:20-0:30]\\n"
+                  "{all.reset@2s:smooth Master.fade:4s:smooth Master.tail:3s}\\n")
+        project={"sections":[],"files":FILES}
+        result=section_import.apply(project,script,"replace",30)
+        self.assertEqual([t["amount"] for t in result["section_space_automation"]
+                          if "(Vocals)" in t["source_key"]],[20,35,0])
+        self.assertEqual(len(result["section_space_automation"]),8)
+        project.update(result)
+        restored=section_import.apply(project,section_import.render_tags(project),"replace",30)
+        self.assertEqual(restored["section_space_automation"],result["section_space_automation"])
+        for invalid in ("{Vocals.space:41}","{Vocals.space:-1}","{Vocals.space:20 Vocals.space:25}"):
+            with self.subTest(invalid=invalid),self.assertRaises(ValueError):
+                section_production.parse_block(invalid)
+
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Vocals.width:151@4s:smooth}")

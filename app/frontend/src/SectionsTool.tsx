@@ -5,10 +5,11 @@ type Mode="replace"|"append";
 type ExportData={content:string;sections:SongSection[];detail?:string};
 import type {SavedPanTarget} from "./SectionPanTool";
 type SavedReverbTarget={section_id:string;source_key:string;wet:number;transition_seconds:number;curve:"linear"|"smooth"};
+type SavedWidthTarget={section_id:string;source_key:string;width:number;transition_seconds:number;curve:"linear"|"smooth"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
 export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],ending:SavedEnding)=>void;
+  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],ending:SavedEnding)=>void;
 }){
   const [content,setContent]=useState("");
   const [dirty,setDirty]=useState(false);
@@ -74,9 +75,9 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({content,mode})
       });
-      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];ending?:SavedEnding};
+      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];ending?:SavedEnding};
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
-      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
+      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
       setDirty(false);setStale(false);
       setMessage(result.auto_distributed?"Sections placed · align on timeline":"Saved · timestamps updated");
       loadedRevision.current=-1;
@@ -122,7 +123,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     {error&&<small role="alert">{error}</small>}
     <details className="production-tool-help">
       <summary>Section notation</summary>
-      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Reverb sends use syntax such as <code>{"{Vocals.reverb:30@2s:smooth}"}</code>. Ending instructions belong to the last section: <code>{"{Master.fade:6s:smooth Master.tail:3s}"}</code>. Width, delay and other effects are not implemented yet. Width cues in legacy headers remain proposals.</small>
+      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Reverb sends use syntax such as <code>{"{Vocals.reverb:30@2s:smooth}"}</code>. Ending instructions belong to the last section: <code>{"{Master.fade:6s:smooth Master.tail:3s}"}</code>. Width uses <code>{"{Vocals.width:125@2s:smooth}"}</code> (0-150%, 100% unchanged). Delay and other effects are not implemented yet. Width cues in legacy headers remain proposals.</small>
     </details>
   </section>;
 }

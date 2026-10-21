@@ -39,3 +39,23 @@ Status: committed on 2026-10-20; Windows frontend build and end-to-end runtime Q
 10. Confirm ordinary mouse wheel over section textarea scrolls text instead of changing zoom.
 
 No CI or Windows build results are asserted for these changes. The internal transport is still independently streamed HTMLMediaElement sources; this slice does not address synchronization accuracy or realtime DSP.
+
+## Untimed section imports and boundary alignment (2026-10-20 follow-up)
+
+User QA: asking for explicit timestamps before identifying musical boundaries was tedious. Song Harbor now accepts **untimed section headers** and auto-spreads them evenly over the actual track duration, from 0 to song end. This is only an initial layout, not structure detection. Example:
+
+```text
+[Intro]
+[Verse 1]
+[Chorus]
+[Verse 2]
+[Chorus Vocal1:Expansive-Left]
+[Outro]
+[End]
+```
+
+A final untimed `[End]` is treated as a terminator and does **not** consume an entire section slot. Untimed headers can be pasted directly, included in `.txt` files, or represented as JSON objects without start/end. Ordinary lyric lines between recognized bracketed headers are ignored; unknown square-bracket directions are rejected rather than silently interpreted as structure. Header spatial proposals remain linked to their generated section IDs. All-timed imports preserve their explicit times. Mixed timed and untimed headers in the same import are rejected with a clear error; import them separately instead of guessing which boundaries are authoritative.
+
+**Replace** distributes all imported audible sections across the song. **Append** allocates equal blocks in the remaining time after the existing final section, rejecting impossible placements rather than overlapping. User can then adjust the generated blocks against the waveform. Dragging a shared boundary between adjacent sections now adjusts *both sides of that boundary together* so there is no need to create a gap, then expand the neighbor manually. Keyboard nudges use the same rule. No original media changes.
+
+Added untimed distribution, append, lyrics-list and safe-rejection tests in `app/backend/tests/test_section_import.py`. Unverified Windows build and manual UX test remain pending.

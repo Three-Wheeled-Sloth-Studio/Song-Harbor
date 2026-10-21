@@ -122,6 +122,11 @@ def runtime_status() -> dict[str, Any]:
             "pid": os.getpid(), "busy": running > 0, "active_jobs": running}
 
 
+@app.get("/api/runtime/version")
+def runtime_version() -> dict[str, str]:
+    return app_update.local_version(Path(__file__).resolve().parents[2])
+
+
 @app.get("/api/runtime/update")
 def inspect_app_update() -> dict[str, Any]:
     state=app_update.git_info(Path(__file__).resolve().parents[2])

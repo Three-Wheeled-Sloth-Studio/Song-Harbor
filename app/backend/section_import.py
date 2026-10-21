@@ -66,28 +66,30 @@ def parse(content: str) -> list[dict[str, Any]]:
             if not isinstance(entry, dict):
                 raise ValueError("Each section must be an object")
             result.append({key: entry[key] for key in
-                           ("id", "kind", "number", "start_seconds", "end_seconds", "spatial")
+                           ("id", "kind", "number", "start_seconds", "end_seconds", "spatial", "lyrics")
                            if key in entry})
         return result
 
     result = []
     for index, line in enumerate(content.splitlines(), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith("#"):
             continue
-        # A pasted lyric sheet may contain verses between [section] headings.
-        # Do not silently interpret other [] directions as lyrics.
-        if not line.startswith("["):
+        if not stripped_line.startswith("["):
+            if result:
+                result[-1].setdefault("lyrics", []).append(line.rstrip())
             continue
         try:
-            # Any explicit timecode means this is a timed cue, validated strictly.
-            if re.search(r"\d{1,3}:\d{2}(?:\.\d{1,3})?-", line):
-                cue = production_cues.parse_cue(line)
+            if re.search(r"\d{1,3}:\d{2}(?:\.\d{1,3})?-", stripped_line):
+                cue = production_cues.parse_cue(stripped_line)
                 result.append({**cue["section"], "spatial": cue["spatial"]})
             else:
-                result.append(parse_untimed(line))
+                result.append(parse_untimed(stripped_line))
         except ValueError as exc:
             raise ValueError(f"Line {index}: {exc}") from exc
+    for item in result:
+        if "lyrics" in item:
+            item["lyrics"] = "\n".join(item["lyrics"]).strip()
     if not result:
         raise ValueError("No recognized section headers found")
     return result
@@ -155,20 +157,29 @@ def apply(project: dict[str, Any], content: str, mode: str,
     combined = (old if mode == "append" else []) + imported
     validated = sections.validate_sections(combined, duration=duration)
     old_proposals = project.get("section_spatial_proposals", {})
+    old_lyrics = project.get("section_lyrics", {})
     proposals = {x["id"]: old_proposals[x["id"]] for x in validated
                  if x["id"] in old_proposals and any(y.get("id") == x["id"] for y in old)}
+    lyrics = {x["id"]: old_lyrics[x["id"]] for x in validated
+              if x["id"] in old_lyrics and any(y.get("id") == x["id"] for y in old)}
     for item in imported:
-        if "spatial" not in item:
+        if "spatial" not in item and "lyrics" not in item:
             continue
-        spatial = validate_spatial(item["spatial"])
+        spatial = validate_spatial(item["spatial"]) if "spatial" in item else None
         match = next((s for s in validated if
                       s["kind"] == item.get("kind") and s["number"] == item.get("number")
                       and s["start_seconds"] == round(float(item["start_seconds"]), 3)
                       and s["end_seconds"] == round(float(item["end_seconds"]), 3)), None)
         if match is None:
             raise ValueError("Unable to match imported spatial annotation")
-        proposals[match["id"]] = spatial
+        if spatial is not None:
+            proposals[match["id"]] = spatial
+        if "lyrics" in item:
+            if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
+                raise ValueError("Lyrics text must be at most 20000 characters per section")
+            lyrics[match["id"]] = item["lyrics"]
     return {"sections": validated, "section_spatial_proposals": proposals,
+            "section_lyrics": lyrics,
             "imported_count": len(imported), "auto_distributed": distributed,
             "end_terminator_ignored": end_terminator}
 
@@ -183,4 +194,8 @@ def render_tags(project:dict[str,Any])->str:
             head+=" "+item["track_alias"]+":"+item["width"].capitalize()
             if item["bias"]!="center":head+="-"+item["bias"].capitalize()
         lines.append(head+"]")
+        lyric = project.get("section_lyrics", {}).get(entry["id"], "")
+        if lyric:
+            lines.append(lyric)
+            lines.append("")
     return "\n".join(lines)

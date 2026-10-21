@@ -93,7 +93,7 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
-            section_production.parse_block("{Vocals.width:120@4s:smooth}")
+            section_production.parse_block("{Vocals.width:151@4s:smooth}")
         with self.assertRaises(ValueError):
             section_production.parse_block("{Other.pan:right.150}")
         with self.assertRaises(ValueError):

@@ -420,3 +420,11 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .mix-headroom-fix button:disabled{opacity:.5;cursor:not-allowed}
 .mix-headroom-fix button:first-of-type{font-weight:650}
 .mix-footer>small{display:block;font-size:10px;line-height:1.4;color:var(--tws-color-text-muted)}
+
+/* Lightweight header update launcher: keep song canvas width intact. */
+.song-update-control{position:relative;display:flex;align-items:center}
+.song-update-status{position:absolute;top:calc(100% + 9px);right:0;z-index:100;min-width:230px;max-width:min(320px,90vw);display:grid;gap:6px;padding:12px;border:1px solid var(--tws-color-border-normal,#555);border-radius:8px;background:var(--tws-color-surface-panel,#222);box-shadow:0 8px 24px #0006;font-size:12px}
+.song-update-status small{display:block;overflow-wrap:anywhere}
+.song-update-status button{cursor:pointer}
+.song-update-status button[aria-label="Close update status"]{position:absolute;top:5px;right:7px}
+.song-update-error{position:absolute;top:100%;right:0;z-index:100;background:var(--tws-color-surface-panel,#222);padding:6px;max-width:270px}

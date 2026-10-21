@@ -62,6 +62,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [zoom,setZoom]=useState(1);
   const timelineRef=useRef<HTMLElement|null>(null);
   const [viewportOffset,setViewportOffset]=useState(0);
+  const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
   const [loopEnabled,setLoopEnabled]=useState(false);
   const [loopIn,setLoopIn]=useState<number|null>(null);
   const [loopOut,setLoopOut]=useState<number|null>(null);
@@ -378,7 +379,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <small>Wheel: zoom · Shift+wheel: pan</small>
     </div>
     <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections}
-      onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}/>
+      onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
+      onSectionsChange={setTimelineSections}
+      onSectionsImported={()=>{setZoom(1);setViewportOffset(0);}}/>
 
     <StemWaveforms jobId={jobId} files={stems.map(s=>({
       filename:s.filename,label:s.name,
@@ -386,7 +389,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
         waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
       })):[]
-    }))} duration={duration} position={position} onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}/>
+    }))} duration={duration} position={position} onSeek={seek} viewStart={viewStart} viewEnd={viewEnd} sections={timelineSections}/>
 
     </section>
     <div className="mixer-tracks">

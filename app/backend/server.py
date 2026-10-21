@@ -580,8 +580,11 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         record.get("section_lyrics", {}).items() if ident in keep
     }
     import section_production
-    record["section_ending"] = section_production.materialize_ending(
-        proposed, record.get("section_production", {}))
+    try:
+        record["section_ending"] = section_production.materialize_ending(
+            proposed, record.get("section_production", {}))
+    except ValueError as exc:
+        raise HTTPException(400, f"Ending must be updated before changing this boundary: {exc}") from exc
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}

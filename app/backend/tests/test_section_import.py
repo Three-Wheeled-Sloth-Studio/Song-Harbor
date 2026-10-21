@@ -115,6 +115,22 @@ class SectionImportTests(unittest.TestCase):
         self.assertEqual([0,30.5,61.0],[x["start_seconds"] for x in result["sections"]])
         self.assertEqual(91.5,result["sections"][-1]["end_seconds"])
 
+    def test_lyrics_survive_script_roundtrip_and_boundary_retiming(self):
+        source = "[Verse 1]\nThe city keeps its secrets\nA quiet line\n\n[Chorus]\nRaise the signal"
+        initial = section_import.apply(self.project, source, "replace", 120)
+        self.project.update({key:value for key,value in initial.items()
+                             if key != "imported_count"})
+        first_id = initial["sections"][0]["id"]
+        rendered = section_import.render_tags(self.project)
+        self.assertIn("The city keeps its secrets", rendered)
+        self.assertIn("Raise the signal", rendered)
+        retimed = rendered.replace("0:00-1:00", "0:00-0:55").replace("1:00-2:00", "0:55-2:00")
+        adjusted = section_import.apply(self.project, retimed, "replace", 120)
+        self.assertEqual(first_id, adjusted["sections"][0]["id"])
+        self.assertEqual("The city keeps its secrets\\nA quiet line",
+                         adjusted["section_lyrics"][first_id])
+        self.assertEqual(55.0, adjusted["sections"][0]["end_seconds"])
+
     def test_validate_json_spatial(self):
         raw=json.dumps([{
             "kind":"Intro","start_seconds":0,"end_seconds":5,

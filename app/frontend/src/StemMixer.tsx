@@ -74,6 +74,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const context=useRef<AudioContext|null>(null);
   const audio = useRef<Map<string, HTMLAudioElement>>(new Map());
   const playRef = useRef(false);
+  const transportGeneration=useRef(0);
+  const lastHardResync=useRef(0);
   const seekRef = useRef(0);
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
@@ -133,6 +135,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     finally{setChannelBusy(false);}
   }
   const stop = useCallback(() => {
+    transportGeneration.current+=1;
     playRef.current = false;
     setPlaying(false);
     audio.current.forEach(element => element.pause());
@@ -150,7 +153,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         : [{key:filename,url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0}];
       for(const item of sources){
         const player=new Audio(item.url);
-        player.preload="metadata";
+        player.preload="auto";
         player.addEventListener("loadedmetadata",()=>{
           if(Number.isFinite(player.duration))setDuration(current=>Math.max(current,player.duration));
         });
@@ -171,6 +174,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     audio.current=players;
     setDuration(expectedDuration||0);
     setPosition(0);setPlaying(false);playRef.current=false;
+    lastHardResync.current=0;
     return ()=>{
       players.forEach(p=>{p.pause();p.removeAttribute("src");p.load();});
       players.clear();
@@ -208,38 +212,59 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         stop();
         return;
       }
-      // HTML media streams may drift; correct the followers while keeping memory bounded.
+      // This is still a media-element transport, not a sample-locked DAW.
+      // Avoid repeated 90ms hard seeks: they flush the decoder and cause stutter.
+      // Gently correct modest differences via playbackRate and reserve a hard
+      // seek for gross desync on streams with buffered audio, at most once/4s.
+      const now=performance.now();
       for (const follower of players.slice(1)) {
-        if (follower.readyState >= 1 && Math.abs(follower.currentTime - current) > 0.09) {
-          try { follower.currentTime = current; } catch { /* decoder still loading */ }
+        if(follower.readyState<3 || follower.seeking || master.readyState<3){
+          follower.playbackRate=1;
+          continue;
+        }
+        const difference=follower.currentTime-current;
+        if(Math.abs(difference)>1.5 && now-lastHardResync.current>4000){
+          lastHardResync.current=now;
+          try{follower.currentTime=current;}catch{/* awaiting decoder */}
+          follower.playbackRate=1;
+        }else if(Math.abs(difference)>0.12){
+          follower.playbackRate=difference>0?0.975:1.025;
+        }else if(Math.abs(difference)<0.04){
+          follower.playbackRate=1;
         }
       }
-    }, 120);
+    }, 160);
     return () => window.clearInterval(timer);
   }, [playing, duration, stop,loopEnabled,loopIn,loopOut]);
 
   async function togglePlayback() {
-    if (playRef.current) {
-      stop();
-      return;
-    }
+    if(playRef.current){stop();return;}
     setError("");
-    const players = [...audio.current.values()];
+    const players=[...audio.current.values()];
     if(players.length<6){setError("Audio tracks have not loaded.");return;}
-    await context.current?.resume();
-    const time = position >= duration - 0.05 && duration > 0 ? 0 : position;
-    players.forEach(player => {
-      player.pause();
-      player.currentTime = time;
-    });
-    seekRef.current = time;
-    try {
-      await Promise.all(players.map(player => player.play()));
-      playRef.current = true;
+    const generation=++transportGeneration.current;
+    playRef.current=true;
+    const time=position>=duration-0.05&&duration>0?0:position;
+    try{
+      await context.current?.resume();
+      if(generation!==transportGeneration.current)return;
+      // Preserve current position on resume instead of re-seeking every source.
+      // Only seek if reset/explicit navigation changed its time materially.
+      for(const player of players){
+        if(Math.abs(player.currentTime-time)>0.3)player.currentTime=time;
+        player.playbackRate=1;
+      }
+      await Promise.all(players.map(player=>player.play()));
+      if(generation!==transportGeneration.current){
+        players.forEach(player=>player.pause());
+        return;
+      }
       setPlaying(true);
-    } catch {
-      stop();
-      setError("Playback failed. Try pressing Play again after the stems finish loading.");
+    }catch{
+      if(generation===transportGeneration.current){
+        stop();
+        setError("Playback failed. Check that the stems have finished loading.");
+      }
     }
   }
 
@@ -259,15 +284,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   durationRef.current=duration;
   const seekRefFunction=useRef(seek);
   seekRefFunction.current=seek;
-  const stopRef=useRef(stop);
-  stopRef.current=stop;
   useEffect(()=>{
+    // Capture before focused buttons receive the browser's Space-to-click.
+    // Typing, native form controls and accessible section sliders keep their keys.
     function keydown(event:KeyboardEvent){
       if(event.altKey||event.ctrlKey||event.metaKey||event.repeat)return;
       const source=event.target;
-      if(source instanceof Element && source.closest('input,textarea,select,button,[contenteditable="true"],[role="slider"],[role="textbox"]'))return;
+      if(source instanceof Element &&
+          source.closest('input,textarea,select,[contenteditable="true"],[role="slider"],[role="textbox"]'))return;
       if(event.code==="Space"){
         event.preventDefault();
+        event.stopPropagation();
         void togglePlaybackRef.current();
       }else if(event.key==="ArrowLeft"){
         event.preventDefault();
@@ -277,8 +304,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         seekRefFunction.current(Math.min(durationRef.current,positionRef.current+5));
       }
     }
-    window.addEventListener("keydown",keydown);
-    return ()=>window.removeEventListener("keydown",keydown);
+    window.addEventListener("keydown",keydown,true);
+    return ()=>window.removeEventListener("keydown",keydown,true);
   },[]);
   function stopAndReset(){stop();seek(0);}
   function skip(seconds:number){seek(Math.max(0,Math.min(duration,position+seconds)));}

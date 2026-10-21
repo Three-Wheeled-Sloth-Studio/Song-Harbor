@@ -61,6 +61,36 @@ class ProductionNotationTests(unittest.TestCase):
             with self.subTest(script=script), self.assertRaises(ValueError):
                 section_import.apply({"sections": [], "files": FILES}, script, "replace", 20)
 
+    def test_width_pan_reverb_inheritance_and_reset_roundtrip(self):
+        script = ("[Intro 0:00-0:10]\n"
+                  "{Vocals.pan:left.60@2s:smooth Vocals.width:140@2s:smooth Vocals.reverb:20@2s:smooth}\n"
+                  "[Verse 0:10-0:20]\n"
+                  "[Chorus 0:20-0:30]\n"
+                  "{Vocals.width:150@2s:smooth Drums.width:120@2s:smooth}\n"
+                  "[Outro 0:30-0:40]\n"
+                  "{all.reset@2s:smooth Master.fade:6s:smooth Master.tail:3s}\n")
+        project = {"sections": [], "files": FILES}
+        result = section_import.apply(project, script, "replace", 40)
+        vocal_width = [x["width"] for x in result["section_width_automation"]
+                       if "(Vocals)" in x["source_key"]]
+        self.assertEqual(vocal_width, [140, 150, 100])
+        self.assertEqual(len(result["section_width_automation"]), 9)
+        self.assertEqual(result["section_ending"]["tail_seconds"], 3)
+        self.assertEqual(len([x for x in result["section_pan_automation"]
+                              if "(Vocals)" in x["source_key"]]), 2)
+        project.update(result)
+        roundtrip = section_import.apply(project, section_import.render_tags(project),
+                                         "replace", 40)
+        self.assertEqual(roundtrip["section_width_automation"], result["section_width_automation"])
+
+    def test_width_rejects_invalid_targets(self):
+        for entry in ("{Vocals.width:151}", "{Vocals.width:-5}", "{Drums.width:wide}",
+                      "{Vocals.width:120 Vocals.width:130}", "{Bass.width:200@2s:smooth}"):
+            with self.subTest(entry=entry), self.assertRaises(ValueError):
+                section_production.parse_block(entry)
+        self.assertEqual(section_production.parse_block("{Vocals.width:0}")[0]["width"], 0)
+        self.assertEqual(section_production.parse_block("{Vocals.width:100}")[0]["width"], 100)
+
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Vocals.width:120@4s:smooth}")

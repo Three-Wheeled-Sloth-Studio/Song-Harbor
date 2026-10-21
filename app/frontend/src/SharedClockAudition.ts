@@ -280,17 +280,6 @@ export class SharedClockAudition {
 function encodeWav24(buffer:AudioBuffer,outputTrimDb:number):Blob{
   const left=buffer.getChannelData(0),right=buffer.getChannelData(1);
   const frames=buffer.length;
-  const bytes=44+frames*6;
-  const array=new ArrayBuffer(bytes);
-  const view=new DataView(array);
-  const ascii=(offset:number,value:string)=>{
-    for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));
-  };
-  ascii(0,"RIFF");view.setUint32(4,bytes-8,true);ascii(8,"WAVE");
-  ascii(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);
-  view.setUint16(22,2,true);view.setUint32(24,buffer.sampleRate,true);
-  view.setUint32(28,buffer.sampleRate*6,true);view.setUint16(32,6,true);
-  view.setUint16(34,24,true);ascii(36,"data");view.setUint32(40,frames*6,true);
   let peak=0;
   for(let i=0;i<frames;i++){
     peak=Math.max(peak,Math.abs(left[i]),Math.abs(right[i]));
@@ -304,6 +293,17 @@ function encodeWav24(buffer:AudioBuffer,outputTrimDb:number):Blob{
     const additional=Math.floor((needed-0.05)*10)/10;
     throw new MixHeadroomError(dbfs,additional);
   }
+  const bytes=44+frames*6;
+  const array=new ArrayBuffer(bytes);
+  const view=new DataView(array);
+  const ascii=(offset:number,value:string)=>{
+    for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));
+  };
+  ascii(0,"RIFF");view.setUint32(4,bytes-8,true);ascii(8,"WAVE");
+  ascii(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);
+  view.setUint16(22,2,true);view.setUint32(24,buffer.sampleRate,true);
+  view.setUint32(28,buffer.sampleRate*6,true);view.setUint16(32,6,true);
+  view.setUint16(34,24,true);ascii(36,"data");view.setUint32(40,frames*6,true);
   for(let i=0;i<frames;i++){
     const samples=[left[i],right[i]];
     for(let ch=0;ch<2;ch++){

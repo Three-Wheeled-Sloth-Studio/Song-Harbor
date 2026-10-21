@@ -10,6 +10,7 @@ import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { SectionWidthTool, type SavedWidthTarget } from "./SectionWidthTool";
 import { SectionSpaceTool } from "./SectionSpaceTool";
+import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
@@ -18,9 +19,9 @@ import type { SongSection } from "./SectionEditor";
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
-type EffectKey="pan"|"width"|"space"|"reverb"|"ending";
-const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","ending"];
-const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,ending:false};
+type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq";
+const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","ending"];
+const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -83,6 +84,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
+  const [eqTargets,setEqTargets]=useState<SavedEqTarget[]>([]);
   const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
@@ -157,17 +159,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setReverbTargets([]);
     setWidthTargets([]);
     setSpaceTargets([]);
+    setEqTargets([]);
     setEnding({fade_seconds:0,tail_seconds:0,curve:"smooth"});
     void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];space_targets:typeof spaceTargets;ending:typeof ending}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];space_targets:typeof spaceTargets;eq_targets:SavedEqTarget[];ending:typeof ending}>;
       })
       .then(async data=>{
         const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
         if(!panResponse.ok)throw Error("Could not load pan automation");
         const panData=await panResponse.json() as {targets:SavedPanTarget[]};
-        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);setEqTargets(data.eq_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
       })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
@@ -256,7 +259,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -308,10 +311,32 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),space:compileSectionAutomation(desired,0,{min:0,max:.4})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid spatial reflections");return;}
     }
+    for(const filename of files){
+      for(const band of [1,2,3] as const){
+        const desired=eqTargets.filter(item=>item.source_key===filename&&item.band===band)
+          .flatMap(item=>{
+            const section=sectionById.get(item.section_id);
+            return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+              frequency:item.frequency,q:item.q,gain:item.gain_db,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+          });
+        if(!desired.length)continue;
+        try{
+          const compile=(key:"frequency"|"q"|"gain",start:number,min:number,max:number)=>
+            compileSectionAutomation(desired.map(item=>({sectionId:item.sectionId,start:item.start,end:item.end,
+              value:item[key],transitionSeconds:item.transitionSeconds,curve:item.curve})),start,{min,max});
+          const eq={...(byFile[filename]?.eq||{}),[band]:{
+            frequency:compile("frequency",1000,30,16000),
+            q:compile("q",1,.3,12),
+            gain:compile("gain",0,-12,12)
+          }};
+          byFile[filename]={...(byFile[filename]||{}),eq};
+        }catch(e){setError(e instanceof Error?e.message:"Invalid EQ automation");return;}
+      }
+    }
     engine.setAutomation(byFile);
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,ending,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,ending,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -588,11 +613,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,width,space,finish)=>{
+          onApplied={(items,targets,reverb,width,space,eq,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
             setSpaceTargets(space);
+            setEqTargets(eq);
             setEnding(finish);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
@@ -613,7 +639,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>!bypassed[k])}
                 onClick={()=>setBypassed({...DEFAULT_BYPASS})}>A · Processed</button>
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>bypassed[k])}
-                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,ending:true})}>B · Original</button>
+                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,ending:true})}>B · Original</button>
             </div>
             {EFFECT_KEYS.map(key=><label key={key}>
               <input type="checkbox" checked={bypassed[key]}
@@ -623,6 +649,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>
+        <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
+          targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <div className="production-tools-zoom">

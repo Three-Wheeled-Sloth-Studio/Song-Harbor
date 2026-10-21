@@ -60,3 +60,29 @@ Fix committed: polling samples the `currentTime` of all active media elements. A
 **Known limitation:** Multiple independently streamed media elements are still not sample locked. The active median clock prevents first-stem frozen UI but it does not guarantee that every stream remains perfectly aligned or can never stutter. Prioritize a single clocked audio engine if discrepancies continue. Windows runtime/CI verification is still outstanding.
 
 Smoke QA: 1) Play an existing song for several minutes watching the cursor, especially through intro-to-chorus; cursor should continue when audible audio advances. 2) Mute/solo and split channels; cursor should follow audible streams. 3) Pause/resume, seek, rewind, jump, and loop; position should update without false forward movement during genuine audio buffering. 4) Play through song end; transport stops. 5) While following a chorus, drag the section boundary and confirm both the marker and playhead remain synchronized with actual audio.
+
+## 2026-10-21 hard sync regression: stereo L/R and stems drift apart mid-song
+
+QA: six independently streamed audio elements audibly lose alignment halfway into a song, particularly the extracted left/right channels. Previous mitigations (first-element clock → moving median clock; playbackRate ±2.5%/occasional seek) did not solve the fundamental issue and could change timing/pitch. **Replaced the complete in-browser multi-stream audition transport** with `app/frontend/src/SharedClockAudition.ts`, a single AudioContext and decoded AudioBufferSourceNodes.
+
+### New invariant
+Every active stem or split-channel buffer is started using **the same AudioContext start timestamp and the same source offset**. Pause stores `AudioContext.currentTime`-derived offset, seek recreates all buffer sources with a shared timestamp, and playhead reads that same clock. Each stem has independent GainNode; mono derived left/right route through hard-left/right StereoPannerNodes. Gain/solo/mute, monitor volume, exclusive parent/children routing and FFmpeg export remain as before. No more HTMLAudioElement transport, dynamic median clocks, per-stem playbackRate modification, or follower hard seek.
+
+### MVP constraints
+- Full audio is fetched and decoded into memory, sequentially, **before Play is enabled**; a compact `Preparing synchronized audio X/Y tracks` status is displayed. This may require noticeable preparation time on longer songs.
+- Hard budget **768 MiB decoded PCM** to avoid unbounded browser memory growth. If exceeded, playback is unavailable and a clear error directs to DAW export; it does **not** switch back to unsynchronized audition. Longer tracks need shared-clock **chunked streaming** later, not another collection of media elements.
+- Validate all decoded track durations agree within 150ms. Refuse badly mismatched media rather than pretending phase lock with unaligned files. Project audio is untouched.
+- AudioBufferSources are one-shot; every seek/pause/resume rebuilds their sources, but all schedule together. Browser context output latency may remain, though it should be constant across stems.
+- Changes exist in remote GitHub but **full Windows runtime and npm frontend build have NOT been verified**.
+
+### Mandatory smoke QA
+1. Launch Song Harbor normally and open the same problem song; observe `Preparing synchronized audio X/Y tracks` until ready.
+2. Play the full song and listen closely halfway through where stereo left/right previously flammed/phased. Stereo image and drum transients must remain aligned.
+3. Split a stereo stem, activate L/R children, play halfway through, and compare their timing and reconstructed stereo image against the parent mode (which needs a new preparation pass).
+4. Repeat pause/resume, Space, arrow-jumps, drag seek, and section-boundary editing. One playhead must stay locked to all audible buffers.
+5. Mute and solo stems *during* playback; changes must apply immediately without reloading/seek drift. Export mix still uses same chosen source set and respects parent controls.
+6. Test a >768MiB decoded project and an intentionally mismatched track if possible; clear actionable error, no automatic fallback or partial playback.
+7. Inspect memory use during playback and after switching songs/channel routing; decoded buffers must be released after engine dispose.
+
+### Next engineering milestone
+Replace full-buffer predecode with a native/Web Audio shared-clock chunk scheduler or AudioWorklet ring buffers so arbitrary-length songs work with bounded memory. Maintain a single timeline clock and explicit level/pan routing. Do NOT revive six independent HTMLAudioElements. Add automated null/mid-side/stereo reconstruction tests comparing export versus preview where test harness supports audio capture.

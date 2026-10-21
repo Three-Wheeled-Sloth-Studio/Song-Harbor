@@ -564,6 +564,10 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         ident: value for ident, value in
         record.get("section_spatial_proposals", {}).items() if ident in keep
     }
+    record["section_lyrics"] = {
+        ident: value for ident, value in
+        record.get("section_lyrics", {}).items() if ident in keep
+    }
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}
@@ -590,6 +594,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
         raise HTTPException(400, f"Import rejected: {exc}") from exc
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
+                   "section_lyrics": changed["section_lyrics"],
                    "updated_at": time.time()})
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
@@ -606,7 +611,8 @@ def export_song_sections(ident: str) -> dict[str, Any]:
         raise HTTPException(404, "Song unavailable")
     return {"content": section_import.render_tags(record),
             "sections": record.get("sections", []),
-            "spatial_proposals": record.get("section_spatial_proposals", {})}
+            "spatial_proposals": record.get("section_spatial_proposals", {}),
+            "section_lyrics": record.get("section_lyrics", {})}
 
 
 class DawTargetRequest(BaseModel):

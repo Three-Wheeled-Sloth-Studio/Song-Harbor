@@ -182,7 +182,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
     lyrics = {x["id"]: old_lyrics[x["id"]] for x in validated
               if x["id"] in old_lyrics and any(y.get("id") == x["id"] for y in old)}
     production = {x["id"]: old_production[x["id"]] for x in validated
-                  if x["id"] in old_production and any(y.get("id") == x["id"] for y in old)}
+                  if mode == "append" and x["id"] in old_production
+                  and any(y.get("id") == x["id"] for y in old)}
     for item in imported:
         if "spatial" not in item and "lyrics" not in item and "production" not in item:
             continue
@@ -196,7 +197,12 @@ def apply(project: dict[str, Any], content: str, mode: str,
         if spatial is not None:
             proposals[match["id"]] = spatial
         if "production" in item:
-            production[match["id"]] = item["production"]
+            if not isinstance(item["production"], list):
+                raise ValueError("Production directives must be a list")
+            # Normalize even JSON imports through the same constrained grammar.
+            parsed = section_production.parse_block(section_production.render_block(item["production"]))
+            if parsed:
+                production[match["id"]] = parsed
         if "lyrics" in item:
             if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
                 raise ValueError("Lyrics text must be at most 20000 characters per section")

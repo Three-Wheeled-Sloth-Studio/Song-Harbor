@@ -1,4 +1,5 @@
 import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
+import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -30,13 +31,14 @@ export class SharedClockAudition {
   private ending={fade_seconds:0,tail_seconds:0,curve:"smooth" as "smooth"|"linear"};
   private tracks:Track[]=[];
   private groupPanners=new Map<string,StereoPannerNode>();
+  private widthStages=new Map<string,StereoWidthStage>();
   private reverb:ConvolverNode;
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>={};
+  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -95,6 +97,9 @@ export class SharedClockAudition {
         if(!bus){
           bus=this.context.createStereoPanner();
           bus.pan.value=0;
+          const stage=createStereoWidthStage(this.context);
+          stage.output.connect(bus);
+          this.widthStages.set(src.filename,stage);
           bus.connect(this.dryMaster);
           const send=this.context.createGain();
           send.gain.value=0;
@@ -105,7 +110,7 @@ export class SharedClockAudition {
         let panner:StereoPannerNode|undefined;
         panner=this.context.createStereoPanner();
         panner.pan.value=src.pan;
-        gain.connect(panner).connect(bus);
+        gain.connect(panner).connect(this.widthStages.get(src.filename)!.input);
         gain.gain.value=0;
         this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
@@ -186,11 +191,15 @@ export class SharedClockAudition {
     convolver.buffer=createRoomImpulse(offline);
     convolver.connect(offline.destination);
     const sends=new Map<string,GainNode>();
+    const widths=new Map<string,StereoWidthStage>();
     for(const track of this.tracks){
       let bus=group.get(track.source.filename);
       if(!bus){
         bus=offline.createStereoPanner();
         bus.pan.value=0;
+        const stage=createStereoWidthStage(offline);
+        stage.output.connect(bus);
+        widths.set(track.source.filename,stage);
         bus.connect(dry);
         const send=offline.createGain();
         send.gain.value=0;
@@ -204,7 +213,7 @@ export class SharedClockAudition {
       gain.gain.value=this.renderedLevels[track.source.filename]??0;
       const childPan=offline.createStereoPanner();
       childPan.pan.value=track.source.pan;
-      source.connect(gain).connect(childPan).connect(bus);
+      source.connect(gain).connect(childPan).connect(widths.get(track.source.filename)!.input);
       source.start(0);
     }
     for(const [filename,bus] of group){
@@ -212,6 +221,8 @@ export class SharedClockAudition {
       if(curve)scheduleAutomation(bus.pan,curve,0,0);
       const wet=this.automation[filename]?.reverb;
       if(wet)scheduleAutomation(sends.get(filename)!.gain,wet,0,0);
+      const width=this.automation[filename]?.width;
+      if(width)scheduleStereoWidth(widths.get(filename)!,width,0,0);
     }
     const rendered=await offline.startRendering();
     return encodeWav24(rendered,this.outputTrimDb);
@@ -258,6 +269,10 @@ export class SharedClockAudition {
           bus.pan.cancelScheduledValues(startAt);
           bus.pan.setValueAtTime(0,startAt);
         }
+        const width=this.automation[filename]?.width;
+        const stage=this.widthStages.get(filename);
+        if(width&&stage)scheduleStereoWidth(stage,width,offset,startAt);
+        else if(stage)scheduleStereoWidth(stage,[{time:0,value:1}],offset,startAt);
         const send=this.reverbSends.get(filename);
         if(send){
           const wet=this.automation[filename]?.reverb;
@@ -282,6 +297,9 @@ export class SharedClockAudition {
     this.dryMaster.gain.cancelScheduledValues(this.context.currentTime);
     for(const bus of this.groupPanners.values())bus.pan.cancelScheduledValues(this.context.currentTime);
     for(const send of this.reverbSends.values())send.gain.cancelScheduledValues(this.context.currentTime);
+    for(const stage of this.widthStages.values()){
+      for(const node of [...stage.direct,...stage.cross])node.gain.cancelScheduledValues(this.context.currentTime);
+    }
     for(const node of this.nodes){
       try{node.stop();}catch{/* node may have ended */}
       node.disconnect();
@@ -294,6 +312,11 @@ export class SharedClockAudition {
     for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
     for(const bus of this.groupPanners.values())bus.disconnect();
     for(const send of this.reverbSends.values())send.disconnect();
+    for(const stage of this.widthStages.values()){
+      stage.input.disconnect();stage.output.disconnect();
+      for(const node of [...stage.direct,...stage.cross])node.disconnect();
+    }
+    this.widthStages.clear();
     this.groupPanners.clear();
     this.reverbSends.clear();
     this.tracks=[];

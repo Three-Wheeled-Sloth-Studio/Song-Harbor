@@ -1,6 +1,6 @@
 version: 1
 schema: refs/schemas/schemaRegistry.yaml
-updated: 2026-10-16
+updated: 2026-10-21
 decisions:
   - id: SH-DEC-001
     status: accepted
@@ -78,3 +78,31 @@ decisions:
       - Implement separation as a focused standalone-compatible utility/worker, not full imported-song reconstruction.
       - Begin license and 12 GB benchmark discovery with python-audio-separator, Demucs and other compatible engines.
       - Keep exported separated stems explicitly distinguished from genuinely independently generated stems.
+
+  - id: SH-DEC-011
+    status: accepted
+    date: 2026-10-21
+    decision: Prioritize stem-, section- and eventually phrase/time-range-scriptable audio operations that are laborious to reproduce manually in conventional DAWs, without abandoning eventual general effects rack and third-party plugin hosting.
+    rationale: Song Harbor's distinct value is applying coherent, repeatable creative decisions across an arrangement without clip cutting or manually reapplying effects.
+    consequences:
+      - Preserve local-first, non-destructive editing, live/offline WAV rendering parity and original project/source files.
+      - Prioritize automated EQ, dynamics, vocal-keyed ducking, localized diagnostics and bounded repair.
+      - Plan a full effects rack and plugin host later, subject to compatibility, licensing and process isolation decisions.
+  - id: SH-DEC-012
+    status: accepted
+    date: 2026-10-21
+    decision: Maintain the shared-clock Web Audio audition architecture and deterministic offline render route, with synchronized split L/R channels and a single section production grammar.
+    rationale: Independent streaming stem clocks visibly froze and audibly drifted; user listening QA now confirms in-app and exported mixes sound correct after shared-clock/spatial/fade fixes.
+    consequences:
+      - Never regress to independent HTMLMediaElement clocks for stem synchronization.
+      - Validate all new DSP in both audition and 24-bit export and through A/B.
+      - Honor existing section/lyrics fidelity, inherited directives, and export headroom.
+  - id: SH-DEC-013
+    status: accepted
+    date: 2026-10-21
+    decision: Make production tools compact, icon-first, with detailed controls in pop-out dialogs or inspectors, while keeping the waveform and section timeline maximally usable.
+    rationale: The existing right sidebar became wordy and compromised the established no-wasted-margins editing principle.
+    consequences:
+      - Defer broad redesign until the immediate EQ/dynamics and cleanup milestones are stable.
+      - Use the shared TWS Design Principles/TWS-UI patterns rather than unique per-app layout hacks.
+      - No excessive blank gutters or hidden production work area.

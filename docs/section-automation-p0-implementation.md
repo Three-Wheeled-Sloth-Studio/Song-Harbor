@@ -124,3 +124,23 @@ A clipping render fails with a clear error rather than silently applying a misma
 8. Check that the original six stems and existing split child WAVs remain unchanged.
 
 Limitations: Offline bounce currently ends at the original song duration (including truncating any remaining reverb decay); real-time playback also stops there. Extending the ending and preserving external reverb tails is subsequent work. No production-grade mastering or loudness matching has been implemented. Windows auditory QA and this commit's frontend/backend CI results are not yet verified.
+
+
+## Clipping recovery workflow (2026-10-21, main)
+
+The browser WAV bounce now analyzes the untrimmed summed mix before PCM encoding. When the full mix exceeds 0 dBFS, export **does not** create/download a file; instead the Tools > Export mix section automatically scrolls its actionable **Mix needs output headroom** panel into view. It displays measured untrimmed mix peak in dBFS, the recommended **additional** reduction to reach a -1 dBFS sample-peak ceiling, and an **Apply safe output trim and re-render** action.
+
+The action applies an output-only master trim (after the stereo buses and reverb return, before the monitoring output), keeps existing individual stem gains, mute/solo and section pan/reverb automation untouched, makes that exact trim audible in shared-clock playback, then reruns the offline 24-bit PCM export. Output trim is also available through an always-visible -60 to 0 dB slider; it does NOT replace the independent monitor-volume slider. WAV export includes trim but deliberately excludes monitor volume. No limiter, compressor, makeup gain, normalization of tracks or source-file modification is implied. If the required correction exceeds -60 dB, the UI refuses auto-correction and suggests inspecting tracks/effects.
+
+On successful rendering the app shows **Mix ready to download** and a clearly labeled **Download WAV** link. The generated file stays in browser memory until the user clicks Download WAV; the browser chooses its destination. Song Harbor cannot honestly report the actual browser download directory or open it until a future local-backend managed export is implemented. The output trim is currently SESSION-LOCAL and is not yet saved in the project manifest.
+
+### Acceptance on split-stem 4:00 current song
+1. Start Song Harbor using the ordinary launcher on **main**, open the current four-minute song with split L/R for all six stems, keep your existing pan/reverb script.
+2. Click **Export mix WAV** without first changing stem gains. If the mix exceeds full scale, the headroom panel must appear beside Export, automatically scroll into view, show a numeric peak and suggested correction; no download link should appear yet.
+3. Click **Apply safe output trim and re-render**. Stem sliders and section directives should remain unchanged, master trim should change, and the renderer should complete with a **Download WAV** link (unless another genuine error is reported).
+4. Click **Download WAV**. Check the browser's configured destination or Ctrl+J, and compare the exported WAV against Song Harbor playback at matched loudness.
+5. Play a Verse-to-Chorus vocal-pan transition before/after; ensure master trim changes overall level only and split-stem synchronization is intact.
+6. Adjust the independent monitor volume: the rendered WAV should not change. Adjust master output trim: the subsequent WAV must change.
+7. Test clicking Export again with sufficient headroom: the user should not see a clipping warning.
+
+**QA gate:** These fixes are committed on main, but no local Windows build, actual browser download or listening smoke test was executed from this tool environment. A separate future slice should persist master trim and offer versioned backend-saved exports with a truthful destination/Open folder control.

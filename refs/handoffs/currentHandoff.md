@@ -7,6 +7,10 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## Development checkpoint - 2026-10-21 dynamics on main
+
+Section compressor and vocal-keyed ducking are wired through the shared playback/offline engine, with import/export persistence, validated production scripts, and neutral legacy defaults. See `docs/section-dynamics-implementation.md` for exact grammar, implementation and QA gaps. Backend CI passed at `830c4f53`; latest frontend/Windows checks remain pending. Do not mark update/relaunch, EQ persistence, fade/tail or listening parity as user-accepted.
+
 ## START HERE — 2026-10-21 handoff after in-app updates and section EQ
 
 **Branch:** Work directly on `main` of `Three-Wheeled-Sloth-Studio/Song-Harbor`. Supported Windows launcher: `scripts/launch-song-harbor.bat`. Checkout observed at `C:\\Apps\\Song-Harbor`, with separate runtime `C:\\Apps\\SongHarbor`. Launcher safely fast-forwards updates when Git permits, builds frontend (`tsc --noEmit && vite build`), then starts one FastAPI server on an available loopback port; Vite is build-time only. Local projects and source WAVs are non-destructive. See `app/README.md` for setup. **Do not start another feature branch or resurrect superseded HTMLAudioElement multi-stream transport.**

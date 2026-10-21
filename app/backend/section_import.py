@@ -211,6 +211,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
     reverb_targets = section_production.materialize_reverb(validated, production, project.get("files", []))
     width_targets = section_production.materialize_width(validated, production, project.get("files", []))
     space_targets = section_production.materialize_space(validated, production, project.get("files", []))
+    eq_targets = section_production.materialize_eq(validated, production, project.get("files", []))
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,

@@ -6,6 +6,8 @@ import { SectionEditor } from "./SectionEditor";
 import { ChannelSplitter } from "./ChannelSplitter";
 import { StemWaveforms } from "./StemWaveforms";
 import { SectionsTool } from "./SectionsTool";
+import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
+import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, type AuditionSource } from "./SharedClockAudition";
 import type { SongSection } from "./SectionEditor";
 
@@ -65,6 +67,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const timelineRef=useRef<HTMLElement|null>(null);
   const [viewportOffset,setViewportOffset]=useState(0);
   const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
+  const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
+  const [panLoaded,setPanLoaded]=useState(false);
   const [scriptOpen,setScriptOpen]=useState(false);
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
   const [scriptRevision,setScriptRevision]=useState(0);
@@ -124,6 +128,20 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(r.ok){const data=await r.json() as {channels:ChannelSets};setChannels(data.channels||{});setRoutingVersion(v=>v+1);}
   },[jobId]);
   useEffect(()=>{void refreshChannels();},[refreshChannels]);
+  useEffect(()=>{
+    let cancelled=false;
+    setPanLoaded(false);
+    setPanTargets([]);
+    void fetch("/api/projects/"+jobId+"/section-pan")
+      .then(async response=>{
+        if(!response.ok)throw Error("Could not load pan automation");
+        return response.json() as Promise<{targets:SavedPanTarget[]}>;
+      })
+      .then(data=>{if(!cancelled){setPanTargets(data.targets||[]);setPanLoaded(true);}})
+      .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
+    return ()=>{cancelled=true;};
+  },[jobId]);
+
   async function toggleChannel(filename:string){
     const entry=channels[filename];
     if(!entry||channelBusy)return;
@@ -201,6 +219,32 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     for(const stem of stems)levels[stem.filename]={gain:effectiveGain(stem,anySolo)};
     audio.current?.setLevels(levels,monitorVolume/100);
   },[stems,anySolo,monitorVolume,audioReady]);
+
+  useEffect(()=>{
+    const engine=audio.current;
+    if(!engine?.ready||!panLoaded)return;
+    const byFile:Record<string,{pan:ReturnType<typeof compileSectionAutomation>}>={};
+    const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
+    for(const filename of files){
+      if(channels[filename]?.active)continue;
+      const saved=panTargets.filter(item=>item.source_key===filename);
+      if(!saved.length)continue;
+      const desired=saved.flatMap(item=>{
+        const section=sectionById.get(item.section_id);
+        return section?[{
+          sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+          value:item.pan,transitionSeconds:item.transition_seconds,curve:item.curve,
+        }]:[];
+      });
+      try{
+        byFile[filename]={pan:compileSectionAutomation(desired,0,{min:-1,max:1})};
+      }catch(e){
+        setError(e instanceof Error?e.message:"Invalid section pan automation");
+        return;
+      }
+    }
+    engine.setAutomation(byFile);
+  },[audioReady,panLoaded,panTargets,timelineSections,files,channels]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -357,6 +401,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }
 
   async function exportMix() {
+    if(panTargets.length){
+      setError("Pan automation is preview-only. WAV export cannot include it yet. Remove pan targets or await matched offline rendering.");
+      return;
+    }
     stop();
     setExporting(true);
     setMixUrl(null);
@@ -464,10 +512,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={items=>{
+          onApplied={(items,targets)=>{
+            setPanTargets(targets);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>
+        <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
+          splitFiles={files.filter(filename=>Boolean(channels[filename]?.active))}
+          targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>
           <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>

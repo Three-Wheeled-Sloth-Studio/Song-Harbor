@@ -564,6 +564,13 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         ident: value for ident, value in
         record.get("section_spatial_proposals", {}).items() if ident in keep
     }
+    record["section_pan_automation"] = [
+        target for target in record.get("section_pan_automation", [])
+        if target.get("section_id") in keep
+    ]
+    record["section_production"] = {
+        key: value for key, value in record.get("section_production", {}).items() if key in keep
+    }
     record["section_lyrics"] = {
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
@@ -571,6 +578,69 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}
+
+
+class SectionPanTarget(BaseModel):
+    section_id: str
+    source_key: str = Field(min_length=1, max_length=260)
+    pan: float = Field(ge=-1.0, le=1.0)
+    transition_seconds: float = Field(default=1.0, ge=0.05, le=30.0)
+    curve: str = "smooth"
+
+
+class SectionPanRequest(BaseModel):
+    targets: list[SectionPanTarget] = Field(max_length=2048)
+
+
+@app.get("/api/projects/{ident}/section-pan")
+def read_section_pan(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    return {"targets": record.get("section_pan_automation", [])}
+
+
+@app.put("/api/projects/{ident}/section-pan")
+def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    valid_sections = {section["id"] for section in record.get("sections", [])}
+    valid_sources = set(record.get("files", []))
+    seen: set[tuple[str, str]] = set()
+    targets = []
+    for target in body.targets:
+        key = (target.section_id, target.source_key)
+        if target.section_id not in valid_sections or target.source_key not in valid_sources:
+            raise HTTPException(400, "Pan targets must reference saved sections and source stems")
+        if key in seen or target.curve not in ("linear", "smooth"):
+            raise HTTPException(400, "Duplicate target or unsupported pan curve")
+        seen.add(key)
+        targets.append(target.model_dump())
+    record["section_pan_automation"] = targets
+    # Legacy structured pan editor remains authoritative for its pan instructions.
+    # Remove stale inline block pan for affected sections; preserve reset events.
+    import section_production
+    blocks = dict(record.get("section_production", {}))
+    for section in record.get("sections", []):
+        sid = section["id"]
+        base = [d for d in blocks.get(sid, []) if d["kind"] == "reset"]
+        for item in targets:
+            if item["section_id"] != sid:
+                continue
+            alias = next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]), None)
+            if alias and not any(d["track"] in ("all", alias) for d in base):
+                base.append({"kind": "pan", "track": alias, "pan": item["pan"],
+                             "transition_seconds": item["transition_seconds"], "curve": item["curve"]})
+        if base:
+            blocks[sid] = base
+        else:
+            blocks.pop(sid, None)
+    record["section_production"] = blocks
+    record["updated_at"] = time.time()
+    projects.write_project(DATA_ROOT, record)
+    return {"targets": targets}
 
 
 class SectionImportRequest(BaseModel):
@@ -592,12 +662,16 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             resolved_song_duration(record, job))
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, f"Import rejected: {exc}") from exc
+    retained_ids = {section["id"] for section in changed["sections"]}
+    record["section_production"] = changed["section_production"]
+    record["section_pan_automation"] = changed["section_pan_automation"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],
                    "updated_at": time.time()})
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
+            "pan_targets": changed["section_pan_automation"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
             "auto_distributed": changed["auto_distributed"],
@@ -612,7 +686,8 @@ def export_song_sections(ident: str) -> dict[str, Any]:
     return {"content": section_import.render_tags(record),
             "sections": record.get("sections", []),
             "spatial_proposals": record.get("section_spatial_proposals", {}),
-            "section_lyrics": record.get("section_lyrics", {})}
+            "section_lyrics": record.get("section_lyrics", {}),
+            "section_production": record.get("section_production", {})}
 
 
 class DawTargetRequest(BaseModel):

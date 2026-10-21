@@ -101,15 +101,15 @@ def parse_block(text: str) -> list[dict[str, Any]]:
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
-        suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
-        if d["kind"] == "reset":
-            head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
-        elif d["kind"] in ("fade", "tail"):
+        if d["kind"] in ("fade", "tail"):
             head = f"Master.{d['kind']}:{float(d['seconds']):g}s"
             if d["kind"] == "fade":
                 head += ":" + d["curve"]
             rendered.append(head)
             continue
+        suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
+        if d["kind"] == "reset":
+            head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
         elif d["kind"] == "space":
             head = f"{d['track']}.space:{d['amount']}"
         elif d["kind"] == "width":

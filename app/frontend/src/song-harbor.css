@@ -404,3 +404,6 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 
 /* Library inventory is a working surface too; no arbitrary 1450px letterbox. */
 .library-home{max-width:none;width:100%;margin:0}
+
+/* Shared-clock decoded audition preparation: concise, truthful loading feedback. */
+.audition-buffer-status{font-size:11px;color:var(--tws-color-text-muted);padding:5px 3px 8px;font-variant-numeric:tabular-nums}

@@ -12,7 +12,6 @@ import { SharedClockAudition, type AuditionSource } from "./SharedClockAudition"
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
-type MixResponse = { url: string; filename: string };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
@@ -59,6 +58,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
   const [mixUrl, setMixUrl] = useState<string | null>(null);
+  const renderedUrl=useRef<string|null>(null);
+  useEffect(()=>()=>{if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);},[]);
   const [error, setError] = useState("");
   const [channels,setChannels]=useState<ChannelSets>({});
   const [routingVersion,setRoutingVersion]=useState(0);
@@ -400,34 +401,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }
 
   async function exportMix() {
-    if(panTargets.length){
-      setError("Pan automation is preview-only. WAV export cannot include it yet. Remove pan targets or await matched offline rendering.");
-      return;
-    }
+    const engine=audio.current;
+    if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
     stop();
     setExporting(true);
     setMixUrl(null);
     setError("");
-    try {
-      const response = await fetch("/api/jobs/" + jobId + "/mix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stems: stemsRef.current.map(s => ({
-          filename: s.filename, gain: s.gain / 100, mute: s.mute, solo: s.solo,
-        })) }),
-      });
-      const data = await response.json() as MixResponse & { detail?: string };
-      if (!response.ok) {
-        if (response.status === 409 && /ffmpeg/i.test(data.detail || "") && onMissingFfmpeg) {
-          onMissingFfmpeg(() => { void exportMix(); });
-          return;
-        }
-        throw new Error(data.detail || "Mix export failed");
-      }
-      setMixUrl(data.url);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Mix export failed");
-    } finally {
+    try{
+      const blob=await engine.renderWav24();
+      if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);
+      renderedUrl.current=URL.createObjectURL(blob);
+      setMixUrl(renderedUrl.current);
+      setNotice("Rendered 24-bit WAV using the audition routing and section automation. Monitoring volume excluded.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"Processed WAV export failed");
+    }finally{
       setExporting(false);
     }
   }

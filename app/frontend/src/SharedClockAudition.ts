@@ -154,7 +154,7 @@ export class SharedClockAudition {
       this.monitorLevel*Math.pow(10,this.outputTrimDb/20),
       this.context.currentTime,0.015);
   }
-  /** Ending fades attenuate the dry mix, preserving the wet reverb return. */
+  /** End-anchored fade attenuates the dry mix and reverb excitation; existing wet decay survives. */
   setEnding(settings:{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}){
     const {fade_seconds,tail_seconds,curve}=settings;
     if(!Number.isFinite(fade_seconds)||fade_seconds<0||fade_seconds>30||
@@ -176,7 +176,7 @@ export class SharedClockAudition {
     }
     return points;
   }
-  /** Original A/B bypass is audition-only: saved mix and export remain processed. */
+  /** Audition-only effect bypass: the saved mix and offline export remain processed. */
   setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean}){
     if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
     this.bypassEffects={...effects};
@@ -205,7 +205,7 @@ export class SharedClockAudition {
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[]}>){
     this.automation=curves;
     if(this.running)this.seek(this.position);
   }

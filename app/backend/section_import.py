@@ -5,34 +5,125 @@ Spatial annotations are stored as nonexecuting proposals keyed to section IDs.
 """
 from __future__ import annotations
 import json
+import math
+import re
 from typing import Any
 import sections
 import production_cues
 
-def parse(content:str)->list[dict[str,Any]]:
-    stripped=content.strip()
-    if not stripped:raise ValueError("No sections supplied")
+def parse_untimed(line: str) -> dict[str, Any]:
+    """A plain section header may include a verse number and spatial proposals."""
+    if len(line) > 4096 or not line.startswith("[") or not line.endswith("]"):
+        raise ValueError("Expected a bracketed section header")
+    text = line[1:-1].strip()
+    kind = next((name for name in production_cues.TYPES if
+                 text.startswith(name) and
+                 (len(text) == len(name) or text[len(name)].isspace())), None)
+    if kind is None:
+        raise ValueError("Unknown section type")
+    remainder = text[len(kind):].strip()
+    number = None
+    tokens = remainder.split()
+    if tokens and tokens[0].isdigit():
+        number = int(tokens.pop(0))
+        if number < 1 or number > 99 or kind == "End":
+            raise ValueError("Invalid section number")
+    # Reuse the same spatial grammar as timed tags without inventing a time.
+    directives = []
+    used = set()
+    for token in tokens:
+        if token.count(":") != 1:
+            raise ValueError("Expected Track:Width[-Bias] or a numbered section")
+        track, width_bias = token.split(":")
+        pieces = width_bias.split("-")
+        if (not production_cues.NAME.fullmatch(track) or track in used
+                or len(pieces) not in (1, 2)
+                or pieces[0] not in production_cues.WIDTHS
+                or (len(pieces) == 2 and pieces[1] not in production_cues.BIASES)):
+            raise ValueError("Invalid or duplicate spatial directive")
+        used.add(track)
+        directives.append({"track_alias": track, "width": pieces[0].lower(),
+                           "bias": (pieces[1] if len(pieces) == 2 else "Center").lower()})
+        if len(directives) > 64:
+            raise ValueError("Too many spatial directives")
+    return {"kind": kind, "number": number, "spatial": directives}
+
+
+def parse(content: str) -> list[dict[str, Any]]:
+    stripped = content.strip()
+    if not stripped:
+        raise ValueError("No sections supplied")
     if stripped.startswith("{") or stripped.startswith("[{"):
-        try:data=json.loads(stripped)
-        except json.JSONDecodeError as exc:raise ValueError("Invalid JSON") from exc
-        entries=data.get("sections") if isinstance(data,dict) else data
-        if not isinstance(entries,list):raise ValueError("Expected a sections array")
-        result=[]
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Invalid JSON") from exc
+        entries = data.get("sections") if isinstance(data, dict) else data
+        if not isinstance(entries, list):
+            raise ValueError("Expected a sections array")
+        result = []
         for entry in entries:
-            if not isinstance(entry,dict):raise ValueError("Each section must be an object")
-            result.append({key:entry[key] for key in (
-                "id","kind","number","start_seconds","end_seconds","spatial")
-                if key in entry})
+            if not isinstance(entry, dict):
+                raise ValueError("Each section must be an object")
+            result.append({key: entry[key] for key in
+                           ("id", "kind", "number", "start_seconds", "end_seconds", "spatial")
+                           if key in entry})
         return result
-    result=[]
-    for index,line in enumerate(content.splitlines(),1):
-        line=line.strip()
-        if not line or line.startswith("#"):continue
-        try:cue=production_cues.parse_cue(line)
-        except ValueError as exc:raise ValueError(f"Line {index}: {exc}") from exc
-        result.append({**cue["section"],"spatial":cue["spatial"]})
-    if not result:raise ValueError("No timed sections found")
+
+    result = []
+    for index, line in enumerate(content.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # A pasted lyric sheet may contain verses between [section] headings.
+        # Do not silently interpret other [] directions as lyrics.
+        if not line.startswith("["):
+            continue
+        try:
+            # Any explicit timecode means this is a timed cue, validated strictly.
+            if re.search(r"\\d{1,3}:\\d{2}(?:\\.\\d{1,3})?-", line):
+                cue = production_cues.parse_cue(line)
+                result.append({**cue["section"], "spatial": cue["spatial"]})
+            else:
+                result.append(parse_untimed(line))
+        except ValueError as exc:
+            raise ValueError(f"Line {index}: {exc}") from exc
+    if not result:
+        raise ValueError("No recognized section headers found")
     return result
+
+
+def assign_initial_times(imported: list[dict[str, Any]], mode: str,
+                         previous: list[dict[str, Any]],
+                         duration: float | None) -> tuple[list[dict[str, Any]], bool, bool]:
+    """Auto-distribute untimed sections across the available song interval."""
+    timed = [("start_seconds" in s or "end_seconds" in s) for s in imported]
+    if any(timed) and not all(timed):
+        raise ValueError("Use either all timed or all untimed sections in one import")
+    if all(timed):
+        return imported, False, False
+    if not isinstance(duration, (int, float)) or not math.isfinite(duration) or duration <= 0:
+        raise ValueError("Song duration is required to place untimed sections")
+    # [End] is a terminator, not an audible section with a long arbitrary duration.
+    had_end = imported[-1]["kind"] == "End"
+    if had_end:
+        imported = imported[:-1]
+    if not imported:
+        raise ValueError("A song must contain at least one audible section")
+    if any(s["kind"] == "End" for s in imported):
+        raise ValueError("[End] is only supported as the final untimed terminator")
+    start = max((float(x["end_seconds"]) for x in previous), default=0.0) if mode == "append" else 0.0
+    available = float(duration) - start
+    if available < len(imported) * 0.1:
+        raise ValueError("Not enough unassigned song time to distribute these sections")
+    result = []
+    for index, section in enumerate(imported):
+        first = round(start + available * index / len(imported), 3)
+        last = (round(float(duration), 3) if index == len(imported) - 1
+                else round(start + available * (index + 1) / len(imported), 3))
+        result.append({**section, "start_seconds": first, "end_seconds": last})
+    return result, True, had_end
+
 
 def validate_spatial(raw:Any)->list[dict[str,str]]:
     if not isinstance(raw,list) or len(raw)>64:
@@ -54,26 +145,33 @@ def validate_spatial(raw:Any)->list[dict[str,str]]:
         clean.append({"track_alias":alias,"width":width,"bias":bias})
     return clean
 
-def apply(project:dict[str,Any],content:str,mode:str,duration:float|None)->dict[str,Any]:
-    if mode not in ("replace","append"):raise ValueError("Mode must be replace or append")
-    imported=parse(content)
-    old=project.get("sections",[])
-    combined=(old if mode=="append" else [])+imported
-    validated=sections.validate_sections(combined,duration=duration)
-    old_proposals=project.get("section_spatial_proposals",{})
-    proposals={x["id"]:old_proposals[x["id"]] for x in validated
-               if x["id"] in old_proposals and any(y.get("id")==x["id"] for y in old)}
+def apply(project: dict[str, Any], content: str, mode: str,
+          duration: float | None) -> dict[str, Any]:
+    if mode not in ("replace", "append"):
+        raise ValueError("Mode must be replace or append")
+    imported = parse(content)
+    old = project.get("sections", [])
+    imported, distributed, end_terminator = assign_initial_times(imported, mode, old, duration)
+    combined = (old if mode == "append" else []) + imported
+    validated = sections.validate_sections(combined, duration=duration)
+    old_proposals = project.get("section_spatial_proposals", {})
+    proposals = {x["id"]: old_proposals[x["id"]] for x in validated
+                 if x["id"] in old_proposals and any(y.get("id") == x["id"] for y in old)}
     for item in imported:
-        if "spatial" not in item:continue
-        spatial=validate_spatial(item["spatial"])
-        match=next((s for s in validated if
-            s["kind"]==item.get("kind") and s["number"]==item.get("number")
-            and s["start_seconds"]==round(float(item["start_seconds"]),3)
-            and s["end_seconds"]==round(float(item["end_seconds"]),3)),None)
-        if match is None:raise ValueError("Unable to match imported spatial annotation")
-        proposals[match["id"]]=spatial
-    return {"sections":validated,"section_spatial_proposals":proposals,
-            "imported_count":len(imported)}
+        if "spatial" not in item:
+            continue
+        spatial = validate_spatial(item["spatial"])
+        match = next((s for s in validated if
+                      s["kind"] == item.get("kind") and s["number"] == item.get("number")
+                      and s["start_seconds"] == round(float(item["start_seconds"]), 3)
+                      and s["end_seconds"] == round(float(item["end_seconds"]), 3)), None)
+        if match is None:
+            raise ValueError("Unable to match imported spatial annotation")
+        proposals[match["id"]] = spatial
+    return {"sections": validated, "section_spatial_proposals": proposals,
+            "imported_count": len(imported), "auto_distributed": distributed,
+            "end_terminator_ignored": end_terminator}
+
 
 def render_tags(project:dict[str,Any])->str:
     cues=project.get("section_spatial_proposals",{})

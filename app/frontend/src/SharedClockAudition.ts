@@ -19,6 +19,7 @@ export class SharedClockAudition {
   private master:GainNode;
   private tracks:Track[]=[];
   private groupPanners=new Map<string,StereoPannerNode>();
+  private renderedLevels:Record<string,number>={};
   private nodes:ActiveNode[]=[];
   private automation:Record<string,{pan?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
@@ -95,6 +96,7 @@ export class SharedClockAudition {
   }
   setLevels(levels:Record<string,AuditionLevel>,monitor:number){
     this.master.gain.value=Math.max(0,Math.min(1,monitor));
+    this.renderedLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
     for(const track of this.tracks){
       track.gain.gain.value=Math.max(0,Math.min(1,levels[track.source.filename]?.gain??0));
     }
@@ -104,6 +106,43 @@ export class SharedClockAudition {
     this.automation=curves;
     if(this.running)this.seek(this.position);
   }
+  /**
+   * Deterministic offline bounce from the SAME decoded buffers, stem routing,
+   * levels and section curves as playback. Monitoring volume is excluded.
+   * Throws rather than silently limiting a clipping mix differently from preview.
+   */
+  async renderWav24():Promise<Blob>{
+    if(!this.ready)throw Error("Synchronized audio must finish loading before export");
+    const sampleRate=this.context.sampleRate;
+    const frames=Math.ceil(this.durationSeconds*sampleRate);
+    if(frames<1||frames>sampleRate*60*15)throw Error("Offline export supports up to 15 minutes");
+    const offline=new OfflineAudioContext(2,frames,sampleRate);
+    const group=new Map<string,StereoPannerNode>();
+    for(const track of this.tracks){
+      let bus=group.get(track.source.filename);
+      if(!bus){
+        bus=offline.createStereoPanner();
+        bus.pan.value=0;
+        bus.connect(offline.destination);
+        group.set(track.source.filename,bus);
+      }
+      const source=offline.createBufferSource();
+      source.buffer=track.buffer;
+      const gain=offline.createGain();
+      gain.gain.value=this.renderedLevels[track.source.filename]??0;
+      const childPan=offline.createStereoPanner();
+      childPan.pan.value=track.source.pan;
+      source.connect(gain).connect(childPan).connect(bus);
+      source.start(0);
+    }
+    for(const [filename,bus] of group){
+      const curve=this.automation[filename]?.pan;
+      if(curve)scheduleAutomation(bus.pan,curve,0,0);
+    }
+    const rendered=await offline.startRendering();
+    return encodeWav24(rendered);
+  }
+
   async play(){
     if(!this.ready)throw Error("Audio still loading");
     if(this.running)return;
@@ -182,4 +221,39 @@ export class SharedClockAudition {
     this.master.disconnect();
     await this.context.close().catch(()=>{});
   }
+}
+
+/** Stereo 24-bit PCM WAV. No normalizer/limiter: audible mix and export match. */
+function encodeWav24(buffer:AudioBuffer):Blob{
+  const left=buffer.getChannelData(0),right=buffer.getChannelData(1);
+  const frames=buffer.length;
+  const bytes=44+frames*6;
+  const array=new ArrayBuffer(bytes);
+  const view=new DataView(array);
+  const ascii=(offset:number,value:string)=>{
+    for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i));
+  };
+  ascii(0,"RIFF");view.setUint32(4,bytes-8,true);ascii(8,"WAVE");
+  ascii(12,"fmt ");view.setUint32(16,16,true);view.setUint16(20,1,true);
+  view.setUint16(22,2,true);view.setUint32(24,buffer.sampleRate,true);
+  view.setUint32(28,buffer.sampleRate*6,true);view.setUint16(32,6,true);
+  view.setUint16(34,24,true);ascii(36,"data");view.setUint32(40,frames*6,true);
+  let peak=0;
+  for(let i=0;i<frames;i++){
+    peak=Math.max(peak,Math.abs(left[i]),Math.abs(right[i]));
+  }
+  if(!Number.isFinite(peak)||peak>1.00001)
+    throw Error("Rendered mix peaks above 0 dBFS. Lower stem gains and retry to avoid clipping.");
+  for(let i=0;i<frames;i++){
+    const samples=[left[i],right[i]];
+    for(let ch=0;ch<2;ch++){
+      const sample=Math.max(-1,Math.min(1,samples[ch]));
+      const signed=Math.round(sample<0?sample*8388608:sample*8388607);
+      const off=44+i*6+ch*3;
+      view.setUint8(off,signed&255);
+      view.setUint8(off+1,(signed>>8)&255);
+      view.setUint8(off+2,(signed>>16)&255);
+    }
+  }
+  return new Blob([array],{type:"audio/wav"});
 }

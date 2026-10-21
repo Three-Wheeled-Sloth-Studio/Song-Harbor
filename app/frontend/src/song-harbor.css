@@ -7,6 +7,8 @@ body{margin:0;min-width:320px}
 .brand strong{font-size:15px;letter-spacing:.015em}
 .brand-mark{color:#8ed5d1;font-size:22px}
 .brand-divider{color:#607985}
+.song-version-badge{display:inline-block;max-width:122px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--tws-color-border-normal);border-radius:6px;padding:3px 6px;color:var(--tws-color-text-muted);font:10px/1.2 Consolas,monospace;font-variant-numeric:tabular-nums;letter-spacing:0}
+@media(max-width:650px){.song-version-badge{max-width:65px}}
 .workspace{max-width:1440px;margin:auto;padding:26px 30px 22px}
 .workspace-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:26px}
 .eyebrow{font-size:11px;letter-spacing:.16em;color:#83c4ca;font-weight:700;margin:0 0 9px}

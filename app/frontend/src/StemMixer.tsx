@@ -222,8 +222,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         available.push({player,time:current,audible});
       }
       if(available.length===0){
-        // Buffered audio has genuinely stopped moving. Keep the last meaningful
-        // media position instead of inventing progress with a wall-clock timer.
+        // When all tracks end, stop even though none can be a moving clock.
+        // If they are merely buffering, hold the last genuine audio position.
+        if(entries.every(([,player])=>player.ended))stop();
         return;
       }
       const audible=available.filter(item=>item.audible);

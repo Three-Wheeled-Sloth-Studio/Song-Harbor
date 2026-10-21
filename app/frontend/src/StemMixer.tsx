@@ -60,6 +60,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [routingVersion,setRoutingVersion]=useState(0);
   const [channelBusy,setChannelBusy]=useState(false);
   const [zoom,setZoom]=useState(1);
+  const timelineRef=useRef<HTMLElement|null>(null);
   const [viewportOffset,setViewportOffset]=useState(0);
   const [loopEnabled,setLoopEnabled]=useState(false);
   const [loopIn,setLoopIn]=useState<number|null>(null);
@@ -74,6 +75,36 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const visibleSeconds=duration>0?duration/zoom:0;
   const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
   const viewEnd=duration>0?viewStart+visibleSeconds:0;
+  // Timeline wheel zooms around the pointer; Shift+wheel pans the visible window.
+  // Native non-passive handler ensures preventDefault works in Chromium.
+  useEffect(()=>{
+    const element=timelineRef.current;
+    if(!element)return;
+    const choices=[1,2,4,8,16];
+    function wheel(event:WheelEvent){
+      if(!duration)return;
+      const amount=event.deltaY||event.deltaX;
+      if(!amount)return;
+      event.preventDefault();
+      if(event.shiftKey){
+        setViewportOffset(current=>Math.max(0,Math.min(1,current+Math.sign(amount)*0.07)));
+        return;
+      }
+      const bounds=element!.getBoundingClientRect();
+      const fraction=Math.max(0,Math.min(1,(event.clientX-bounds.left)/Math.max(1,bounds.width)));
+      const currentZoom=zoom;
+      const currentIndex=choices.indexOf(currentZoom);
+      const nextZoom=choices[Math.max(0,Math.min(choices.length-1,currentIndex+(amount>0?-1:1)))];
+      if(nextZoom===currentZoom)return;
+      const point=(duration-duration/currentZoom)*viewportOffset+fraction*duration/currentZoom;
+      const nextWidth=duration/nextZoom;
+      const nextOffset=nextZoom===1?0:(point-fraction*nextWidth)/(duration-nextWidth);
+      setZoom(nextZoom);
+      setViewportOffset(Math.max(0,Math.min(1,nextOffset)));
+    }
+    element.addEventListener("wheel",wheel,{passive:false});
+    return ()=>element.removeEventListener("wheel",wheel);
+  },[duration,zoom,viewportOffset]);
 
   const refreshChannels=useCallback(async()=>{
     const r=await fetch("/api/projects/"+jobId+"/channels");
@@ -319,7 +350,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-label="Playback monitoring volume" onChange={e => setMonitorVolume(Number(e.target.value))} />
       </label>
     </div>
-    <section className="integrated-timeline" aria-label="Integrated production timeline">
+    <section ref={timelineRef} className="integrated-timeline" aria-label="Integrated production timeline">
       <div className="integrated-timeline-heading"><strong>Production timeline</strong><span>Sections · audio waveforms · derived channels · loop</span></div>
     <div className="timeline-loop-controls">
       <strong>Region loop</strong>
@@ -332,12 +363,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>Clear</button>
     </div>
     <div className="timeline-zoom-controls">
-      <label>Zoom <select value={zoom} onChange={e=>{setZoom(Number(e.target.value));setViewportOffset(0);}}>
+      <label>Zoom <select value={zoom} onChange={e=>setZoom(Number(e.target.value))}>
         {[1,2,4,8,16].map(v=><option key={v} value={v}>{v}×</option>)}
       </select></label>
-      <input type="range" aria-label="Scroll timeline" min="0" max="1" step=".001"
-        value={viewportOffset} disabled={zoom===1} onChange={e=>setViewportOffset(Number(e.target.value))}/>
+      <input type="range" aria-label="Timeline zoom" min="0" max="4" step="1"
+        value={Math.log2(zoom)} onChange={e=>setZoom(2**Number(e.target.value))}/>
+      {zoom>1&&<label className="timeline-pan-label">Pan
+        <input type="range" aria-label="Pan timeline horizontally" min="0" max="1" step=".001"
+          value={viewportOffset} onChange={e=>setViewportOffset(Number(e.target.value))}/>
+      </label>}
       <span>{timecode(viewStart)} – {timecode(viewEnd)}</span>
+      <small>Wheel: zoom · Shift+wheel: pan</small>
     </div>
     <SectionEditor jobId={jobId} duration={duration} position={position} initialSections={initialSections}
       onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}/>

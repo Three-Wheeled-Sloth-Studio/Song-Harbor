@@ -25,6 +25,9 @@ export class MixHeadroomError extends Error{
 export class SharedClockAudition {
   readonly context:AudioContext;
   private master:GainNode;
+  private dryMaster:GainNode;
+  private sourceDurationSeconds=0;
+  private ending={fade_seconds:0,tail_seconds:0,curve:"smooth" as "smooth"|"linear"};
   private tracks:Track[]=[];
   private groupPanners=new Map<string,StereoPannerNode>();
   private reverb:ConvolverNode;
@@ -45,6 +48,8 @@ export class SharedClockAudition {
     this.context=new AudioContext();
     this.master=this.context.createGain();
     this.master.connect(this.context.destination);
+    this.dryMaster=this.context.createGain();
+    this.dryMaster.connect(this.master);
     this.reverb=this.context.createConvolver();
     this.reverb.normalize=false;
     this.reverb.buffer=createRoomImpulse(this.context);
@@ -90,7 +95,7 @@ export class SharedClockAudition {
         if(!bus){
           bus=this.context.createStereoPanner();
           bus.pan.value=0;
-          bus.connect(this.master);
+          bus.connect(this.dryMaster);
           const send=this.context.createGain();
           send.gain.value=0;
           bus.connect(send).connect(this.reverb);
@@ -105,7 +110,8 @@ export class SharedClockAudition {
         this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
       }
-      this.durationSeconds=maxDuration;
+      this.sourceDurationSeconds=maxDuration;
+      this.durationSeconds=maxDuration+this.ending.tail_seconds;
       this.prepared=true;
     }catch(err){
       this.clearTracks();
@@ -133,6 +139,28 @@ export class SharedClockAudition {
       this.monitorLevel*Math.pow(10,this.outputTrimDb/20),
       this.context.currentTime,0.015);
   }
+  /** Ending fades attenuate the dry mix, preserving the wet reverb return. */
+  setEnding(settings:{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}){
+    const {fade_seconds,tail_seconds,curve}=settings;
+    if(!Number.isFinite(fade_seconds)||fade_seconds<0||fade_seconds>30||
+       !Number.isFinite(tail_seconds)||tail_seconds<0||tail_seconds>10||
+       !["linear","smooth"].includes(curve))throw Error("Invalid ending treatment");
+    this.ending={fade_seconds,tail_seconds,curve};
+    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+tail_seconds;
+    if(this.running)this.seek(this.position);
+  }
+  private fadePoints():AutomationPoint[]{
+    const {fade_seconds,curve}=this.ending;
+    if(fade_seconds<=0)return [{time:0,value:1}];
+    const start=Math.max(0,this.sourceDurationSeconds-fade_seconds);
+    const points:AutomationPoint[]=[{time:0,value:1},{time:start,value:1}];
+    const steps=curve==="smooth"?16:1;
+    for(let i=1;i<=steps;i++){
+      const x=i/steps;
+      points.push({time:start+fade_seconds*x,value:curve==="smooth"?1-x*x*(3-2*x):1-x});
+    }
+    return points;
+  }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){
     this.automation=curves;
@@ -150,6 +178,9 @@ export class SharedClockAudition {
     if(frames<1||frames>sampleRate*60*15)throw Error("Offline export supports up to 15 minutes");
     const offline=new OfflineAudioContext(2,frames,sampleRate);
     const group=new Map<string,StereoPannerNode>();
+    const dry=offline.createGain();
+    dry.connect(offline.destination);
+    scheduleAutomation(dry.gain,this.fadePoints(),0,0);
     const convolver=offline.createConvolver();
     convolver.normalize=false;
     convolver.buffer=createRoomImpulse(offline);
@@ -160,7 +191,7 @@ export class SharedClockAudition {
       if(!bus){
         bus=offline.createStereoPanner();
         bus.pan.value=0;
-        bus.connect(offline.destination);
+        bus.connect(dry);
         const send=offline.createGain();
         send.gain.value=0;
         bus.connect(send).connect(convolver);
@@ -234,6 +265,7 @@ export class SharedClockAudition {
           else{send.gain.cancelScheduledValues(startAt);send.gain.setValueAtTime(0,startAt);}
         }
       }
+      scheduleAutomation(this.dryMaster.gain,this.fadePoints(),offset,startAt);
       for(const node of made)node.start(startAt,offset);
       this.nodes=made;
       this.offset=offset;
@@ -247,6 +279,7 @@ export class SharedClockAudition {
   }
   private stopSources(){
     this.running=false;
+    this.dryMaster.gain.cancelScheduledValues(this.context.currentTime);
     for(const bus of this.groupPanners.values())bus.pan.cancelScheduledValues(this.context.currentTime);
     for(const send of this.reverbSends.values())send.gain.cancelScheduledValues(this.context.currentTime);
     for(const node of this.nodes){
@@ -264,13 +297,14 @@ export class SharedClockAudition {
     this.groupPanners.clear();
     this.reverbSends.clear();
     this.tracks=[];
-    this.durationSeconds=0;this.offset=0;
+    this.durationSeconds=0;this.sourceDurationSeconds=0;this.offset=0;
   }
   async dispose(){
     this.disposed=true;
     this.loadController?.abort();
     this.clearTracks();
     this.reverb.disconnect();
+    this.dryMaster.disconnect();
     this.master.disconnect();
     await this.context.close().catch(()=>{});
   }

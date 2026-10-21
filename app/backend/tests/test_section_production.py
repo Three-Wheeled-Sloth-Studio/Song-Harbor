@@ -109,6 +109,25 @@ class ProductionNotationTests(unittest.TestCase):
             with self.subTest(invalid=invalid),self.assertRaises(ValueError):
                 section_production.parse_block(invalid)
 
+    def test_real_full_spatial_sheet_reloads_with_ending(self):
+        source = (Path(__file__).resolve().parents[3] / "docs" /
+                  "qa-full-spatial-the-logo-and-the-maw.txt").read_text(encoding="utf-8")
+        parsed = section_import.apply({"sections": [], "files": FILES}, source, "replace", 240)
+        self.assertEqual(len(parsed["sections"]), 13)
+        self.assertEqual(parsed["section_ending"]["fade_seconds"], 4)
+        self.assertEqual(parsed["section_ending"]["tail_seconds"], 3)
+        self.assertTrue(parsed["section_space_automation"])
+        self.assertTrue(parsed["section_width_automation"])
+        project = {"files": FILES, **parsed}
+        exported = section_import.render_tags(project)
+        self.assertIn("Master.fade:4s:smooth", exported)
+        self.assertIn("Master.tail:3s", exported)
+        restored = section_import.apply(project, exported, "replace", 240)
+        self.assertEqual(restored["section_space_automation"], parsed["section_space_automation"])
+        self.assertEqual(restored["section_width_automation"], parsed["section_width_automation"])
+        self.assertEqual(restored["section_ending"], parsed["section_ending"])
+        self.assertEqual(restored["section_lyrics"], parsed["section_lyrics"])
+
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Vocals.width:151@4s:smooth}")

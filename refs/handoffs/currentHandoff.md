@@ -7,6 +7,50 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## START HERE — 2026-10-21 handoff after in-app updates and section EQ
+
+**Branch:** Work directly on `main` of `Three-Wheeled-Sloth-Studio/Song-Harbor`. Supported Windows launcher: `scripts/launch-song-harbor.bat`. Checkout observed at `C:\\Apps\\Song-Harbor`, with separate runtime `C:\\Apps\\SongHarbor`. Launcher safely fast-forwards updates when Git permits, builds frontend (`tsc --noEmit && vite build`), then starts one FastAPI server on an available loopback port; Vite is build-time only. Local projects and source WAVs are non-destructive. See `app/README.md` for setup. **Do not start another feature branch or resurrect superseded HTMLAudioElement multi-stream transport.**
+
+### Latest user acceptance and open verification
+
+- User confirmed the final *The Logo and the Maw* spatial treatment is **“very good and epic”**. The processed in-app audio and exported WAV were both reported to sound good after the fade-excitation fix. Audible section pan and widening carry through the export. The section EQ sounds **“subtle, but good”** in the latest feedback. Treat these as *user listening acceptance*, not proof of numerical null/parity or every individual code path.
+- The earlier clipping error now offers one-click, non-destructive master output trim. Browser-generated 24-bit WAV requires an explicit **Download WAV** click; actual destination is controlled by browser settings. Master trim is **session-only**, not persisted.
+- Sections text reload previously failed due to a backend `render_block` attempt to access `transition_seconds` on `Master.fade`/`Master.tail`; serializer ordering and editor cache refresh were repaired, and the 13-section full sheet has a regression fixture. User had to reenter a block before fix; no later explicit section-reload acceptance report. Do not assert that long-term persistence has been verified end-to-end.
+- Latest new `↻` update-check/relaunch control has **not** been verified by user on Windows. No completed CI run for the latest group of commits has been confirmed here, and the assistant did not execute a full local build. Before expanding DSP, QA its header display, update status, independent PowerShell handoff, process shutdown/restart, project persistence, and Git conflict protection. Review `app/backend/app_update.py`, `scripts/relaunch-song-harbor.ps1`, `app/frontend/src/UpdateControl.tsx`.
+- The prior harmless `GET /favicon.ico 404` led to `public/favicon.svg`, `index.html` reference and FastAPI `/favicon.svg` route. This avoids requests from the new page icon, but legacy explicit `/favicon.ico` probes can still 404 harmlessly.
+
+### Current production stack — distinguish implemented from planned
+
+- Local six-stem separation (Vocals/Drums/Bass/Guitar/Piano/Other), song Library/project persistence, waveform overview, section timeline, split L/R source routing with parent exclusivity, and stable shared-clock Web Audio `AudioBufferSourceNode` transport. Decode limit **768 MiB** and >150ms stem-duration mismatch check; no fallback to phase-unsafe independent media streams. User previously found split-channel drift and waveform-stall bugs; shared-clock approach is the accepted architecture.
+- 13-section *The Logo and the Maw* test content: `docs/qa-full-spatial-the-logo-and-the-maw.txt` (four-minute source, Outro 3:48.183–4:00, optional 3s wet post-roll to ~4:03). Preserve existing lyrics, exact section labels/timings, and inherited effects; do not regenerate new lyrics or automatically replace sheet while testing other effects.
+- Canonical production grammar: one `[Section time]` line, optional **single** `{...}` directive line and original lyrics beneath. Supported `Track.pan:left.40@2s:smooth`, `Track.width:135@2s:smooth` (0–150%), `Track.space:20@2s:smooth` (0–40 cross-channel early reflections), `Track.reverb:35@2s:smooth` (0–100 send), `Track.eq1:320,1.2,-2@2s:smooth` (three peaking EQ bands, 30–16000Hz, Q .3–12, ±12dB), resets, `Master.fade:4s:smooth`, `Master.tail:3s` on final section. Directives inherit across omitted sections; unknown directives are rejected, not silently ignored.
+- Playback and offline rendering share stem gains, pan curves, EQ, M/S width, short spatial reflections, reverb and end fade. End fade now attenuates both **dry mix** and **reverb excitation** before convolution, while retaining decay of already-generated reverb into the post-roll. Offline renderer applies master trim; monitor volume is excluded. A/B bypass for pan, width, space, reverb, EQ and ending is **audition-only**, does not alter saved mix or WAV. It is not perceived-loudness matched.
+- Structured editors: sections, pan, reverb, width, spatial reflections, ending treatments and now **Parametric EQ**; GET/PUT section target APIs, saved production blocks and text round-trip. EQ filters are three cascaded Web Audio peaking BiquadFilters after reconstruction of split L/R and before width; static scripted EQ by section is implemented, but dynamic threshold-following EQ, compression, sidechaining and advanced repair are **not**.
+- In-app safe update/relaunch implemented: manual ↻ Git check (fetch does not overwrite tree), per-instance token + same-origin POST, refuse busy server/diverged branch, independent `pwsh` helper waits for old backend PID then uses existing `update-checkout.ps1` and reopens standard launcher. **First Windows end-to-end QA is pending**. Save unapplied browser edits before restart. Never silently kill active jobs, reset/stash conflicting files, or kill unrelated listeners.
+
+### Accepted priorities for next thread (in order)
+
+1. **Stabilization / QA first:** Run normal launcher on `main` and confirm frontend TypeScript build, backend import/tests and actual ↻ update/relaunch on Windows. Test safe update with latest available commit, dirty unrelated file, busy job refusal, and old-window/new-window behavior. Address errors before starting more DSP. Reverify EQ persistence plus audio preview/WAV parity and final 4s fade + 3s tail.
+2. **Next DSP slice: section/phrase-aware compression + source-aware ducking**. Design a consistent live/offline graph; detector/threshold/ratio/attack/release/makeup, gain reduction metering; sidechain signal from vocals or selected stem to guitars/Other, with reversible intensity and independent range/section automation. Start conservatively: AI-generated music is often already compressed. Follow with **de-essing** using frequency-selective dynamics.
+3. **First sound cleanup workbench:** detect and mark click/pop, clipping, harsh resonance, de-essing candidates, high-frequency fizz, mono/phase issues and separated-stem bleed; offer precise region looping → conservative suggested gain/EQ/fade repair → A/B → accept/revert. Add **time-range/phrase-level directives** because sections alone are too coarse for isolated defects. Preserve original stems and provenance.
+4. **Next script features:** dynamic EQ, rhythmic/tempo-synchronized stereo delay, loudness-matched A/B, true/sample-peak/stereo-correlation/mono QA, versioned mixer renders with honest open-folder links and persisted master trim.
+5. **Deferred UI pass:** right Tools sidebar has become text-heavy. User explicitly wants **compact, icon-first tools, informative state, and details in pop-out modals/inspectors**, retaining as much waveform/timeline width as possible. Follow shared TWS Design Principles; no blank outer margins or narrowed editor.
+6. **Longer-term, still accepted:** full effects rack **and third-party plugin hosting**, native model generation/ACE-Step/YuE2 adapters, Second Take targeted revision/remix, local model workbench, standalone packaging, optional cloud handoff. Plugin format, licensing, sandbox/security, realtime/offline render determinism are open architecture choices. These are not replaced by the script-first priority.
+
+**User product principle:** develop unique section-/stem-/phrase-scriptable operations that otherwise require extensive manual clip cutting and per-region effects in a DAW; retain non-destructive source, preview/export parity, local-first, compact efficient UI and future conventional effects/plugin extensibility. Band usage (*Infra Choir*) is a testing use case, not Song Harbor product branding.
+
+### Immediate source map / instructions
+
+- `app/frontend/src/SharedClockAudition.ts`, `SectionAutomation.ts`, `SectionEq.ts`, `StereoWidth.ts`, `SpatialReflection.ts` — DSP and shared-clock audition/offline bounce.
+- `app/frontend/src/StemMixer.tsx`, `SectionsTool.tsx`, `SectionEqTool.tsx`, `UpdateControl.tsx` — orchestration/controls.
+- `app/backend/section_production.py`, `section_import.py`, `server.py`, `app_update.py` — grammar, project persistence, API, update/restart.
+- `scripts/update-checkout.ps1`, `start-song-harbor.ps1`, `relaunch-song-harbor.ps1`, `app/run.ps1` — Windows boot/update.
+- `docs/remote-daw-waveform-restoration-discovery.md` — effect/cleanup priority detail; `docs/section-automation-p0-implementation.md` — historical slice/test notes; `docs/spatial-choreography-target-the-logo-and-the-maw.md` — artistic spatial targets; `docs/qa-full-spatial-the-logo-and-the-maw.txt` — full original test section sheet.
+
+**Next-thread opening request:** “Continue Song Harbor on `main` from `refs/handoffs/currentHandoff.md`, START HERE section. Verify new in-app update/relaunch and EQ build/persistence, then implement conservative section-aware compression and vocal-keyed ducking with shared audition/WAV processing, tests and non-destructive structured scripting. Preserve existing spatial/ending work and compact-UI debt.”
+
+---
+
 ## 2026-10-21 stereo channels drifting mid-song: replaced multi-stream transport
 User verified previous cursor fix improved alignment, but left/right channels and stems audibly slipped apart halfway through playback. Fundamental architecture defect: independent media elements each have their own buffering/decoder clock, and prior per-stem playbackRate/drift-seek correction is unsafe for phase-coherent music.
 

@@ -18,6 +18,7 @@ export class SharedClockAudition {
   readonly context:AudioContext;
   private master:GainNode;
   private tracks:Track[]=[];
+  private groupPanners=new Map<string,StereoPannerNode>();
   private nodes:ActiveNode[]=[];
   private automation:Record<string,{pan?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
@@ -68,10 +69,17 @@ export class SharedClockAudition {
         }
         maxDuration=Math.max(maxDuration,buffer.duration);
         const gain=this.context.createGain();
+        let bus=this.groupPanners.get(src.filename);
+        if(!bus){
+          bus=this.context.createStereoPanner();
+          bus.pan.value=0;
+          bus.connect(this.master);
+          this.groupPanners.set(src.filename,bus);
+        }
         let panner:StereoPannerNode|undefined;
         panner=this.context.createStereoPanner();
         panner.pan.value=src.pan;
-        gain.connect(panner).connect(this.master);
+        gain.connect(panner).connect(bus);
         gain.gain.value=0;
         this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
@@ -91,7 +99,7 @@ export class SharedClockAudition {
       track.gain.gain.value=Math.max(0,Math.min(1,levels[track.source.filename]?.gain??0));
     }
   }
-  /** Source-keyed pan automation. Parent and split child routing stay exclusive. */
+  /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{pan?:AutomationPoint[]}>){
     this.automation=curves;
     if(this.running)this.seek(this.position);
@@ -130,12 +138,12 @@ export class SharedClockAudition {
         node.connect(track.gain);
         made.push(node);
       }
-      for(const track of this.tracks){
-        const curve=this.automation[track.source.key]?.pan;
-        if(curve&&track.panner)scheduleAutomation(track.panner.pan,curve,offset,startAt);
-        else if(track.panner){
-          track.panner.pan.cancelScheduledValues(startAt);
-          track.panner.pan.setValueAtTime(track.source.pan,startAt);
+      for(const [filename,bus] of this.groupPanners){
+        const curve=this.automation[filename]?.pan;
+        if(curve)scheduleAutomation(bus.pan,curve,offset,startAt);
+        else{
+          bus.pan.cancelScheduledValues(startAt);
+          bus.pan.setValueAtTime(0,startAt);
         }
       }
       for(const node of made)node.start(startAt,offset);
@@ -151,7 +159,7 @@ export class SharedClockAudition {
   }
   private stopSources(){
     this.running=false;
-    for(const track of this.tracks)track.panner?.pan.cancelScheduledValues(this.context.currentTime);
+    for(const bus of this.groupPanners.values())bus.pan.cancelScheduledValues(this.context.currentTime);
     for(const node of this.nodes){
       try{node.stop();}catch{/* node may have ended */}
       node.disconnect();
@@ -162,6 +170,8 @@ export class SharedClockAudition {
     this.prepared=false;
     this.stopSources();
     for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
+    for(const bus of this.groupPanners.values())bus.disconnect();
+    this.groupPanners.clear();
     this.tracks=[];
     this.durationSeconds=0;this.offset=0;
   }

@@ -230,10 +230,10 @@ export class SharedClockAudition {
     for(const [filename,settings] of Object.entries(curves)){
       const duck=settings.dynamics?.duck;
       if(!duck)continue;
-      const key=this.tracks.find(track=>track.source.filename===duck.keyFilename);
-      if(!key)continue;
+      const keys=this.tracks.filter(track=>track.source.filename===duck.keyFilename);
+      if(!keys.length)continue;
       const gain=this.renderedLevels[duck.keyFilename]??0;
-      this.duckEnvelopes.set(filename,makeDuckingEnvelope(key.buffer,duck.depthDb,gain));
+      this.duckEnvelopes.set(filename,makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain));
     }
     if(this.running)this.seek(this.position);
   }

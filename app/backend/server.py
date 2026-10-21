@@ -31,6 +31,7 @@ import audacity_handoff
 import channel_split
 import waveform_peaks
 import track_routing
+import app_update
 import library
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
@@ -119,6 +120,38 @@ def runtime_status() -> dict[str, Any]:
                       for job in jobs.values())
     return {"instance_token": os.environ.get("SONG_HARBOR_INSTANCE_TOKEN", ""),
             "pid": os.getpid(), "busy": running > 0, "active_jobs": running}
+
+
+@app.get("/api/runtime/update")
+def inspect_app_update() -> dict[str, Any]:
+    state=app_update.git_info(Path(__file__).resolve().parents[2])
+    state["busy"]=runtime_status()["busy"]
+    return state
+
+
+class RestartRequest(BaseModel):
+    instance_token: str = Field(min_length=16, max_length=100)
+
+
+@app.post("/api/runtime/update/relaunch")
+def restart_with_update(body: RestartRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    expected=os.environ.get("SONG_HARBOR_INSTANCE_TOKEN","")
+    if not expected or body.instance_token != expected:
+        raise HTTPException(403,"This Song Harbor instance is no longer current")
+    if runtime_status()["busy"]:
+        raise HTTPException(409,"Processing is active. Finish current work before restarting.")
+    repository=Path(__file__).resolve().parents[2]
+    state=app_update.git_info(repository)
+    if not state.get("supported") or not state.get("can_fast_forward"):
+        raise HTTPException(409, state.get("reason") or "Cannot update this checkout safely")
+    try:
+        app_update.begin_relaunch(repository,APP_ROOT,os.getpid())
+    except (OSError,RuntimeError) as exc:
+        raise HTTPException(500,f"Could not open update launcher: {exc}") from exc
+    app_update.stop_after_response()
+    return {"restarting":True,
+            "message":"A separate update console will rebuild and reopen Song Harbor. Save unsaved browser edits before using this action."}
 
 
 def dependency_tool(name: str) -> str:

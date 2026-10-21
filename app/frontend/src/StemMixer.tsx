@@ -6,6 +6,7 @@ import { SectionEditor } from "./SectionEditor";
 import { ChannelSplitter } from "./ChannelSplitter";
 import { StemWaveforms } from "./StemWaveforms";
 import { SectionsTool } from "./SectionsTool";
+import { SharedClockAudition, type AuditionSource } from "./SharedClockAudition";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -71,12 +72,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [loopEnabled,setLoopEnabled]=useState(false);
   const [loopIn,setLoopIn]=useState<number|null>(null);
   const [loopOut,setLoopOut]=useState<number|null>(null);
-  const context=useRef<AudioContext|null>(null);
-  const audio = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audio=useRef<SharedClockAudition|null>(null);
+  const [audioLoad,setAudioLoad]=useState<{ready:number;total:number}|null>(null);
+  const [audioReady,setAudioReady]=useState(false);
+  const monitorRef=useRef(monitorVolume);
+  monitorRef.current=monitorVolume;
   const playRef = useRef(false);
   const transportGeneration=useRef(0);
-  const lastHardResync=useRef(0);
-  const clockSamples=useRef(new Map<HTMLAudioElement,number>());
   const seekRef = useRef(0);
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
@@ -137,182 +139,121 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }
   const stop = useCallback(() => {
     transportGeneration.current+=1;
-    playRef.current = false;
+    playRef.current=false;
+    audio.current?.pause();
     setPlaying(false);
-    audio.current.forEach(element => {element.pause();element.playbackRate=1;});
-    clockSamples.current.clear();
-  }, []);
-
-  useEffect(() => {
-    const players=new Map<string,HTMLAudioElement>();
-    const ctx=new AudioContext();
-    context.current=ctx;
-    for(const filename of files){
-      const split=channels[filename];
-      const sources=split?.active
-        ? [{key:filename+":left",url:split.tracks.left.url,pan:-1},
-           {key:filename+":right",url:split.tracks.right.url,pan:1}]
-        : [{key:filename,url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0}];
-      for(const item of sources){
-        const player=new Audio(item.url);
-        player.preload="auto";
-        player.addEventListener("loadedmetadata",()=>{
-          if(Number.isFinite(player.duration))setDuration(current=>Math.max(current,player.duration));
-        });
-        player.addEventListener("error",()=>{
-          setError("An audio stream failed. Verify the derived channel files.");
-          stop();
-        });
-        const source=ctx.createMediaElementSource(player);
-        if(item.pan===0)source.connect(ctx.destination);
-        else {
-          const panner=ctx.createStereoPanner();
-          panner.pan.value=item.pan;
-          source.connect(panner).connect(ctx.destination);
-        }
-        players.set(item.key,player);
-      }
-    }
-    audio.current=players;
-    setDuration(expectedDuration||0);
-    setPosition(0);setPlaying(false);playRef.current=false;
-    lastHardResync.current=0;
-    clockSamples.current.clear();
-    return ()=>{
-      players.forEach(p=>{p.pause();p.removeAttribute("src");p.load();});
-      players.clear();
-      void ctx.close();
-      if(context.current===ctx)context.current=null;
-    };
-  },[files,jobId,expectedDuration,stop,routingVersion]);
+    setPosition(audio.current?.position??0);
+  },[]);
 
   useEffect(()=>{
-    for(const stem of stems){
-      const entry=channels[stem.filename];
-      const keys=entry?.active?[stem.filename+":left",stem.filename+":right"]:[stem.filename];
-      for(const key of keys){
-        const player=audio.current.get(key);
-        if(player)player.volume=Math.min(1,Math.max(0,effectiveGain(stem,anySolo)*monitorVolume/100));
+    let cancelled=false;
+    const generation=++transportGeneration.current;
+    const engine=new SharedClockAudition();
+    audio.current=engine;
+    setAudioReady(false);
+    setAudioLoad({ready:0,total:files.length});
+    setError("");
+    playRef.current=false;
+    setPlaying(false);
+    setPosition(0);
+    setDuration(expectedDuration||0);
+    const sources:AuditionSource[]=[];
+    for(const filename of files){
+      const split=channels[filename];
+      if(split?.active){
+        sources.push({key:filename+":left",filename,url:split.tracks.left.url,pan:-1});
+        sources.push({key:filename+":right",filename,url:split.tracks.right.url,pan:1});
+      }else{
+        sources.push({key:filename,filename,
+          url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0});
       }
     }
-  },[stems,anySolo,monitorVolume,channels,routingVersion]);
+    setAudioLoad({ready:0,total:sources.length});
+    void engine.prepare(sources,(ready,total)=>{
+      if(!cancelled)setAudioLoad({ready,total});
+    }).then(()=>{
+      if(cancelled||generation!==transportGeneration.current)return;
+      const levels:Record<string,{gain:number}>={};
+      const settings=stemsRef.current;
+      const solo=settings.some(stem=>stem.solo);
+      for(const stem of settings)levels[stem.filename]={gain:effectiveGain(stem,solo)};
+      engine.setLevels(levels,monitorRef.current/100);
+      setDuration(engine.duration);
+      setAudioReady(true);
+      setAudioLoad(null);
+    }).catch(err=>{
+      if(cancelled)return;
+      setAudioReady(false);
+      setAudioLoad(null);
+      setError(err instanceof Error?err.message:String(err));
+    });
+    return ()=>{
+      cancelled=true;
+      ++transportGeneration.current;
+      playRef.current=false;
+      if(audio.current===engine)audio.current=null;
+      void engine.dispose();
+    };
+  },[files,jobId,expectedDuration,routingVersion]);
+
+  useEffect(()=>{
+    const levels:Record<string,{gain:number}>={};
+    for(const stem of stems)levels[stem.filename]={gain:effectiveGain(stem,anySolo)};
+    audio.current?.setLevels(levels,monitorVolume/100);
+  },[stems,anySolo,monitorVolume,audioReady]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
 
-  useEffect(() => {
-    if (!playing) return;
-    const timer = window.setInterval(() => {
-      const entries=[...audio.current.entries()];
-      if(entries.length===0)return;
-      const available:{player:HTMLAudioElement;time:number;audible:boolean}[]=[];
-      // A stalled or buffering media element must never become the timeline clock.
-      // Select from streams that demonstrably advanced since the last sample.
-      const samples=clockSamples.current;
-      const activeStems=stemsRef.current;
-      const soloed=activeStems.some(s=>s.solo);
-      for(const [key,player] of entries){
-        const current=player.currentTime;
-        const previous=samples.get(player);
-        samples.set(player,current);
-        if(player.paused||player.ended||player.seeking||player.readyState<2)continue;
-        if(previous===undefined||current-previous<0.012||current-previous>1.0)continue;
-        const stem=activeStems.find(x=>key===x.filename||key.startsWith(x.filename+":"));
-        const audible=stem?effectiveGain(stem,soloed)>0 && monitorVolume>0:false;
-        available.push({player,time:current,audible});
-      }
-      if(available.length===0){
-        // When all tracks end, stop even though none can be a moving clock.
-        // If they are merely buffering, hold the last genuine audio position.
-        if(entries.every(([,player])=>player.ended))stop();
-        return;
-      }
-      const audible=available.filter(item=>item.audible);
-      const candidates=audible.length>0?audible:available;
-      const ordered=candidates.map(item=>item.time).sort((x,y)=>x-y);
-      const midpoint=Math.floor(ordered.length/2);
-      const current=ordered.length%2===1
-        ?ordered[midpoint]:(ordered[midpoint-1]+ordered[midpoint])/2;
-      setPosition(current);
-      const players=entries.map(([,player])=>player);
-      if(loopEnabled&&loopIn!==null&&loopOut!==null&&loopOut>loopIn+0.1&&current>=loopOut-0.02){
-        players.forEach(player=>{
-          player.playbackRate=1;
-          try{player.currentTime=loopIn;}catch{/* decoder not ready */}
-        });
-        samples.clear();
-        lastHardResync.current=performance.now();
+  useEffect(()=>{
+    if(!playing)return;
+    const timer=window.setInterval(()=>{
+      const engine=audio.current;
+      if(!engine||!engine.playing)return;
+      const now=engine.position;
+      setPosition(now);
+      if(loopEnabled&&loopIn!==null&&loopOut!==null&&loopOut>loopIn+0.1
+          &&now>=loopOut-0.02){
+        engine.seek(loopIn);
         setPosition(loopIn);
         return;
       }
-      if((duration>0&&current>=duration-0.03)||players.every(player=>player.ended)){
+      if(now>=engine.duration-0.025){
         stop();
-        return;
+        setPosition(engine.duration);
       }
-      // Softly bring other *moving* streams towards the actual audible position.
-      // In particular, never drag the timeline back to a stuck first stem.
-      const now=performance.now();
-      const advancing=new Set(available.map(item=>item.player));
-      for(const player of players){
-        if(!advancing.has(player)){
-          player.playbackRate=1;
-          continue;
-        }
-        const difference=player.currentTime-current;
-        if(Math.abs(difference)>1.5&&now-lastHardResync.current>4000&&player.readyState>=3){
-          lastHardResync.current=now;
-          try{player.currentTime=current;}catch{/* decoder not ready */}
-          player.playbackRate=1;
-        }else if(Math.abs(difference)>0.12){
-          player.playbackRate=difference>0?0.975:1.025;
-        }else{
-          player.playbackRate=1;
-        }
-      }
-    }, 160);
-    return () => window.clearInterval(timer);
-  }, [playing,duration,stop,loopEnabled,loopIn,loopOut,monitorVolume]);
+    },33);
+    return ()=>window.clearInterval(timer);
+  },[playing,stop,loopEnabled,loopIn,loopOut]);
 
-  async function togglePlayback() {
+  async function togglePlayback(){
     if(playRef.current){stop();return;}
+    const engine=audio.current;
+    if(!engine?.ready){setError("Synchronized audio is still loading.");return;}
     setError("");
-    const players=[...audio.current.values()];
-    if(players.length<6){setError("Audio tracks have not loaded.");return;}
     const generation=++transportGeneration.current;
-    clockSamples.current.clear();
     playRef.current=true;
-    const time=position>=duration-0.05&&duration>0?0:position;
     try{
-      await context.current?.resume();
-      if(generation!==transportGeneration.current)return;
-      // Preserve current position on resume instead of re-seeking every source.
-      // Only seek if reset/explicit navigation changed its time materially.
-      for(const player of players){
-        if(Math.abs(player.currentTime-time)>0.3)player.currentTime=time;
-        player.playbackRate=1;
-      }
-      await Promise.all(players.map(player=>player.play()));
+      await engine.play();
       if(generation!==transportGeneration.current){
-        players.forEach(player=>player.pause());
+        engine.pause();
         return;
       }
+      setPosition(engine.position);
       setPlaying(true);
-    }catch{
+    }catch(err){
       if(generation===transportGeneration.current){
-        stop();
-        setError("Playback failed. Check that the stems have finished loading.");
+        playRef.current=false;
+        setPlaying(false);
+        setError(err instanceof Error?err.message:"Synchronized playback failed");
       }
     }
   }
 
-  function seek(next: number) {
-    clockSamples.current.clear();
-    lastHardResync.current=performance.now();
-    setPosition(next);
-    seekRef.current = next;
-    audio.current.forEach(player => {
-      try { player.currentTime = next; } catch { /* player metadata not yet ready */ }
-    });
+  function seek(next:number){
+    const target=Math.max(0,Math.min(duration,next));
+    audio.current?.seek(target);
+    setPosition(target);
   }
 
   const positionRef=useRef(position);
@@ -452,11 +393,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     </div>
     <div className="production-workspace">
       <main className="production-main">
+        {audioLoad&&<div className="audition-buffer-status" role="status">
+          Preparing synchronized audio · {audioLoad.ready}/{audioLoad.total} tracks
+        </div>}
         <div className="transport production-playline" aria-label="Playback transport">
           <button type="button" title="Rewind 5 seconds; right click to start" aria-label="Rewind five seconds"
             onClick={()=>skip(-5)}
             onContextMenu={e=>{e.preventDefault();seek(0);}}>⏪</button>
-          <IconButton icon={playing?"⏸":"▶"} label={playing?"Pause":"Play"} onClick={togglePlayback}/>
+          <IconButton icon={playing?"⏸":"▶"} label={playing?"Pause":"Play"} disabled={!audioReady} onClick={togglePlayback}/>
           <button type="button" title="Stop and return to start" aria-label="Stop" onClick={stopAndReset}>■</button>
           <button type="button" title="Forward 5 seconds" aria-label="Forward five seconds" onClick={()=>skip(5)}>⏩</button>
           <span className="timecode">{timecode(position)}</span>

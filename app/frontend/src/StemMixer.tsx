@@ -18,6 +18,9 @@ import type { SongSection } from "./SectionEditor";
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
+type EffectKey="pan"|"width"|"space"|"reverb"|"ending";
+const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","ending"];
+const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -58,6 +61,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [notice, setNotice] = useState("");
   const [playing, setPlaying] = useState(false);
   const [monitorVolume, setMonitorVolume] = useState(75);
+  const [bypassed,setBypassed]=useState<Record<EffectKey,boolean>>(DEFAULT_BYPASS);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
@@ -102,6 +106,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
+  useEffect(()=>{audio.current?.setEffectBypass(bypassed);},[bypassed,audioReady]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb);},[masterTrimDb,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
@@ -223,6 +228,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       for(const stem of settings)levels[stem.filename]={gain:effectiveGain(stem,solo)};
       engine.setLevels(levels,monitorRef.current/100);
       engine.setOutputTrimDb(masterTrimDb);
+      engine.setEffectBypass(bypassed);
       setDuration(engine.duration);
       setAudioReady(true);
       setAudioLoad(null);
@@ -599,6 +605,24 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files}
           targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+        <details className="production-tool-detail" aria-label="A/B audition">
+          <summary>◉ A/B comparison &amp; bypass</summary>
+          <div className="timeline-loop-controls">
+            <p>Audition the same stems and levels with production processing enabled or bypassed. WAV export always uses the processed mix.</p>
+            <div className="production-tool-actions">
+              <button type="button" aria-pressed={EFFECT_KEYS.every(k=>!bypassed[k])}
+                onClick={()=>setBypassed({...DEFAULT_BYPASS})}>A · Processed</button>
+              <button type="button" aria-pressed={EFFECT_KEYS.every(k=>bypassed[k])}
+                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,ending:true})}>B · Original</button>
+            </div>
+            {EFFECT_KEYS.map(key=><label key={key}>
+              <input type="checkbox" checked={bypassed[key]}
+                onChange={e=>setBypassed(v=>({...v,[key]:e.target.checked}))}/>
+              Bypass {key==="space"?"spatial reflections":key}
+            </label>)}
+            <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
+          </div>
+        </details>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <div className="production-tools-zoom">

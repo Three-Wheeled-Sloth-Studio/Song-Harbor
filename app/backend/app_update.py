@@ -10,6 +10,28 @@ from pathlib import Path
 from typing import Any
 
 
+
+def local_version(repository: Path) -> dict[str, str]:
+    """Read installed checkout identity without fetching or modifying the tree."""
+    if not (repository / ".git").exists():
+        return {"label": "local", "branch": "", "revision": ""}
+    try:
+        flags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        def read(*args: str) -> str:
+            result=subprocess.run(["git", "-C", str(repository), *args],
+                                  text=True, capture_output=True, timeout=5,
+                                  creationflags=flags)
+            if result.returncode:
+                raise RuntimeError("Could not inspect checkout revision")
+            return result.stdout.strip()
+        revision=read("rev-parse", "--short=8", "HEAD")
+        branch=read("branch", "--show-current") or "detached"
+        return {"label": branch + "@" + revision,
+                "branch": branch, "revision": revision}
+    except (OSError, subprocess.TimeoutExpired, RuntimeError):
+        return {"label": "local", "branch": "", "revision": ""}
+
+
 def git_info(repository: Path) -> dict[str, Any]:
     if sys.platform != "win32":
         return {"supported": False, "reason": "In-app relaunch currently supports Windows only"}

@@ -103,3 +103,24 @@ A clipping render fails with a clear error rather than silently applying a misma
 5. Reduce stem gains if the export detects peaks over full scale. Such a warning is deliberate, not a request to bypass headroom protection.
 6. Change a section's pan, re-export and verify the new render differs accordingly. Monitor slider changes must not affect export amplitude.
 7. Repeat a seek/pause/replay in the shared-clock player after export; confirm no drift.
+
+
+## Spatial processing slice: initial section reverb send (2026-10-21)
+- Added a deterministic 1.7-second diffuse stereo impulse shared by Web Audio audition and OfflineAudioContext rendering. Per-stem wet sends are mixed in parallel with dry stereo routing; split L/R channels remain reconstructed once, before the effect send.
+- New supported token: `Vocals.reverb:30@2s:smooth` (0-100 wet-send percentage, 0.05-30s transition, default 1s smooth). Independent of `Vocals.pan` in the same brace line.
+- `all.reset` and `Track.reset` reset both pan and reverb send to their initial neutral/default state. A missing reverb directive inherits the previous send target.
+- Added structured **Section reverb** controls to the existing Tools sidebar with section, stem, wet send, ramp and interpolation curve.
+- Production script import, song persistence and live preview are wired to `section_reverb_automation`. The same reverb and automation are included in offline WAV exports.
+- This is ONE basic room response, NOT configurable acoustic room presets yet. Stereo width, tempo delay, final-tail extension and ending fades are later slices.
+
+### Focused first spatial smoke test (The Logo and the Maw, split stems)
+1. Use the already aligned four-minute vocal-pan sheet, with all six original stems split into left/right children.
+2. In Tools > Sections, place `{Vocals.pan:center@2s:smooth Vocals.reverb:10@2s:smooth}` beneath Verse 1, and `{Vocals.pan:right.30@2s:smooth Vocals.reverb:30@2s:smooth}` beneath the first Chorus. Avoid 60% pan for musical judgments; that setting was for conspicuous pan QA only.
+3. Keep Verse 2 without a block to test inheritance. In the Bridge use `{Vocals.reverb:45@4s:smooth}` (or an `all.reset` if testing reset behavior).
+4. Apply the script, play across 0:34-1:12 and 2:05-2:28. Listen for a larger room on the Chorus and Bridge, with no clicks or sudden tail cutoff between sections.
+5. Export a 24-bit WAV and compare with playback at matched loudness and same time. Check that dry vocal identity, separation and left/right timing remain intact.
+6. Use the structured Section reverb editor to change the first Chorus from 30% to 20%, save, reload, and confirm the changed brace directive is still present in the Sections script.
+7. Verify the exported file is not clipping. If a peak warning occurs, lower relevant stem gains in the mixer and retry.
+8. Check that the original six stems and existing split child WAVs remain unchanged.
+
+Limitations: Offline bounce currently ends at the original song duration (including truncating any remaining reverb decay); real-time playback also stops there. Extending the ending and preserving external reverb tails is subsequent work. No production-grade mastering or loudness matching has been implemented. Windows auditory QA and this commit's frontend/backend CI results are not yet verified.

@@ -55,7 +55,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       if(!response.ok||!result.sections) throw new Error(result.detail||"Could not save sections");
       localRevision.current=true;
       setSections(result.sections);setStart(null);setEnd(null);
-      setMessage("Section boundaries saved. Audio is unchanged.");
+      setMessage("Sections saved");
     } catch(e) {setSections(rollback);setError(e instanceof Error?e.message:"Could not save sections");}
     finally {setBusy(false);}
   }
@@ -72,10 +72,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       localRevision.current=true;
       setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
       onSectionsImported?.();
-      setMessage(data.auto_distributed
-        ? `${data.imported_count} sections spread evenly across the song as a starting point. Drag boundaries against the waveform to align them.${data.end_terminator_ignored ? " Final [End] was treated as a terminator." : ""}`
-        : `${data.imported_count} timed sections imported. Original audio unchanged.`);
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
+      setMessage(data.auto_distributed ? `${data.imported_count} sections placed · drag to align` : `${data.imported_count} sections imported`);\n    }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
   async function loadSectionText() {

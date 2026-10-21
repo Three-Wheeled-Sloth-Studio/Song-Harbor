@@ -42,6 +42,8 @@ def parse_block(text: str) -> list[dict[str, Any]]:
             elif parameter == "pan" and value in ("center", "reset"):
                 pan = 0.0
             elif parameter == "pan":
+                if not (value.startswith("left") or value.startswith("right")):
+                    raise ValueError("Pan target must be center, left or right")
                 direction, _, amount = value.partition(".")
                 n = int(amount) if amount else 100
                 if n > 100:

@@ -1,6 +1,6 @@
 version: 1
 schema: refs/schemas/schemaRegistry.yaml
-updated: 2026-10-17
+updated: 2026-10-21
 roadmap:
   - id: SH-RM-000
     horizon: now
@@ -8,7 +8,7 @@ roadmap:
     summary: Complete Agent Academy bootstrap and pin a repeatable discovery and validation environment.
   - id: SH-RM-005
     horizon: now
-    status: planned
+    status: implemented-in-development
     summary: Deliver local standalone-compatible Stem Separation Workbench first; prototype MIT-licensed inference wrapper, verify model-weight rights, benchmark 2/4-stem output on 12 GB, then add batch, preview and export.
   - id: SH-RM-010
     horizon: now
@@ -23,12 +23,12 @@ roadmap:
     status: planned
     summary: Establish non-destructive project and arrangement schema with versioned tracks, sections, assets, timing and provenance.
   - id: SH-RM-040
-    horizon: next
-    status: planned
+    horizon: now
+    status: in-progress
     summary: Implement structured composition direction, sections, score/lyrics, timeline editing and transitions.
   - id: SH-RM-050
-    horizon: next
-    status: planned
+    horizon: now
+    status: in-progress
     summary: Implement stem-directed generation, native/imported track handling, synchronized playback, basic mixer and isolated track export; full mixed-track reconstruction is later.
   - id: SH-RM-060
     horizon: next
@@ -50,3 +50,32 @@ roadmap:
     horizon: later
     status: planned
     summary: Expand into training, advanced plugins, remote/cloud execution, and optional collaboration.
+
+  - id: SH-RM-110
+    horizon: now
+    status: implemented-awaiting-windows-qa
+    summary: Verify in-app safe Git update/check/relaunch, independent PowerShell handoff, busy processing guard and non-destructive worktree preservation.
+  - id: SH-RM-120
+    horizon: now
+    status: implemented-in-development
+    summary: Section-scriptable pan, stereo width, spatial reflections, reverb, master fade/tail and three-band EQ in phase-coherent playback and 24-bit WAV export; EQ listening accepted, regression/Windows build gates still apply.
+  - id: SH-RM-130
+    horizon: next
+    status: planned
+    summary: Build conservative section/phrase-aware compression, gain reduction metering, source-aware vocal-keyed ducking and frequency-selective de-essing; ensure consistent live/offline graphs and reversible scripted settings.
+  - id: SH-RM-140
+    horizon: next
+    status: planned
+    summary: Build detect-first cleanup and mix QA; localize clips, peaks, sibilance, spectral harshness and phase anomalies, audition bounded region repair, compare and accept/revert without replacing original audio.
+  - id: SH-RM-150
+    horizon: next
+    status: planned
+    summary: Add time-range/phrase automation, dynamic EQ, tempo-synchronized stereo delay, loudness-matched A/B, and export destination/open-folder with persisted master trim.
+  - id: SH-RM-160
+    horizon: later
+    status: planned
+    summary: Refactor right-side Tools into compact icon-first palette with pop-out inspectors, preserving waveform/timeline width and shared TWS UI principles.
+  - id: SH-RM-170
+    horizon: later
+    status: planned
+    summary: Deliver full general effects rack and third-party plugin hosting after defining Windows plugin format, security/sandboxing, licensing, realtime scheduling and deterministic offline export.

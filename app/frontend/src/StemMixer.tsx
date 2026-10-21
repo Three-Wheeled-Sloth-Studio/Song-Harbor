@@ -8,6 +8,7 @@ import { StemWaveforms } from "./StemWaveforms";
 import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
+import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type { SongSection } from "./SectionEditor";
@@ -564,6 +565,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
         <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
           targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
+        <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
+          onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>
           <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>

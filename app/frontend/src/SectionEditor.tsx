@@ -14,8 +14,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onSectionsImported,onPersisted,onSectionDoubleClick,externalSections}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onSectionsImported?:()=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[];
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[];
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -26,9 +26,6 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [selected,setSelected]=useState<string|null>(null);
-  const [showImport,setShowImport]=useState(false);
-  const [importText,setImportText]=useState("");
-  const [importMode,setImportMode]=useState<"replace"|"append">("replace");
   const drag=useRef<Drag|null>(null);
   const sectionsRef=useRef(sections);
   const localRevision=useRef(false);
@@ -38,7 +35,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
     if(currentJob.current!==jobId){
       currentJob.current=jobId;
       localRevision.current=false;
-      setStart(null);setEnd(null);setSelected(null);setImportText("");setShowImport(false);
+      setStart(null);setEnd(null);setSelected(null);
     }
     // A delayed parent project refresh must never overwrite sections just imported.
     if(!localRevision.current)setSections(initialSections||[]);
@@ -66,40 +63,6 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       onPersisted?.();
     } catch(e) {setSections(rollback);setError(e instanceof Error?e.message:"Could not save sections");}
     finally {setBusy(false);}
-  }
-
-  async function importSections() {
-    setBusy(true);setError("");setMessage("");
-    try{
-      const response=await fetch(`/api/projects/${jobId}/sections/import`,{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({content:importText,mode:importMode})
-      });
-      const data=await response.json() as {sections?:SongSection[];imported_count?:number;auto_distributed?:boolean;end_terminator_ignored?:boolean;detail?:string};
-      if(!response.ok||!data.sections)throw Error(data.detail||"Could not import sections");
-      localRevision.current=true;
-      setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
-      onSectionsImported?.();
-      setMessage(data.auto_distributed ? `${data.imported_count} sections placed · drag to align` : `${data.imported_count} sections imported`);
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
-  }
-  async function loadSectionText() {
-    setError("");
-    try{
-      const response=await fetch(`/api/projects/${jobId}/sections/export`);
-      const data=await response.json() as {content?:string;detail?:string};
-      if(!response.ok)throw Error(data.detail||"Could not read saved section tags");
-      setImportText(data.content||"");
-      setImportMode("replace");
-      setShowImport(true);
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-  }
-  async function readSectionFile(file:File|undefined) {
-    if(!file)return;
-    if(file.size>100000){setError("Section file exceeds the 100 KB limit");return;}
-    try{setImportText(await file.text());setShowImport(true);setError("");}
-    catch{setError("Could not read the section file");}
   }
 
   function bounds(id:string):[number,number] {

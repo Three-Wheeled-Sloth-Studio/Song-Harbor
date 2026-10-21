@@ -2,6 +2,7 @@ import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
 import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflectionStage} from "./SpatialReflection";
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
+import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -35,6 +36,7 @@ export class SharedClockAudition {
   private groupPanners=new Map<string,StereoPannerNode>();
   private widthStages=new Map<string,StereoWidthStage>();
   private eqStages=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
+  private dynamicsStages=new Map<string,DynamicsStage>();
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
@@ -44,7 +46,8 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves}>={};
+  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
+  private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -108,7 +111,10 @@ export class SharedClockAudition {
           const eq=createEqStage(this.context);
           this.eqStages.set(src.filename,eq);
           const stage=createStereoWidthStage(this.context);
-          eq[2].connect(stage.input);
+          const dynamics=createDynamicsStage(this.context);
+          this.dynamicsStages.set(src.filename,dynamics);
+          eq[2].connect(dynamics.compressor);
+          dynamics.duckGain.connect(stage.input);
           stage.output.connect(bus);
           const space=createSpatialReflection(this.context);
           stage.output.connect(space.input);
@@ -144,6 +150,7 @@ export class SharedClockAudition {
     this.monitorLevel=Math.max(0,Math.min(1,monitor));
     this.updateMasterOutput();
     this.renderedLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
+    if(Object.values(this.automation).some(item=>item.dynamics?.duck))this.setAutomation(this.automation);
     for(const track of this.tracks){
       track.gain.gain.value=Math.max(0,Math.min(2,levels[track.source.filename]?.gain??0));
     }
@@ -194,6 +201,11 @@ export class SharedClockAudition {
     for(const [filename,bus] of this.groupPanners){
       const eq=this.eqStages.get(filename);
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
+      const dynamics=this.dynamicsStages.get(filename);
+      if(dynamics){
+        scheduleCompressor(dynamics,this.automation[filename]?.dynamics?.compressor,offset,at);
+        scheduleDucking(dynamics,this.duckEnvelopes.get(filename),offset,at);
+      }
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
       const width=this.widthStages.get(filename);
@@ -212,8 +224,17 @@ export class SharedClockAudition {
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves}>){
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>){
     this.automation=curves;
+    this.duckEnvelopes.clear();
+    for(const [filename,settings] of Object.entries(curves)){
+      const duck=settings.dynamics?.duck;
+      if(!duck)continue;
+      const key=this.tracks.find(track=>track.source.filename===duck.keyFilename);
+      if(!key)continue;
+      const gain=this.renderedLevels[duck.keyFilename]??0;
+      this.duckEnvelopes.set(filename,makeDuckingEnvelope(key.buffer,duck.depthDb,gain));
+    }
     if(this.running)this.seek(this.position);
   }
   /**
@@ -241,6 +262,7 @@ export class SharedClockAudition {
     const sends=new Map<string,GainNode>();
     const widths=new Map<string,StereoWidthStage>();
     const eqs=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
+    const dynamicsStages=new Map<string,DynamicsStage>();
     const spaces=new Map<string,SpatialReflectionStage>();
     for(const track of this.tracks){
       let bus=group.get(track.source.filename);
@@ -250,7 +272,10 @@ export class SharedClockAudition {
         const eq=createEqStage(offline);
         eqs.set(track.source.filename,eq);
         const stage=createStereoWidthStage(offline);
-        eq[2].connect(stage.input);
+        const dynamics=createDynamicsStage(offline);
+        dynamicsStages.set(track.source.filename,dynamics);
+        eq[2].connect(dynamics.compressor);
+        dynamics.duckGain.connect(stage.input);
         stage.output.connect(bus);
         const space=createSpatialReflection(offline);
         stage.output.connect(space.input);
@@ -283,6 +308,9 @@ export class SharedClockAudition {
       const space=this.automation[filename]?.space;
       if(space)scheduleSpatialReflection(spaces.get(filename)!,space,0,0);
       scheduleEq(eqs.get(filename)!,this.automation[filename]?.eq||{},0,0);
+      const dynamics=dynamicsStages.get(filename)!;
+      scheduleCompressor(dynamics,this.automation[filename]?.dynamics?.compressor,0,0);
+      scheduleDucking(dynamics,this.duckEnvelopes.get(filename),0,0);
     }
     const rendered=await offline.startRendering();
     return encodeWav24(rendered,this.outputTrimDb);
@@ -343,6 +371,9 @@ export class SharedClockAudition {
     for(const stage of this.widthStages.values()){
       for(const node of [...stage.direct,...stage.cross])node.gain.cancelScheduledValues(this.context.currentTime);
     }
+    for(const stage of this.dynamicsStages.values()){
+      for(const param of [stage.compressor.threshold,stage.compressor.ratio,stage.compressor.attack,stage.compressor.release,stage.duckGain.gain])param.cancelScheduledValues(this.context.currentTime);
+    }
     for(const filters of this.eqStages.values())for(const filter of filters){
       filter.frequency.cancelScheduledValues(this.context.currentTime);
       filter.Q.cancelScheduledValues(this.context.currentTime);
@@ -369,6 +400,10 @@ export class SharedClockAudition {
     this.widthStages.clear();
     for(const eq of this.eqStages.values())for(const filter of eq)filter.disconnect();
     this.eqStages.clear();
+    for(const stage of this.dynamicsStages.values()){
+      stage.compressor.disconnect();stage.duckGain.disconnect();
+    }
+    this.dynamicsStages.clear();this.duckEnvelopes.clear();
     for(const stage of this.spaceStages.values()){
       stage.input.disconnect();stage.output.disconnect();
       for(const node of [...stage.sends,...stage.delays])node.disconnect();

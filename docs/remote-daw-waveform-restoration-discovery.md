@@ -78,3 +78,24 @@ Unobtrusive "Audio Quality" inspection and repair should target *audible* proble
 
 ## Ardour procurement comparison
 Official Windows demo's audio periodically goes silent after 10 min runtime; full paid binaries have no demo silence, and normal GPL source builds do not inherit it. Official [MSVC build recipe](https://ardour.org/building_msvc.html) is unsupported and may need manual repairs. Current purchase options allow low-cost one-time payment for current major version (https://community.ardour.org/download?architecture=x86_64&paymentSelection=options&platform=win&type=compiled) or $1/month subscription and access to nightlies. Given developer hours, try inexpensive official unrestricted binary rather than spending a day troubleshooting Windows dependencies unless build/test/distribution is itself the objective. **Do not start REAPER's 60-day trial yet** per user's preference.
+
+
+## 2026-10-21 revised production roadmap after verified WAV spatial/fade QA
+
+User confirmed processed audio and WAV export both sound good after spatial effects and fade corrections. The browser GET /favicon.ico 404 is cosmetic and can be fixed by shipping an icon/link.
+
+**New workflow requirement:** Add an in-app **Check for updates / Install & Relaunch** action. Reuse the existing safe `scripts/update-checkout.ps1` fast-forward logic rather than introducing a second updater. Must preserve dirty files and refuse conflicting/diverged changes; check `/api/runtime/status` for active processing jobs; never kill unknown listeners; coordinate backend stop, fetch, frontend build and reopen with an independent launcher/helper so the running service does not terminate its own only restart mechanism. Show version, available commits, changelog/result and rollback guidance; only offer actual restart after update/install validation. Do not run background auto-update while jobs are active. Manual current behavior remains valid until implemented.
+
+**Audio priority** (favor dynamic script automation, which avoids many manual DAW clip edits):
+1. Parametric EQ, with frequency/Q/gain/type, named validated presets and smooth per-section interpolation. Dynamic EQ and de-ess use related detector infrastructure.
+2. Compressor and safe sidechain ducking keyed to source stems or vocal activity; strong dynamic/phrase-aware value. Meter gain reduction. Avoid overcompressing already mastered AI material.
+3. Detection-first audio cleanup: sample peak/true peak, clicks, clipping, sibilance, high-frequency fizz, stationary noise, unstable resonances, stereo phase/mono compatibility, transient smear, separated-stem bleed. Flag exact time intervals and confidence, provide loop audition and original/repair A/B.
+4. Bounded, reversible region-local treatment: short fades/crossfades, declick, de-ess, dynamic EQ, surgical filter adjustments, limited noise attenuation; do not automatically overwrite originals. Time-range scoped production directives are essential because sections alone are often too coarse.
+5. Tempo-synced stereo delay and rhythmic spatial modulation, separate from fixed 13/19ms early-reflection widening. Later: spectral restoration or generative regeneration only after the conservative QA workflow is proven.
+6. Mix diagnostics: mono collapse, correlation, loudness-matched A/B and frequency-buildup warnings, with optional gain-reduction and spectra overlays.
+
+**Script design:** prefer an extensible, typed graph of track-level, section-level and *time-range/phrase-level* targets with preset references plus explicit numeric parameters and transition shapes. Keep effect order unambiguous and identical in live playback versus offline WAV; add parameter persistence and A/B tests before broad feature rollout. Example EQ notation in exploratory discussions is NOT executable yet; do not paste unimplemented directives into the active section sheet.
+
+**Deferred design-system UI debt:** right-hand Tools area has become verbose. Convert to **compact icon-first tool access, informative status states, and pop-out modal/inspector for long settings**. Preserve full timeline/ waveform width and avoid empty margins. Base shared patterns in TWS-UI rather than repeating a bespoke approach.
+
+**Milestone boundary:** basic cleanup is ~2-3 implementation slices away if EQ/dynamic processing and diagnostics are tackled next, not a claim about elapsed time. Advanced harmonic/voice warble restoration remains separate research, with evidence-based quality evaluation.

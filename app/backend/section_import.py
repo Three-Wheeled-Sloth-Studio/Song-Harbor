@@ -212,11 +212,13 @@ def apply(project: dict[str, Any], content: str, mode: str,
     width_targets = section_production.materialize_width(validated, production, project.get("files", []))
     space_targets = section_production.materialize_space(validated, production, project.get("files", []))
     eq_targets = section_production.materialize_eq(validated, production, project.get("files", []))
+    dynamics_targets = section_production.materialize_dynamics(validated, production, project.get("files", []))
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,
             "section_reverb_automation": reverb_targets, "section_width_automation": width_targets,
-            "section_space_automation": space_targets, "section_ending": ending,
+            "section_space_automation": space_targets, "section_eq_automation": eq_targets,
+            "section_dynamics_automation": dynamics_targets, "section_ending": ending,
             "section_lyrics": lyrics,
             "imported_count": len(imported), "auto_distributed": distributed,
             "end_terminator_ignored": end_terminator}

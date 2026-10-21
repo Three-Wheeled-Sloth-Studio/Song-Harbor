@@ -1,6 +1,7 @@
 import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
 import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflectionStage} from "./SpatialReflection";
+import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -33,16 +34,17 @@ export class SharedClockAudition {
   private tracks:Track[]=[];
   private groupPanners=new Map<string,StereoPannerNode>();
   private widthStages=new Map<string,StereoWidthStage>();
+  private eqStages=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
-  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false};
+  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[]}>={};
+  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves}>={};
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -103,7 +105,10 @@ export class SharedClockAudition {
         if(!bus){
           bus=this.context.createStereoPanner();
           bus.pan.value=0;
+          const eq=createEqStage(this.context);
+          this.eqStages.set(src.filename,eq);
           const stage=createStereoWidthStage(this.context);
+          eq[2].connect(stage.input);
           stage.output.connect(bus);
           const space=createSpatialReflection(this.context);
           stage.output.connect(space.input);
@@ -120,7 +125,7 @@ export class SharedClockAudition {
         let panner:StereoPannerNode|undefined;
         panner=this.context.createStereoPanner();
         panner.pan.value=src.pan;
-        gain.connect(panner).connect(this.widthStages.get(src.filename)!.input);
+        gain.connect(panner).connect(this.eqStages.get(src.filename)![0]);
         gain.gain.value=0;
         this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
@@ -177,7 +182,7 @@ export class SharedClockAudition {
     return points;
   }
   /** Audition-only effect bypass: the saved mix and offline export remain processed. */
-  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean}){
+  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean}){
     if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
     this.bypassEffects={...effects};
     if(this.running)this.seek(this.position);
@@ -187,6 +192,8 @@ export class SharedClockAudition {
   private configurePreviewNodes(at:number,offset:number){
     const bypass=this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
+      const eq=this.eqStages.get(filename);
+      if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
       const width=this.widthStages.get(filename);
@@ -205,7 +212,7 @@ export class SharedClockAudition {
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[]}>){
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves}>){
     this.automation=curves;
     if(this.running)this.seek(this.position);
   }
@@ -233,13 +240,17 @@ export class SharedClockAudition {
     convolver.connect(offline.destination);
     const sends=new Map<string,GainNode>();
     const widths=new Map<string,StereoWidthStage>();
+    const eqs=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
     const spaces=new Map<string,SpatialReflectionStage>();
     for(const track of this.tracks){
       let bus=group.get(track.source.filename);
       if(!bus){
         bus=offline.createStereoPanner();
         bus.pan.value=0;
+        const eq=createEqStage(offline);
+        eqs.set(track.source.filename,eq);
         const stage=createStereoWidthStage(offline);
+        eq[2].connect(stage.input);
         stage.output.connect(bus);
         const space=createSpatialReflection(offline);
         stage.output.connect(space.input);
@@ -259,7 +270,7 @@ export class SharedClockAudition {
       gain.gain.value=this.renderedLevels[track.source.filename]??0;
       const childPan=offline.createStereoPanner();
       childPan.pan.value=track.source.pan;
-      source.connect(gain).connect(childPan).connect(widths.get(track.source.filename)!.input);
+      source.connect(gain).connect(childPan).connect(eqs.get(track.source.filename)![0]);
       source.start(0);
     }
     for(const [filename,bus] of group){
@@ -271,6 +282,7 @@ export class SharedClockAudition {
       if(width)scheduleStereoWidth(widths.get(filename)!,width,0,0);
       const space=this.automation[filename]?.space;
       if(space)scheduleSpatialReflection(spaces.get(filename)!,space,0,0);
+      scheduleEq(eqs.get(filename)!,this.automation[filename]?.eq||{},0,0);
     }
     const rendered=await offline.startRendering();
     return encodeWav24(rendered,this.outputTrimDb);
@@ -331,6 +343,11 @@ export class SharedClockAudition {
     for(const stage of this.widthStages.values()){
       for(const node of [...stage.direct,...stage.cross])node.gain.cancelScheduledValues(this.context.currentTime);
     }
+    for(const filters of this.eqStages.values())for(const filter of filters){
+      filter.frequency.cancelScheduledValues(this.context.currentTime);
+      filter.Q.cancelScheduledValues(this.context.currentTime);
+      filter.gain.cancelScheduledValues(this.context.currentTime);
+    }
     for(const stage of this.spaceStages.values())
       for(const send of stage.sends)send.gain.cancelScheduledValues(this.context.currentTime);
     for(const node of this.nodes){
@@ -350,6 +367,8 @@ export class SharedClockAudition {
       for(const node of [...stage.direct,...stage.cross])node.disconnect();
     }
     this.widthStages.clear();
+    for(const eq of this.eqStages.values())for(const filter of eq)filter.disconnect();
+    this.eqStages.clear();
     for(const stage of this.spaceStages.values()){
       stage.input.disconnect();stage.output.disconnect();
       for(const node of [...stage.sends,...stage.delays])node.disconnect();

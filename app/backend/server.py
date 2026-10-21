@@ -579,6 +579,9 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
     }
+    import section_production
+    record["section_ending"] = section_production.materialize_ending(
+        proposed, record.get("section_production", {}))
     record["updated_at"] = time.time()
     projects.write_project(DATA_ROOT, record)
     return {"sections": proposed, "tags": [sections.display_tag(item) for item in proposed]}
@@ -731,6 +734,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_production"] = changed["section_production"]
     record["section_pan_automation"] = changed["section_pan_automation"]
     record["section_reverb_automation"] = changed["section_reverb_automation"]
+    record["section_ending"] = changed["section_ending"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],
@@ -739,6 +743,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     return {"sections": changed["sections"],
             "pan_targets": changed["section_pan_automation"],
             "reverb_targets": changed["section_reverb_automation"],
+            "ending": changed["section_ending"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
             "auto_distributed": changed["auto_distributed"],
@@ -755,7 +760,8 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "spatial_proposals": record.get("section_spatial_proposals", {}),
             "section_lyrics": record.get("section_lyrics", {}),
             "section_production": record.get("section_production", {}),
-            "reverb_targets": record.get("section_reverb_automation", [])}
+            "reverb_targets": record.get("section_reverb_automation", []),
+            "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}
 
 
 class DawTargetRequest(BaseModel):

@@ -8,10 +8,10 @@
  */
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1};
 export type AuditionLevel = {gain:number};
-type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode};
+type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;panner?:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
-export const MAX_DECODED_AUDIO_BYTES=512*1024*1024;
+export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
 
 export class SharedClockAudition {
   readonly context:AudioContext;
@@ -58,22 +58,23 @@ export class SharedClockAudition {
         if(signal.aborted||this.disposed)throw Error("Audio load cancelled");
         bytes+=buffer.length*buffer.numberOfChannels*Float32Array.BYTES_PER_ELEMENT;
         if(bytes>MAX_DECODED_AUDIO_BYTES){
-          throw Error("This song exceeds the 512 MiB decoded-audio audition limit. Use a DAW export until chunked shared-clock streaming is available.");
+          throw Error("This song exceeds the 768 MiB decoded-audio audition limit. Use a DAW export until chunked shared-clock streaming is available.");
         }
         if(maxDuration>0&&Math.abs(buffer.duration-maxDuration)>0.15){
           throw Error(`Stem lengths differ by more than 150ms (${src.filename}). Re-run separation or repair the source before aligned audition.`);
         }
         maxDuration=Math.max(maxDuration,buffer.duration);
         const gain=this.context.createGain();
+        let panner:StereoPannerNode|undefined;
         if(src.pan!==0){
-          const panner=this.context.createStereoPanner();
+          panner=this.context.createStereoPanner();
           panner.pan.value=src.pan;
           gain.connect(panner).connect(this.master);
         }else{
           gain.connect(this.master);
         }
         gain.gain.value=0;
-        this.tracks.push({source:src,buffer,gain});
+        this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
       }
       this.durationSeconds=maxDuration;
@@ -145,7 +146,7 @@ export class SharedClockAudition {
   }
   private clearTracks(){
     this.stopSources();
-    for(const track of this.tracks)track.gain.disconnect();
+    for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
     this.tracks=[];
     this.durationSeconds=0;this.offset=0;
   }

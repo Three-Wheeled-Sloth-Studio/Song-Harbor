@@ -571,6 +571,10 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     record["section_production"] = {
         key: value for key, value in record.get("section_production", {}).items() if key in keep
     }
+    record["section_reverb_automation"] = [
+        target for target in record.get("section_reverb_automation", [])
+        if target.get("section_id") in keep
+    ]
     record["section_lyrics"] = {
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
@@ -665,6 +669,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     retained_ids = {section["id"] for section in changed["sections"]}
     record["section_production"] = changed["section_production"]
     record["section_pan_automation"] = changed["section_pan_automation"]
+    record["section_reverb_automation"] = changed["section_reverb_automation"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],
@@ -672,6 +677,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
             "pan_targets": changed["section_pan_automation"],
+            "reverb_targets": changed["section_reverb_automation"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
             "auto_distributed": changed["auto_distributed"],
@@ -687,7 +693,8 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "sections": record.get("sections", []),
             "spatial_proposals": record.get("section_spatial_proposals", {}),
             "section_lyrics": record.get("section_lyrics", {}),
-            "section_production": record.get("section_production", {})}
+            "section_production": record.get("section_production", {}),
+            "reverb_targets": record.get("section_reverb_automation", [])}
 
 
 class DawTargetRequest(BaseModel):

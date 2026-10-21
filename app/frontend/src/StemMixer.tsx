@@ -9,6 +9,7 @@ import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { SectionWidthTool, type SavedWidthTarget } from "./SectionWidthTool";
+import { SectionSpaceTool } from "./SectionSpaceTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
@@ -596,6 +597,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
         <SectionWidthTool jobId={jobId} sections={timelineSections} files={files}
           targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+        <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files}
+          targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <div className="production-tools-zoom">

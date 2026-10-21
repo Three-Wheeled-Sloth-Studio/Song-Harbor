@@ -78,6 +78,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [panTargets,setPanTargets]=useState<SavedPanTarget[]>([]);
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
+  const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
     fade_seconds:0,tail_seconds:0,curve:"smooth"
@@ -149,17 +150,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setPanTargets([]);
     setReverbTargets([]);
     setWidthTargets([]);
+    setSpaceTargets([]);
     setEnding({fade_seconds:0,tail_seconds:0,curve:"smooth"});
     void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];ending:typeof ending}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];space_targets:typeof spaceTargets;ending:typeof ending}>;
       })
       .then(async data=>{
         const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
         if(!panResponse.ok)throw Error("Could not load pan automation");
         const panData=await panResponse.json() as {targets:SavedPanTarget[]};
-        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
       })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
@@ -247,7 +249,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -288,10 +290,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),width:compileSectionAutomation(desired,1,{min:0,max:1.5})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid width automation");return;}
     }
+    for(const filename of files){
+      const desired=spaceTargets.filter(item=>item.source_key===filename).flatMap(item=>{
+        const section=sectionById.get(item.section_id);
+        return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+          value:item.amount/100,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+      });
+      if(!desired.length)continue;
+      try{
+        byFile[filename]={...(byFile[filename]||{}),space:compileSectionAutomation(desired,0,{min:0,max:.4})};
+      }catch(e){setError(e instanceof Error?e.message:"Invalid spatial reflections");return;}
+    }
     engine.setAutomation(byFile);
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,ending,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,ending,timelineSections,files]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -568,10 +581,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,width,finish)=>{
+          onApplied={(items,targets,reverb,width,space,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
+            setSpaceTargets(space);
             setEnding(finish);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);

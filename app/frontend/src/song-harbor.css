@@ -315,3 +315,20 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 /* Imported arrangement boundaries remain visible across every waveform row. */
 .waveform-section-boundary{position:absolute;top:0;bottom:0;border-left:1px solid rgba(220,177,105,.65);z-index:1;pointer-events:none}
 .section-marker-summary{font-size:11px;font-weight:600;color:var(--tws-color-text-primary);margin:8px 0 1px}
+
+/* Compact section editor: help and manual creation are opt-in. */
+.section-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:6px 0 8px}
+.section-toolbar>button,.section-toolbar>.section-file-label,.section-manual-controls>summary,.section-help>summary,.section-manual-inner>button{background:var(--tws-color-surface-inset);border:1px solid var(--tws-color-border-normal);color:var(--tws-color-text-primary);border-radius:5px;padding:5px 8px;cursor:pointer;font-size:12px}
+.section-toolbar>button:not(:first-child),.section-toolbar>.section-file-label,.section-help>summary{min-width:29px;text-align:center}
+.section-manual-controls,.section-help{position:relative}
+.section-manual-controls>summary,.section-help>summary{list-style:none}
+.section-manual-controls>summary::-webkit-details-marker,.section-help>summary::-webkit-details-marker{display:none}
+.section-manual-inner{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:5px 0;padding:7px;background:var(--tws-color-surface-inset);border-radius:5px}
+.section-manual-controls[open]{flex-basis:100%}
+.section-time-range{font:11px Consolas,monospace;color:var(--tws-color-text-muted)}
+.section-help-content{position:absolute;z-index:10;top:100%;right:0;width:min(320px,80vw);padding:12px;border:1px solid var(--tws-color-border-normal);border-radius:8px;background:var(--tws-color-surface-panel);box-shadow:0 5px 16px #0005;font-size:11px;line-height:1.4}
+.section-help-content p{margin:7px 0 0}
+.section-toolbar>.section-marker-summary{margin-left:auto;font-size:11px;font-weight:500;white-space:nowrap}
+.section-list-details{font-size:11px;color:var(--tws-color-text-muted);margin:6px 0}
+.section-list-details>summary{cursor:pointer;width:max-content}
+.section-import-panel{margin:5px 0 10px}

@@ -76,6 +76,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const playRef = useRef(false);
   const transportGeneration=useRef(0);
   const lastHardResync=useRef(0);
+  const clockSamples=useRef(new Map<HTMLAudioElement,number>());
   const seekRef = useRef(0);
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
@@ -138,7 +139,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     transportGeneration.current+=1;
     playRef.current = false;
     setPlaying(false);
-    audio.current.forEach(element => element.pause());
+    audio.current.forEach(element => {element.pause();element.playbackRate=1;});
+    clockSamples.current.clear();
   }, []);
 
   useEffect(() => {
@@ -175,6 +177,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setDuration(expectedDuration||0);
     setPosition(0);setPlaying(false);playRef.current=false;
     lastHardResync.current=0;
+    clockSamples.current.clear();
     return ()=>{
       players.forEach(p=>{p.pause();p.removeAttribute("src");p.load();});
       players.clear();
@@ -200,42 +203,74 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => {
-      const players = [...audio.current.values()];
-      const master = players[0];
-      if (!master) return;
-      const current = master.currentTime;
-      setPosition(current);
-      if(loopEnabled && loopIn!==null && loopOut!==null && loopOut>loopIn+0.1 && current>=loopOut-0.02){
-        players.forEach(p=>{p.currentTime=loopIn;});setPosition(loopIn);return;
+      const entries=[...audio.current.entries()];
+      if(entries.length===0)return;
+      const available:{player:HTMLAudioElement;time:number;audible:boolean}[]=[];
+      // A stalled or buffering media element must never become the timeline clock.
+      // Select from streams that demonstrably advanced since the last sample.
+      const samples=clockSamples.current;
+      const activeStems=stemsRef.current;
+      const soloed=activeStems.some(s=>s.solo);
+      for(const [key,player] of entries){
+        const current=player.currentTime;
+        const previous=samples.get(player);
+        samples.set(player,current);
+        if(player.paused||player.ended||player.seeking||player.readyState<2)continue;
+        if(previous===undefined||current-previous<0.012||current-previous>1.0)continue;
+        const stem=activeStems.find(x=>key===x.filename||key.startsWith(x.filename+":"));
+        const audible=stem?effectiveGain(stem,soloed)>0 && monitorVolume>0:false;
+        available.push({player,time:current,audible});
       }
-      if (master.ended || (duration > 0 && current >= duration - 0.03)) {
+      if(available.length===0){
+        // Buffered audio has genuinely stopped moving. Keep the last meaningful
+        // media position instead of inventing progress with a wall-clock timer.
+        return;
+      }
+      const audible=available.filter(item=>item.audible);
+      const candidates=audible.length>0?audible:available;
+      const ordered=candidates.map(item=>item.time).sort((x,y)=>x-y);
+      const midpoint=Math.floor(ordered.length/2);
+      const current=ordered.length%2===1
+        ?ordered[midpoint]:(ordered[midpoint-1]+ordered[midpoint])/2;
+      setPosition(current);
+      const players=entries.map(([,player])=>player);
+      if(loopEnabled&&loopIn!==null&&loopOut!==null&&loopOut>loopIn+0.1&&current>=loopOut-0.02){
+        players.forEach(player=>{
+          player.playbackRate=1;
+          try{player.currentTime=loopIn;}catch{/* decoder not ready */}
+        });
+        samples.clear();
+        lastHardResync.current=performance.now();
+        setPosition(loopIn);
+        return;
+      }
+      if((duration>0&&current>=duration-0.03)||players.every(player=>player.ended)){
         stop();
         return;
       }
-      // This is still a media-element transport, not a sample-locked DAW.
-      // Avoid repeated 90ms hard seeks: they flush the decoder and cause stutter.
-      // Gently correct modest differences via playbackRate and reserve a hard
-      // seek for gross desync on streams with buffered audio, at most once/4s.
+      // Softly bring other *moving* streams towards the actual audible position.
+      // In particular, never drag the timeline back to a stuck first stem.
       const now=performance.now();
-      for (const follower of players.slice(1)) {
-        if(follower.readyState<3 || follower.seeking || master.readyState<3){
-          follower.playbackRate=1;
+      const advancing=new Set(available.map(item=>item.player));
+      for(const player of players){
+        if(!advancing.has(player)){
+          player.playbackRate=1;
           continue;
         }
-        const difference=follower.currentTime-current;
-        if(Math.abs(difference)>1.5 && now-lastHardResync.current>4000){
+        const difference=player.currentTime-current;
+        if(Math.abs(difference)>1.5&&now-lastHardResync.current>4000&&player.readyState>=3){
           lastHardResync.current=now;
-          try{follower.currentTime=current;}catch{/* awaiting decoder */}
-          follower.playbackRate=1;
+          try{player.currentTime=current;}catch{/* decoder not ready */}
+          player.playbackRate=1;
         }else if(Math.abs(difference)>0.12){
-          follower.playbackRate=difference>0?0.975:1.025;
-        }else if(Math.abs(difference)<0.04){
-          follower.playbackRate=1;
+          player.playbackRate=difference>0?0.975:1.025;
+        }else{
+          player.playbackRate=1;
         }
       }
     }, 160);
     return () => window.clearInterval(timer);
-  }, [playing, duration, stop,loopEnabled,loopIn,loopOut]);
+  }, [playing,duration,stop,loopEnabled,loopIn,loopOut,monitorVolume]);
 
   async function togglePlayback() {
     if(playRef.current){stop();return;}
@@ -243,6 +278,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const players=[...audio.current.values()];
     if(players.length<6){setError("Audio tracks have not loaded.");return;}
     const generation=++transportGeneration.current;
+    clockSamples.current.clear();
     playRef.current=true;
     const time=position>=duration-0.05&&duration>0?0:position;
     try{
@@ -269,6 +305,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }
 
   function seek(next: number) {
+    clockSamples.current.clear();
+    lastHardResync.current=performance.now();
     setPosition(next);
     seekRef.current = next;
     audio.current.forEach(player => {

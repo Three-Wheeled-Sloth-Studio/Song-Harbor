@@ -57,7 +57,7 @@ class SectionImportTests(unittest.TestCase):
                 self.assertEqual(original,self.project)
 
     def test_untimed_sections_fill_track_evenly(self):
-        content="[Intro]\\n[Verse 1]\\n[Chorus]\\n[Verse 2]\\n[Chorus]\\n[Outro]\\n[End]"
+        content="[Intro]\n[Verse 1]\n[Chorus]\n[Verse 2]\n[Chorus]\n[Outro]\n[End]"
         result=section_import.apply(self.project,content,"replace",180.0)
         self.assertTrue(result["auto_distributed"])
         self.assertTrue(result["end_terminator_ignored"])
@@ -90,17 +90,17 @@ class SectionImportTests(unittest.TestCase):
     def test_untimed_append_uses_remaining_song_duration(self):
         first=section_import.apply(self.project,"[Intro 0:00-0:20]","replace",80)
         self.project.update({k:v for k,v in first.items() if k!="imported_count"})
-        result=section_import.apply(self.project,"[Verse]\\n[Chorus]","append",80)
+        result=section_import.apply(self.project,"[Verse]\n[Chorus]","append",80)
         self.assertEqual([0,20,50],[x["start_seconds"] for x in result["sections"]])
         self.assertEqual(80,result["sections"][-1]["end_seconds"])
 
     def test_reject_mixed_timed_and_untimed_with_atomic_state(self):
         original=copy.deepcopy(self.project)
         for content in (
-            "[Intro]\\n[Verse 0:20-0:40]",
-            "[Verse 0:00-0:20]\\n[Chorus]",
+            "[Intro]\n[Verse 0:20-0:40]",
+            "[Verse 0:00-0:20]\n[Chorus]",
             "[End]",
-            "[Verse]\\n[End]\\n[Chorus]",
+            "[Verse]\n[End]\n[Chorus]",
             "[Unknown]",
         ):
             with self.subTest(content=content):

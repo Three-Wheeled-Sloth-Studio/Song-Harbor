@@ -172,3 +172,48 @@ On successful rendering the app shows **Mix ready to download** and a clearly la
 7. Choose **Clear treatment**, Save, and verify the original 4:00 length returns and prior recordings were never overwritten.
 
 Suggested initial preference for this track: **Atmospheric tail** with a moderate ending reverb send, but choose by listening rather than defaulting it into user content.
+
+## 2026-10-21 P0 export fade correction + P1 A/B audition
+
+### Fade diagnosis and fix
+
+**Observed:** User confirmed rendered WAV carries noticeable section pan and spatial treatments but reported that the ending fade did not carry through clearly.
+
+**Root cause identified in routing:** Prior graphs put the dry stereo buses through the ending fade, while the source continued driving the reverb convolver at full strength through the original audio endpoint. The *already wet* reverb output remained unfaded intentionally, but the continued unattenuated input could mask the musical fade in the resulting WAV.
+
+**Implementation:** A dedicated `reverbDrive` GainNode was inserted between all per-stem reverb sends and the convolver, in **both** the live AudioContext and offline rendering graph. Both `dryMaster.gain` and `reverbDrive.gain` now receive the SAME end-anchored fade curve. The reverb *output* still bypasses the dry fade and decays naturally during the optional post-roll. Thus no new full-level vocal/instrument material is injected into reverb once the fade reaches zero. The fixed path is:
+
+```
+active original OR split L/R stem -> width -> spatial reflections -> pan bus
+  -> dryMaster (end-anchored fade) -----------------------> master
+  -> reverb send -> reverbDrive (same fade) -> convolver --> master
+master -> saved output trim and independent preview-only monitor gain
+```
+
+This corrects **excitation** without cutting off **existing wet tails**. A true silent dry fade still requires active and nonzero `Master.fade` in the saved section script. Compare full final 4:00 musical endpoint and post-roll separately.
+
+### P1 audition-only A/B comparison and effect bypass
+
+Added an **A/B comparison & bypass** section to the existing Tools sidebar, deliberately without revisiting sidebar redesign yet.
+
+- **A · Processed**: original saved section pan, width, early reflections, reverb, and ending are heard.
+- **B · Original**: bypasses all five production effects in live audition, retaining source routing (including split L/R), individual stem levels/mutes/solos, and output master trim.
+- Individual bypass checkboxes: pan, width, spatial reflections, reverb, ending. They can be toggled while auditioning. A/B changes are **session-only** and do not mutate project instructions or change the processed WAV.
+- This is an **equal stem gain / output trim** comparison, NOT yet integrated-loudness-matched A/B. Loudness matching and historical mix snapshots remain future work.
+
+### Windows acceptance test — current 4:00 song
+
+1. Run the normal launcher on `main`. Confirm frontend builds, and open the saved song. All previous section lyrics, spatial settings and ending instructions must survive.
+2. Inspect final `[Outro]` instructions; if necessary set `Master.fade:4s:smooth Master.tail:3s` in the ending tool. Check that Outro has active reverb sends so the return is audible.
+3. Play continuously from 3:48 through ~4:03 and listen for performance/dry fade toward 4:00 plus **decaying**, not freshly sustained, reverb in post-roll.
+4. Export the processed WAV, use the existing automatic master headroom correction if prompted, save by clicking **Download WAV**, and listen with a waveform editor around 3:56–4:03. Dry instrumental/vocal attack peaks should decline and cease near the original 4:00 boundary. The final 3s is ambience only, not continued full-volume music.
+5. Toggle B · Original, then A · Processed in the same passage. Confirm the return of pan/width/reflections and ending fade. B will have an **unfaded original ending** by design, so do not confuse that with export.
+6. Try bypassing **ending alone** while retaining reverb. It should stop the fade in live preview. Independently bypass **reverb** to hear the dry fade reach zero without a tail.
+7. Export again while B is active: the WAV **must still contain the processed fade**, confirming A/B is purely an audition tool.
+8. Verify no split-L/R drift, click or doubled stem, and that pausing or seeking behaves as before.
+
+### Technical gates and future UI debt
+
+- The current tools remain temporarily text-heavy. Future design-system refactor: **compact icon-first palette**, short hover/tooltip labels and status indicators, with editing forms hosted in pop-out modal/inspector overlays. Preserve full-width timeline/waveform usage; do **not** replace this with large blank margins.
+- A/B loudness matching should measure an appropriate analysis interval or use independent reference gain, **not silently alter stem balance or export gain**.
+- Pending: full Windows TypeScript build and auditory/quantitative fade test. Source code inspection verifies shared drive envelope routing; it is not by itself proof of audio output parity.

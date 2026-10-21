@@ -19,9 +19,11 @@ export class SharedClockAudition {
   private master:GainNode;
   private tracks:Track[]=[];
   private groupPanners=new Map<string,StereoPannerNode>();
+  private reverb:ConvolverNode;
+  private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private nodes:ActiveNode[]=[];
-  private automation:Record<string,{pan?:AutomationPoint[]}>={};
+  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -33,6 +35,10 @@ export class SharedClockAudition {
     this.context=new AudioContext();
     this.master=this.context.createGain();
     this.master.connect(this.context.destination);
+    this.reverb=this.context.createConvolver();
+    this.reverb.normalize=false;
+    this.reverb.buffer=createRoomImpulse(this.context);
+    this.reverb.connect(this.master);
   }
   get duration(){return this.durationSeconds;}
   get ready(){return this.prepared&&this.tracks.length>0&&!this.disposed;}
@@ -75,6 +81,10 @@ export class SharedClockAudition {
           bus=this.context.createStereoPanner();
           bus.pan.value=0;
           bus.connect(this.master);
+          const send=this.context.createGain();
+          send.gain.value=0;
+          bus.connect(send).connect(this.reverb);
+          this.reverbSends.set(src.filename,send);
           this.groupPanners.set(src.filename,bus);
         }
         let panner:StereoPannerNode|undefined;
@@ -102,7 +112,7 @@ export class SharedClockAudition {
     }
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[]}>){
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){
     this.automation=curves;
     if(this.running)this.seek(this.position);
   }
@@ -118,12 +128,21 @@ export class SharedClockAudition {
     if(frames<1||frames>sampleRate*60*15)throw Error("Offline export supports up to 15 minutes");
     const offline=new OfflineAudioContext(2,frames,sampleRate);
     const group=new Map<string,StereoPannerNode>();
+    const convolver=offline.createConvolver();
+    convolver.normalize=false;
+    convolver.buffer=createRoomImpulse(offline);
+    convolver.connect(offline.destination);
+    const sends=new Map<string,GainNode>();
     for(const track of this.tracks){
       let bus=group.get(track.source.filename);
       if(!bus){
         bus=offline.createStereoPanner();
         bus.pan.value=0;
         bus.connect(offline.destination);
+        const send=offline.createGain();
+        send.gain.value=0;
+        bus.connect(send).connect(convolver);
+        sends.set(track.source.filename,send);
         group.set(track.source.filename,bus);
       }
       const source=offline.createBufferSource();
@@ -138,6 +157,8 @@ export class SharedClockAudition {
     for(const [filename,bus] of group){
       const curve=this.automation[filename]?.pan;
       if(curve)scheduleAutomation(bus.pan,curve,0,0);
+      const wet=this.automation[filename]?.reverb;
+      if(wet)scheduleAutomation(sends.get(filename)!.gain,wet,0,0);
     }
     const rendered=await offline.startRendering();
     return encodeWav24(rendered);
@@ -184,6 +205,12 @@ export class SharedClockAudition {
           bus.pan.cancelScheduledValues(startAt);
           bus.pan.setValueAtTime(0,startAt);
         }
+        const send=this.reverbSends.get(filename);
+        if(send){
+          const wet=this.automation[filename]?.reverb;
+          if(wet)scheduleAutomation(send.gain,wet,offset,startAt);
+          else{send.gain.cancelScheduledValues(startAt);send.gain.setValueAtTime(0,startAt);}
+        }
       }
       for(const node of made)node.start(startAt,offset);
       this.nodes=made;
@@ -199,6 +226,7 @@ export class SharedClockAudition {
   private stopSources(){
     this.running=false;
     for(const bus of this.groupPanners.values())bus.pan.cancelScheduledValues(this.context.currentTime);
+    for(const send of this.reverbSends.values())send.gain.cancelScheduledValues(this.context.currentTime);
     for(const node of this.nodes){
       try{node.stop();}catch{/* node may have ended */}
       node.disconnect();
@@ -210,7 +238,9 @@ export class SharedClockAudition {
     this.stopSources();
     for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
     for(const bus of this.groupPanners.values())bus.disconnect();
+    for(const send of this.reverbSends.values())send.disconnect();
     this.groupPanners.clear();
+    this.reverbSends.clear();
     this.tracks=[];
     this.durationSeconds=0;this.offset=0;
   }
@@ -218,6 +248,7 @@ export class SharedClockAudition {
     this.disposed=true;
     this.loadController?.abort();
     this.clearTracks();
+    this.reverb.disconnect();
     this.master.disconnect();
     await this.context.close().catch(()=>{});
   }
@@ -256,4 +287,32 @@ function encodeWav24(buffer:AudioBuffer):Blob{
     }
   }
   return new Blob([array],{type:"audio/wav"});
+}
+
+/** Repeatable, band-limited-looking decaying diffuse room response, shared
+ * identically by real-time and offline graphs. A deliberately simple MVP IR.
+ * No dynamic reverb type changes until profile presets are modeled explicitly.
+ */
+function createRoomImpulse(context:BaseAudioContext):AudioBuffer{
+  const rate=context.sampleRate;
+  const length=Math.round(rate*1.7);
+  const buffer=context.createBuffer(2,length,rate);
+  let seed=0x136597af;
+  const random=()=>{
+    seed=(Math.imul(1664525,seed)+1013904223)>>>0;
+    return (seed/4294967296)*2-1;
+  };
+  for(let channel=0;channel<2;channel++){
+    const data=buffer.getChannelData(channel);
+    let energy=0;
+    for(let i=0;i<length;i++){
+      const time=i/rate;
+      const envelope=(1-Math.exp(-time*45))*Math.exp(-time*4.2);
+      data[i]=random()*envelope;
+      energy+=data[i]*data[i];
+    }
+    const scale=0.65/Math.sqrt(Math.max(energy,0.000001));
+    for(let i=0;i<length;i++)data[i]*=scale;
+  }
+  return buffer;
 }

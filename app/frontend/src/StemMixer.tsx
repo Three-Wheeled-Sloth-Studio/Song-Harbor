@@ -83,6 +83,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const choices=[1,2,4,8,16];
     function wheel(event:WheelEvent){
       if(!duration)return;
+      const source=event.target;
+      if(source instanceof Element && source.closest("input,select,textarea,button,[contenteditable=true]"))return;
       const amount=event.deltaY||event.deltaX;
       if(!amount)return;
       event.preventDefault();
@@ -90,7 +92,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         setViewportOffset(current=>Math.max(0,Math.min(1,current+Math.sign(amount)*0.07)));
         return;
       }
-      const bounds=element!.getBoundingClientRect();
+      const bounds=(element!.querySelector(".waveform-seek")||element!).getBoundingClientRect();
       const fraction=Math.max(0,Math.min(1,(event.clientX-bounds.left)/Math.max(1,bounds.width)));
       const currentZoom=zoom;
       const currentIndex=choices.indexOf(currentZoom);

@@ -212,7 +212,7 @@ function App() {
     <AppSettings open={settingsOpen} onOpenChange={setSettingsOpen} health={health} onReady={next => setHealth(next)} />
     <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
-      onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className="workspace">
+      onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className={"workspace"+(job?" workspace--song-session":"")}>
       <button className="back-to-library" title="Back to Library" onClick={() => setView("library")}>← Library</button>
       <section className="song-session-heading">
         <div className="session-breadcrumb">{job ? "LIBRARY / SONG" : "LIBRARY / IMPORT"}</div>

@@ -26,7 +26,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     if(!open)return;
     if(dirty&&!force){setStale(true);return;}
     try{
-      const r=await fetch(`/api/projects/${jobId}/sections/export`);
+      const r=await fetch(`/api/projects/${jobId}/sections/export`,{cache:"no-store"});
       const data=await r.json() as ExportData;
       if(!r.ok)throw Error(data.detail||"Could not read section text");
       setContent(data.content||"");
@@ -49,7 +49,11 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   },[jobId,open,dirty,revision]);
   useEffect(()=>{
-    if(!open)return;
+    if(!open){
+      // A closed editor must never rely on the previous cached revision.
+      loadedRevision.current=-1;
+      return;
+    }
     if(loadedRevision.current===revision)return;
     void load();
   },[open,revision,load]);
@@ -79,14 +83,17 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
       onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
       setDirty(false);setStale(false);
-      setMessage(result.auto_distributed?"Sections placed · align on timeline":"Saved · timestamps updated");
       loadedRevision.current=-1;
       setMode("replace");
-      const reload=await fetch(`/api/projects/${jobId}/sections/export`);
-      if(reload.ok){
-        const saved=await reload.json() as ExportData;
-        setContent(saved.content||"");
-      }
+      const reload=await fetch(`/api/projects/${jobId}/sections/export`,{cache:"no-store"});
+      if(!reload.ok)throw Error("Saved, but verification reload failed. Reopen the section tool before further edits.");
+      const saved=await reload.json() as ExportData;
+      if(!saved.content||saved.sections.length!==result.sections.length)
+        throw Error("Saved, but the reloaded script did not match. Further editing blocked pending inspection.");
+      setContent(saved.content);
+      setDirty(false);
+      loadedRevision.current=revision+1;
+      setMessage(result.auto_distributed?"Sections placed · saved reload verified":"Saved · section sheet reloaded from disk");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setSaving(false);}
   }

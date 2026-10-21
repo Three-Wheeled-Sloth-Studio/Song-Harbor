@@ -128,6 +128,32 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(restored["section_ending"], parsed["section_ending"])
         self.assertEqual(restored["section_lyrics"], parsed["section_lyrics"])
 
+    def test_parametric_eq_multiple_bands_and_round_trip(self):
+        sheet=("[Verse 0:00-0:10]\n"
+               "{Vocals.eq1:320,1.2,-2@2s:smooth Vocals.eq2:3200,2,+2.5@3s:linear "
+               "Vocals.pan:left.20 Vocals.width:125}\n"
+               "[Chorus 0:10-0:20]\n{Vocals.eq1:320,1.2,+1}\n"
+               "[Outro 0:20-0:30]\n{all.reset Master.fade:4s:smooth Master.tail:3s}\n")
+        project={"sections":[],"files":FILES}
+        result=section_import.apply(project,sheet,"replace",30)
+        gains=[(d["band"],d["gain_db"]) for d in result["section_eq_automation"]
+               if "(Vocals)" in d["source_key"]]
+        self.assertEqual(gains[:3],[(1,-2.0),(2,2.5),(1,1.0)])
+        self.assertEqual(gains[-3:],[(1,0.0),(2,0.0),(3,0.0)])
+        self.assertEqual(result["section_ending"]["tail_seconds"],3)
+        project.update(result)
+        exported=section_import.render_tags(project)
+        self.assertIn("Vocals.eq1:320,1.2,-2@2s:smooth",exported)
+        self.assertEqual(section_import.apply(project,exported,"replace",30)["section_eq_automation"],
+                         result["section_eq_automation"])
+
+    def test_parametric_eq_invalid_values(self):
+        for block in ("{Vocals.eq1:20,1,-2}","{Vocals.eq4:1000,1,-2}",
+                      "{Vocals.eq1:1000,0.1,-2}","{Vocals.eq1:1000,1,-13}",
+                      "{Vocals.eq1:1000,1,+1 Vocals.eq1:2000,1,+2}"):
+            with self.subTest(block=block),self.assertRaises(ValueError):
+                section_production.parse_block(block)
+
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Vocals.width:151@4s:smooth}")

@@ -711,6 +711,47 @@ def save_section_reverb(ident: str, request: Request, body: SectionReverbRequest
     return {"targets": targets}
 
 
+class EndingRequest(BaseModel):
+    fade_seconds: float = Field(default=0, ge=0, le=30)
+    tail_seconds: float = Field(default=0, ge=0, le=10)
+    curve: str = "smooth"
+
+
+@app.put("/api/projects/{ident}/ending")
+def save_song_ending(ident: str, request: Request, body: EndingRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    ordered = sorted(record.get("sections", []), key=lambda item: item["start_seconds"])
+    if not ordered:
+        raise HTTPException(409, "Align at least one song section before adding an ending")
+    if body.curve not in ("smooth", "linear"):
+        raise HTTPException(400, "Ending curve must be smooth or linear")
+    last = ordered[-1]
+    if body.fade_seconds > last["end_seconds"] - last["start_seconds"]:
+        raise HTTPException(400, "Ending fade cannot exceed the last section's duration")
+    import section_production
+    blocks = dict(record.get("section_production", {}))
+    directives = [d for d in blocks.get(last["id"], []) if d["kind"] not in ("fade", "tail")]
+    if body.fade_seconds:
+        directives.append({"kind": "fade", "track": "Master", "seconds": body.fade_seconds,
+                           "curve": body.curve})
+    if body.tail_seconds:
+        directives.append({"kind": "tail", "track": "Master", "seconds": body.tail_seconds,
+                           "curve": "smooth"})
+    if directives:
+        blocks[last["id"]] = directives
+    else:
+        blocks.pop(last["id"], None)
+    result = section_production.materialize_ending(ordered, blocks)
+    record["section_production"] = blocks
+    record["section_ending"] = result
+    record["updated_at"] = time.time()
+    projects.write_project(DATA_ROOT, record)
+    return {"ending": result}
+
+
 class SectionImportRequest(BaseModel):
     content: str = Field(min_length=1, max_length=100000)
     mode: str = "replace"

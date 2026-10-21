@@ -512,7 +512,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           title="Open canonical time-stamped arrangement text">≡ Sections</button>
         <SectionsTool jobId={jobId} open={scriptOpen}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
-          onApplied={items=>{
+          onApplied={(items,targets)=>{
+            setPanTargets(targets);
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>

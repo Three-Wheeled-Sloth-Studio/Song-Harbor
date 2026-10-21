@@ -208,8 +208,10 @@ def apply(project: dict[str, Any], content: str, mode: str,
                 raise ValueError("Lyrics text must be at most 20000 characters per section")
             lyrics[match["id"]] = item["lyrics"]
     pan_targets = section_production.materialize_pan(validated, production, project.get("files", []))
+    reverb_targets = section_production.materialize_reverb(validated, production, project.get("files", []))
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,
+            "section_reverb_automation": reverb_targets,
             "section_lyrics": lyrics,
             "imported_count": len(imported), "auto_distributed": distributed,
             "end_terminator_ignored": end_terminator}

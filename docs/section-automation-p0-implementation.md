@@ -144,3 +144,31 @@ On successful rendering the app shows **Mix ready to download** and a clearly la
 7. Test clicking Export again with sufficient headroom: the user should not see a clipping warning.
 
 **QA gate:** These fixes are committed on main, but no local Windows build, actual browser download or listening smoke test was executed from this tool environment. A separate future slice should persist master trim and offer versioned backend-saved exports with a truthful destination/Open folder control.
+
+
+## 2026-10-21 ending treatments: end-anchored dry fade and reverb post-roll
+
+**Implemented on `main` (Windows listening QA not yet completed).** The Tools sidebar now has an **Ending treatments** panel. Presets **Clean fade**, **Atmospheric tail**, and **Clear treatment** only populate editable fields; pressing **Save ending** persists the parameters in the *last* song section and updates the section script. Equivalent canonical block:
+
+```text
+[Outro 3:48.183-4:00]
+{Master.fade:6s:smooth Master.tail:3s}
+```
+
+- `Master.fade:6s:smooth`: the **dry** stereo mix holds until 3:54, then fades to zero at 4:00. Supported smooth or linear curves; 0-30 seconds in the sidebar, 0.05-30 seconds in active notation. Fades cannot exceed the last section duration.
+- `Master.tail:3s`: adds up to 10 seconds of wet-only post-roll. A 4:00 original should render as a 4:03 WAV. The current reverb is a deterministic 1.7s impulse, so extra silence after its natural decay is expected; a tail only becomes audible when one or more reverb sends are active at the end.
+- Important processing order: active split-L/R channels -> per-stem pan/reverb send -> **dry bus (faded)** plus **reverb return (unfaded)** -> shared master monitoring/trim. Live Web Audio and offline WAV use the same timing, fade and reverb impulse logic. Individual stem gains and section production are unchanged.
+- `Master.fade` and `Master.tail` belong to the final section only; earlier placement and overlong fade produce explicit validation errors. A saved ending is carried in project `section_ending`; removing ending directives in a replace-mode section script resets it.
+- A/B preview version history and generated musical extension are **not yet implemented**. Likewise the next width choreography is documented separately and is not yet an executable width directive.
+
+### Windows test - The Logo and the Maw
+
+1. Launch with the normal batch file on `main`; open the 4:00 split-channel project with existing section instructions intact.
+2. In the existing **Ending treatments** panel, choose **Clean fade** (default 6s dry fade, 0s tail), then **Save ending**. Listen from 3:50 through the end. The dry mix should smoothly reach silence at 4:00; export should render ~4:00.
+3. Choose **Atmospheric tail** (4s fade, 3s tail), then **Save ending**. Ensure Outro has a nonzero reverb send (e.g. `Vocals.reverb:35@2s:smooth` in its production block). Listen from 3:52 through 4:03; the performance should end by 4:00 while the reverb decay remains audible into the tail. Export WAV length should be ~4:03.
+4. Open Tools > Sections and confirm the final Outro now contains `Master.fade:4s:smooth Master.tail:3s`. Save/reload the song and confirm the panel restores the chosen values and preserves all lyrics/pan/reverb notes.
+5. Test seeking, replay, and pause/resume near 3:54 and 4:00; the waveform should not desync from the shared-clock player. Direct seek *into* a post-roll currently cannot reconstruct earlier reverb history and may sound different from continuous playback; this is a known limit.
+6. Check that the previous headroom-fix flow still works for any clipping WAV; no stale download link should appear on failure.
+7. Choose **Clear treatment**, Save, and verify the original 4:00 length returns and prior recordings were never overwritten.
+
+Suggested initial preference for this track: **Atmospheric tail** with a moderate ending reverb send, but choose by listening rather than defaulting it into user content.

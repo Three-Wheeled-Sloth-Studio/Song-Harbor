@@ -7,6 +7,9 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-21 frozen playhead regression (blocks section alignment)
+User QA: waveform cursor freezes even though audible stems continue playing. Root cause inspected in `StemMixer.tsx`: transport clock was always `players[0].currentTime`, so first stem underrun froze position and could force wrong drift corrections. Fixed to sample all media at 160ms cadence, select actively advancing ready/nonseeking streams and prefer audible ones, use median actual media time as displayed clock and correction target. Stalled first track never freezes playhead as long as any other audible stream advances. Poll cache clears on pause, resume, seek, loop and route rebuild; all-ended state still stops transport. Still six independent HTMLMediaElements: sample-accurate long-term engine remains necessary. Windows/CI tests unverified; acceptance checklist in `docs/production-timeline-script-ux.md`. QA should inspect song 2+ mins while tracking cursor, muted/soloed/split behavior and pause/resume/seek/loop transitions. If the cursor still freezes, inspect all streams' `currentTime`, `readyState`, `paused`, `seeking` in browser DevTools and consider Web Audio shared clock engine.
+
 ## 2026-10-21 QOL regression repair: Space, audio stutter, wasted margins
 User QA: Space pressed with waveform/button focus activated last button instead of playback; prolonged stem playback often stuttered; the new tools sidebar existed *inside* the globally 1440px-capped page leaving large outer screen gutters and an unnecessarily skinny waveform. Changes committed to main:
 - `StemMixer.tsx`: global keydown listener now capture-phase; Space calls play/pause even with focused controls/buttons/waveform (but not while typing or operating range/select/accessibility sliders); Left/Right jump 5s. Fixed pending playback async race via generation counter. On resume no unnecessary per-stem seek; audio preload auto.

@@ -99,3 +99,25 @@ User confirmed processed audio and WAV export both sound good after spatial effe
 **Deferred design-system UI debt:** right-hand Tools area has become verbose. Convert to **compact icon-first tool access, informative status states, and pop-out modal/inspector for long settings**. Preserve full timeline/ waveform width and avoid empty margins. Base shared patterns in TWS-UI rather than repeating a bespoke approach.
 
 **Milestone boundary:** basic cleanup is ~2-3 implementation slices away if EQ/dynamic processing and diagnostics are tackled next, not a claim about elapsed time. Advanced harmonic/voice warble restoration remains separate research, with evidence-based quality evaluation.
+
+## 2026-10-21 implementation: update/relaunch + first parametric EQ
+
+**Committed to `main`; Windows build and user listening acceptance outstanding.** This is the first focused slice after the user accepted the script-first effects roadmap.
+
+- **In-app updates:** header ↻ control calls GET `/api/runtime/update` on demand. It uses read-only branch checks plus `git fetch` (which updates remote refs but not the working tree), reports revision/current vs remote, divergence and busy state. Explicit **Install & relaunch** confirmation sends a per-instance token to POST `/api/runtime/update/relaunch`. When the app is not busy and the Git history can fast-forward, a **separate** PowerShell terminal starts `scripts/relaunch-song-harbor.ps1`, waits for the current backend PID to exit, invokes existing non-destructive `update-checkout.ps1`, and relaunches `start-song-harbor.ps1 -NoUpdate`. Conflicting local changes are never reset or stashed. The old browser may remain open but a new browser window is opened. Save unapplied text edits before restarting.
+- **Favicon:** lightweight SVG icon in `app/frontend/public/favicon.svg`, linked from `index.html` and explicitly served at `/favicon.svg`.
+- **Three-band peaking EQ:** `{Vocals.eq1:320,1.2,-2@2s:smooth}` controls band 1 at 320 Hz, Q 1.2, -2 dB gain. Bands `eq1`, `eq2`, `eq3` can all be set in one section alongside pan/width/space/reverb/ending directives. Supported frequency 30-16000 Hz, Q .3-12, gain -12..+12 dB, transition .05-30 sec. Omitted sections inherit; reset restores all 3 bands' gain to 0. Source files unchanged. Three cascaded Web Audio peaking filters run **after split-child reconstruction and before stereo width** in BOTH live/offline graphs. Bypass EQ from the A/B panel without changing WAV output. The structured **Parametric EQ** tool saves via PUT `/api/projects/{ident}/section-eq` and round-trips into canonical production blocks. The current EQ does **not** offer dynamic threshold-following behavior, shelves, high/low-pass, spectral repair, or plugin hosting.
+- **Strategic acknowledgement:** A full effects rack and third-party/plugin hosting **are eventual product capabilities**, but not near-term priorities. Favor section-/phrase-aware processing difficult to automate manually in conventional DAWs. Future plugin compatibility will need format/platform/licensing/security choices (e.g. VST3 on Windows), sandboxing/crash containment and deterministic offline rendering; do not describe it as already supported.
+
+### Windows QA gates
+
+1. Start from `main`; the normal launcher still performs its own safe update/build and should display Song Harbor with no frontend errors.
+2. Click the **↻ Check updates** header action. Current branch/revisions should appear; if already up-to-date, don't offer an unnecessary restart. Diverged Git or busy processing should block restart.
+3. If an update is actually available, save all in-app edits, choose **Install & relaunch**, accept the explicit confirmation, observe the separate update console and newly opened Song Harbor. Verify dirty checkout files are untouched, songs/projects and audio continue to open.
+4. Open a song's **Parametric EQ** control. Choose Vocals, Verse 1, band 1, 320 Hz, Q1.2, -2 dB, transition 2 seconds, save. Inspect the section script for `Vocals.eq1:320,1.2,-2@2s:smooth`; check it survives closing/reopening and project reload.
+5. Audition with EQ bypassed vs active at matched monitoring/output volume. Then export WAV, inspect that its EQ matches processed audition while keeping split L/R alignment and pan.
+6. Set a second band in the same section; verify neither instruction replaces the other. In a later section, set band 1 +2 dB and verify smooth transition/inheritance. Use a reset and verify EQ returns to neutral, without erasing other automation.
+7. Re-import the existing 13-section full spatial sheet (if testing import). It has no EQ directives and must remain unchanged in sound and structure; no accidental EQ must be imposed.
+8. Since the backend/routing edits were made remotely without a Windows runtime, successful source commits **are not evidence of a passing local TypeScript build or actual audio QA**.
+
+Next DSP slice: compression and vocal-dependent ducking, then quality diagnostics/region repair; UI compact icon-first inspector design remains deferred.

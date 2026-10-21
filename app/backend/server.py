@@ -827,6 +827,70 @@ def save_section_width(ident: str, request: Request, body: SectionWidthRequest) 
     return {"targets": targets}
 
 
+class SectionSpaceTarget(BaseModel):
+    section_id: str
+    source_key: str = Field(min_length=1, max_length=260)
+    amount: int = Field(ge=0, le=40)
+    transition_seconds: float = Field(default=1, ge=0.05, le=30)
+    curve: str = "smooth"
+
+
+class SectionSpaceRequest(BaseModel):
+    targets: list[SectionSpaceTarget] = Field(max_length=2048)
+
+
+@app.get("/api/projects/{ident}/section-space")
+def read_section_space(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    return {"targets": record.get("section_space_automation", [])}
+
+
+@app.put("/api/projects/{ident}/section-space")
+def save_section_space(ident: str, request: Request, body: SectionSpaceRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    valid_sections = {s["id"] for s in record.get("sections", [])}
+    files = set(record.get("files", []))
+    seen: set[tuple[str, str]] = set()
+    targets=[]
+    for item in body.targets:
+        key=(item.section_id,item.source_key)
+        if item.section_id not in valid_sections or item.source_key not in files:
+            raise HTTPException(400, "Spatial reflection target must reference a saved section and stem")
+        if key in seen or item.curve not in ("smooth","linear"):
+            raise HTTPException(400, "Duplicate reflection target or unsupported curve")
+        seen.add(key)
+        targets.append(item.model_dump())
+    import section_production
+    blocks=dict(record.get("section_production", {}))
+    for section in record.get("sections", []):
+        sid=section["id"]
+        base=[d for d in blocks.get(sid, []) if d["kind"] != "space"]
+        for item in targets:
+            if item["section_id"] != sid:
+                continue
+            alias=next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]),None)
+            if not alias:
+                raise HTTPException(400, "Unrecognized spatial reflection source")
+            if any(d["kind"]=="reset" and d["track"] in ("all",alias) for d in base):
+                raise HTTPException(400, "Spatial reflection conflicts with reset; edit section script")
+            base.append({"kind":"space","track":alias,"amount":item["amount"],
+                         "transition_seconds":item["transition_seconds"],"curve":item["curve"]})
+        if base:
+            blocks[sid]=base
+        else:
+            blocks.pop(sid,None)
+    record["section_production"]=blocks
+    record["section_space_automation"]=targets
+    record["updated_at"]=time.time()
+    projects.write_project(DATA_ROOT,record)
+    return {"targets":targets}
+
+
 class SectionImportRequest(BaseModel):
     content: str = Field(min_length=1, max_length=100000)
     mode: str = "replace"

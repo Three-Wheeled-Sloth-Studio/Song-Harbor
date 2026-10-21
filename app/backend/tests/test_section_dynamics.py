@@ -31,6 +31,27 @@ class SectionDynamicsTests(unittest.TestCase):
             with self.subTest(token=token),self.assertRaises(ValueError):
                 section_production.parse_block("{"+token+"}")
 
+    def test_outro_broad_reset_conflicts_with_spatial_settings(self):
+        bad=("{Other.reset@2s:smooth Guitar.duck:0@1s:smooth "
+             "Other.pan:right.4@3s:smooth Other.width:95@3s:smooth "
+             "Other.space:18@3s:smooth Master.fade:4s:smooth Master.tail:3s}")
+        with self.assertRaisesRegex(ValueError, r"Other\\.reset conflicts"):
+            section_production.parse_block(bad)
+        repaired=bad.replace("Other.reset@2s:smooth","Other.comp:-18,1@2s:smooth")
+        parsed=section_production.parse_block(repaired)
+        self.assertEqual(len(parsed),7)
+        self.assertEqual([d["kind"] for d in parsed],
+                         ["comp","duck","pan","width","space","fade","tail"])
+        script=("[Verse 0:00-0:10]\\n{Other.comp:-18,2@2s:smooth}\\n"
+                "[Outro 0:10-0:20]\\n"+repaired+"\\n")
+        result=section_import.apply({"files":FILES,"sections":[]},script,"replace",20)
+        other=[t for t in result["section_dynamics_automation"]
+               if "(Other)" in t["source_key"] and t["kind"]=="comp"]
+        self.assertEqual([t["ratio"] for t in other],[2,1])
+        self.assertEqual(result["section_ending"]["tail_seconds"],3)
+        self.assertEqual([t["width"] for t in result["section_width_automation"]
+                          if "(Other)" in t["source_key"]],[95])
+
     def test_legacy_sheet_has_no_dynamics(self):
         changed=section_import.apply({"files":FILES,"sections":[]},
             "[Verse 0:00-0:10]\n{Other.pan:left.40}\n", "replace",10)

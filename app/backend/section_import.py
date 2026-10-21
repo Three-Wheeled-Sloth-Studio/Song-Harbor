@@ -10,6 +10,7 @@ import re
 from typing import Any
 import sections
 import production_cues
+import section_production
 
 def parse_untimed(line: str) -> dict[str, Any]:
     """A plain section header may include a verse number and spatial proposals."""
@@ -66,7 +67,7 @@ def parse(content: str) -> list[dict[str, Any]]:
             if not isinstance(entry, dict):
                 raise ValueError("Each section must be an object")
             result.append({key: entry[key] for key in
-                           ("id", "kind", "number", "start_seconds", "end_seconds", "spatial", "lyrics")
+                           ("id", "kind", "number", "start_seconds", "end_seconds", "spatial", "lyrics", "production")
                            if key in entry})
         return result
 
@@ -75,6 +76,16 @@ def parse(content: str) -> list[dict[str, Any]]:
         stripped_line = line.strip()
         if not stripped_line or stripped_line.startswith("#"):
             continue
+        if stripped_line.startswith("{") and stripped_line.endswith("}") and result:
+            if "production" in result[-1]:
+                raise ValueError(f"Line {index}: Only one production block per section")
+            try:
+                result[-1]["production"] = section_production.parse_block(stripped_line)
+            except ValueError as exc:
+                raise ValueError(f"Line {index}: {exc}") from exc
+            continue
+        if stripped_line.startswith("{") and not result:
+            raise ValueError(f"Line {index}: Production block needs a preceding section")
         if not stripped_line.startswith("["):
             if result:
                 result[-1].setdefault("lyrics", []).append(line.rstrip())
@@ -165,12 +176,15 @@ def apply(project: dict[str, Any], content: str, mode: str,
     validated = sections.validate_sections(combined, duration=duration)
     old_proposals = project.get("section_spatial_proposals", {})
     old_lyrics = project.get("section_lyrics", {})
+    old_production = project.get("section_production", {})
     proposals = {x["id"]: old_proposals[x["id"]] for x in validated
                  if x["id"] in old_proposals and any(y.get("id") == x["id"] for y in old)}
     lyrics = {x["id"]: old_lyrics[x["id"]] for x in validated
               if x["id"] in old_lyrics and any(y.get("id") == x["id"] for y in old)}
+    production = {x["id"]: old_production[x["id"]] for x in validated
+                  if x["id"] in old_production and any(y.get("id") == x["id"] for y in old)}
     for item in imported:
-        if "spatial" not in item and "lyrics" not in item:
+        if "spatial" not in item and "lyrics" not in item and "production" not in item:
             continue
         spatial = validate_spatial(item["spatial"]) if "spatial" in item else None
         match = next((s for s in validated if
@@ -181,11 +195,15 @@ def apply(project: dict[str, Any], content: str, mode: str,
             raise ValueError("Unable to match imported spatial annotation")
         if spatial is not None:
             proposals[match["id"]] = spatial
+        if "production" in item:
+            production[match["id"]] = item["production"]
         if "lyrics" in item:
             if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
                 raise ValueError("Lyrics text must be at most 20000 characters per section")
             lyrics[match["id"]] = item["lyrics"]
+    pan_targets = section_production.materialize_pan(validated, production, project.get("files", []))
     return {"sections": validated, "section_spatial_proposals": proposals,
+            "section_production": production, "section_pan_automation": pan_targets,
             "section_lyrics": lyrics,
             "imported_count": len(imported), "auto_distributed": distributed,
             "end_terminator_ignored": end_terminator}
@@ -201,6 +219,9 @@ def render_tags(project:dict[str,Any])->str:
             head+=" "+item["track_alias"]+":"+item["width"].capitalize()
             if item["bias"]!="center":head+="-"+item["bias"].capitalize()
         lines.append(head+"]")
+        directives = project.get("section_production", {}).get(entry["id"], [])
+        if directives:
+            lines.append(section_production.render_block(directives))
         lyric = project.get("section_lyrics", {}).get(entry["id"], "")
         if lyric:
             lines.append(lyric)

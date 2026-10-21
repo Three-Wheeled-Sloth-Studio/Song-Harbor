@@ -1,3 +1,4 @@
+import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -18,6 +19,7 @@ export class SharedClockAudition {
   private master:GainNode;
   private tracks:Track[]=[];
   private nodes:ActiveNode[]=[];
+  private automation:Record<string,{pan?:AutomationPoint[]}>={};
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -67,13 +69,9 @@ export class SharedClockAudition {
         maxDuration=Math.max(maxDuration,buffer.duration);
         const gain=this.context.createGain();
         let panner:StereoPannerNode|undefined;
-        if(src.pan!==0){
-          panner=this.context.createStereoPanner();
-          panner.pan.value=src.pan;
-          gain.connect(panner).connect(this.master);
-        }else{
-          gain.connect(this.master);
-        }
+        panner=this.context.createStereoPanner();
+        panner.pan.value=src.pan;
+        gain.connect(panner).connect(this.master);
         gain.gain.value=0;
         this.tracks.push({source:src,buffer,gain,panner});
         onProgress?.(i+1,sources.length);
@@ -92,6 +90,11 @@ export class SharedClockAudition {
     for(const track of this.tracks){
       track.gain.gain.value=Math.max(0,Math.min(1,levels[track.source.filename]?.gain??0));
     }
+  }
+  /** Source-keyed pan automation. Parent and split child routing stay exclusive. */
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[]}>){
+    this.automation=curves;
+    if(this.running)this.seek(this.position);
   }
   async play(){
     if(!this.ready)throw Error("Audio still loading");
@@ -127,6 +130,14 @@ export class SharedClockAudition {
         node.connect(track.gain);
         made.push(node);
       }
+      for(const track of this.tracks){
+        const curve=this.automation[track.source.key]?.pan;
+        if(curve&&track.panner)scheduleAutomation(track.panner.pan,curve,offset,startAt);
+        else if(track.panner){
+          track.panner.pan.cancelScheduledValues(startAt);
+          track.panner.pan.setValueAtTime(track.source.pan,startAt);
+        }
+      }
       for(const node of made)node.start(startAt,offset);
       this.nodes=made;
       this.offset=offset;
@@ -140,6 +151,7 @@ export class SharedClockAudition {
   }
   private stopSources(){
     this.running=false;
+    for(const track of this.tracks)track.panner?.pan.cancelScheduledValues(this.context.currentTime);
     for(const node of this.nodes){
       try{node.stop();}catch{/* node may have ended */}
       node.disconnect();

@@ -8,9 +8,9 @@ import re
 from typing import Any
 
 TOKEN = re.compile(
-    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.(?P<parameter>pan|reverb):(?P<value>center|left(?:\\.\\d{1,3})?|right(?:\\.\\d{1,3})?|reset|\\d{1,3})"
-    r"|(?P<reset>all\\.reset|[A-Za-z][A-Za-z0-9_-]*\\.reset))"
-    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
+    r"|(?P<reset>all\.reset|[A-Za-z][A-Za-z0-9_-]*\.reset))"
+    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
 

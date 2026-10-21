@@ -78,8 +78,8 @@ def parse_block(text: str) -> list[dict[str, Any]]:
             directive = {"kind": "reset", "track": canonical}
         if key in touched or ("all" in touched) or canonical.lower() in touched:
             raise ValueError("Duplicate or conflicting production directives within a section")
-        if canonical == "all" and touched:
-            raise ValueError("all.reset cannot be combined with other section directives")
+        if canonical == "all" and any(not x.startswith("master.") for x in touched):
+            raise ValueError("all.reset cannot be combined with stem directives")
         touched.add(key)
         duration = float(match.group("seconds") or 1)
         if duration < 0.05 or duration > 30:

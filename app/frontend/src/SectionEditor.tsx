@@ -26,10 +26,13 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [selected,setSelected]=useState<string|null>(null);
+  const [showImport,setShowImport]=useState(false);
+  const [importText,setImportText]=useState("");
+  const [importMode,setImportMode]=useState<"replace"|"append">("replace");
   const drag=useRef<Drag|null>(null);
   const sectionsRef=useRef(sections);
   sectionsRef.current=sections;
-  useEffect(()=>{setSections(initialSections||[]);setStart(null);setEnd(null);setSelected(null);},[jobId,initialSections]);
+  useEffect(()=>{setSections(initialSections||[]);setStart(null);setEnd(null);setSelected(null);setImportText("");setShowImport(false);},[jobId,initialSections]);
 
   async function persist(next:SongSection[],rollback:SongSection[]=sectionsRef.current) {
     setBusy(true);setError("");setMessage("");
@@ -43,6 +46,38 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       setMessage("Section boundaries saved. Audio is unchanged.");
     } catch(e) {setSections(rollback);setError(e instanceof Error?e.message:"Could not save sections");}
     finally {setBusy(false);}
+  }
+
+  async function importSections() {
+    setBusy(true);setError("");setMessage("");
+    try{
+      const response=await fetch(`/api/projects/${jobId}/sections/import`,{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({content:importText,mode:importMode})
+      });
+      const data=await response.json() as {sections?:SongSection[];imported_count?:number;detail?:string};
+      if(!response.ok||!data.sections)throw Error(data.detail||"Could not import sections");
+      setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
+      setMessage(`${data.imported_count} sections imported. Original audio unchanged.`);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
+  async function loadSectionText() {
+    setError("");
+    try{
+      const response=await fetch(`/api/projects/${jobId}/sections/export`);
+      const data=await response.json() as {content?:string;detail?:string};
+      if(!response.ok)throw Error(data.detail||"Could not read saved section tags");
+      setImportText(data.content||"");
+      setImportMode("replace");
+      setShowImport(true);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+  }
+  async function readSectionFile(file:File|undefined) {
+    if(!file)return;
+    if(file.size>100000){setError("Section file exceeds the 100 KB limit");return;}
+    try{setImportText(await file.text());setShowImport(true);setError("");}
+    catch{setError("Could not read the section file");}
   }
 
   function bounds(id:string):[number,number] {
@@ -109,6 +144,28 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       <button type="button" disabled={busy||start===null||end===null||b-a<MIN_LENGTH||b>duration+0.005}
         onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}>Add section</button>
     </div>
+    <div className="section-import-actions">
+      <button type="button" onClick={()=>{setShowImport(v=>!v);setError("");}}> {showImport?"Close text editor":"Import / edit sections"} </button>
+      <button type="button" disabled={busy} onClick={()=>{void loadSectionText();}}>Edit saved tags</button>
+      <label className="section-file-label">Open .txt / .json
+        <input type="file" accept=".txt,.json,text/plain,application/json" aria-label="Choose sections file"
+          onChange={e=>{void readSectionFile(e.target.files?.[0]);e.target.value="";}} />
+      </label>
+    </div>
+    {showImport&&<div className="section-import-panel">
+      <p>One timed tag per line. Optional spatial cues are saved as proposals, not applied to audio.</p>
+      <textarea aria-label="Timed section tags" spellCheck={false} rows={5} value={importText}
+        placeholder={"[Verse 0:15-0:45]\\n[Chorus 0:45-1:15 Vocal1:Expansive-Left Drums:Narrow-Right]"}
+        onChange={e=>setImportText(e.target.value)}/>
+      <div className="section-import-footer">
+        <label><input type="radio" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/> Replace existing</label>
+        <label><input type="radio" checked={importMode==="append"} onChange={()=>setImportMode("append")}/> Append</label>
+        <button type="button" disabled={busy||!importText.trim()} onClick={()=>{void importSections();}}>
+          {busy?"Validating…":"Apply timed sections"}
+        </button>
+      </div>
+      <small>Invalid time ranges or overlaps reject the entire import. Existing sections are preserved on failure.</small>
+    </div>}
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}

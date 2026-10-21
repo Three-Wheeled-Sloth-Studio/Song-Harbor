@@ -23,6 +23,7 @@ export class SharedClockAudition {
   private startAt=0;
   private running=false;
   private disposed=false;
+  private prepared=false;
   private durationSeconds=0;
   constructor(){
     this.context=new AudioContext();
@@ -30,7 +31,7 @@ export class SharedClockAudition {
     this.master.connect(this.context.destination);
   }
   get duration(){return this.durationSeconds;}
-  get ready(){return this.tracks.length>0&&!this.disposed;}
+  get ready(){return this.prepared&&this.tracks.length>0&&!this.disposed;}
   get playing(){return this.running;}
   get position(){
     if(!this.running)return this.offset;
@@ -78,6 +79,7 @@ export class SharedClockAudition {
         onProgress?.(i+1,sources.length);
       }
       this.durationSeconds=maxDuration;
+      this.prepared=true;
     }catch(err){
       this.clearTracks();
       throw err;
@@ -145,6 +147,7 @@ export class SharedClockAudition {
     this.nodes=[];
   }
   private clearTracks(){
+    this.prepared=false;
     this.stopSources();
     for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
     this.tracks=[];

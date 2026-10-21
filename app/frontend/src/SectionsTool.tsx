@@ -8,10 +8,11 @@ type SavedReverbTarget={section_id:string;source_key:string;wet:number;transitio
 type SavedWidthTarget={section_id:string;source_key:string;width:number;transition_seconds:number;curve:"linear"|"smooth"};
 type SavedSpaceTarget={section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"};
 type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;q:number;gain_db:number;transition_seconds:number;curve:"linear"|"smooth"};
+export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck";threshold_db:number;ratio:number;depth_db:number;transition_seconds:number;curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
 export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],ending:SavedEnding)=>void;
+  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],ending:SavedEnding)=>void;
 }){
   const [content,setContent]=useState("");
   const [dirty,setDirty]=useState(false);
@@ -81,9 +82,9 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({content,mode})
       });
-      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:SavedSpaceTarget[];eq_targets?:SavedEqTarget[];ending?:SavedEnding};
+      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:SavedSpaceTarget[];eq_targets?:SavedEqTarget[];dynamics_targets?:SavedDynamicsTarget[];ending?:SavedEnding};
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
-      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.space_targets||[],result.eq_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
+      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.space_targets||[],result.eq_targets||[],result.dynamics_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
       setDirty(false);setStale(false);
       loadedRevision.current=-1;
       setMode("replace");

@@ -14,8 +14,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number;
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onSectionsImported}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onSectionsImported?:()=>void;
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -33,6 +33,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const sectionsRef=useRef(sections);
   sectionsRef.current=sections;
   useEffect(()=>{setSections(initialSections||[]);setStart(null);setEnd(null);setSelected(null);setImportText("");setShowImport(false);},[jobId,initialSections]);
+  useEffect(()=>{onSectionsChange?.(sections);},[sections,onSectionsChange]);
 
   async function persist(next:SongSection[],rollback:SongSection[]=sectionsRef.current) {
     setBusy(true);setError("");setMessage("");
@@ -58,6 +59,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       const data=await response.json() as {sections?:SongSection[];imported_count?:number;auto_distributed?:boolean;end_terminator_ignored?:boolean;detail?:string};
       if(!response.ok||!data.sections)throw Error(data.detail||"Could not import sections");
       setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
+      onSectionsImported?.();
       setMessage(data.auto_distributed
         ? `${data.imported_count} sections spread evenly across the song as a starting point. Drag boundaries against the waveform to align them.${data.end_terminator_ignored ? " Final [End] was treated as a terminator." : ""}`
         : `${data.imported_count} timed sections imported. Original audio unchanged.`);
@@ -200,6 +202,9 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         </button>
       </div>
       <small>Untimed sections receive equal initial durations; adjust interactively afterward. A final [End] is a terminator, not a section. Import timed and untimed tags separately. Existing sections remain safe if validation fails.</small>
+    </div>}
+    {sections.length>0&&<div className="section-marker-summary" role="status">
+      {sections.length} section{sections.length===1?"":"s"} saved · {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).length} in current view
     </div>}
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>

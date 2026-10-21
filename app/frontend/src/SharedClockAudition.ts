@@ -36,7 +36,7 @@ export class SharedClockAudition {
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
-  private originalComparison=false;
+  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
@@ -177,32 +177,32 @@ export class SharedClockAudition {
     return points;
   }
   /** Original A/B bypass is audition-only: saved mix and export remain processed. */
-  setOriginalComparison(enabled:boolean){
-    if(this.originalComparison===enabled)return;
-    this.originalComparison=enabled;
+  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean}){
+    if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
+    this.bypassEffects={...effects};
     if(this.running)this.seek(this.position);
     else this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
   }
-  get comparingOriginal(){return this.originalComparison;}
+  get comparingOriginal(){return Object.values(this.bypassEffects).every(Boolean);}
   private configurePreviewNodes(at:number,offset:number){
-    const bypass=this.originalComparison;
+    const bypass=this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
       scheduleAutomation(bus.pan,
-        !bypass&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
+        !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
       const width=this.widthStages.get(filename);
       if(width)scheduleStereoWidth(width,
-        !bypass&&this.automation[filename]?.width||[{time:0,value:1}],offset,at);
+        !bypass.width&&this.automation[filename]?.width||[{time:0,value:1}],offset,at);
       const reflection=this.spaceStages.get(filename);
       if(reflection)scheduleSpatialReflection(reflection,
-        !bypass&&this.automation[filename]?.space||[{time:0,value:0}],offset,at);
+        !bypass.space&&this.automation[filename]?.space||[{time:0,value:0}],offset,at);
       const send=this.reverbSends.get(filename);
       if(send)scheduleAutomation(send.gain,
-        !bypass&&this.automation[filename]?.reverb||[{time:0,value:0}],offset,at);
+        !bypass.reverb&&this.automation[filename]?.reverb||[{time:0,value:0}],offset,at);
     }
     scheduleAutomation(this.dryMaster.gain,
-      bypass?[{time:0,value:1}]:this.fadePoints(),offset,at);
+      bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
     scheduleAutomation(this.reverbDrive.gain,
-      bypass?[{time:0,value:0}]:this.fadePoints(),offset,at);
+      bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[]}>){

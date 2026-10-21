@@ -3,9 +3,10 @@ import type {SongSection} from "./SectionEditor";
 
 type Mode="replace"|"append";
 type ExportData={content:string;sections:SongSection[];detail?:string};
+import type {SavedPanTarget} from "./SectionPanTool";
 export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[])=>void;
+  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[])=>void;
 }){
   const [content,setContent]=useState("");
   const [dirty,setDirty]=useState(false);
@@ -71,9 +72,9 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({content,mode})
       });
-      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number};
+      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[]};
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
-      onApplied(result.sections);
+      onApplied(result.sections,result.pan_targets||[]);
       setDirty(false);setStale(false);
       setMessage(result.auto_distributed?"Sections placed · align on timeline":"Saved · timestamps updated");
       loadedRevision.current=-1;
@@ -99,7 +100,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
       <button type="button" title="Close section script" aria-label="Close section script" onClick={onClose}>×</button>
     </div>
     <textarea ref={editor} aria-label="Section script" spellCheck={false}
-      value={content} rows={10} placeholder={"[Intro]\n[Verse 1]\n[Chorus]\n[Outro]"}
+      value={content} rows={10} placeholder={"[Intro]\n[Verse 1]\n{Other.pan:left.60@2s:smooth}\n[Chorus]\n{Other.pan:right.60@2s:smooth}\n[Outro]"}
       onChange={e=>{setContent(e.target.value);setDirty(true);setMessage("");}}/>
     <div className="production-tool-actions">
       <label title="Import a section/lyrics text or JSON file">▣
@@ -119,7 +120,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     {error&&<small role="alert">{error}</small>}
     <details className="production-tool-help">
       <summary>Section notation</summary>
-      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Width cues remain proposals.</small>
+      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production lines {Track.pan:right.60@2s:smooth} support pan and {all.reset@2s:smooth} restores defaults. Other effects are not implemented yet. Width cues in legacy headers remain proposals.</small>
     </details>
   </section>;
 }

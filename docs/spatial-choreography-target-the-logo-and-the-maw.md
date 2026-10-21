@@ -61,3 +61,19 @@ These example blocks are *selected test sections only*, not a complete paste-rea
 7. Important: confirmation of native mid/side behavior does **not** establish satisfaction of the user's desired dramatic width for nearly mono stems. Perceptual decorrelation and stereo delay remain the next slice.
 
 **QA gate:** code committed to `main`; a real browser/WebAudio listening test and independent full Windows build have not yet been confirmed.
+
+## 2026-10-21 perceptual-width/early-reflection slice and full-sheet delivery
+
+**Full drop-in sheet**: `docs/qa-full-spatial-the-logo-and-the-maw.txt`. This contains ALL original words, section headers, times, and valid executable production blocks. Open Tools > Sections, use the file picker or paste the full file, leave Append **unchecked**, then Apply. The test should show **Saved · section sheet reloaded from disk**; close/reopen to confirm it still appears before performing any further edits.
+
+**Prior reload defect:** the backend section serializer tried to access `transition_seconds` on `Master.fade`/`Master.tail`, which have `seconds` instead. This could cause GET /sections/export to fail when any ending treatment was saved. Fixed by serializing master ending directives before reading generic transition fields; added a regression test that imports, saves, exports and reimports the real 13-section sheet with ending and space effects. The frontend editor now invalidates its cached revision when closed, GETs authoritative content on reopen, and performs a verification GET after each successful Apply. These changes were committed directly on **main**.
+
+New supported effect: `Track.space:0-40@2s:smooth`, e.g. `Vocals.space:25@2s:smooth`. It adds quiet, cross-channel first reflections at asymmetric 13ms/19ms delays **with no feedback**, making some near-mono sources more spacious even when pure mid/side width cannot. Send percentage defaults to 0 and is inherited from section to section. `Track.reset` and `all.reset` return it to 0. Preview and offline WAV use the same deterministic short-delay graph. A new **Spatial reflections** structured control saves the value and updates the section script.
+
+The full sheet's planned contrasts:
+- Vocals enter strongly left/wide, move inward across verses, swell extremely wide in Choruses and Instrumental, and finish center/narrower.
+- Bass, Guitar, Piano and Other counterbalance toward the right, tighten across verses, and bloom at chorus boundaries. Bass intentionally receives modest width and NO spatial reflection sends, to protect low-end mono stability.
+- Drums start nearly mono, alternate left/right focus in sections, gradually widen, and end broad with strong reflections/reverb.
+- Master Outro: 4s dry fade + 3s wet post-roll. The 4-minute project should yield an approximately 4:03 exported WAV. Existing master headroom recovery still applies after widening.
+
+**Acceptance:** Verify clean startup, import/GET round trip, re-open sheet, proper left-right route count, section changes and inheritance, stereo headphones, mono fold-down, 2:28 Instrumental opening, 3:13 final Chorus, and export/playback match. Short reflections can cause comb filtering in mono and are not a mastering limiter. No user sound QA nor independent Windows build has been completed for this slice yet.

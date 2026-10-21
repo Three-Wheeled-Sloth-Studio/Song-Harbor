@@ -169,7 +169,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
 
   return <section className="section-editor" aria-label="Song sections" style={{padding:"12px 0",borderTop:"1px solid var(--color-border, #6665)"}}>
     <h3 style={{margin:"0 0 8px"}}>Song sections</h3>
-    <p style={{fontSize:12,margin:"0 0 8px"}}>Mark a range, then drag its block to move it or either edge to resize. Boundaries are stored as time tags; source audio is never modified.</p>
+    <p style={{fontSize:12,margin:"0 0 8px"}}>Paste section headings without times for a quick starting layout, then drag boundaries on the waveform. Or mark in/out manually. Source audio is never modified.</p>
     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
       <button type="button" onClick={()=>setStart(position)} title="Mark start at playback cursor">Mark in</button>
       <button type="button" onClick={()=>setEnd(position)} title="Mark end at playback cursor">Mark out</button>
@@ -180,7 +180,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         onClick={()=>void persist([...sections,{id:crypto.randomUUID().replaceAll("-",""),kind,number:number?Number(number):null,start_seconds:a,end_seconds:b}])}>Add section</button>
     </div>
     <div className="section-import-actions">
-      <button type="button" onClick={()=>{setShowImport(v=>!v);setError("");}}> {showImport?"Close text editor":"Import / edit sections"} </button>
+      <button type="button" onClick={()=>{setShowImport(v=>!v);setError("");}}>{showImport?"Hide section list":"Paste / import section list"}</button>
       <button type="button" disabled={busy} onClick={()=>{void loadSectionText();}}>Edit saved tags</button>
       <label className="section-file-label">Open .txt / .json
         <input type="file" accept=".txt,.json,text/plain,application/json" aria-label="Choose sections file"
@@ -188,7 +188,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       </label>
     </div>
     {showImport&&<div className="section-import-panel">
-      <p>Times optional. Paste [Intro], [Verse 1], [Chorus], etc. Untimed sections are spaced evenly across the song as a starting point; drag boundaries to align with the waveform. Timed tags still work. Spatial cues are saved as proposals, not applied.</p>
+      <p>Paste a list such as [Intro], [Verse 1], [Chorus], [Outro]. If no times are present, each section gets an equal share of the available song duration. These are estimates, not detected transitions; drag shared boundaries afterward. Timed tags still work. Spatial cues are stored as proposals only.</p>
       <textarea aria-label="Timed section tags" spellCheck={false} rows={5} value={importText}
         placeholder={"[Intro]\\n[Verse 1]\\n[Chorus Vocal1:Expansive-Left]\\n[Verse 2]\\n[Chorus]\\n[Outro]\\n[End]"}
         onChange={e=>setImportText(e.target.value)}/>

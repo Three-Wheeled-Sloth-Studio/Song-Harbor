@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 TOKEN = re.compile(
-    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb|width):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
+    r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb|width|space):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
     r"|(?P<reset>all\.reset|[A-Za-z][A-Za-z0-9_-]*\.reset))"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
@@ -52,7 +52,11 @@ def parse_block(text: str) -> list[dict[str, Any]]:
                 raise ValueError(f"Unknown stem alias: {name}")
             value = match.group("value").lower()
             parameter = match.group("parameter").lower()
-            if parameter == "width":
+            if parameter == "space":
+                if not value.isdigit() or int(value)>40:
+                    raise ValueError("Spatial reflection send must be 0-40 percent")
+                directive = {"kind":"space", "track":canonical, "amount":int(value)}
+            elif parameter == "width":
                 if not value.isdigit() or int(value) > 150:
                     raise ValueError("Width must be 0-150 percent (100 is original width)")
                 directive = {"kind": "width", "track": canonical, "width": int(value)}
@@ -106,6 +110,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
                 head += ":" + d["curve"]
             rendered.append(head)
             continue
+        elif d["kind"] == "space":
+            head = f"{d['track']}.space:{d['amount']}"
         elif d["kind"] == "width":
             head = f"{d['track']}.width:{d['width']}"
         elif d["kind"] == "reverb":
@@ -138,7 +144,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "fade", "tail"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -164,7 +170,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "fade", "tail"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -204,6 +210,26 @@ def materialize_width(sections: list[dict[str, Any]],
                     "curve": directive["curve"],
                 })
     return output
+
+def materialize_space(sections: list[dict[str, Any]],
+                      blocks: dict[str, list[dict[str, Any]]],
+                      files: list[str]) -> list[dict[str, Any]]:
+    stems={alias:filename for filename in files for alias in ALIASES
+           if "(" + alias + ")" in filename}
+    output=[]
+    for section in sorted(sections,key=lambda s:s["start_seconds"]):
+        for d in blocks.get(section["id"], []):
+            if d["kind"] not in ("space","reset"):
+                continue
+            targets=list(stems) if d["kind"]=="reset" and d["track"]=="all" else [d["track"]]
+            for alias in targets:
+                if alias not in stems:
+                    raise ValueError(f"Spatial reflection target {alias} not in project")
+                output.append({"section_id":section["id"], "source_key":stems[alias],
+                               "amount":d["amount"] if d["kind"]=="space" else 0,
+                               "transition_seconds":d["transition_seconds"], "curve":d["curve"]})
+    return output
+
 
 def materialize_ending(sections: list[dict[str, Any]],
                        blocks: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:

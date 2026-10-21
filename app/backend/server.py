@@ -558,7 +558,9 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
             "spatial_proposals": changed["section_spatial_proposals"],
-            "imported_count": changed["imported_count"]}
+            "imported_count": changed["imported_count"],
+            "auto_distributed": changed["auto_distributed"],
+            "end_terminator_ignored": changed["end_terminator_ignored"]}
 
 
 @app.get("/api/projects/{ident}/sections/export")

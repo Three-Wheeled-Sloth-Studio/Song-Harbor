@@ -34,16 +34,22 @@ def parse_block(text: str) -> list[dict[str, Any]]:
             if not canonical:
                 raise ValueError(f"Unknown stem alias: {name}")
             value = match.group("value").lower()
-            if value in ("center", "reset"):
+            parameter = match.group("parameter").lower()
+            if parameter == "reverb":
+                if not value.isdigit() or int(value)>100:
+                    raise ValueError("Reverb send must be 0-100 percent")
+                directive = {"kind": "reverb", "track": canonical, "wet": int(value)/100}
+            elif value in ("center", "reset"):
                 pan = 0.0
-            else:
+            elif parameter == "pan":
                 direction, _, amount = value.partition(".")
                 n = int(amount) if amount else 100
                 if n > 100:
                     raise ValueError("Pan percentage cannot exceed 100")
                 pan = n / 100 * (-1 if direction == "left" else 1)
-            key = canonical.lower()
-            directive = {"kind": "pan", "track": canonical, "pan": pan}
+            key = canonical.lower() + "." + parameter
+            if parameter == "pan":
+                directive = {"kind": "pan", "track": canonical, "pan": pan}
         else:
             canonical = "all" if reset.lower() == "all.reset" else next(
                 (a for a in ALIASES if a.lower() == reset[:-6].lower()), None)
@@ -51,7 +57,7 @@ def parse_block(text: str) -> list[dict[str, Any]]:
                 raise ValueError(f"Unknown reset scope: {reset}")
             key = canonical.lower() if canonical == "all" else canonical.lower()
             directive = {"kind": "reset", "track": canonical}
-        if key in touched or ("all" in touched):
+        if key in touched or ("all" in touched) or canonical.lower() in touched:
             raise ValueError("Duplicate or conflicting production directives within a section")
         if canonical == "all" and touched:
             raise ValueError("all.reset cannot be combined with other section directives")
@@ -71,6 +77,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
+        elif d["kind"] == "reverb":
+            head = f"{d['track']}.reverb:{round(float(d['wet'])*100)}"
         else:
             value = float(d["pan"])
             if value == 0:
@@ -99,6 +107,8 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
+            if d["kind"] == "reverb":
+                continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
                 if alias not in stems:
@@ -108,5 +118,31 @@ def materialize_pan(sections: list[dict[str, Any]],
                     "pan": d["pan"] if d["kind"] == "pan" else 0.0,
                     "transition_seconds": d["transition_seconds"],
                     "curve": d["curve"],
+                })
+    return output
+
+
+def materialize_reverb(sections: list[dict[str, Any]],
+                       blocks: dict[str, list[dict[str, Any]]],
+                       files: list[str]) -> list[dict[str, Any]]:
+    stems = {}
+    for filename in files:
+        for alias in ALIASES:
+            if "(" + alias + ")" in filename:
+                stems[alias] = filename
+    output = []
+    for section in sorted(sections, key=lambda s: s["start_seconds"]):
+        for directive in blocks.get(section["id"], []):
+            if directive["kind"] == "pan":
+                continue
+            targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
+            for alias in targets:
+                if alias not in stems:
+                    raise ValueError("Reverb target not in project")
+                output.append({
+                    "section_id": section["id"], "source_key": stems[alias],
+                    "wet": directive["wet"] if directive["kind"] == "reverb" else 0.0,
+                    "transition_seconds": directive["transition_seconds"],
+                    "curve": directive["curve"],
                 })
     return output

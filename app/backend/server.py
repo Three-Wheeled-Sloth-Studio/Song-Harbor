@@ -629,7 +629,7 @@ def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> d
     blocks = dict(record.get("section_production", {}))
     for section in record.get("sections", []):
         sid = section["id"]
-        base = [d for d in blocks.get(sid, []) if d["kind"] == "reset"]
+        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "reverb")]
         for item in targets:
             if item["section_id"] != sid:
                 continue

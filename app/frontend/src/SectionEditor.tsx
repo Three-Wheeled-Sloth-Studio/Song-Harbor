@@ -12,7 +12,7 @@ function stamp(seconds:number) {
   const minutes=Math.floor(seconds/60);
   return `${minutes}:${(seconds%60).toFixed(2).padStart(5,"0")}`;
 }
-type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; limits:[number,number]; width:number; changed:boolean};
+type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
 export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration}:{
   jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number;
@@ -96,11 +96,39 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
     if(mode==="end") last=clamp(base.end_seconds+delta,first+MIN_LENGTH,limits[1]);
     return {...base,start_seconds:Math.round(first*1000)/1000,end_seconds:Math.round(last*1000)/1000};
   }
+  function moveBoundary(items:SongSection[],section:SongSection,mode:Drag["mode"],delta:number):SongSection[] {
+    const ordered=[...items].sort((a,b)=>a.start_seconds-b.start_seconds);
+    const index=ordered.findIndex(s=>s.id===section.id);
+    if(index<0)return items;
+    const prev=index>0?ordered[index-1]:null;
+    const next=index<ordered.length-1?ordered[index+1]:null;
+    const sharedStart=mode==="start"&&prev&&Math.abs(prev.end_seconds-section.start_seconds)<0.005;
+    const sharedEnd=mode==="end"&&next&&Math.abs(next.start_seconds-section.end_seconds)<0.005;
+    if(sharedStart){
+      const at=Math.round(clamp(section.start_seconds+delta,prev.start_seconds+MIN_LENGTH,
+                              section.end_seconds-MIN_LENGTH)*1000)/1000;
+      return items.map(s=>s.id===section.id?{...s,start_seconds:at}:
+        s.id===prev.id?{...s,end_seconds:at}:s);
+    }
+    if(sharedEnd){
+      const at=Math.round(clamp(section.end_seconds+delta,section.start_seconds+MIN_LENGTH,
+                              next.end_seconds-MIN_LENGTH)*1000)/1000;
+      return items.map(s=>s.id===section.id?{...s,end_seconds:at}:
+        s.id===next.id?{...s,start_seconds:at}:s);
+    }
+    const idx=ordered.findIndex(s=>s.id===section.id);
+    const limits:[number,number]=[
+      idx>0?ordered[idx-1].end_seconds:0,
+      idx<ordered.length-1?ordered[idx+1].start_seconds:duration
+    ];
+    const changed=reposition(section,mode,delta,limits);
+    return items.map(s=>s.id===section.id?changed:s);
+  }
   function beginDrag(e:ReactPointerEvent<HTMLDivElement>,section:SongSection,mode:Drag["mode"]) {
     if(busy||duration<=0) return;
     e.preventDefault();e.stopPropagation();
     const width=e.currentTarget.closest("[data-section-lane]")?.getBoundingClientRect().width||1;
-    drag.current={id:section.id,mode,x:e.clientX,original:section,limits:bounds(section.id),width,changed:false};
+    drag.current={id:section.id,mode,x:e.clientX,original:section,originals:[...sectionsRef.current],limits:bounds(section.id),width,changed:false};
     setSelected(section.id);
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -108,27 +136,32 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
     const d=drag.current;
     if(!d) return;
     const delta=(e.clientX-d.x)/d.width*(viewEnd-viewStart);
-    const next=reposition(d.original,d.mode,delta,d.limits);
-    d.changed=d.changed||next.start_seconds!==d.original.start_seconds||next.end_seconds!==d.original.end_seconds;
-    setSections(items=>items.map(s=>s.id===d.id?next:s));
+    const next=moveBoundary(d.originals,d.original,d.mode,delta);
+    d.changed=d.changed||next.some(s=>{
+      const before=d.originals.find(x=>x.id===s.id);
+      return before?.start_seconds!==s.start_seconds||before?.end_seconds!==s.end_seconds;
+    });
+    setSections(next);
   }
   function finishDrag(e:ReactPointerEvent<HTMLDivElement>) {
     const d=drag.current;
     if(!d) return;
     moveDrag(e);
     const delta=(e.clientX-d.x)/d.width*(viewEnd-viewStart);
-    const next=reposition(d.original,d.mode,delta,d.limits);
+    const candidate=moveBoundary(d.originals,d.original,d.mode,delta);
     drag.current=null;
-    if(next.start_seconds!==d.original.start_seconds||next.end_seconds!==d.original.end_seconds) {
-      const candidate=sectionsRef.current.map(s=>s.id===d.id?next:s);
-      void persist(candidate,candidate.map(s=>s.id===d.id?d.original:s));
-    }
+    if(candidate.some(s=>{
+      const before=d.originals.find(x=>x.id===s.id);
+      return before?.start_seconds!==s.start_seconds||before?.end_seconds!==s.end_seconds;
+    }))void persist(candidate,d.originals);
   }
   function nudge(section:SongSection,mode:Drag["mode"],direction:number) {
     if(busy) return;
-    const next=reposition(section,mode,direction*0.1,bounds(section.id));
-    if(next.start_seconds!==section.start_seconds||next.end_seconds!==section.end_seconds)
-      void persist(sections.map(s=>s.id===section.id?next:s));
+    const candidate=moveBoundary(sections,section,mode,direction*0.1);
+    if(candidate.some(s=>{
+      const before=sections.find(x=>x.id===s.id);
+      return before?.start_seconds!==s.start_seconds||before?.end_seconds!==s.end_seconds;
+    }))void persist(candidate);
   }
   const a=Math.min(start??position,end??position);
   const b=Math.max(start??position,end??position);
@@ -173,12 +206,12 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
           title="Drag to resize start. Arrow keys adjust by 0.1s."
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"start",e.key==="ArrowLeft"?-1:1);}}}
-          onPointerDown={e=>beginDrag(e,s,"start")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{drag.current=null;setSections(sectionsRef.current);}}
+          onPointerDown={e=>beginDrag(e,s,"start")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{if(drag.current)setSections(drag.current.originals);drag.current=null;}}
           style={{width:9,height:"100%",cursor:"ew-resize",background:"#ffffff55",flexShrink:0}}/>
         <div role="slider" tabIndex={0} aria-label={`Move ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={bounds(s.id)[1]-(s.end_seconds-s.start_seconds)} aria-valuenow={s.start_seconds}
           title={`${s.kind} ${stamp(s.start_seconds)}-${stamp(s.end_seconds)}. Drag to move, arrow keys 0.1s.`}
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"move",e.key==="ArrowLeft"?-1:1);}}}
-          onPointerDown={e=>beginDrag(e,s,"move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{drag.current=null;}}
+          onPointerDown={e=>beginDrag(e,s,"move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{if(drag.current)setSections(drag.current.originals);drag.current=null;}}
           style={{flex:1,minWidth:0,height:"100%",cursor:"grab",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",whiteSpace:"nowrap",fontSize:11}}>
           {s.kind}{s.number===null?"":` ${s.number}`}
         </div>

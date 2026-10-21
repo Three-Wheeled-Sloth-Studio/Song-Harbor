@@ -55,10 +55,12 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({content:importText,mode:importMode})
       });
-      const data=await response.json() as {sections?:SongSection[];imported_count?:number;detail?:string};
+      const data=await response.json() as {sections?:SongSection[];imported_count?:number;auto_distributed?:boolean;end_terminator_ignored?:boolean;detail?:string};
       if(!response.ok||!data.sections)throw Error(data.detail||"Could not import sections");
       setSections(data.sections);setShowImport(false);setStart(null);setEnd(null);
-      setMessage(`${data.imported_count} sections imported. Original audio unchanged.`);
+      setMessage(data.auto_distributed
+        ? `${data.imported_count} sections spread evenly across the song as a starting point. Drag boundaries against the waveform to align them.${data.end_terminator_ignored ? " Final [End] was treated as a terminator." : ""}`
+        : `${data.imported_count} timed sections imported. Original audio unchanged.`);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
@@ -153,9 +155,9 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       </label>
     </div>
     {showImport&&<div className="section-import-panel">
-      <p>One timed tag per line. Optional spatial cues are saved as proposals, not applied to audio.</p>
+      <p>Times optional. Paste [Intro], [Verse 1], [Chorus], etc. Untimed sections are spaced evenly across the song as a starting point; drag boundaries to align with the waveform. Timed tags still work. Spatial cues are saved as proposals, not applied.</p>
       <textarea aria-label="Timed section tags" spellCheck={false} rows={5} value={importText}
-        placeholder={"[Verse 0:15-0:45]\\n[Chorus 0:45-1:15 Vocal1:Expansive-Left Drums:Narrow-Right]"}
+        placeholder={"[Intro]\\n[Verse 1]\\n[Chorus Vocal1:Expansive-Left]\\n[Verse 2]\\n[Chorus]\\n[Outro]\\n[End]"}
         onChange={e=>setImportText(e.target.value)}/>
       <div className="section-import-footer">
         <label><input type="radio" checked={importMode==="replace"} onChange={()=>setImportMode("replace")}/> Replace existing</label>
@@ -164,7 +166,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
           {busy?"Validating…":"Apply timed sections"}
         </button>
       </div>
-      <small>Invalid time ranges or overlaps reject the entire import. Existing sections are preserved on failure.</small>
+      <small>Untimed sections receive equal initial durations; adjust interactively afterward. A final [End] is a terminator, not a section. Import timed and untimed tags separately. Existing sections remain safe if validation fails.</small>
     </div>}
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>

@@ -25,9 +25,9 @@ class ProductionNotationTests(unittest.TestCase):
                          result["section_pan_automation"])
 
     def test_reverb_send_and_reset_round_trip(self):
-        script = ("[Verse 0:00-0:10]\\n{Vocals.pan:left.30@2s:smooth Vocals.reverb:25@3s:smooth}\\n"
-                  "[Chorus 0:10-0:20]\\n{Vocals.reverb:40@2s:smooth}\\n"
-                  "[Outro 0:20-0:30]\\n{all.reset@2s:smooth}\\n")
+        script = ("[Verse 0:00-0:10]\n{Vocals.pan:left.30@2s:smooth Vocals.reverb:25@3s:smooth}\n"
+                  "[Chorus 0:10-0:20]\n{Vocals.reverb:40@2s:smooth}\n"
+                  "[Outro 0:20-0:30]\n{all.reset@2s:smooth}\n")
         project = {"sections": [], "files": FILES}
         result = section_import.apply(project, script, "replace", 30)
         vocal = [item["wet"] for item in result["section_reverb_automation"]
@@ -38,6 +38,28 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(section_import.apply(project, section_import.render_tags(project),
                           "replace", 30)["section_reverb_automation"],
                          result["section_reverb_automation"])
+
+    def test_final_section_fade_and_tail(self):
+        script = ("[Verse 0:00-0:10]\\n"
+                  "[Outro 0:10-0:20]\\n"
+                  "{Vocals.reverb:40@2s:smooth Master.fade:6s:smooth Master.tail:3s}\\n")
+        project = {"sections": [], "files": FILES}
+        result = section_import.apply(project, script, "replace", 20)
+        self.assertEqual(result["section_ending"], {
+            "fade_seconds": 6.0, "tail_seconds": 3.0, "curve": "smooth"})
+        project.update(result)
+        restored = section_import.apply(project, section_import.render_tags(project), "replace", 20)
+        self.assertEqual(restored["section_ending"], result["section_ending"])
+        self.assertEqual(len(restored["section_reverb_automation"]), 1)
+
+    def test_ending_rejects_nonterminal_and_excessive_fade(self):
+        for script in (
+            "[Verse 0:00-0:10]\\n{Master.fade:2s:smooth}\\n[Outro 0:10-0:20]",
+            "[Verse 0:00-0:10]\\n[Outro 0:10-0:20]\\n{Master.fade:12s:smooth}",
+            "[Verse 0:00-0:10]\\n[Outro 0:10-0:20]\\n{Master.tail:11s}",
+        ):
+            with self.subTest(script=script), self.assertRaises(ValueError):
+                section_import.apply({"sections": [], "files": FILES}, script, "replace", 20)
 
     def test_fail_closed(self):
         with self.assertRaises(ValueError):

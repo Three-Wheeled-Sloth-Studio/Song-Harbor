@@ -6,6 +6,7 @@ import type { SavedStem } from "./StemMixer";
 import type { SongSection } from "./SectionEditor";
 import { FfmpegSetup } from "./FfmpegSetup";
 import { AppSettings } from "./AppSettings";
+import { UpdateControl } from "./UpdateControl";
 import { LibraryHome } from "./LibraryHome";
 import "@tws-ui/core/tokens.css";
 import "@tws-ui/core/react/styles.css";
@@ -24,7 +25,7 @@ type Job = {
 };
 type RecentSong = {id: string; title: string; filename: string; created_at: number; recovered?: boolean};
 type SongProject = {id: string; title: string; stems: SavedStem[]; sections?: SongSection[]; source_duration_seconds?: number | null};
-type Health = { ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
+type Health = { instance_token?:string;ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
 function App() {
@@ -200,6 +201,7 @@ function App() {
     <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden="true">◈</span><span>TWS STUDIOS</span><span className="brand-divider">/</span><strong>Song Harbor</strong></div>
       <div className="header-actions">
+        <UpdateControl instanceToken={health?.instance_token||""}/>
         <Status tone={health?.separator_ready ? "success" : "warning"}>{health?.separator_ready ? "Local engine" : "Engine unavailable"}</Status>
         <button type="button" className="dependency-indicator" title={missingCount ? `${missingCount} component(s) need setup. Open settings.` : "Settings"}
           aria-label={missingCount ? `Settings, ${missingCount} missing component(s)` : "Open settings"}

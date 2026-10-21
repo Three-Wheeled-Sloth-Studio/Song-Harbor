@@ -5,6 +5,7 @@ import { AudioIcon } from "./AudioIcons";
 import { SectionEditor } from "./SectionEditor";
 import { ChannelSplitter } from "./ChannelSplitter";
 import { StemWaveforms } from "./StemWaveforms";
+import { SectionsTool } from "./SectionsTool";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -63,6 +64,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const timelineRef=useRef<HTMLElement|null>(null);
   const [viewportOffset,setViewportOffset]=useState(0);
   const [timelineSections,setTimelineSections]=useState<SongSection[]>(initialSections||[]);
+  const [scriptOpen,setScriptOpen]=useState(false);
+  const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
+  const [scriptRevision,setScriptRevision]=useState(0);
+  const [externalSections,setExternalSections]=useState<SongSection[]|undefined>(undefined);
   const [loopEnabled,setLoopEnabled]=useState(false);
   const [loopIn,setLoopIn]=useState<number|null>(null);
   const [loopOut,setLoopOut]=useState<number|null>(null);
@@ -246,6 +251,37 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     });
   }
 
+  const positionRef=useRef(position);
+  positionRef.current=position;
+  const togglePlaybackRef=useRef(togglePlayback);
+  togglePlaybackRef.current=togglePlayback;
+  const durationRef=useRef(duration);
+  durationRef.current=duration;
+  const seekRefFunction=useRef(seek);
+  seekRefFunction.current=seek;
+  const stopRef=useRef(stop);
+  stopRef.current=stop;
+  useEffect(()=>{
+    function keydown(event:KeyboardEvent){
+      if(event.altKey||event.ctrlKey||event.metaKey||event.repeat)return;
+      const source=event.target;
+      if(source instanceof Element && source.closest('input,textarea,select,button,[contenteditable="true"],[role="slider"],[role="textbox"]'))return;
+      if(event.code==="Space"){
+        event.preventDefault();
+        void togglePlaybackRef.current();
+      }else if(event.key==="ArrowLeft"){
+        event.preventDefault();
+        seekRefFunction.current(Math.max(0,positionRef.current-5));
+      }else if(event.key==="ArrowRight"){
+        event.preventDefault();
+        seekRefFunction.current(Math.min(durationRef.current,positionRef.current+5));
+      }
+    }
+    window.addEventListener("keydown",keydown);
+    return ()=>window.removeEventListener("keydown",keydown);
+  },[]);
+  function stopAndReset(){stop();seek(0);}
+  function skip(seconds:number){seek(Math.max(0,Math.min(duration,position+seconds)));}
   function update(filename: string, changes: Partial<Stem>) {
     setStems(current => current.map(s => s.filename === filename ? { ...s, ...changes } : s));
   }

@@ -33,26 +33,31 @@ export function scheduleCompressor(stage:DynamicsStage,curve:CompressorCurves|un
  * The detector reads the immutable decoded vocal AudioBuffer; it does not alter it.
  * It operates at 50Hz, so this is envelope ducking, not sample-rate sidechaining.
  */
-export function makeDuckingEnvelope(key:AudioBuffer,depthDb:readonly AutomationPoint[],
+export function makeDuckingEnvelope(key:AudioBuffer|readonly AudioBuffer[],depthDb:readonly AutomationPoint[],
     gain:number,stepSeconds=.02):AutomationPoint[]{
   if(!Number.isFinite(stepSeconds)||stepSeconds<.01||stepSeconds>.1)throw Error("Invalid detector resolution");
-  const channels=key.numberOfChannels;
-  const step=Math.max(1,Math.round(key.sampleRate*stepSeconds));
+  const buffers=Array.isArray(key)?key:[key as AudioBuffer];
+  if(!buffers.length)return [{time:0,value:1}];
+  const sampleRate=buffers[0].sampleRate;
+  const length=Math.min(...buffers.map(buffer=>buffer.length));
+  if(buffers.some(buffer=>buffer.sampleRate!==sampleRate))throw Error("Sidechain sample rates differ");
+  const channels=buffers.reduce((n,buffer)=>n+buffer.numberOfChannels,0);
+  const step=Math.max(1,Math.round(sampleRate*stepSeconds));
   const points:AutomationPoint[]=[{time:0,value:1}];
   let detector=0;
   const attack=.035,release=.25;
-  for(let pos=0;pos<key.length;pos+=step){
-    const end=Math.min(key.length,pos+step);
+  for(let pos=0;pos<length;pos+=step){
+    const end=Math.min(length,pos+step);
     let power=0;
-    for(let c=0;c<channels;c++){
-      const data=key.getChannelData(c);
+    for(const buffer of buffers)for(let c=0;c<buffer.numberOfChannels;c++){
+      const data=buffer.getChannelData(c);
       for(let i=pos;i<end;i++)power+=data[i]*data[i];
     }
     const rms=Math.sqrt(power/Math.max(1,(end-pos)*channels))*Math.max(0,gain);
-    const delta=(end-pos)/key.sampleRate;
+    const delta=(end-pos)/sampleRate;
     const tau=rms>detector?attack:release;
     detector+= (rms-detector)*(1-Math.exp(-delta/tau));
-    const time=end/key.sampleRate;
+    const time=end/sampleRate;
     const depth=valueAt(depthDb,time);
     // A gentle onset above -30 dBFS; full requested depth above -15 dBFS.
     const activity=Math.min(1,Math.max(0,(detector-.0316)/(.1778-.0316)));

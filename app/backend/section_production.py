@@ -13,6 +13,7 @@ TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
+FINISH = re.compile(r"(?i)^Master\\.(fade|tail):(\\d+(?:\\.\\d{1,3})?)s(?::(smooth|linear))?$")
 
 
 def parse_block(text: str) -> list[dict[str, Any]]:
@@ -24,6 +25,22 @@ def parse_block(text: str) -> list[dict[str, Any]]:
     directives = []
     touched = set()
     for token in tokens:
+        finishing = FINISH.fullmatch(token)
+        if finishing:
+            action, duration, curve = finishing.groups()
+            action = action.lower()
+            seconds = float(duration)
+            if action == "fade" and not (0.05 <= seconds <= 30):
+                raise ValueError("Master fade duration must be 0.05-30 seconds")
+            if action == "tail" and not (0 <= seconds <= 10):
+                raise ValueError("Master tail must be between 0 and 10 seconds")
+            key = "master." + action
+            if key in touched:
+                raise ValueError("Duplicate master ending directive")
+            touched.add(key)
+            directives.append({"kind": action, "track": "Master", "seconds": seconds,
+                               "curve": (curve or "smooth").lower()})
+            continue
         match = TOKEN.fullmatch(token)
         if not match:
             raise ValueError(f"Unsupported production directive: {token}. Pan, reverb send and reset only for this release")
@@ -79,6 +96,12 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
+        elif d["kind"] in ("fade", "tail"):
+            head = f"Master.{d['kind']}:{float(d['seconds']):g}s"
+            if d["kind"] == "fade":
+                head += ":" + d["curve"]
+            rendered.append(head)
+            continue
         elif d["kind"] == "reverb":
             head = f"{d['track']}.reverb:{round(float(d['wet'])*100)}"
         else:
@@ -109,7 +132,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] == "reverb":
+            if d["kind"] in ("reverb", "fade", "tail"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -135,7 +158,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] == "pan":
+            if directive["kind"] in ("pan", "fade", "tail"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -148,3 +171,29 @@ def materialize_reverb(sections: list[dict[str, Any]],
                     "curve": directive["curve"],
                 })
     return output
+
+
+def materialize_ending(sections: list[dict[str, Any]],
+                       blocks: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """End-anchored dry mix fade and wet-tail extension.
+
+    An explicit ending is restricted to the final audible section. The full
+    post-roll is a single project-level setting, not a per-stem effect.
+    """
+    ordered = sorted(sections, key=lambda s: s["start_seconds"])
+    ending = {"fade_seconds": 0.0, "tail_seconds": 0.0, "curve": "smooth"}
+    final_id = ordered[-1]["id"] if ordered else None
+    for section in ordered:
+        for directive in blocks.get(section["id"], []):
+            if directive["kind"] not in ("fade", "tail"):
+                continue
+            if section["id"] != final_id:
+                raise ValueError("Master.fade and Master.tail belong to the final section")
+            if directive["kind"] == "fade":
+                if directive["seconds"] > section["end_seconds"]-section["start_seconds"]:
+                    raise ValueError("Fade cannot be longer than the final section")
+                ending["fade_seconds"] = directive["seconds"]
+                ending["curve"] = directive["curve"]
+            else:
+                ending["tail_seconds"] = directive["seconds"]
+    return ending

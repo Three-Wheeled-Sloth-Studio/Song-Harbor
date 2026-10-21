@@ -24,6 +24,21 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(section_import.apply(project, rendered, "replace", 40)["section_pan_automation"],
                          result["section_pan_automation"])
 
+    def test_reverb_send_and_reset_round_trip(self):
+        script = ("[Verse 0:00-0:10]\\n{Vocals.pan:left.30@2s:smooth Vocals.reverb:25@3s:smooth}\\n"
+                  "[Chorus 0:10-0:20]\\n{Vocals.reverb:40@2s:smooth}\\n"
+                  "[Outro 0:20-0:30]\\n{all.reset@2s:smooth}\\n")
+        project = {"sections": [], "files": FILES}
+        result = section_import.apply(project, script, "replace", 30)
+        vocal = [item["wet"] for item in result["section_reverb_automation"]
+                 if "(Vocals)" in item["source_key"]]
+        self.assertEqual(vocal, [0.25, 0.4, 0.0])
+        self.assertEqual(len(result["section_reverb_automation"]), 8)
+        project.update(result)
+        self.assertEqual(section_import.apply(project, section_import.render_tags(project),
+                          "replace", 30)["section_reverb_automation"],
+                         result["section_reverb_automation"])
+
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Vocals.width:120@4s:smooth}")

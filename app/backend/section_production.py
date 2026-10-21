@@ -142,7 +142,9 @@ def parse_block(text: str) -> list[dict[str, Any]]:
                 raise ValueError(f"Unknown reset scope: {reset}")
             key = canonical.lower() if canonical == "all" else canonical.lower()
             directive = {"kind": "reset", "track": canonical}
-        if key in touched or ("all" in touched) or canonical.lower() in touched:
+        if canonical.lower() in touched and canonical != "all":
+            raise ValueError(f"{canonical}.reset conflicts with other {canonical} settings in this section. To reset compression only, use {canonical}.comp:-18,1@2s:smooth and retain explicit pan/width/space values.")
+        if key in touched or ("all" in touched):
             raise ValueError("Duplicate or conflicting production directives within a section")
         if canonical == "all" and any(not x.startswith("master.") for x in touched):
             raise ValueError("all.reset cannot be combined with stem directives")

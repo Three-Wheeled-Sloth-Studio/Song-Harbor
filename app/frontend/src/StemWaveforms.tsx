@@ -59,7 +59,7 @@ export function StemWaveforms({jobId,files,duration,position,onSeek,viewStart,vi
     {files.map(row=><div key={row.filename}>
       <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd} sections={sections}/>
       {row.children?.map(child=><div className="waveform-child-row" key={child.filename}>
-        <WaveRow jobId={jobId} row={child} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd}/>
+        <WaveRow jobId={jobId} row={child} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd} sections={sections}/>
       </div>)}
     </div>)}
   </section>;

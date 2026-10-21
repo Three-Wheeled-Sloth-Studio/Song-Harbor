@@ -108,7 +108,7 @@ export class SharedClockAudition {
     this.master.gain.value=Math.max(0,Math.min(1,monitor));
     this.renderedLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
     for(const track of this.tracks){
-      track.gain.gain.value=Math.max(0,Math.min(1,levels[track.source.filename]?.gain??0));
+      track.gain.gain.value=Math.max(0,Math.min(2,levels[track.source.filename]?.gain??0));
     }
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */

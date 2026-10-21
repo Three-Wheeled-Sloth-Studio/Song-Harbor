@@ -1,0 +1,130 @@
+[Intro 0:00-0:12.323]
+{Vocals.pan:left.55@2s:smooth Vocals.width:135@2s:smooth Vocals.space:16@2s:smooth Vocals.reverb:12@2s:smooth Bass.pan:right.35@2s:smooth Bass.width:115@2s:smooth Guitar.pan:right.45@2s:smooth Guitar.width:135@2s:smooth Guitar.space:12@2s:smooth Piano.pan:right.40@2s:smooth Piano.width:135@2s:smooth Other.pan:right.50@2s:smooth Other.width:140@2s:smooth Other.space:15@2s:smooth Drums.pan:center@2s:smooth Drums.width:30@2s:smooth Drums.space:0@2s:smooth}
+(whispered, distant)
+Salt in the circuit, rust in the vein
+Black water calling my old name again
+Hull full of secrets, hands full of wire
+Night on the ocean, bright mouth of fire
+
+[Verse 1 0:12.323-0:34.429]
+{Vocals.pan:left.48@3s:smooth Vocals.width:125@3s:smooth Vocals.space:12@3s:smooth Bass.pan:right.32@3s:smooth Guitar.pan:right.40@3s:smooth Guitar.width:125@3s:smooth Piano.pan:right.35@3s:smooth Piano.width:125@3s:smooth Other.pan:right.43@3s:smooth Other.width:128@3s:smooth Drums.pan:left.12@3s:smooth Drums.width:45@3s:smooth}
+We drag the wake where the dead nets swing
+Sell what we find to the pale neon kings
+Steel in the water, ghosts in the foam
+Every black tide says the machine wants home
+I seen the red lights blink through the mist
+Cold little saints with a barcode kiss
+One for the buyer and one for the grave
+One for the fool who gets paid to behave
+
+[Pre-Chorus 0:34.429-0:45.409]
+{Vocals.pan:left.38@2s:smooth Vocals.width:120@2s:smooth Vocals.reverb:18@2s:smooth Bass.pan:right.28@2s:smooth Guitar.pan:right.35@2s:smooth Piano.pan:right.30@2s:smooth Other.pan:right.35@2s:smooth Drums.pan:right.14@2s:smooth Drums.width:55@2s:smooth}
+Count the crates and count the bones
+Count the voices in the radios
+Count the seconds, count your breath
+Everybody on this deck owes death
+
+[Chorus 0:45.409-1:09.278]
+{Vocals.pan:left.22@2s:smooth Vocals.width:150@2s:smooth Vocals.space:34@2s:smooth Vocals.reverb:30@2s:smooth Bass.pan:right.20@2s:smooth Bass.width:120@2s:smooth Guitar.pan:right.20@2s:smooth Guitar.width:150@2s:smooth Guitar.space:30@2s:smooth Piano.pan:right.16@2s:smooth Piano.width:150@2s:smooth Piano.space:30@2s:smooth Other.pan:right.22@2s:smooth Other.width:150@2s:smooth Other.space:35@2s:smooth Drums.pan:center@2s:smooth Drums.width:115@2s:smooth Drums.space:20@2s:smooth}
+Hoist and haul, keep your head down low
+The sea keeps score and the red lights glow
+Hoist and haul, hear the long horn moan
+No one owns the tide, but it owns us all
+Hoist and haul, feel the cables strain
+Blood in the bilge and oil in the rain
+Hoist and haul, sing it soft, not loud
+The ocean takes the lost and feeds the crowd
+
+[Verse 2 1:09.278-1:31.339]
+{Vocals.pan:left.34@3s:smooth Vocals.width:115@3s:smooth Vocals.space:12@3s:smooth Vocals.reverb:13@3s:smooth Bass.pan:right.24@3s:smooth Bass.width:108@3s:smooth Guitar.pan:right.30@3s:smooth Guitar.width:112@3s:smooth Guitar.space:12@3s:smooth Piano.pan:right.25@3s:smooth Piano.width:112@3s:smooth Piano.space:12@3s:smooth Other.pan:right.30@3s:smooth Other.width:115@3s:smooth Other.space:14@3s:smooth Drums.pan:left.16@3s:smooth Drums.width:78@3s:smooth Drums.space:10@3s:smooth}
+Saw a girl with a halo spine
+Chrome in her jaw and a contract sign
+Said keep moving, keep stacking the dead
+Corps pay extra when the data is fresh
+Saw a boy with a prayer in code
+Hands on the rail where the black moss glowed
+He said freedom is a word men sell
+Right before they trade your name as well
+
+[Pre-Chorus 1:31.339-1:42.324]
+{Vocals.pan:left.28@2s:smooth Vocals.width:110@2s:smooth Vocals.reverb:20@2s:smooth Guitar.pan:right.25@2s:smooth Piano.pan:right.20@2s:smooth Other.pan:right.24@2s:smooth Drums.pan:right.18@2s:smooth Drums.width:92@2s:smooth}
+Count the scars and count the tags
+Count the things in the dragging bags
+Count the lies that the buyers tell
+Heaven looks a lot like a cargo cell
+
+[Chorus 1:42.324-2:05.355]
+{Vocals.pan:left.15@2s:smooth Vocals.width:150@2s:smooth Vocals.space:35@2s:smooth Vocals.reverb:32@2s:smooth Bass.pan:right.14@2s:smooth Bass.width:118@2s:smooth Guitar.pan:right.13@2s:smooth Guitar.width:150@2s:smooth Guitar.space:32@2s:smooth Piano.pan:right.12@2s:smooth Piano.width:150@2s:smooth Piano.space:32@2s:smooth Other.pan:right.15@2s:smooth Other.width:150@2s:smooth Other.space:36@2s:smooth Drums.pan:center@2s:smooth Drums.width:130@2s:smooth Drums.space:24@2s:smooth}
+Hoist and haul, keep your head down low
+The sea keeps score and the red lights glow
+Hoist and haul, hear the long horn moan
+No one owns the tide, but it owns us all
+Hoist and haul, feel the cables strain
+Blood in the bilge and oil in the rain
+Hoist and haul, sing it soft, not loud
+The ocean takes the lost and feeds the crowd
+
+[Bridge 2:05.355-2:28.384]
+{Vocals.pan:left.20@4s:smooth Vocals.width:100@4s:smooth Vocals.space:25@4s:smooth Vocals.reverb:43@4s:smooth Bass.pan:right.16@4s:smooth Bass.width:102@4s:smooth Guitar.pan:right.18@4s:smooth Guitar.width:105@4s:smooth Guitar.space:20@4s:smooth Piano.pan:right.15@4s:smooth Piano.width:105@4s:smooth Piano.space:22@4s:smooth Other.pan:right.18@4s:smooth Other.width:108@4s:smooth Other.space:25@4s:smooth Drums.pan:left.20@4s:smooth Drums.width:100@4s:smooth Drums.space:18@4s:smooth}
+(sparser, eerie)
+In the hold, in the hold
+Something learning in the cold
+In the wires, in the teeth
+In the prayers beneath the reef
+And the bosses on the shore want a cleaner kind of sin
+And the thing below the hull only wants to let us in
+And the line between a wage and a collar made of steel
+Gets thinner every time we trade a wound for one more meal
+
+[Instrumental 2:28.384-2:38.955]
+{Vocals.pan:center@1.5s:smooth Vocals.width:150@1.5s:smooth Vocals.space:38@1.5s:smooth Vocals.reverb:35@1.5s:smooth Bass.pan:right.12@1.5s:smooth Bass.width:120@1.5s:smooth Guitar.pan:right.10@1.5s:smooth Guitar.width:150@1.5s:smooth Guitar.space:35@1.5s:smooth Piano.pan:right.10@1.5s:smooth Piano.width:150@1.5s:smooth Piano.space:35@1.5s:smooth Other.pan:right.10@1.5s:smooth Other.width:150@1.5s:smooth Other.space:38@1.5s:smooth Drums.pan:center@1.5s:smooth Drums.width:145@1.5s:smooth Drums.space:30@1.5s:smooth}
+(chanted, layered)
+Drag the chain
+Mark the gain
+Salt the wound
+Hide the stain
+Drag the chain
+Mark the gain
+If it speaks
+Do not say your name
+
+[Verse 3 2:38.955-3:02.815]
+{Vocals.pan:left.15@3s:smooth Vocals.width:95@3s:smooth Vocals.space:10@3s:smooth Vocals.reverb:13@3s:smooth Bass.pan:right.12@3s:smooth Bass.width:102@3s:smooth Guitar.pan:right.13@3s:smooth Guitar.width:100@3s:smooth Guitar.space:10@3s:smooth Piano.pan:right.12@3s:smooth Piano.width:100@3s:smooth Piano.space:10@3s:smooth Other.pan:right.12@3s:smooth Other.width:102@3s:smooth Other.space:12@3s:smooth Drums.pan:right.20@3s:smooth Drums.width:115@3s:smooth Drums.space:16@3s:smooth}
+Morning never really gets here now
+Just a paler shade of anyhow
+We cash our checks in a drowning town
+Buy fake halos when the lights go down
+Some men serve the logo, some the maw
+Some just learn to love the locking jaw
+Me, I sing so I can hear what's mine
+One thin thread in the engine whine
+
+[Pre-Chorus 3:02.815-3:13.386]
+{Vocals.pan:left.10@2s:smooth Vocals.width:90@2s:smooth Vocals.reverb:20@2s:smooth Bass.pan:right.10@2s:smooth Guitar.pan:right.10@2s:smooth Piano.pan:right.10@2s:smooth Other.pan:right.10@2s:smooth Drums.pan:left.22@2s:smooth Drums.width:120@2s:smooth}
+Count the decks and count the doors
+Count what still comes back to shore
+Count the ones who came back wrong
+Then tell me this ain't just another song
+
+[Chorus 3:13.386-3:48.183]
+{Vocals.pan:center@3s:smooth Vocals.width:150@3s:smooth Vocals.space:40@3s:smooth Vocals.reverb:36@3s:smooth Bass.pan:right.06@3s:smooth Bass.width:120@3s:smooth Guitar.pan:right.05@3s:smooth Guitar.width:150@3s:smooth Guitar.space:38@3s:smooth Piano.pan:right.05@3s:smooth Piano.width:150@3s:smooth Piano.space:38@3s:smooth Other.pan:right.05@3s:smooth Other.width:150@3s:smooth Other.space:40@3s:smooth Drums.pan:center@3s:smooth Drums.width:150@3s:smooth Drums.space:35@3s:smooth Drums.reverb:18@3s:smooth}
+Hoist and haul, keep your head down low
+The sea keeps score and the red lights glow
+Hoist and haul, hear the long horn moan
+No one owns the tide, but it owns us all
+Hoist and haul, feel the cables strain
+Blood in the bilge and oil in the rain
+Hoist and haul, sing it hard, not proud
+The ocean keeps the truth beneath the sound
+Hoist and haul, keep the lantern dim
+Some get rich and some get taken in
+Hoist and haul, when the black wakes call
+No one owns the tide, but it owns us all
+
+[Outro 3:48.183-4:00]
+{Vocals.pan:center@3s:smooth Vocals.width:85@3s:smooth Vocals.space:22@3s:smooth Vocals.reverb:35@3s:smooth Bass.pan:center@3s:smooth Bass.width:100@3s:smooth Guitar.pan:right.04@3s:smooth Guitar.width:92@3s:smooth Guitar.space:15@3s:smooth Piano.pan:right.04@3s:smooth Piano.width:92@3s:smooth Piano.space:15@3s:smooth Other.pan:right.04@3s:smooth Other.width:95@3s:smooth Other.space:18@3s:smooth Drums.pan:center@3s:smooth Drums.width:150@3s:smooth Drums.space:35@3s:smooth Drums.reverb:24@3s:smooth Master.fade:4s:smooth Master.tail:3s}
+(soft, fading)
+Salt in the circuit, rust in the vein
+Black water calling my old name again
+Hull full of secrets, hands full of wire
+Night on the ocean, bright mouth of fire

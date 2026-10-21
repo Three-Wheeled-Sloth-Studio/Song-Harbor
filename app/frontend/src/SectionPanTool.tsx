@@ -8,10 +8,10 @@ export type SavedPanTarget={
 };
 type Props={
   jobId:string;sections:SongSection[];files:string[];
-  splitFiles:string[];targets:SavedPanTarget[];
+  targets:SavedPanTarget[];
   onChange:(items:SavedPanTarget[])=>void;
 };
-export function SectionPanTool({jobId,sections,files,splitFiles,targets,onChange}:Props){
+export function SectionPanTool({jobId,sections,files,targets,onChange}:Props){
   const [sectionId,setSectionId]=useState("");
   const [file,setFile]=useState("");
   const [pan,setPan]=useState(0);
@@ -21,7 +21,7 @@ export function SectionPanTool({jobId,sections,files,splitFiles,targets,onChange
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const currentSection=sections.some(s=>s.id===sectionId)?sectionId:(sections[0]?.id||"");
-  const available=files.filter(f=>!splitFiles.includes(f));
+  const available=files;
   const currentFile=available.includes(file)?file:(available[0]||"");
   const existing=targets.find(t=>t.section_id===currentSection&&t.source_key===currentFile);
   useEffect(()=>{
@@ -71,7 +71,7 @@ export function SectionPanTool({jobId,sections,files,splitFiles,targets,onChange
           {available.map(f=><option key={f} value={f}>{f}</option>)}
         </select>
       </label>
-      {splitFiles.length>0&&<p>Split stems are excluded until independent child pan targets are supported.</p>}
+      <p>Pan moves the combined stereo stem, preserving split L/R routing at the center position.</p>
       <label>Pan target: {pan<0?Math.abs(Math.round(pan*100))+"% left":pan>0?Math.round(pan*100)+"% right":"center"}
         <input aria-label="Section pan target" type="range" min="-1" max="1" step=".05" value={pan}
           onChange={e=>setPan(Number(e.target.value))}/>

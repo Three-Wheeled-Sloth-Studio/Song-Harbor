@@ -120,7 +120,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     {error&&<small role="alert">{error}</small>}
     <details className="production-tool-help">
       <summary>Section notation</summary>
-      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production lines {Track.pan:right.60@2s:smooth} support pan and {all.reset@2s:smooth} restores defaults. Other effects are not implemented yet. Width cues in legacy headers remain proposals.</small>
+      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Other effects are not implemented yet. Width cues in legacy headers remain proposals.</small>
     </details>
   </section>;
 }

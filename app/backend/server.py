@@ -616,6 +616,10 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         target for target in record.get("section_space_automation", [])
         if target.get("section_id") in keep
     ]
+    record["section_eq_automation"] = [
+        target for target in record.get("section_eq_automation", [])
+        if target.get("section_id") in keep
+    ]
     record["section_lyrics"] = {
         ident: value for ident, value in
         record.get("section_lyrics", {}).items() if ident in keep
@@ -676,7 +680,7 @@ def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> d
     blocks = dict(record.get("section_production", {}))
     for section in record.get("sections", []):
         sid = section["id"]
-        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "reverb", "width", "space", "fade", "tail")]
+        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "reverb", "width", "space", "eq", "fade", "tail")]
         for item in targets:
             if item["section_id"] != sid:
                 continue
@@ -736,7 +740,7 @@ def save_section_reverb(ident: str, request: Request, body: SectionReverbRequest
     blocks = dict(record.get("section_production", {}))
     for section in record.get("sections", []):
         sid = section["id"]
-        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "pan", "width", "space", "fade", "tail")]
+        base = [d for d in blocks.get(sid, []) if d["kind"] in ("reset", "pan", "width", "space", "eq", "fade", "tail")]
         for item in targets:
             if item["section_id"] != sid:
                 continue
@@ -924,6 +928,66 @@ def save_section_space(ident: str, request: Request, body: SectionSpaceRequest) 
     return {"targets":targets}
 
 
+class SectionEqTarget(BaseModel):
+    section_id: str
+    source_key: str = Field(min_length=1,max_length=260)
+    band: int = Field(ge=1,le=3)
+    frequency: int = Field(ge=30,le=16000)
+    q: float = Field(ge=.3,le=12)
+    gain_db: float = Field(ge=-12,le=12)
+    transition_seconds: float = Field(default=1,ge=.05,le=30)
+    curve: str = "smooth"
+
+
+class SectionEqRequest(BaseModel):
+    targets: list[SectionEqTarget] = Field(max_length=2048)
+
+
+@app.put("/api/projects/{ident}/section-eq")
+def save_section_eq(ident:str, request:Request, body:SectionEqRequest)->dict[str,Any]:
+    require_local_origin(request)
+    record=projects.read_project(DATA_ROOT,ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404,"Song not found")
+    sections_by_id={s["id"] for s in record.get("sections",[])}
+    files=set(record.get("files",[]))
+    seen=set()
+    targets=[]
+    for item in body.targets:
+        key=(item.section_id,item.source_key,item.band)
+        if key in seen or item.curve not in ("smooth","linear"):
+            raise HTTPException(400,"Duplicate EQ band or invalid curve")
+        if item.section_id not in sections_by_id or item.source_key not in files:
+            raise HTTPException(400,"EQ target must reference saved section and stem")
+        seen.add(key)
+        targets.append(item.model_dump())
+    import section_production
+    blocks=dict(record.get("section_production",{}))
+    for section in record.get("sections",[]):
+        sid=section["id"]
+        base=[d for d in blocks.get(sid,[]) if d["kind"]!="eq"]
+        for item in targets:
+            if item["section_id"]!=sid:
+                continue
+            alias=next((a for a in section_production.ALIASES
+                        if "(" + a + ")" in item["source_key"]),None)
+            if not alias:
+                raise HTTPException(400,"Unrecognized stem")
+            if any(d["kind"]=="reset" and d["track"] in ("all",alias) for d in base):
+                raise HTTPException(400,"EQ conflicts with reset in same section")
+            base.append({"kind":"eq","track":alias,"band":item["band"],
+                         "frequency":item["frequency"],"q":item["q"],
+                         "gain_db":item["gain_db"],
+                         "transition_seconds":item["transition_seconds"],"curve":item["curve"]})
+        if base:blocks[sid]=base
+        else:blocks.pop(sid,None)
+    record["section_production"]=blocks
+    record["section_eq_automation"]=targets
+    record["updated_at"]=time.time()
+    projects.write_project(DATA_ROOT,record)
+    return {"targets":targets}
+
+
 class SectionImportRequest(BaseModel):
     content: str = Field(min_length=1, max_length=100000)
     mode: str = "replace"
@@ -949,6 +1013,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_reverb_automation"] = changed["section_reverb_automation"]
     record["section_width_automation"] = changed["section_width_automation"]
     record["section_space_automation"] = changed["section_space_automation"]
+    record["section_eq_automation"] = changed["section_eq_automation"]
     record["section_ending"] = changed["section_ending"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
@@ -960,6 +1025,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "reverb_targets": changed["section_reverb_automation"],
             "width_targets": changed["section_width_automation"],
             "space_targets": changed["section_space_automation"],
+            "eq_targets": changed["section_eq_automation"],
             "ending": changed["section_ending"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
@@ -980,6 +1046,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "reverb_targets": record.get("section_reverb_automation", []),
             "width_targets": record.get("section_width_automation", []),
             "space_targets": record.get("section_space_automation", []),
+            "eq_targets": record.get("section_eq_automation", []),
             "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}
 
 

@@ -341,11 +341,11 @@ function App() {
                   <small>{(track.size/1048576).toFixed(1)} MB</small>
                 </div>)}
               </div>
-              <small>Working copies are aligned at 0:00; originals remain intact. Add manifest.json from a Song Harbor channel export to automatically reunite L/R pairs with the original split routing.</small>
+              <small>{trackFiles.some(item=>item.name.toLowerCase()==="manifest.json")?"Channel-split manifest selected: complete L/R pairs will be reconstructed as their parent stems with L/R routing active.":"Working copies align at 0:00; original files stay intact. Include manifest.json with an L/R channel export to reconstruct original parent stems."}</small>
             </>}
             <div className="action-row">
               <Button variant="primary" size="compact" disabled={busy||trackFiles.length<2||trackFiles.length>129||!trackTitle.trim()}
-                onClick={()=>{void importSelectedTracks();}}>{busy?"Importing tracks…":`Import ${trackFiles.length} tracks as one song`}</Button>
+                onClick={()=>{void importSelectedTracks();}}>{busy?"Importing tracks…":"Import selected tracks as one song"}</Button>
             </div>
           </>}
           {error && <div className="error-message" role="alert">{error}</div>}
@@ -359,7 +359,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.original_filename.replace(/\\.[^.]+$/,"")])):undefined} trackAliases={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.stem_alias])):undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
+            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.original_filename.replace(/\.[^.]+$/,"")])):undefined} trackAliases={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.stem_alias])):undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

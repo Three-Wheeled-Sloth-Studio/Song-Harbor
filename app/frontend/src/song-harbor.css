@@ -498,3 +498,12 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-cleanup-actions button{border:1px solid var(--tws-color-border-normal);border-radius:5px;padding:5px 7px;background:var(--tws-color-surface-panel);color:var(--tws-color-text-primary);font-size:10px;cursor:pointer}
 .song-cleanup-next{font-size:10px;text-align:center}
 .song-cleanup-panel button:focus-visible,.song-cleanup-panel select:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+
+/* One compact QC marker rail above stems; never repeat markers across 12 L/R rows. */
+.song-cleanup-marker-row{display:grid;grid-template-columns:75px minmax(0,1fr);gap:10px;align-items:center;margin:2px 0 7px;min-height:18px}
+.song-cleanup-marker-label{font:600 10px/1.2 system-ui,sans-serif;color:var(--tws-color-text-muted);white-space:nowrap}
+.song-cleanup-marker-track{position:relative;height:18px;border:1px solid var(--tws-color-border-normal);background:var(--tws-color-surface-inset);border-radius:5px;min-width:0}
+.song-cleanup-marker{position:absolute;top:3px;width:8px;height:11px;transform:translateX(-50%);border:1px solid var(--tws-color-border-strong);border-radius:3px;background:var(--tws-color-text-muted);padding:0;cursor:pointer}
+.song-cleanup-marker.is-warning{background:#d6a86f;border-color:#f0ce94}
+.song-cleanup-marker:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px;z-index:3}
+@media(max-width:570px){.song-cleanup-marker-row{grid-template-columns:65px minmax(0,1fr);gap:8px}}

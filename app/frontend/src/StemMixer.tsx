@@ -124,7 +124,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
-  useEffect(()=>{audio.current?.setEffectBypass(bypassed);},[bypassed,audioReady]);
+  useEffect(()=>{audio.current?.setEffectBypass(correction?{...bypassed,compression:false,ducking:false}:bypassed);},[bypassed,audioReady,correction]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb+(correction?.kind==="trim"&&correction.proposed?correction.trimDelta:0));},[masterTrimDb,correction,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;

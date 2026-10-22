@@ -7,9 +7,9 @@ export type SavedWidthTarget={
 };
 type Props={
   jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
-  targets:SavedWidthTarget[];onChange:(targets:SavedWidthTarget[])=>void;
+  targets:SavedWidthTarget[];previewEnabled?:boolean;onPreview?:(items:SavedWidthTarget[])=>void;onChange:(targets:SavedWidthTarget[])=>void;
 };
-export function SectionWidthTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+export function SectionWidthTool({jobId,sections,files,targets,onChange,initialSectionId,previewEnabled=false,onPreview}:Props){
   const [sectionId,setSectionId]=useState(initialSectionId||"");
   useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
@@ -47,6 +47,15 @@ export function SectionWidthTool({jobId,sections,files,targets,onChange,initialS
     void persist([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),
       {section_id:selectedSection,source_key:selectedFile,width,transition_seconds:transition,curve}]);
   }
+
+  // Live preview remains a purely local draft. Save/Apply is the only API write.
+  useEffect(()=>{
+    if(!previewEnabled||!selectedSection||!selectedFile)return;
+    onPreview?.([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),{
+      section_id:selectedSection,source_key:selectedFile,width,transition_seconds:transition,curve
+    }]);
+  // Deliberately react to editable values, not to parent re-renders.
+  },[previewEnabled,selectedSection,selectedFile,width,transition,curve]);
   return <details className="production-tool-detail" open>
     <summary>Section stereo width</summary>
     <div className="timeline-loop-controls">

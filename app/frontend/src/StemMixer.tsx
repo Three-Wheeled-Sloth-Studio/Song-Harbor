@@ -9,7 +9,7 @@ import { SectionsTool } from "./SectionsTool";
 import { SectionPanTool, type SavedPanTarget } from "./SectionPanTool";
 import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { SectionWidthTool, type SavedWidthTarget } from "./SectionWidthTool";
-import { SectionSpaceTool } from "./SectionSpaceTool";
+import { SectionSpaceTool,type SavedSpaceTarget } from "./SectionSpaceTool";
 import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";

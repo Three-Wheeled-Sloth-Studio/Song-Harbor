@@ -41,7 +41,7 @@ export class SharedClockAudition {
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
-  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,dynamics:false};
+  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,compression:false,ducking:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
@@ -196,7 +196,7 @@ export class SharedClockAudition {
     return points;
   }
   /** Audition-only effect bypass: the saved mix and offline export remain processed. */
-  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;dynamics:boolean}){
+  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;compression:boolean;ducking:boolean}){
     if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
     this.bypassEffects={...effects};
     if(this.running)this.seek(this.position);
@@ -210,8 +210,8 @@ export class SharedClockAudition {
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       const dynamics=this.dynamicsStages.get(filename);
       if(dynamics){
-        scheduleCompressor(dynamics,bypass.dynamics?undefined:this.automation[filename]?.dynamics?.compressor,offset,at);
-        scheduleDucking(dynamics,bypass.dynamics?undefined:this.duckEnvelopes.get(filename),offset,at);
+        scheduleCompressor(dynamics,bypass.compression?undefined:this.automation[filename]?.dynamics?.compressor,offset,at);
+        scheduleDucking(dynamics,bypass.ducking?undefined:this.duckEnvelopes.get(filename),offset,at);
       }
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
@@ -250,7 +250,7 @@ export class SharedClockAudition {
       const envelope=makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain);
       this.duckEnvelopes.set(filename,envelope);
       // Re-schedule only a gain node, never the source/transport graph.
-      if(changedKeys&&!this.bypassEffects.dynamics){
+      if(changedKeys&&!this.bypassEffects.ducking){
         const stage=this.dynamicsStages.get(filename);
         if(stage)scheduleDucking(stage,envelope,offset,at);
       }

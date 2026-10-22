@@ -195,7 +195,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
           onPointerDown={e=>beginDrag(e,s,"start")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{if(drag.current)setSections(drag.current.originals);drag.current=null;}}
           style={{width:9,height:"100%",cursor:"ew-resize",background:"#ffffff55",flexShrink:0}}/>
         <div role="slider" tabIndex={0} aria-label={`Move ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={bounds(s.id)[1]-(s.end_seconds-s.start_seconds)} aria-valuenow={s.start_seconds}
-          title={`${s.kind} ${stamp(s.start_seconds)}-${stamp(s.end_seconds)}. Drag to move, arrow keys 0.1s.`}
+          title={`${s.kind} ${stamp(s.start_seconds)}-${stamp(s.end_seconds)}. ${insightsById.has(s.id)?insightTitle(insightsById.get(s.id)!):"Scan to measure intensity and channel balance."} Drag to move, arrow keys 0.1s.`}
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"move",e.key==="ArrowLeft"?-1:1);}}}
           onDoubleClick={()=>onSectionDoubleClick?.(s)}
           onPointerDown={e=>beginDrag(e,s,"move")} onPointerMove={moveDrag} onPointerUp={finishDrag} onPointerCancel={()=>{if(drag.current)setSections(drag.current.originals);drag.current=null;}}

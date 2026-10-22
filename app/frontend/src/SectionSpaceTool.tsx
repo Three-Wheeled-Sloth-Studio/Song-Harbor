@@ -6,8 +6,8 @@ export type SavedSpaceTarget={
   curve:"linear"|"smooth";
 };
 type Props={jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
-  targets:SavedSpaceTarget[];onChange:(next:SavedSpaceTarget[])=>void};
-export function SectionSpaceTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  targets:SavedSpaceTarget[];previewEnabled?:boolean;onPreview?:(items:SavedSpaceTarget[])=>void;onChange:(next:SavedSpaceTarget[])=>void};
+export function SectionSpaceTool({jobId,sections,files,targets,onChange,initialSectionId,previewEnabled=false,onPreview}:Props){
   const [sectionId,setSectionId]=useState(initialSectionId||"");
   useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
@@ -44,6 +44,15 @@ export function SectionSpaceTool({jobId,sections,files,targets,onChange,initialS
     void persist([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),
       {section_id:selectedSection,source_key:selectedFile,amount,transition_seconds:transition,curve}]);
   }
+
+  // Live preview remains a purely local draft. Save/Apply is the only API write.
+  useEffect(()=>{
+    if(!previewEnabled||!selectedSection||!selectedFile)return;
+    onPreview?.([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),{
+      section_id:selectedSection,source_key:selectedFile,amount,transition_seconds:transition,curve
+    }]);
+  // Deliberately react to editable values, not to parent re-renders.
+  },[previewEnabled,selectedSection,selectedFile,amount,transition,curve]);
   return <details className="production-tool-detail" open>
     <summary>Spatial reflections</summary>
     <div className="timeline-loop-controls">

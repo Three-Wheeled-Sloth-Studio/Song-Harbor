@@ -792,6 +792,9 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
         target for target in record.get("section_space_automation", [])
         if target.get("section_id") in keep
     ]
+    record["section_gain_automation"] = [
+        target for target in record.get("section_gain_automation", []) if target.get("section_id") in keep
+    ]
     record["section_eq_automation"] = [
         target for target in record.get("section_eq_automation", [])
         if target.get("section_id") in keep
@@ -1191,6 +1194,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_space_automation"] = changed["section_space_automation"]
     record["section_eq_automation"] = changed["section_eq_automation"]
     record["section_dynamics_automation"] = changed["section_dynamics_automation"]
+    record["section_gain_automation"] = changed["section_gain_automation"]
     record["section_ending"] = changed["section_ending"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
@@ -1204,6 +1208,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "space_targets": changed["section_space_automation"],
             "eq_targets": changed["section_eq_automation"],
             "dynamics_targets": changed["section_dynamics_automation"],
+            "gain_targets": changed["section_gain_automation"],
             "ending": changed["section_ending"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
@@ -1226,6 +1231,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "space_targets": record.get("section_space_automation", []),
             "eq_targets": record.get("section_eq_automation", []),
             "dynamics_targets": record.get("section_dynamics_automation", []),
+            "gain_targets": record.get("section_gain_automation", []),
             "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}
 
 

@@ -41,7 +41,7 @@ export class SharedClockAudition {
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
-  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,compression:false,ducking:false};
+  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,compression:false,ducking:false,deess:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
@@ -207,7 +207,7 @@ export class SharedClockAudition {
     return points;
   }
   /** Audition-only effect bypass: the saved mix and offline export remain processed. */
-  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;compression:boolean;ducking:boolean}){
+  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;compression:boolean;ducking:boolean;deess:boolean}){
     if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
     this.bypassEffects={...effects};
     if(this.running)this.seek(this.position);
@@ -223,7 +223,7 @@ export class SharedClockAudition {
       if(dynamics){
         scheduleCompressor(dynamics,bypass.compression?undefined:this.automation[filename]?.dynamics?.compressor,offset,at);
         scheduleDucking(dynamics,bypass.ducking?undefined:this.duckEnvelopes.get(filename),offset,at);
-        scheduleDeEss(dynamics,this.automation[filename]?.dynamics?.deess,this.deessEnvelopes.get(filename),offset,at);
+        scheduleDeEss(dynamics,bypass.deess?undefined:this.automation[filename]?.dynamics?.deess,bypass.deess?undefined:this.deessEnvelopes.get(filename),offset,at);
       }
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);

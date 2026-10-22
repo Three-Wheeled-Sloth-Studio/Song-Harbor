@@ -6,11 +6,12 @@ export type SavedWidthTarget={
   curve:"linear"|"smooth";
 };
 type Props={
-  jobId:string;sections:SongSection[];files:string[];
+  jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedWidthTarget[];onChange:(targets:SavedWidthTarget[])=>void;
 };
-export function SectionWidthTool({jobId,sections,files,targets,onChange}:Props){
-  const [sectionId,setSectionId]=useState("");
+export function SectionWidthTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  const [sectionId,setSectionId]=useState(initialSectionId||"");
+  useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
   const [width,setWidth]=useState(100);
   const [transition,setTransition]=useState(2);

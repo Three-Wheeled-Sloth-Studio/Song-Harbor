@@ -89,6 +89,23 @@ A/B bypass is **audition-only**, not saved in WAV. **Bypass compression** and **
 
 **Export to DAW** prepares six original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
 
+## Fullscreen Song Harbor and floating tool windows
+
+On Windows, when the default browser is Chrome, Edge, Brave or Vivaldi, the launcher now starts a dedicated isolated Song Harbor app window in fullscreen mode. Firefox uses its kiosk mode. Other browser handlers retain a conventional window fallback. The far-right **×** in the Song Harbor top bar confirms shutdown and asks the **current local backend** to quit; it does not close unrelated apps or browser windows. Finish jobs and save work before quitting. Windows launcher behavior still requires local acceptance testing.
+
+The workspace Tools control is a compact **icon rail** along the right edge instead of a permanently wide inspector. Choose one icon for its tool; a movable floating window appears over the main waveform/editor and updates the current song while controls change. Drag the title bar to reposition; **×** dismisses the tool without removing song settings. The rail's icons have hover/keyboard labels. Only the selected tool's controls are mounted, and the waveform keeps the reclaimed horizontal space. The Sections editor retains its own safe Apply/Save behavior.
+
+### Correction trial for a cleanup finding
+
+For **Peak exceeds 0 dBFS** and **Repeated loudness dips**, choose **Try correction A/B** on the finding card after analysis. Song Harbor sets a short listening loop around the finding.
+
+- **A · Saved** means the current saved processing. **B · Proposed** means a temporary auditioning override. These do not overwrite original audio. Change sliders and listen to the loop again.
+- A **peak** proposes lowering master output trim to aim at -1 dBFS sample peak. The correction is a **session-only** master output trim pending future persistence; accepting updates the live mix/export setting but won't survive restart.
+- For **repeated loudness dips**, the initial suggested trial disables vocal-keyed ducking (0 dB) on an active non-vocal stem. You can instead choose compression, adjust its threshold and ratio, and select the exact stem; trial targets the containing saved section. This is a hypothesis to audition, not a diagnosis of the cause.
+- **Accept correction** validates and applies the dynamics directive through the current section-script import pipeline, preserving the other section directives and lyrics. Section automation inheritance still applies. **Discard** reverts the temporary override without changing the saved script. Corrected WAV export continues to use accepted production settings rather than temporary trial state.
+
+Switching an adjustment while playing may reschedule the current audio sources; seamless instantaneous sample-level trial switching is not yet guaranteed. The tool is intentionally conservative: it does not auto-accept suggested changes or claim sound improvement without listening.
+
 ## Sound cleanup analyzer: detection and review
 
 Open **Tools → Sound cleanup** and select **Analyze mix**. Song Harbor builds the same non-destructive offline processing graph used for the WAV export, then checks the rendered floating-point audio (with master output trim). It does **not** download a WAV or change stored audio, sections, or effects.

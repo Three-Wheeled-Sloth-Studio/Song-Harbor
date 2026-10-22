@@ -7,12 +7,13 @@ export type SavedPanTarget={
   transition_seconds:number;curve:AutomationCurve;
 };
 type Props={
-  jobId:string;sections:SongSection[];files:string[];
+  jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedPanTarget[];
   onChange:(items:SavedPanTarget[])=>void;
 };
-export function SectionPanTool({jobId,sections,files,targets,onChange}:Props){
-  const [sectionId,setSectionId]=useState("");
+export function SectionPanTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  const [sectionId,setSectionId]=useState(initialSectionId||"");
+  useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
   const [pan,setPan]=useState(0);
   const [transition,setTransition]=useState(1);

@@ -12,9 +12,10 @@ type Target={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";
 type Result={sections:SongSection[];pan_targets:SavedPanTarget[];reverb_targets:SavedReverbTarget[];
   width_targets:SavedWidthTarget[];space_targets:SavedSpaceTarget[];eq_targets:SavedEqTarget[];
   dynamics_targets:Target[];ending:{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}};
-export function SectionDeEssTool({jobId,sections,files,initialSectionId,targets,onSaved}:{
+export function SectionDeEssTool({jobId,sections,files,initialSectionId,targets,onSaved,previewEnabled=false,onPreview}:{
   jobId:string;sections:SongSection[];files:string[];initialSectionId?:string;
-  targets:Target[];onSaved:(result:Result)=>void;
+  targets:Target[];previewEnabled?:boolean;onPreview?:(targets:Target[])=>void;
+  onSaved:(result:Result)=>void;
 }){
   const [source,setSource]=useState(files.find(file=>file.includes("(Vocals)"))||files[0]||"");
   const [frequency,setFrequency]=useState(6500);
@@ -33,6 +34,14 @@ export function SectionDeEssTool({jobId,sections,files,initialSectionId,targets,
     setMaxReduction(target?.max_reduction_db??4);
     setTransition(target?.transition_seconds??2);
   },[sectionId,source,targets]);
+  useEffect(()=>{
+    if(!previewEnabled||!source||!sectionId)return;
+    const next:Target={section_id:sectionId,source_key:source,kind:"deess",
+      frequency,q,threshold_db:threshold,max_reduction_db:maxReduction,
+      ratio:1,depth_db:0,transition_seconds:transition,curve:"smooth"};
+    onPreview?.([...targets.filter(item=>!(item.section_id===sectionId&&
+      item.source_key===source&&item.kind==="deess")),next]);
+  },[previewEnabled,source,sectionId,frequency,q,threshold,maxReduction,transition]);
   async function apply(){
     if(!source||!sectionId)return;
     setSaving(true);setStatus("");

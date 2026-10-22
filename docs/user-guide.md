@@ -67,9 +67,17 @@ The compressor has conservative fixed attack/release and no automatic makeup gai
 
 **Export mix WAV** uses the current saved production settings, stem levels, end fade and reverb tail. The WAV is a rendered stereo mix. You must click **Download WAV** after rendering; the browser handles the save destination. If a clipping warning appears, apply the suggested master output trim and render again. Master trim is session-only at present.
 
-The A/B bypass is **audition-only**; it does not change the saved mix or processed WAV.
+The A/B bypass is **audition-only**; it does not change the saved mix or processed WAV. **B · Original** now also bypasses section compression and vocal-keyed ducking. Changes to stem levels no longer intentionally restart the player just to rebuild ducking.
 
 **Export to DAW** prepares six original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
+
+## Initial sound cleanup review
+
+After a **successful Export mix WAV**, expand **Sound cleanup review** in Tools. This first-pass non-destructive scan checks the same rendered floating-point mix used for the 24-bit WAV and flags:
+- Peak samples at or above -0.18 dBFS (approximately 0.98 linear), including clipping candidates. The scan accounts for master output trim.
+- Single-sample jumps of at least 0.7 linear amplitude, separated by at least 80 ms, as **possible** clicks or other discontinuities. Drums and deliberately distorted audio may trigger false positives.
+
+Click a reported timestamp to seek the audition transport. This is *suggestion-only* QA; it neither repairs sound nor changes exports. The list is capped to keep it usable. It currently runs during mix export, not continuously while playing. Sibilance, separation artifacts, broadband noise, pumping analysis, stem attribution and waveform marker overlays are not yet implemented.
 
 ## Updates, Settings and version
 

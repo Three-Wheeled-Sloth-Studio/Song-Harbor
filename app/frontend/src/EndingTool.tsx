@@ -28,7 +28,7 @@ export function EndingTool({jobId,sections,ending,onChange}:Props){
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setSaving(false);}
   }
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Ending treatments</summary>
     <div className="timeline-loop-controls">
       <p>Fade the dry mix into the final section boundary, preserving the reverb return into optional post-roll.</p>

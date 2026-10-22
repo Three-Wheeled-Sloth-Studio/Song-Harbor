@@ -293,7 +293,7 @@ def materialize_width(sections: list[dict[str, Any]],
 def materialize_space(sections: list[dict[str, Any]],
                       blocks: dict[str, list[dict[str, Any]]],
                       files: list[str]) -> list[dict[str, Any]]:
-    stems={alias:filename for filename in files for alias in ALIASES
+    stems={alias:filename for filename in files for alias in source_aliases(files)
            if "(" + alias + ")" in filename}
     output=[]
     for section in sorted(sections,key=lambda s:s["start_seconds"]):
@@ -313,7 +313,7 @@ def materialize_space(sections: list[dict[str, Any]],
 def materialize_eq(sections: list[dict[str, Any]],
                    blocks: dict[str, list[dict[str, Any]]],
                    files: list[str]) -> list[dict[str, Any]]:
-    stems={alias:filename for filename in files for alias in ALIASES
+    stems={alias:filename for filename in files for alias in source_aliases(files)
            if "(" + alias + ")" in filename}
     out=[]
     for section in sorted(sections,key=lambda s:s["start_seconds"]):

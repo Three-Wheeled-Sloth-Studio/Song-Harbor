@@ -39,10 +39,11 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, initialSections, initialTitle, onSaved }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, initialSections, initialTitle, onSaved }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
+  trackLabels?: Record<string,string>;
   initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
@@ -50,11 +51,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
     const saved = savedStems?.find(stem => stem.filename === filename);
     return {
-      filename, name: labelOf(filename),
+      filename, name: trackLabels?.[filename] || labelOf(filename),
       gain: saved ? Math.round(saved.gain * 100) : 100,
       mute: saved?.mute ?? false, solo: saved?.solo ?? false,
     };
-  }).sort((a, b) => names.indexOf(a.name) - names.indexOf(b.name)));
+  }).sort((a, b) => {const x=names.indexOf(a.name),y=names.indexOf(b.name);return x<0||y<0?0:x-y;}));
   const [title, setTitle] = useState(initialTitle || "Untitled song");
   const [saving, setSaving] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);

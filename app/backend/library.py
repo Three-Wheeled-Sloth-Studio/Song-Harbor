@@ -149,7 +149,9 @@ def adopt_jobs(data_root: Path) -> dict:
             # Keep explicit Library renames; manifest renames are normally updated
             # through rename_song, which writes the manifest and DB together.
             source_id = _id("source", legacy_id)
-            source = data_root / "jobs" / legacy_id / project["source_filename"]
+            source = (data_root / "jobs" / legacy_id /
+                      ("originals" if project.get("imported_tracks") else "") /
+                      project["source_filename"])
             if not source.is_file():
                 continue
             current = conn.execute("SELECT sha256 FROM sources WHERE id=?", (source_id,)).fetchone()

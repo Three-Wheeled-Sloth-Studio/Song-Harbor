@@ -23,10 +23,16 @@ export const FINDING_GROUPS:Record<AudioFindingKind,string>={
   phase:"Stereo / mono",pumping:"Dynamics"
 };
 type AudioLike=Pick<AudioBuffer,"length"|"sampleRate"|"numberOfChannels"|"getChannelData">;
-const clamp=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
 const db=(level:number)=>20*Math.log10(Math.max(1e-10,level));
 const WINDOW=2048;
 const hann=Float64Array.from({length:WINDOW},(_,i)=>.5-.5*Math.cos(2*Math.PI*i/(WINDOW-1)));
+const twiddles=Array.from({length:11},(_,stage)=>{
+  const size=2**(stage+1),half=size/2;
+  return {
+    cos:Float64Array.from({length:half},(_,i)=>Math.cos(-2*Math.PI*i/size)),
+    sin:Float64Array.from({length:half},(_,i)=>Math.sin(-2*Math.PI*i/size))
+  };
+});
 const makeFrequencyBands=(rate:number)=>{
   const nyquist=rate/2;
   const bounds:[[number,number],[number,number],[number,number],[number,number]]=[
@@ -42,13 +48,13 @@ function fftEnergy(re:Float64Array,im:Float64Array,binBands:number[][]){
     j^=bit;
     if(i<j){let v=re[i];re[i]=re[j];re[j]=v;v=im[i];im[i]=im[j];im[j]=v;}
   }
-  for(let size=2;size<=WINDOW;size*=2){
-    const half=size/2,step=-2*Math.PI/size;
+  for(let size=2,stage=0;size<=WINDOW;size*=2,stage++){
+    const half=size/2;
+    const {cos,sin}=twiddles[stage];
     for(let base=0;base<WINDOW;base+=size){
       for(let j=0;j<half;j++){
-        const a=base+j,b=a+half,angle=step*j;
-        const cos=Math.cos(angle),sin=Math.sin(angle);
-        const tre=cos*re[b]-sin*im[b],tim=sin*re[b]+cos*im[b];
+        const a=base+j,b=a+half;
+        const tre=cos[j]*re[b]-sin[j]*im[b],tim=sin[j]*re[b]+cos[j]*im[b];
         re[b]=re[a]-tre;im[b]=im[a]-tim;
         re[a]+=tre;im[a]+=tim;
       }
@@ -136,7 +142,7 @@ export function inspectRenderedAudio(buffer:AudioLike,outputTrimDb=0,maxFindings
     severity:highestPeak>1?"warning":"review",
     label:highestPeak>1?"Peak exceeds 0 dBFS":"Peak close to digital ceiling",
     detail:"Highest output-trim-adjusted rendered sample: "+db(highestPeak).toFixed(1)+" dBFS.",
-    suggestion:"Reduce master output trim and re-render. A sample peak alone is not a true-peak measurement."});
+    suggestion:"To aim for a -1 dBFS sample-peak ceiling, reduce master output trim by "+Math.max(0,1+db(highestPeak)).toFixed(1)+" dB and re-render. This is not a true-peak measurement."});
   if(flatHits>=4)offer({kind:"clip_shape",timeSeconds:flatPosition/rate,
     severity:"review",label:"Possible flattened waveform peaks",
     detail:flatHits+" repeated flat-topped sample runs near full scale; hard limiting or deliberate distortion may look similar.",

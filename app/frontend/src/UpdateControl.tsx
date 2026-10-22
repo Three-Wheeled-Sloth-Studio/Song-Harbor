@@ -5,12 +5,13 @@ type UpdateState={supported:boolean;reason?:string;branch?:string;current?:strin
 
 export function UpdateControl({instanceToken}:{instanceToken:string}){
   const [state,setState]=useState<UpdateState|null>(null);
-  const [installedVersion,setInstalledVersion]=useState("local");
+  const [installedVersion,setInstalledVersion]=useState("0.1.0:1:local");
+  const [versionDetail,setVersionDetail]=useState("Development build");
   useEffect(()=>{
     let active=true;
     void fetch("/api/runtime/version",{cache:"no-store"})
-      .then(async response=>{if(!response.ok)throw Error("Version unavailable");return response.json() as Promise<{label?:string}>;})
-      .then(version=>{if(active)setInstalledVersion(version.label||"local");})
+      .then(async response=>{if(!response.ok)throw Error("Version unavailable");return response.json() as Promise<{label?:string;branch?:string;commit?:string}>;})
+      .then(version=>{if(active){setInstalledVersion(version.label||"0.1.0:1:local");setVersionDetail([version.branch,version.commit].filter(Boolean).join(" · ")||"Local development build");}})
       .catch(()=>{});
     return ()=>{active=false;};
   },[]);
@@ -24,7 +25,7 @@ export function UpdateControl({instanceToken}:{instanceToken:string}){
       const data=await response.json() as UpdateState & {detail?:string};
       if(!response.ok)throw Error(data.detail||"Cannot check updates");
       setState(data);
-      if(data.current&&data.branch)setInstalledVersion(data.branch+"@"+data.current.slice(0,8));
+      if(data.current&&data.branch)setVersionDetail(data.branch+" · "+data.current.slice(0,8));
     }catch(e){setError(e instanceof Error?e.message:"Cannot check updates");}
     finally{setChecking(false);}
   }
@@ -46,7 +47,7 @@ export function UpdateControl({instanceToken}:{instanceToken:string}){
   }
   return <div className="song-update-control">
     <small className="song-version-badge" aria-label={"Installed Song Harbor version "+installedVersion}
-      title={"Installed checkout: "+installedVersion}>{installedVersion}</small>
+      title={"Version:Revision:Build · "+installedVersion+" · "+versionDetail}>{installedVersion}</small>
     <button type="button" className="dependency-indicator" title="Check Song Harbor updates"
       aria-label="Check Song Harbor updates" disabled={checking||restarting}
       onClick={()=>{void check();}}>{checking?"…":"↻"}</button>

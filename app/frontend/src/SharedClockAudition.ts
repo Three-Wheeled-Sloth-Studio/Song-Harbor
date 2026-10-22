@@ -231,11 +231,15 @@ export class SharedClockAudition {
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>){
+  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
     this.automation=curves;
     this.duckEnvelopes.clear();
     this.refreshDuckingEnvelopes();
-    if(this.running)this.seek(this.position);
+    if(liveTrial&&this.running){
+      // Update existing per-stem AudioParams in place. Do not restart transport
+      // on each correction slider movement; offline render still uses saved mix.
+      this.configurePreviewNodes(this.context.currentTime+0.03,this.position);
+    }else if(this.running)this.seek(this.position);
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
   }
   private refreshDuckingEnvelopes(changedKeys?:Set<string>){

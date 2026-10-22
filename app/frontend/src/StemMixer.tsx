@@ -885,7 +885,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               {(["pan","reverb","width","space","eq","deess"] as const).map(effect=>
                 <button key={effect} type="button" role="tab" aria-selected={sectionEffect===effect}
                   onClick={()=>{setSectionPreviewActive(false);setSectionPreview(null);setSectionEffect(effect);}}>
-                  {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect==="deess"?"De-ess":effect[0].toUpperCase()+effect.slice(1)}
+                  {effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect==="deess"?"De-ess":effect[0].toUpperCase()+effect.slice(1)}
                 </button>)}
             </div>
           </div>

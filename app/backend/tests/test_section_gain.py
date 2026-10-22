@@ -32,9 +32,9 @@ class SectionGainTests(unittest.TestCase):
         self.assertEqual(section_production.parse_block("{Vocals.gain:-2.5}")[0]["gain_db"],-2.5)
 
     def test_broadcast_gain_explicit_override_and_round_trip(self):
-        sheet=("[Verse 0:00-0:10]\\n"
-               "{all.gain:-1@2s:smooth Drums.gain:+0.75@3s:linear}\\n"
-               "[Chorus 0:10-0:20]\\n{all.gain:0@1s:smooth}\\n")
+        sheet=("[Verse 0:00-0:10]\n"
+               "{all.gain:-1@2s:smooth Drums.gain:+0.75@3s:linear}\n"
+               "[Chorus 0:10-0:20]\n{all.gain:0@1s:smooth}\n")
         initial={"sections":[],"files":FILES}
         changed=section_import.apply(initial,sheet,"replace",20)
         targets=changed["section_gain_automation"]
@@ -49,11 +49,11 @@ class SectionGainTests(unittest.TestCase):
         self.assertEqual(targets,restored["section_gain_automation"])
 
     def test_broadcast_pan_width_reverb_space_eq_precedence(self):
-        sheet=("[Verse 0:00-0:10]\\n"
+        sheet=("[Verse 0:00-0:10]\n"
                "{all.pan:right.20 Vocals.pan:left.50 all.width:110 "
                "Drums.width:125 all.reverb:15 Vocals.reverb:40 "
                "all.space:10 Drums.space:25 all.eq1:1000,1,+1 "
-               "Vocals.eq1:800,1,-2}\\n")
+               "Vocals.eq1:800,1,-2}\n")
         result=section_import.apply({"sections":[],"files":FILES},sheet,"replace",10)
         sid=result["sections"][0]["id"]
         cases=(("section_pan_automation","pan",-0.5,0.2),

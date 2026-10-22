@@ -6,7 +6,16 @@ Approved Oct 22, 2026 after mastering The Logo and the Maw. User wants concise s
 
 Sound cleanup → Analyze mix now extracts post-processing stereo section metrics and paints the existing draggable section headers. Hue runs subtly from cool (less intense) to warm (more intense); intensity is normalized within the song. If left-heavy, neutral background shows at the **right edge**; if right-heavy, neutral space shows at the **left edge**. Tooltips give section RMS, peak, L/R balance and side/mid width. No fake defaults or source-only visual estimates before the mix scan. The header design retains section boundaries, resize/drag, and the existing full-width timeline. This is a measure, not a DSP modification.
 
-## Next steps — syntax accepted in principle, not yet executable
+## Delivered second slice: explicit stem gain (awaiting local audio QA)
+
+The section sheet now recognizes `Drums.gain:+0.75@2s:smooth` and `Vocals.gain:-2.5@1s:linear`.
+Gain is expressed in dB relative to the saved manual stem fader; the audio engine
+uses multiplicative gain curves in both synchronized audition and offline WAV export.
+Gain inheritance is sticky across sections and `all.reset` restores a neutral 0 dB
+section offset. Added parser/import/reset regression tests. This does not implement
+`auto.gain` or `all.gain`. Local build and listening QA are still required.
+
+## Next steps — remaining syntax accepted in principle, not yet executable
 
 Example proposed section: 
 
@@ -15,7 +24,7 @@ Example proposed section:
 {Vocals.pan:left.32@4s:smooth Drums.gain:+0.75@3s:smooth auto.pan:center@8s:smooth auto.gain:0@8s:smooth}
 ```
 
-The current importer **does not implement** these new `all.<effect>` or `auto.<effect>` names or section gain. Only `all.reset` exists. Do not copy the example into saved sections until grammar and DSP are implemented.
+The importer **does not yet implement** `all.<effect>` or `auto.<effect>` names; explicit stem gain is now supported. Only `all.reset` exists. Do not copy the example into saved sections until grammar and DSP are implemented.
 
 - `Stem.effect`: explicit, highest priority; must never be silently overridden by automation.
 - `all.effect`: default target broadcast to all eligible stems not explicitly set in that section. Explicit stem directive wins. This is not an analyzer.

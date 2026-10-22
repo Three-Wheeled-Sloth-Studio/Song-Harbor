@@ -20,7 +20,7 @@ def source_aliases(files:list[str])->tuple[str,...]:
     """
     aliases=[]
     for filename in files:
-        match=re.search(r"\\(([A-Za-z][A-Za-z0-9_-]*)\\)",filename)
+        match=re.search(r"\(([A-Za-z][A-Za-z0-9_-]*)\)",filename)
         if match and match.group(1) not in aliases:
             aliases.append(match.group(1))
     return tuple(aliases)

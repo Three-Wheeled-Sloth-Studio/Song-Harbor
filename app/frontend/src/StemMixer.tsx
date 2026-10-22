@@ -686,7 +686,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   async function exportMix(overrideTrimDb?:number) {
     const engine=audio.current;
-    if(correction){setError("Accept or discard the correction trial before exporting the saved mix.");return;}
+    if(correction||sectionPreviewActive){setError("Return Section Edit to A Saved and accept/discard corrections before exporting the saved mix.");return;}
     if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
     stop();
     setExporting(true);
@@ -765,7 +765,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
-            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setSectionPreviewActive(false);setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
+            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setSectionPreviewActive(false);setSectionPreview(null);setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
           {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
             <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
               <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
@@ -829,6 +829,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onClick={()=>{
             if(item.id==="sectionEdit")setSectionEditId(current=>current||timelineSections[0]?.id||"");
             if(item.id==="cleanup"&&openTools.includes("cleanup"))setCorrection(null);
+            if(item.id==="sectionEdit"&&openTools.includes("sectionEdit")){setSectionPreviewActive(false);setSectionPreview(null);}
             setOpenTools(existing=>existing.includes(item.id)?
               existing.filter(x=>x!==item.id):[...existing,item.id]);
           }}>
@@ -841,6 +842,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           [...current.filter(item=>item!==tool),tool])}
         onClose={()=>{
           setOpenTools(items=>items.filter(item=>item!==tool));
+          if(tool==="sectionEdit"){setSectionPreviewActive(false);setSectionPreview(null);}
           if(tool==="cleanup")setCorrection(null);
         }}>
         {tool==="sectionEdit"&&<>
@@ -857,10 +859,32 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               onClick={()=>setOpenTools(items=>items.includes("songText")?items:[...items,"songText"])}>
               <span aria-hidden="true">{"{}"}</span> Edit whole-song section text…
             </button>
+            <div className="song-section-audition" role="group" aria-label="Section edit A/B">
+              <div className="song-section-audition-switch">
+                <button type="button" aria-pressed={!sectionPreviewActive}
+                  onClick={()=>setSectionPreviewActive(false)}>A · Saved</button>
+                <button type="button" aria-pressed={sectionPreviewActive}
+                  onClick={()=>{
+                    setCorrection(null);
+                    setSectionPreviewActive(true);
+                    const section=timelineSections.find(x=>x.id===sectionEditId)||timelineSections[0];
+                    if(section){
+                      setLoopIn(section.start_seconds);
+                      setLoopOut(section.end_seconds);
+                      setLoopEnabled(true);
+                      seek(section.start_seconds);
+                      if(!playRef.current)void togglePlayback();
+                    }
+                  }}>B · Draft preview</button>
+              </div>
+              <small>Adjust the effect controls while B plays. A restores the saved mix.
+                Nothing is written until the effect's Save/Apply button is used.
+                Switch to A to discard the audition, or close this window.</small>
+            </div>
             <div className="song-section-effect-tabs" role="tablist" aria-label="Section edit effect">
               {(["pan","reverb","width","space","eq","deess"] as const).map(effect=>
                 <button key={effect} type="button" role="tab" aria-selected={sectionEffect===effect}
-                  onClick={()=>{setSectionPreviewActive(false);setSectionEffect(effect);}}>
+                  onClick={()=>{setSectionPreviewActive(false);setSectionPreview(null);setSectionEffect(effect);}}>
                   {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect==="deess"?"De-ess":effect[0].toUpperCase()+effect.slice(1)}
                 </button>)}
             </div>
@@ -887,35 +911,41 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         {tool==="sectionEdit"&&sectionEffect==="pan"&&<>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
-          targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
+          previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"pan",targets:items})}
+          targets={panTargets} onChange={items=>{setSectionPreviewActive(false);setSectionPreview(null);setPanTargets(items);setMixUrl(null);}}/>
 
         </>}
         {tool==="sectionEdit"&&sectionEffect==="reverb"&&<>
         <SectionReverbTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
-          targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
+          previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"reverb",targets:items})}
+          targets={reverbTargets} onChange={items=>{setSectionPreviewActive(false);setSectionPreview(null);setReverbTargets(items);setMixUrl(null);}}/>
 
         </>}
         {tool==="sectionEdit"&&sectionEffect==="width"&&<>
         <SectionWidthTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
-          targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+          previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"width",targets:items})}
+          targets={widthTargets} onChange={items=>{setSectionPreviewActive(false);setSectionPreview(null);setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
 
         </>}
         {tool==="sectionEdit"&&sectionEffect==="space"&&<>
         <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
-          targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+          previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"space",targets:items})}
+          targets={spaceTargets} onChange={items=>{setSectionPreviewActive(false);setSectionPreview(null);setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
 
         </>}
 
         {tool==="sectionEdit"&&sectionEffect==="eq"&&<>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
-          targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+          previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"eq",targets:items})}
+          targets={eqTargets} onChange={items=>{setSectionPreviewActive(false);setSectionPreview(null);setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
 
         </>}
 
         {tool==="sectionEdit"&&sectionEffect==="deess"&&<>
           <SectionDeEssTool jobId={jobId} sections={timelineSections} files={files}
             initialSectionId={sectionEditId} targets={dynamicsTargets}
-            onSaved={data=>{
+            previewEnabled={sectionPreviewActive} onPreview={items=>setSectionPreview({kind:"deess",targets:items})}
+            onSaved={data=>{setSectionPreviewActive(false);setSectionPreview(null);
               setExternalSections(data.sections);setTimelineSections(data.sections);
               setPanTargets(data.pan_targets);setReverbTargets(data.reverb_targets);
               setWidthTargets(data.width_targets);setSpaceTargets(data.space_targets);
@@ -1022,7 +1052,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
-          disabled={exporting||Boolean(correction)} onClick={()=>{void exportMix();}}/>
+          disabled={exporting||Boolean(correction)||sectionPreviewActive} onClick={()=>{void exportMix();}}/>
         {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">Download WAV</a>}
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready to download</Status> : null}

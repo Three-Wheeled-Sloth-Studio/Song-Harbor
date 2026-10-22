@@ -106,7 +106,7 @@ The analyzer now makes *listening suggestions* in these categories:
 
 The analyzer uses bounded FFT windows for frequency evidence, a broad RMS envelope for dynamics, and correlation windows for mono-compatibility risk. Thresholds favor relatively pronounced candidates, not exhaustive defect identification.
 
-**Review workflow:** Filter by category; click a timestamp to seek; choose **Loop ± context** to mark and play a short repeating region around the candidate; read the conservative suggested next action; mark a candidate reviewed to hide it temporarily. Use **Show reviewed** to revisit it. Results are sorted by severity then time. Re-analyzing or changing production settings clears prior review decisions; review marks are session-only.
+**Review workflow:** Filter by category; click a timestamp to seek; choose **Loop ± context** to mark and play a short repeating region around the candidate; read the conservative suggested next action; mark a candidate reviewed to hide it temporarily. A narrow **QC marker rail** also appears directly above the stem waveforms, so candidates can be located and clicked without duplicating markers on every split track. Use **Show reviewed** to revisit it. Results are sorted by severity then time. Re-analyzing or changing production settings clears prior review decisions; review marks are session-only.
 
 Some findings offer **Active raw stems** as a clue about which inputs contain the strongest local signal or high-frequency activity. These are pre-effect approximate activity rankings, not reliable causal attribution, instrument recognition or a source isolation result.
 

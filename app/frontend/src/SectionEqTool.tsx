@@ -52,7 +52,7 @@ export function SectionEqTool({jobId,sections,files,targets,onChange}:Props){
   const valid=Number.isFinite(frequency)&&Number.isFinite(q)&&Number.isFinite(gain)&&
     Number.isFinite(transition)&&frequency>=30&&frequency<=16000&&q>=.3&&q<=12&&
     gain>=-12&&gain<=12&&transition>=.05&&transition<=30;
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Parametric EQ</summary>
     <div className="timeline-loop-controls">
       <p>Three per-stem peaking bands, smoothly automatable by section. Start with modest corrections.</p>

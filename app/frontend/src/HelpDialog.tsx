@@ -25,14 +25,14 @@ export const HELP_TOPICS:Topic[]=[
   {id:"playback",title:"Playback and stem mixing",summary:"Navigation, split channels, and safe audition.",
    body:[
      "Space plays or pauses when you are not typing in an input. Left/Right arrows move by five seconds. Click the waveform to seek; use timeline zoom and the region loop to work on a passage.",
-     "Mouse-wheel always scrolls the page, including over waveforms. Song Harbor now uses a right-hand icon tool rail: choose Zoom, EQ, Sections, Split channels, DAW handoff, or another tool to open one draggable floating context panel above the waveform. Close a tool with its ×. Your unapplied Sections text stays in memory when switching tools. Fullscreen app mode is used by the Windows launcher for supported default browsers; the far-right topbar × confirms shutdown and will not kill unrelated browsers.",
+     "Mouse-wheel scrolls the page over waveforms and scrolls the active floating tool when the pointer is within its content. The right-hand icon rail opens draggable, resizable, independently dismissible tool windows. Edit sections groups Pan, Reverb, Width, Reflections, EQ and De-ess in tabs. Download creates local audio files. Fullscreen mode and a guarded topbar Close × are available for supported browser launchers.",
      "Each stem has level, mute and solo controls. Parent stereo and derived left/right tracks are mutually exclusive: a split pair replaces, rather than doubles, the original parent.",
      "The shared-clock audio engine keeps stems synchronized. Loading long audio may take time and the audition engine reports if its decoded-audio budget is exceeded; it does not silently fall back to unsynchronized playback.",
-     "Monitor volume is for listening only. It does not set the rendered WAV level."
+     "Monitor volume is for listening only, not rendered WAV level. It is now remembered across Song Harbor restarts in local browser storage, with a safer 25% starting volume for new profiles. If browser storage is unavailable the safe 25% default is used."
    ]},
   {id:"sections",title:"Sections and production scripts",summary:"Editable timestamps and non-destructive effects.",
    body:[
-     "Open Tools > Sections. Each section begins with one square-bracket header, followed by at most one curly-brace production line and then optional original lyrics. Use Apply to validate and save.",
+     "Open the Edit sections icon, then click Edit whole-song section text… for an independent wide resizable editor showing every section and its complete production block and lyrics. Edit freely, then Apply to validate and save the complete song. The per-section effect tabs use the selected section instead of hiding or replacing the whole-song text.",
      "Directives target stem names Vocals, Drums, Bass, Guitar, Piano, Other or Master. Omitted settings carry forward into later sections. Transitions are in seconds and may use smooth or linear curves.",
      "A stem reset clears its pan, width, space, reverb, EQ and dynamics. Do not combine Other.reset with Other.pan or Other.width in the same block. To turn off just compression, set its ratio to 1:1 instead.",
      "Unrecognized directives are rejected rather than silently applied. Not every DAW effect is supported as a script yet."
@@ -51,7 +51,7 @@ export const HELP_TOPICS:Topic[]=[
      "Compression: Track.comp:-18,2 means threshold -18 dBFS and 2:1 ratio; supported ratio 1-4. The compressor defaults to neutral 1:1 when no instruction is active.",
      "Vocal-keyed ducking: Guitar.duck:3 requests up to 3 dB reduction when the detected vocal signal is active. Ducking operates on non-vocal stems only, with 0-12 dB allowed. It is an approximate envelope rather than a fully adjustable external sidechain.",
      "Endings belong to the final section: Master.fade:4s:smooth and Master.tail:3s. The fade reduces dry audio and new reverb excitation; the wet decay may continue into the tail.",
-     "Edit sections > De-ess provides the same frequency, Q, detector threshold and max-reduction sliders for the selected section. Edit sections > Script still exposes the full original production block; using Apply preserves lyrics and other directives.",
+     "Edit sections > De-ess provides the same frequency, Q, detector threshold and max-reduction sliders for the selected section. Use Edit sections > Edit whole-song section text… to see or change the entire original song script; using Apply preserves lyrics and other directives. The Section Edit A Saved / B Draft switch loops the selected section and previews each effect slider live without saving. Save/Apply commits, A restores the saved sound, and closing the editor discards unsaved processing.",
      "Frequency-selective per-stem de-essing: Vocals.deess:6500,2,-40,4@2s:smooth (frequency 3000-11000 Hz, Q .4-8, detector threshold -70 to -10 dBFS, maximum band reduction 0-12 dB). Neutral unless scripted or accepted from a correction trial. Live gain-reduction meters are available in A/B and correction tools. A full effects rack, plugin hosting, precise artifact repairs and reliable level-matched audition remain planned."
    ],
    examples:["{Vocals.eq1:320,1.2,-2@2s:smooth Other.comp:-18,2@2s:smooth Guitar.duck:3@1s:smooth}"]},

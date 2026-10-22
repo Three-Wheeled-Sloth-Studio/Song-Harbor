@@ -75,7 +75,7 @@ export function CleanupReview({
         {nextItem&&<button type="button" className="song-cleanup-next"
           onClick={()=>onSeek(nextItem.timeSeconds)}>Jump to first unreviewed finding</button>}
       </>}
-      <small className="song-cleanup-limits">Heuristic listening suggestions, not diagnoses. Sibilance-like energy may be cymbals; harshness may be desirable instrumentation. Source attribution, automatic de-essing and artifact repair are not yet available.</small>
+      <small className="song-cleanup-limits">Heuristic listening suggestions, not diagnoses. Sibilance-like energy may be cymbals; harshness may be intended instrumentation. Stem hints reflect raw audio activity, not proven artifact sources. Automatic de-essing and repairs are not implemented.</small>
     </div>
   </details>;
 }

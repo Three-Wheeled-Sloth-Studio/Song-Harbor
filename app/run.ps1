@@ -83,6 +83,7 @@ Write-Host "Data: $env:SONG_HARBOR_DATA"
 Write-Host "Models: $env:SONG_HARBOR_MODELS"
 Write-Host "UI/API (single server): $url"
 
+$ownedBrowser = $null
 $backend = Start-Process -FilePath $python -ArgumentList @(
   ('"' + (Join-Path $PSScriptRoot 'backend\server.py') + '"')
 ) -WorkingDirectory $Root -PassThru -NoNewWindow
@@ -158,14 +159,18 @@ try {
               # browser window and allows window.close() from our own topbar.
               $profile = Join-Path $Root 'cache\song-harbor-browser'
               New-Item -ItemType Directory -Force $profile | Out-Null
-              Start-Process -FilePath $exePath -ArgumentList @(
+              $ownedBrowser = Start-Process -FilePath $exePath -PassThru -ArgumentList @(
                 "--user-data-dir=`"$profile`"", '--no-first-run',
                 '--start-fullscreen', "--app=$url"
               )
               Write-Host "Opened Song Harbor in dedicated fullscreen app window ($binaryName)."
             } elseif ($binaryName -eq 'firefox.exe') {
-              Start-Process -FilePath $exePath -ArgumentList @('-kiosk', $url)
-              Write-Host 'Opened Song Harbor fullscreen in the default Firefox browser.'
+              $profile = Join-Path $Root 'cache\song-harbor-firefox'
+              New-Item -ItemType Directory -Force $profile | Out-Null
+              $ownedBrowser = Start-Process -FilePath $exePath -PassThru -ArgumentList @(
+                '-no-remote','-profile',("`""+$profile+"`""),'-kiosk',$url
+              )
+              Write-Host 'Opened Song Harbor fullscreen in isolated Firefox profile.'
             } else {
               Start-Process -FilePath $exePath -ArgumentList @($windowSwitch, $url)
               Write-Host "Opened Song Harbor in a dedicated browser window ($binaryName)."
@@ -190,5 +195,13 @@ try {
   $backend.Refresh()
   if (-not $backend.HasExited) {
     Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
+  }
+  # Only the dedicated app process this launcher itself started is eligible for
+  # closure. Never enumerate or terminate unrelated browser processes.
+  if ($ownedBrowser) {
+    $ownedBrowser.Refresh()
+    if (-not $ownedBrowser.HasExited) {
+      Stop-Process -Id $ownedBrowser.Id -ErrorAction SilentlyContinue
+    }
   }
 }

@@ -123,6 +123,32 @@ def runtime_status() -> dict[str, Any]:
             "pid": os.getpid(), "busy": running > 0, "active_jobs": running}
 
 
+class QuitRequest(BaseModel):
+    instance_token: str = Field(min_length=16, max_length=100)
+
+
+@app.post("/api/runtime/quit")
+def close_song_harbor(body: QuitRequest, request: Request) -> dict[str, str]:
+    """Explicitly stop only this local Song Harbor server after a UI confirmation.
+
+    Instance token + same-origin restrictions defend against drive-by requests.
+    Never kill unrelated browser/application processes. Launcher reaps only
+    the backend PID it started.
+    """
+    require_local_origin(request)
+    expected=os.environ.get("SONG_HARBOR_INSTANCE_TOKEN","")
+    if not expected or body.instance_token!=expected:
+        raise HTTPException(403,"Song Harbor instance token is invalid")
+    if runtime_status()["busy"]:
+        raise HTTPException(409,"An audio processing job is active; finish it before quitting")
+    def shutdown():
+        time.sleep(.4)  # allow response to reach the browser
+        import signal
+        os.kill(os.getpid(),signal.SIGTERM)
+    threading.Thread(target=shutdown,daemon=True).start()
+    return {"status":"closing"}
+
+
 @app.get("/api/runtime/version")
 def runtime_version() -> dict[str, str]:
     return app_update.local_version(Path(__file__).resolve().parents[2])

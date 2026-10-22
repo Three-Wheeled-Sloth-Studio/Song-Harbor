@@ -168,7 +168,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   return <section className="section-editor section-editor-rail" aria-label="Song sections">
     <div className="section-inline-row">
       <div className="section-inline-tools">
-        {onAnalyzeSections&&<button type="button" className="section-insight-trigger" disabled={analyzingSections} onClick={onAnalyzeSections} title="Measure current rendered section loudness and stereo balance. Re-run after edits.">{analyzingSections?"Analyzing...":insights.length?"Refresh colors":"Analyze colors"}</button>}
+        {onAnalyzeSections&&<button type="button" className="section-insight-trigger" disabled={analyzingSections} onClick={onAnalyzeSections} aria-label="Analyze section intensity and stereo balance" title="Analyze colors: measure rendered section loudness and stereo balance. Re-run after edits.">{analyzingSections?"...":insights.length?"Redo":"Scan"}</button>}
         <details className="section-manual-controls" title="Create section at playhead">
           <summary aria-label="Manual section tools" title="Section tools">≡</summary>
           <div className="section-manual-popover">

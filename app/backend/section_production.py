@@ -13,6 +13,19 @@ TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
+def source_aliases(files:list[str])->tuple[str,...]:
+    """Use persisted working track aliases, not a fixed count of six.
+
+    Track identity is the immutable working filename; display names can change.
+    """
+    aliases=[]
+    for filename in files:
+        match=re.search(r"\\(([A-Za-z][A-Za-z0-9_-]*)\\)",filename)
+        if match and match.group(1) not in aliases:
+            aliases.append(match.group(1))
+    return tuple(aliases)
+
+
 EQ_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.eq(?P<band>[123]):"
     r"(?P<freq>\d{2,5}),(?P<q>\d+(?:\.\d{1,2})?),(?P<gain>[+-]?\d+(?:\.\d)?)"
@@ -26,18 +39,18 @@ DYNAMICS_TOKEN = re.compile(
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
-def parse_block(text: str) -> list[dict[str, Any]]:
-    if len(text) > 4096 or not text.startswith("{") or not text.endswith("}"):
+def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any]]:
+    if len(text) > 32768 or not text.startswith("{") or not text.endswith("}"):
         raise ValueError("Production instructions must occupy one {...} line")
     tokens = text[1:-1].strip().split()
-    if len(tokens) > 64:
-        raise ValueError("Maximum 64 production directives per section")
+    if len(tokens) > 512:
+        raise ValueError("Maximum 512 production directives per section")
     directives = []
     touched = set()
     for token in tokens:
         dynamics=DYNAMICS_TOKEN.fullmatch(token)
         if dynamics:
-            canonical=next((a for a in ALIASES if a.lower()==dynamics.group("track").lower()),None)
+            canonical=next((a for a in aliases if a.lower()==dynamics.group("track").lower()),None)
             if not canonical:
                 raise ValueError("Unknown dynamics stem")
             kind=dynamics.group("kind").lower()
@@ -204,7 +217,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     """
     stems = {}
     for filename in files:
-        for alias in ALIASES:
+        for alias in source_aliases(files):
             if "(" + alias + ")" in filename:
                 stems[alias] = filename
     output = []
@@ -256,7 +269,7 @@ def materialize_width(sections: list[dict[str, Any]],
                       blocks: dict[str, list[dict[str, Any]]],
                       files: list[str]) -> list[dict[str, Any]]:
     """Compile explicit width changes; omitted sections inherit previous value."""
-    stems = {alias: filename for filename in files for alias in ALIASES
+    stems = {alias: filename for filename in files for alias in source_aliases(files)
              if "(" + alias + ")" in filename}
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
@@ -353,7 +366,7 @@ def materialize_dynamics(sections: list[dict[str, Any]],
                          blocks: dict[str, list[dict[str, Any]]],
                          files: list[str]) -> list[dict[str, Any]]:
     """Only explicit dynamics or resets appear; older projects stay neutral."""
-    stems={alias:filename for filename in files for alias in ALIASES if "(" + alias + ")" in filename}
+    stems={alias:filename for filename in files for alias in source_aliases(files) if "(" + alias + ")" in filename}
     out=[]
     for section in sorted(sections,key=lambda item:item["start_seconds"]):
         for directive in blocks.get(section["id"],[]):

@@ -15,7 +15,7 @@ function sectionFill(insight:SectionInsight){
   return {
     left:insight.balanceDb>=0?"0":`${(missing*100).toFixed(1)}%`,
     width:`${((1-missing)*100).toFixed(1)}%`,
-    background:`hsla(${hue},65%,55%,${(.24+insight.intensity*.27).toFixed(2)})`
+    background:`hsla(${hue},78%,55%,${(.40+insight.intensity*.38).toFixed(2)})`
   };
 }
 function insightTitle(insight:SectionInsight){
@@ -28,8 +28,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections,insights=[]}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[]; insights?:readonly SectionInsight[];
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections,insights=[],onAnalyzeSections,analyzingSections=false}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[]; insights?:readonly SectionInsight[]; onAnalyzeSections?:()=>void; analyzingSections?:boolean;
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -168,6 +168,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   return <section className="section-editor section-editor-rail" aria-label="Song sections">
     <div className="section-inline-row">
       <div className="section-inline-tools">
+        {onAnalyzeSections&&<button type="button" className="section-insight-trigger" disabled={analyzingSections} onClick={onAnalyzeSections} title="Measure current rendered section loudness and stereo balance. Re-run after edits.">{analyzingSections?"Analyzing...":insights.length?"Refresh colors":"Analyze colors"}</button>}
         <details className="section-manual-controls" title="Create section at playhead">
           <summary aria-label="Manual section tools" title="Section tools">≡</summary>
           <div className="section-manual-popover">
@@ -186,7 +187,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         </details>
       </div>
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
-      {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} title={insightsById.has(s.id)?insightTitle(insightsById.get(s.id)!):"Run Sound cleanup → Analyze mix to color sections by relative energy and stereo balance."} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"var(--tws-color-surface-raised, #37434d)",border:"1px solid #fff6",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
+      {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} title={insightsById.has(s.id)?insightTitle(insightsById.get(s.id)!):"Select Analyze colors to measure section intensity and stereo balance."} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"var(--tws-color-surface-raised, #37434d)",border:"1px solid #fff6",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
         {insightsById.has(s.id)&&<span aria-hidden="true" style={{position:"absolute",insetBlock:0,borderRadius:3,pointerEvents:"none",...sectionFill(insightsById.get(s.id)!)}}/>}
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
           title="Drag to resize start. Arrow keys adjust by 0.1s."

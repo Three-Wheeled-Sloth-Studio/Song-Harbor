@@ -20,11 +20,13 @@ jobs:
       - name: Install API route test dependencies
         run: python -m pip install "fastapi>=0.115,<1" "httpx>=0.27,<1" "python-multipart>=0.0.9" "uvicorn>=0.30"
       - name: Check Python source syntax
-        run: python -m py_compile app/backend/server.py app/backend/projects.py app/backend/dependencies.py app/backend/daw.py app/backend/audacity_handoff.py app/backend/library.py
+        run: python -m py_compile app/backend/server.py app/backend/projects.py app/backend/dependencies.py app/backend/daw.py app/backend/audacity_handoff.py app/backend/library.py app/backend/stem_import.py
       - name: Verify two-line section production notation
         run: python -m unittest discover -s app/backend/tests -p 'test_section_production.py' -v
       - name: Verify dynamics scripts
         run: python -m unittest discover -s app/backend/tests -p 'test_section_dynamics.py' -v
+      - name: Verify externally imported tracks and title inference
+        run: python -m unittest discover -s app/backend/tests -p 'test_stem_import.py' -v
       - name: Verify project recovery and DAW exchange
         run: python -m unittest discover -s app/backend/tests -p 'test_projects.py' -v
       - name: Verify SQLite Library adoption and safe rename

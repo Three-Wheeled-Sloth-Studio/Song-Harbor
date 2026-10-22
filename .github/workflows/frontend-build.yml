@@ -21,6 +21,8 @@ jobs:
         run: npm install --prefix app/frontend
       - name: Typecheck and bundle
         run: npm run build --prefix app/frontend
+      - name: Verify frequency-selective de-esser against synthetic audio
+        run: node --test app/frontend/tests/section-deess.test.mjs
       - name: Verify sound cleanup DSP against synthetic audio
         run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs
       - name: Install Chromium smoke dependencies

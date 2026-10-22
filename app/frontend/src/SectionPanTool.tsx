@@ -60,7 +60,7 @@ export function SectionPanTool({jobId,sections,files,targets,onChange,initialSec
     <summary>Section pan (preview)</summary>
     <div className="timeline-loop-controls">
       <p>Animate individual stems between sections. Changes are reversible and saved.</p>
-      <label>Section
+      <label className="subtool-section-picker">Section
         <select aria-label="Automation section" value={currentSection} onChange={e=>setSectionId(e.target.value)}>
           {sections.map(s=><option key={s.id} value={s.id}>
             {s.kind}{s.number?" "+s.number:""} ({s.start_seconds.toFixed(1)}s)

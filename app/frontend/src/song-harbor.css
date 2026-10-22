@@ -534,3 +534,16 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-close-app{margin-left:7px;min-width:36px;height:35px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--tws-color-text-primary);cursor:pointer;font:24px/1 system-ui,sans-serif}
 .song-close-app:hover{background:#a42a31;color:white}
 .song-close-app:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+
+.song-production-exports{grid-column:1/-1;display:grid;gap:10px;min-width:0}
+.song-production-exports>.mix-footer{margin:3px 0 0}
+.song-correction-workbench{display:grid;gap:10px;margin:8px 0 0;padding:11px;border:1px solid var(--tws-color-border-strong);border-radius:8px;background:var(--tws-color-surface-inset);font-size:12px}
+.song-correction-heading{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.song-correction-heading button{border:1px solid var(--tws-color-border-normal);border-radius:5px;background:transparent;color:inherit;cursor:pointer}
+.song-correction-workbench label{display:grid;gap:4px}
+.song-correction-workbench label>input[type="range"]{width:100%;accent-color:var(--tws-color-action-primary)}
+.song-correction-workbench select{padding:6px;border:1px solid var(--tws-color-border-normal);border-radius:5px;background:var(--tws-color-surface-panel);color:inherit;min-width:0}
+.song-correction-switch,.song-correction-actions{display:flex;gap:8px;flex-wrap:wrap}
+.song-correction-switch button,.song-correction-actions button{padding:7px 11px;border:1px solid var(--tws-color-border-normal);border-radius:6px;cursor:pointer;background:var(--tws-color-surface-panel);color:inherit}
+.song-correction-switch button[aria-pressed="true"]{border-color:var(--tws-color-action-primary)}
+.song-correction-workbench small{color:var(--tws-color-text-muted);line-height:1.4}

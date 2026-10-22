@@ -772,14 +772,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           className="song-tool-icon" title={item.label} aria-label={"Open "+item.label+" tool"}
           aria-pressed={selectedTool===item.id}
           onClick={()=>{
-            if(selectedTool===item.id){setSelectedTool(null);setScriptOpen(false);}
-            else {setSelectedTool(item.id);setScriptOpen(item.id==="sections");}
+            if(selectedTool===item.id){setSelectedTool(null);setScriptOpen(false);setCorrection(null);}
+            else {setSelectedTool(item.id);setScriptOpen(item.id==="sections");setCorrection(null);}
           }}>
           <span aria-hidden="true">{item.icon}</span>
         </button>)}
       </aside>
       {selectedTool&&<ToolWindow key={selectedTool} name={TOOL_ITEMS.find(item=>item.id===selectedTool)?.label||"Tool"}
-        onClose={()=>{setSelectedTool(null);setScriptOpen(false);}}>
+        onClose={()=>{setSelectedTool(null);setScriptOpen(false);setCorrection(null);}}>
         {selectedTool==="sections"&&<>
         <SectionsTool jobId={jobId} open={selectedTool==="sections"}
           onClose={()=>{setScriptOpen(false);setSelectedTool(null);}} focused={scriptFocus} revision={scriptRevision}

@@ -22,10 +22,13 @@ SPLIT=re.compile(r"[\s._-]+")
 
 def infer_role(filename:str)->str|None:
     stem=Path(filename).stem.lower()
-    tokens=set(SPLIT.split(stem))
+    # Demucs/Song Harbor names often use "(Vocals)_htdemucs_6s.wav".
+    # Match role words as independent terms, never substrings of song titles
+    # (e.g. "Guitarist" should not be silently classified Guitar).
     for role,aliases in ROLE_WORDS.items():
-        if any(alias in tokens or (" " in alias and alias in stem) for alias in aliases):
-            return role
+        for alias in aliases:
+            if re.search(r"(?<![a-z0-9])"+re.escape(alias)+r"(?![a-z0-9])",stem):
+                return role
     return None
 
 

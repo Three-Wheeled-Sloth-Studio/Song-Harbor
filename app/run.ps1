@@ -153,9 +153,24 @@ try {
             default       { $null }
           }
           if ($windowSwitch) {
-            Start-Process -FilePath $exePath -ArgumentList @($windowSwitch, $url)
+            if ($binaryName -in @('chrome.exe','msedge.exe','brave.exe','vivaldi.exe')) {
+              # A dedicated app profile prevents Chromium reusing an unrelated
+              # browser window and allows window.close() from our own topbar.
+              $profile = Join-Path $Root 'cache\song-harbor-browser'
+              New-Item -ItemType Directory -Force $profile | Out-Null
+              Start-Process -FilePath $exePath -ArgumentList @(
+                "--user-data-dir=`"$profile`"", '--no-first-run',
+                '--start-fullscreen', "--app=$url"
+              )
+              Write-Host "Opened Song Harbor in dedicated fullscreen app window ($binaryName)."
+            } elseif ($binaryName -eq 'firefox.exe') {
+              Start-Process -FilePath $exePath -ArgumentList @('-kiosk', $url)
+              Write-Host 'Opened Song Harbor fullscreen in the default Firefox browser.'
+            } else {
+              Start-Process -FilePath $exePath -ArgumentList @($windowSwitch, $url)
+              Write-Host "Opened Song Harbor in a dedicated browser window ($binaryName)."
+            }
             $launched = $true
-            Write-Host "Opened in Windows default browser ($binaryName), new window."
           }
         }
       }

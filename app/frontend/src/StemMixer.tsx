@@ -16,6 +16,7 @@ import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import {CleanupReview} from "./CleanupReview";
+import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import type { SongSection } from "./SectionEditor";
 
@@ -103,6 +104,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   });
   const [scriptOpen,setScriptOpen]=useState(false);
   const [selectedTool,setSelectedTool]=useState<WorkbenchTool|null>(null);
+  const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
+  const [correctionSaving,setCorrectionSaving]=useState(false);
+  const [correctionError,setCorrectionError]=useState("");
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
   const [scriptRevision,setScriptRevision]=useState(0);
   const [externalSections,setExternalSections]=useState<SongSection[]|undefined>(undefined);
@@ -122,7 +126,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const anySolo = stems.some(s => s.solo);
   useEffect(()=>{audio.current?.setEffectBypass(bypassed);},[bypassed,audioReady]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
-  useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb);},[masterTrimDb,audioReady]);
+  useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb+(correction?.kind==="trim"&&correction.proposed?correction.trimDelta:0));},[masterTrimDb,correction,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
   const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
   const viewEnd=duration>0?viewStart+visibleSeconds:0;
@@ -317,8 +321,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       }
     }
     const vocal=files.find(name=>name.includes("(Vocals)"));
+    const staged=correction&&correction.proposed&&correction.kind!=="trim"?
+      [...dynamicsTargets.filter(item=>!(item.section_id===correction.sectionId&&
+        item.source_key===correction.file&&item.kind===correction.kind)),{
+        section_id:correction.sectionId,source_key:correction.file,kind:correction.kind,
+        threshold_db:correction.threshold,ratio:correction.ratio,depth_db:correction.depth,
+        transition_seconds:correction.transition,curve:"smooth" as const
+      }]:dynamicsTargets;
     for(const filename of files){
-      const settings=dynamicsTargets.filter(item=>item.source_key===filename);
+      const settings=staged.filter(item=>item.source_key===filename);
       if(!settings.length)continue;
       const compile=(kind:"comp"|"duck",field:"threshold_db"|"ratio"|"depth_db",initial:number,min:number,max:number)=>{
         const desired=settings.filter(item=>item.kind===kind).flatMap(item=>{
@@ -346,7 +357,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     engine.setAutomation(byFile);
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,timelineSections,files]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,timelineSections,files,correction]);
 
   // Findings describe a specific processed mix; edits invalidate those results.
   useEffect(()=>{

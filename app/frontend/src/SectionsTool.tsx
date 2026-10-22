@@ -2,6 +2,9 @@ import {useCallback,useEffect,useRef,useState} from "react";
 import type {SongSection} from "./SectionEditor";
 
 type Mode="replace"|"append";
+// Retain unapplied editor drafts while a user switches between floating tools.
+// Deliberately in-memory: edits are not silently written to a project or disk.
+const temporarySectionDrafts=new Map<string,string>();
 type ExportData={content:string;sections:SongSection[];detail?:string};
 import type {SavedPanTarget} from "./SectionPanTool";
 type SavedReverbTarget={section_id:string;source_key:string;wet:number;transition_seconds:number;curve:"linear"|"smooth"};
@@ -14,8 +17,12 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
   revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],ending:SavedEnding)=>void;
 }){
-  const [content,setContent]=useState("");
-  const [dirty,setDirty]=useState(false);
+  const [content,setContent]=useState(()=>temporarySectionDrafts.get(jobId)||"");
+  const [dirty,setDirty]=useState(()=>temporarySectionDrafts.has(jobId));
+  useEffect(()=>{
+    if(dirty)temporarySectionDrafts.set(jobId,content);
+    else temporarySectionDrafts.delete(jobId);
+  },[content,dirty,jobId]);
   const [mode,setMode]=useState<Mode>("replace");
   const [saving,setSaving]=useState(false);
   const [message,setMessage]=useState("");
@@ -60,7 +67,10 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     if(loadedRevision.current===revision)return;
     void load();
   },[open,revision,load]);
-  useEffect(()=>{loadedRevision.current=-1;setContent("");setDirty(false);},[jobId]);
+  useEffect(()=>{loadedRevision.current=-1;
+    setContent(temporarySectionDrafts.get(jobId)||"");
+    setDirty(temporarySectionDrafts.has(jobId));
+  },[jobId]);
   useEffect(()=>{
     if(!open||!focused)return;
     const node=editor.current;

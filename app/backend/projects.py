@@ -23,7 +23,7 @@ def stem_name(filename: str) -> str:
     for name in ORDER:
         if "(" + name + ")" in filename:
             return name
-    generic = re.search(r"\\(([A-Za-z][A-Za-z0-9_-]*)\\)", filename)
+    generic = re.search(r"\(([A-Za-z][A-Za-z0-9_-]*)\)", filename)
     if generic:
         return generic.group(1)
     raise ValueError("Unrecognized stem filename: " + filename)

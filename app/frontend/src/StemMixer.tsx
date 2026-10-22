@@ -16,6 +16,7 @@ import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
+import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
@@ -93,6 +94,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
   const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
+  const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
   const [cleanupError,setCleanupError]=useState("");
@@ -672,12 +674,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const revision=analysisRevision.current;
     setAnalyzing(true);setCleanupError("");setCleanupScanned(false);setCleanupFindings([]);
     try{
-      const results=await engine.analyzeMix();
+      const results=await engine.analyzeMix(timelineSections);
       if(analysisRevision.current!==revision){
         setCleanupError("The mix changed during analysis. Re-analyze the new settings.");
         return;
       }
       setCleanupFindings(results);
+      setSectionInsights(engine.sectionInsights);
       setCleanupScanned(true);
     }catch(e){
       setCleanupError(e instanceof Error?e.message:"Sound analysis failed");
@@ -761,7 +764,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </div>
         <section ref={timelineRef} className="integrated-timeline" aria-label="Integrated production timeline">
           <SectionEditor jobId={jobId} duration={duration} position={position}
-            initialSections={initialSections} externalSections={externalSections}
+            initialSections={initialSections} externalSections={externalSections} insights={sectionInsights}
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}

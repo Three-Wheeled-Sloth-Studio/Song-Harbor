@@ -106,7 +106,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
     const result = await post("/projects/" + jobId + "/daw/export", {target});
     if (!result.directory) throw new Error("DAW export didn't return a folder");
     setFolder(result.directory);
-    setMessage("Six aligned stems prepared.");
+    setMessage("Aligned tracks exported to local folder.");
   }
 
   async function detect() {
@@ -146,7 +146,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
   }
 
   return <Dialog open onOpenChange={next => { if (!next && !busy) onClose(); }}
-    title="DAW handoff" description="Target, files, launch.">
+    title="Download tracks" description="Export aligned track files to a local folder; optional DAW launch is separate.">
     <div className="daw-setup">
       <div className="daw-controls">
         <select aria-label="DAW target" value={target} onChange={e => { void chooseTarget(e.target.value); }}
@@ -158,7 +158,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
       </div>
       <div className="daw-controls">
         <Button variant="primary" disabled={busy} onClick={() => { void perform(folder ? launch : prepare); }}>
-          {busy ? "Working…" : folder ? "Launch" : "Prepare stems"}
+          {busy ? "Working…" : folder ? "Launch DAW" : "Export tracks"}
         </Button>
         {folder && <>
           <Button variant="secondary" disabled={busy} onClick={() => {
@@ -166,7 +166,7 @@ export function DawHandoff({jobId, saveProject, onClose}: {
               const result = await post("/projects/" + jobId + "/daw/open-folder");
               if (result.status !== "opened") throw new Error(result.message || "Could not open export folder");
             });
-          }}>Files</Button>
+          }}>Open folder</Button>
           <Button variant="subtle" disabled={busy} onClick={() => { void perform(prepare); }}>Reprepare</Button>
         </>}
       </div>

@@ -9,8 +9,8 @@ export const HELP_TOPICS:Topic[]=[
   {id:"start",title:"Start here",summary:"From an audio file to an editable six-stem song.",
    body:[
      "Song Harbor is a local-first music workbench. Open a saved song from Library, or choose Import song and select an audio recording.",
-     "The Import screen has two modes: Single recording separates six stems; Multiple tracks accepts 2-12 already recorded/separated audio files, suggests a song title from their common filename prefix, and lets you edit the title before importing.",
-     "Choose Separate stems to create Vocals, Drums, Bass, Guitar, Piano and Other. The first separation can take longer while models load. FFmpeg setup appears if required. Multi-track import does NOT perform AI separation; it aligns each selected track at 0:00 and pads shorter tracks with silence without time stretching.",
+     "The Import screen has two modes: Single recording separates six stems; Multiple tracks accepts 2-64 already recorded/separated audio files, suggests a song title from their common filename prefix, and lets you edit the title before importing.",
+     "Choose Separate stems to create Vocals, Drums, Bass, Guitar, Piano and Other. The first separation can take longer while models load. FFmpeg setup appears if required. Multi-track import does NOT perform AI separation; it aligns tracks at 0:00 and pads shorter tracks with silence without time stretching. For a Song Harbor channel-split export, select every mono WAV plus manifest.json in the same import: the app reconstructs original stereo parents and restores active L/R routing.",
      "When processing finishes, use the shared playback transport, waveform and stem mixer. The six stem categories are model estimates: separation can leave some sound bleeding into other tracks.",
      "Use Sections to paste a time-stamped arrangement. Adjust boundaries in the timeline, audition changes, then render and download a WAV."
    ]},
@@ -19,6 +19,7 @@ export const HELP_TOPICS:Topic[]=[
      "Library holds saved songs, including separately imported takes. Double-click a song to open its workbench.",
      "Use each row's menu or right-click for available rename, collection, grouping, remove and restore actions. Combining related takes is a Library link, not a destructive audio merge.",
      "Song titles are metadata; changing a title does not rename source files. Remove from Library is reversible; original source media is retained. Multi-track imports preserve each original file plus a WAV working copy, and show its original name in the mixer.",
+     "Imported tracks have an immutable internal ID and a script alias shown below their display name. Production directives can address every named track, not just the six default stem categories. Full synchronized audition still has a 768 MiB decoded-audio memory budget; long projects with dozens of tracks may exceed it.",
      "Save project/mixer changes before closing or using the update/relaunch control. Sections Apply persists the section sheet, but unapplied text in an editor will be lost on restart."
    ]},
   {id:"playback",title:"Playback and stem mixing",summary:"Navigation, split channels, and safe audition.",

@@ -25,6 +25,7 @@ export const HELP_TOPICS:Topic[]=[
   {id:"playback",title:"Playback and stem mixing",summary:"Navigation, split channels, and safe audition.",
    body:[
      "Space plays or pauses when you are not typing in an input. Left/Right arrows move by five seconds. Click the waveform to seek; use timeline zoom and the region loop to work on a passage.",
+     "Mouse-wheel always scrolls the page, including over waveforms. For waveform zoom, use the Tools Zoom dropdown or slider. Fullscreen app-window mode and an application Close button are future features.",
      "Each stem has level, mute and solo controls. Parent stereo and derived left/right tracks are mutually exclusive: a split pair replaces, rather than doubles, the original parent.",
      "The shared-clock audio engine keeps stems synchronized. Loading long audio may take time and the audition engine reports if its decoded-audio budget is exceeded; it does not silently fall back to unsynchronized playback.",
      "Monitor volume is for listening only. It does not set the rendered WAV level."
@@ -58,12 +59,12 @@ export const HELP_TOPICS:Topic[]=[
      "Use Export mix WAV to render the current stems and saved production settings. After rendering, explicitly click Download WAV; the browser decides the destination.",
      "If the mix would clip, Song Harbor reports an additional master trim recommendation. Master trim is session-only at present; keep track of the value before restarting.",
      "Export to DAW prepares six original aligned stems for an external editor. Audacity and Waveform workflows depend on the application installed on your computer; a prepared bundle is separate from Song Harbor's processed stereo mix.",
-     "A/B effect bypass affects listening only. The WAV always uses saved production settings, not temporary comparison bypass selections.",
-     "After a successful mix render, Sound cleanup review lists timestamped candidate near-ceiling peaks and sharp single-sample jumps. Click a finding to seek. These are possible faults, not proof of defects; percussion and intentional distortion can be flagged. The scan does not alter audio and currently cannot detect sibilance or separation artifacts."
+     "A/B offers independent Bypass compression and Bypass ducking checkboxes. B Original bypasses both; A Processed restores both. All bypass settings affect audition only. WAV export always uses saved production settings.",
+     "Open Sound cleanup analyzer in Tools and click Analyze mix to scan without downloading a WAV. It also refreshes after successful WAV render. The findings list timestamped candidate near-ceiling peaks and sharp single-sample jumps. Click a finding to seek. These are possible faults, not proof of defects; percussion and intentional distortion can be flagged. The scan does not alter audio and currently cannot detect sibilance or separation artifacts."
    ]},
   {id:"updates",title:"Updates and settings",summary:"Version badge, relaunch and local working files.",
    body:[
-     "The small badge near the top-right update icon shows the installed Git branch and short revision, for example main@1234abcd. This is a development build identifier, not a semantic release number.",
+     "The small badge beside the update icon uses Version:Revision:Build, for example 0.1.0:1:320. Version comes from the app package, Revision is the development revision, and Build counts commits in the local checkout. Hover for branch and Git commit details.",
      "Click the circular update icon to check for a newer checkout; checking does not overwrite files. Install and relaunch saves no un-applied browser edits for you, so Apply changes first.",
      "Update may refuse an active processing job, divergent Git history or conflicting local edits. It must not discard local work or stop unrelated applications.",
      "Settings controls the local working-files directory and component setup. Changing the directory may require a restart and does not automatically move existing project files."

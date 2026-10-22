@@ -380,7 +380,7 @@ def run_track_import(job:dict[str,Any],names:list[str],title:str,manifest_bytes:
         duration=max(probe_duration(folder/"originals"/name) for name in names)
         if duration>60*15:raise ValueError("Imported tracks must be 15 minutes or shorter")
         source_names=[group["source"] for group in groups] if groups else names
-        assignments=stem_import.identity_tracks(source_names,title if not groups else None)
+        assignments=stem_import.identity_tracks(source_names)
         ffmpeg=dependency_tool("ffmpeg")
         converted=[]
         exported_channels=[]

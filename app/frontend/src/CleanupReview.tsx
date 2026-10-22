@@ -7,13 +7,14 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,scanned,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop
+  findings,scanned,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
 }:{
   findings:readonly AudioFinding[];
   scanned:boolean;analyzing:boolean;error:string;ready:boolean;busy:boolean;
   onAnalyze:()=>void;
   onSeek:(seconds:number)=>void;
   onLoop:(start:number,end:number)=>void;
+  onTryCorrection:(finding:AudioFinding)=>void;
 }){
   const [filter,setFilter]=useState<string>("All");
   const [reviewed,setReviewed]=useState<Set<string>>(()=>new Set());
@@ -65,6 +66,8 @@ export function CleanupReview({
                 {item.suggestion&&<p className="song-cleanup-suggestion">{item.suggestion}</p>}
                 <div className="song-cleanup-actions">
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
+                  {(item.kind==="headroom"||item.kind==="pumping")&&
+                    <button type="button" onClick={()=>onTryCorrection(item)}>Try correction A/B</button>}
                   <button type="button" onClick={()=>setReviewed(existing=>{
                     const next=new Set(existing);if(next.has(id))next.delete(id);else next.add(id);return next;
                   })}>{isReviewed?"Unmark":"Mark reviewed"}</button>

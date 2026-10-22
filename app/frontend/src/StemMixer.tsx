@@ -969,7 +969,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <small>Final color scan measures actual effects-processed stereo mix, which can differ from this approximation.</small>
         </details>}
         {tool==="songText"&&<>
-        <SectionsTool jobId={jobId} open={tool==="songText"}
+        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,auto,finish)=>{
             setPanTargets(targets);

@@ -40,7 +40,7 @@ export class SharedClockAudition {
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
-  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false};
+  private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,dynamics:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
@@ -149,11 +149,15 @@ export class SharedClockAudition {
   setLevels(levels:Record<string,AuditionLevel>,monitor:number){
     this.monitorLevel=Math.max(0,Math.min(1,monitor));
     this.updateMasterOutput();
-    this.renderedLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
-    if(Object.values(this.automation).some(item=>item.dynamics?.duck))this.setAutomation(this.automation);
+    const nextLevels=Object.fromEntries(Object.entries(levels).map(([key,item])=>[key,Math.max(0,Math.min(2,item.gain))]));
+    const changedKeys=new Set(Object.keys(nextLevels).filter(key=>nextLevels[key]!==this.renderedLevels[key]));
+    this.renderedLevels=nextLevels;
     for(const track of this.tracks){
-      track.gain.gain.value=Math.max(0,Math.min(2,levels[track.source.filename]?.gain??0));
+      track.gain.gain.setTargetAtTime(nextLevels[track.source.filename]??0,this.context.currentTime,.008);
     }
+    // Only a change in the actual key stem requires sidechain recalculation.
+    // Never call setAutomation/seek here: fader drags must not restart stems.
+    if(changedKeys.size)this.refreshDuckingEnvelopes(changedKeys);
   }
   /** Non-destructive master trim, downstream of all stem and effect sends. */
   setOutputTrimDb(value:number){
@@ -189,7 +193,7 @@ export class SharedClockAudition {
     return points;
   }
   /** Audition-only effect bypass: the saved mix and offline export remain processed. */
-  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean}){
+  setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;dynamics:boolean}){
     if(Object.keys(effects).every(key=>this.bypassEffects[key as keyof typeof effects]===effects[key as keyof typeof effects]))return;
     this.bypassEffects={...effects};
     if(this.running)this.seek(this.position);
@@ -203,8 +207,8 @@ export class SharedClockAudition {
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       const dynamics=this.dynamicsStages.get(filename);
       if(dynamics){
-        scheduleCompressor(dynamics,this.automation[filename]?.dynamics?.compressor,offset,at);
-        scheduleDucking(dynamics,this.duckEnvelopes.get(filename),offset,at);
+        scheduleCompressor(dynamics,bypass.dynamics?undefined:this.automation[filename]?.dynamics?.compressor,offset,at);
+        scheduleDucking(dynamics,bypass.dynamics?undefined:this.duckEnvelopes.get(filename),offset,at);
       }
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
@@ -227,15 +231,27 @@ export class SharedClockAudition {
   setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>){
     this.automation=curves;
     this.duckEnvelopes.clear();
-    for(const [filename,settings] of Object.entries(curves)){
+    this.refreshDuckingEnvelopes();
+    if(this.running)this.seek(this.position);
+    else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
+  }
+  private refreshDuckingEnvelopes(changedKeys?:Set<string>){
+    const at=this.context.currentTime+0.03;
+    const offset=this.position;
+    for(const [filename,settings] of Object.entries(this.automation)){
       const duck=settings.dynamics?.duck;
-      if(!duck)continue;
+      if(!duck||changedKeys&&!changedKeys.has(duck.keyFilename))continue;
       const keys=this.tracks.filter(track=>track.source.filename===duck.keyFilename);
       if(!keys.length)continue;
       const gain=this.renderedLevels[duck.keyFilename]??0;
-      this.duckEnvelopes.set(filename,makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain));
+      const envelope=makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain);
+      this.duckEnvelopes.set(filename,envelope);
+      // Re-schedule only a gain node, never the source/transport graph.
+      if(changedKeys&&!this.bypassEffects.dynamics){
+        const stage=this.dynamicsStages.get(filename);
+        if(stage)scheduleDucking(stage,envelope,offset,at);
+      }
     }
-    if(this.running)this.seek(this.position);
   }
   /**
    * Deterministic offline bounce from the SAME decoded buffers, stem routing,

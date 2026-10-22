@@ -50,7 +50,7 @@ class ImportTracksTests(unittest.TestCase):
             self.assertEqual((folder/"originals"/"A Song - Drums.wav").read_bytes(),b"DRUMS")
             real_job=server.jobs.pop(job["id"])
             def fake_convert(command,**kwargs):
-                Path(command[-1]).write_bytes(b"converted audio")
+                Path(command[-1]).write_bytes(b"converted audio"*8)
                 return SimpleNamespace(returncode=0,stderr="")
             with patch.object(server,"DATA_ROOT",root),patch.object(server,"probe_duration",return_value=12.5),patch.object(server,"dependency_tool",return_value="ffmpeg"),patch.object(server.subprocess,"run",side_effect=fake_convert):
                 server.run_track_import(real_job,["A Song - Vocals.mp3","A Song - Drums.wav"],"My override")

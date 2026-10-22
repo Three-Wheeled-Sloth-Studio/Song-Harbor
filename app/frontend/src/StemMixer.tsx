@@ -856,7 +856,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
 
-        {selectedTool==="cleanup"&&<>
+        {tool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
@@ -869,13 +869,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
 
         </>}
-        {selectedTool==="cleanup"&&correction&&<>
+        {tool==="cleanup"&&correction&&<>
           <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
             busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
             onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}
-        {selectedTool==="ab"&&<>
+        {tool==="ab"&&<>
         <details className="production-tool-detail" aria-label="A/B audition" open>
           <summary>◉ A/B comparison &amp; bypass</summary>
           <div className="timeline-loop-controls">

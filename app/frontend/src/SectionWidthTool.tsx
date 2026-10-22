@@ -46,7 +46,7 @@ export function SectionWidthTool({jobId,sections,files,targets,onChange}:Props){
     void persist([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),
       {section_id:selectedSection,source_key:selectedFile,width,transition_seconds:transition,curve}]);
   }
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Section stereo width</summary>
     <div className="timeline-loop-controls">
       <p>Mid/side width for each reconstructed stereo stem. 100% is original; 0% mono; above 100% expands existing stereo differences.</p>

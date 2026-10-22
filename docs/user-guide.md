@@ -89,13 +89,30 @@ A/B bypass is **audition-only**, not saved in WAV. **Bypass compression** and **
 
 **Export to DAW** prepares six original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
 
-## Initial sound cleanup review
+## Sound cleanup analyzer: detection and review
 
-Open **Sound cleanup analyzer** in the Tools sidebar and click **Analyze mix**, even before exporting. This first-pass non-destructive scan runs the same offline processing graph as the 24-bit WAV mix and flags:
-- Peak samples at or above -0.18 dBFS (approximately 0.98 linear), including clipping candidates. The scan accounts for master output trim.
-- Single-sample jumps of at least 0.7 linear amplitude, separated by at least 80 ms, as **possible** clicks or other discontinuities. Drums and deliberately distorted audio may trigger false positives.
+Open **Tools → Sound cleanup** and select **Analyze mix**. Song Harbor builds the same non-destructive offline processing graph used for the WAV export, then checks the rendered floating-point audio (with master output trim). It does **not** download a WAV or change stored audio, sections, or effects.
 
-Click a reported timestamp to seek the audition transport. Findings also refresh after successful WAV rendering. This is *suggestion-only* QA; it neither repairs sound nor changes exports. The list is capped to keep it usable. The scan is on-demand and does not run continuously during playback. Sibilance, separation artifacts, broadband noise, pumping analysis, stem attribution and waveform marker overlays are not yet implemented.
+The analyzer now makes *listening suggestions* in these categories:
+
+| Category | Candidate checks | What the result can and cannot mean |
+| --- | --- | --- |
+| Levels | Peak at/above approximately -0.18 dBFS, sample peaks over 0 dBFS, repeated flat-topped waveform samples | Review master trim, clipping or intentional limiting; **not** an intersample true-peak meter |
+| Transitions | Large single-sample waveform jumps | Possible click/pop, kick transient or deliberate distortion |
+| Vocal / high frequency | Sustained dominant 5–9.5 kHz bursts (sibilance-like), 2.5–4.9 kHz presence emphasis (harshness), upper-band fizz | Can also identify cymbals, guitars, synthesizers and desired texture. **Not** a voice classifier or automated de-esser |
+| Quiet passages | Persistent high-frequency activity during low-level audio | Possible hiss, separation residue or normal room ambience |
+| Stereo / mono | Sustained negative left/right correlation during audible passages | Possible mono cancellation; wide creative stereo can produce this on purpose |
+| Dynamics | Repeated brief loudness troughs between stronger passages | Possible rhythmic pumping; **not** proof a compressor or sidechain caused it |
+
+The analyzer uses bounded FFT windows for frequency evidence, a broad RMS envelope for dynamics, and correlation windows for mono-compatibility risk. Thresholds favor relatively pronounced candidates, not exhaustive defect identification.
+
+**Review workflow:** Filter by category; click a timestamp to seek; choose **Loop ± context** to mark and play a short repeating region around the candidate; read the conservative suggested next action; mark a candidate reviewed to hide it temporarily. Use **Show reviewed** to revisit it. Results are sorted by severity then time. Re-analyzing or changing production settings clears prior review decisions; review marks are session-only.
+
+Some findings offer **Active raw stems** as a clue about which inputs contain the strongest local signal or high-frequency activity. These are pre-effect approximate activity rankings, not reliable causal attribution, instrument recognition or a source isolation result.
+
+**A peak at 03:35:** If the finding reports a peak over 0 dBFS, audition that time, lower master output trim according to the suggested amount, then re-render/analyze. A single sample peak says nothing by itself about audible distortion. True-peak, integrated loudness and detailed de-essing are still future work.
+
+The scan requires the current synchronized audio to be loaded and can consume CPU/memory for a full-track offline render. Source media is never rewritten. It is not automatically monitoring live playback, and it does not fix detected candidates.
 
 ## Updates, Settings and version
 

@@ -6,6 +6,18 @@
 2. **No source restart during stem fader changes:** `SharedClockAudition.setLevels` updates gains by short target ramp, tracks *changed effective gains*, and rebuilds only duck envelopes whose vocal key gain changed. It reschedules only the duck GainNode; it never calls `seek` or `setAutomation` from the levels path. Monitoring volume changes alone do not trigger the sidechain scan.
 3. **Non-destructive rendered-mix QC:** `AudioCleanupAnalyzer.ts` scans final float audio after OfflineAudioContext rendering, before WAV packing. It records near-ceiling peaks after master output trim and sharp sample discontinuity candidates. The Tools **Sound cleanup review** panel appears after successful WAV render, with click-to-seek timestamps. No automatic repair and no media/project changes.
 
+## Compact rail / multi-window / unified section-edit QA
+
+This follow-up replaces the long single-window tool strip. Verify the **actual right-hand reserved workspace width is only ~54px** on desktop, with visually ~39px icons that fill most of each 48px square. There should be no residual 245–350px inspector reservation, no blank right gutter, and the waveform should reclaim that width.
+
+Use icon rail to open both **Edit sections** and **Sound cleanup** simultaneously. Drag each header and independently resize from the bottom-right corner; click an obscured window to raise it without relocating it. Close one: the other stays open. Verify pressing Esc closes only the focused panel (not the app), and the player continues at the same position while manipulating effects. On narrow screens check floating panels remain within viewport and contents can scroll.
+
+Double-click a section block in waveform: **Edit sections** opens or comes forward with the selected section already set and **Pan** tab active. From its shared section dropdown choose another section, switch through Script, Pan, Reverb, Width, Reflections, EQ, and verify each effect's controls reference the shared section. There should not be a second redundant section picker inside child effect controls. Save one nonzero EQ target or pan move, close and reopen, confirm the correct section retained and playback reflects it. If script text is edited but not Applied, switch tabs and tools and confirm draft survives in memory without overwriting authoritative saved project.
+
+Open **Download** from rail: UI title should be `Download tracks`, primary action `Export tracks`, with separate optional `Launch DAW` action. This currently places exported aligned track files in a local folder (Open folder). Do not confuse it with browser ZIP download: that is not implemented. Regular WAV-mix export remains in the main footer.
+
+CI frontend typecheck and Chromium mount passed at commit `8b405754` with the multi-tool refactor; real Windows drag-resize/full-screen checks remain user QA.
+
 ## Fullscreen, floating inspector and correction-trial QA (2026-10-22)
 
 - **Fullscreen / closing:** Launch via `.bat` using selected Chrome or Edge default. Confirm a dedicated borderless fullscreen app window, not a tab in your normal browsing profile. Its far-right × requests confirmation and shuts down *only* that local Song Harbor instance; do not stop other browsers or parallel Song Harbor instances. Verify exit is blocked with an active import/separation job and rejected for incorrect instance token/foreign Origin. Test Firefox kiosk path separately if available. Unsupported browser defaults fall back to normal window.

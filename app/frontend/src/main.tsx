@@ -385,4 +385,25 @@ function App() {
   </div>;
 }
 
-createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);
+class RootGuard extends React.Component<{children:React.ReactNode},{failure:string|null}>{
+  state:{failure:string|null}={failure:null};
+  static getDerivedStateFromError(error:unknown){
+    return {failure:error instanceof Error?error.message:String(error)};
+  }
+  componentDidCatch(error:unknown,details:React.ErrorInfo){
+    console.error("Song Harbor UI rendering failed",error,details.componentStack);
+  }
+  render(){
+    if(this.state.failure){
+      return <main role="alert" style={{fontFamily:"system-ui",maxWidth:760,margin:"10vh auto",
+        padding:26,background:"#fff",border:"1px solid #cbb",borderRadius:10,color:"#232323"}}>
+        <h1>Song Harbor encountered a startup error</h1>
+        <p>No project or audio files have been changed. Copy this message into the issue report
+          and try Ctrl+Shift+R once.</p>
+        <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{this.state.failure}</pre>
+      </main>;
+    }
+    return this.props.children;
+  }
+}
+createRoot(document.getElementById("root")!).render(<React.StrictMode><RootGuard><App /></RootGuard></React.StrictMode>);

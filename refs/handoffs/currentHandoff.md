@@ -7,6 +7,24 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22: fullscreen app window, icon tool rail, floating edit panes and correction A/B
+
+User shallow-accepted analyzer: 03:35 peak +0.2 dBFS (Drums/Bass activity hint, suggest -1.2dB master trim) and 02:43 repeated level dips (Vocals/Drums activity hint). Asked for quick UI/UX cleanup and ideal loop-based correction workflow.
+
+**Implemented directly to `main`:**
+
+- The Windows `app/run.ps1` launcher opens isolated fullscreen Chromium app window for selected Chrome/Edge/Brave/Vivaldi default browsers, isolated Firefox kiosk profile for Firefox, and generic default browser fallback. Saves only its own browser process handle and closes that dedicated process when its backend exits. No general browser process enumeration or kill. Browser profile cache lives under local `cache/`. `app/backend/server.py` exposes token-guarded, local-origin-only `POST /api/runtime/quit`, rejects busy jobs. Far-right close X in `main.tsx` requests confirmation and gracefully shuts down current backend; if browser script close denied, shows closed page. Test `test_runtime_quit.py` wired to backend CI.
+- `WorkbenchTools.tsx`: compact icon rail and non-modal draggable floating tool window with Esc and close X, over waveform, no permanent 255px Tools sidebar. Only selected tool panel visible: Sections, Sound cleanup, pan, reverb, width, space, A/B, EQ, ending, zoom, region loop, channel splitting and DAW handoff. Effect panels expand upon selection. Primary mix/export remains below the waveform across full width. `SectionsTool` preserves an unapplied draft **in memory only** while switching tools; saves still require Apply.
+- `CorrectionWorkbench.tsx` + `CleanupReview.tsx` + `StemMixer.tsx`: `Try correction A/B` on peak or pumping findings. Loop around event, compare **A Saved** against temporary **B Proposed** while editing controls. For clipping candidate suggest sample-peak-trim (session-only). For repeated loudness dips, prefer neutralizing the latest active vocal duck or compressor target; user can choose track, compressor threshold/ratio or duck depth and transition. Draft dynamics override exists only in frontend, preview reschedules existing AudioParams rather than restarting sources for every fader change. On **Accept**, GET authoritative `sections/export`, change one section directive for the chosen alias, POST validated full `sections/import` which persists production text and derived targets atomically; rejects invalid reset conflicts. Discard or switching tools cancels temp override. Disable WAV export or reanalysis while unaccepted correction is being auditioned: preview must not leak into WAV. Actual source WAV files are never rewritten. Editor documentation/help updated.
+- `SharedClockAudition.setAutomation(curves,liveTrial)` reschedules live trial parameter curves on existing sources, minimizing audio stalls during A/B. `setEnding` now exits early when unchanged to avoid unwanted seek from correction updates.
+- `docs/user-guide.md` and in-app `HelpDialog.tsx` updated. QA needed in `docs/dynamics-cleanup-qa.md` and Windows local shell.
+
+**Acceptance tests pending**: On Windows confirm fullscreen opens in *dedicated* browser app, far-right X closes only that app/backend and refuses an active job. Test app menu keyboard focus and dragging tool windows without stealing transport. Verify the main waveform is wider. Validate `Try correction A/B` on known 03:35 peak and 02:43 pumping event: B changes playback, A restores, Accept writes correct directive under original lyrics/timings, Discard leaves project unchanged, unaccepted draft cannot export, and output trim is session-only. Verify Windows `run.ps1` syntax workflow and backend quit tests. CI had heavy queued work; early frontend build `09d7ef68` and launch smoke passed, but recent changes to tool layout/correction must not be declared QA-proven until their own runs complete.
+
+**Known limitations**: This is a floating panel *within Song Harbor's browser window*, not independent OS child window, so it remains in app bounds. Fullscreen is implemented only where launcher can safely invoke the default browser with an isolated profile. A/B correction supports only session trim and section compression/ducking today, not de-essing/EQ/other artifact repairs. Editing and persist mechanisms are non-destructive. Master output trim is not durable across relaunch. No loudness matching of A/B.
+
+---
+
 ## 2026-10-22: expanded sound-cleanup detection and review UI
 
 User reports A/B compression/ducking bypass works, and first on-demand scan found `03:35 Peak exceeds 0 dBFS`. Accepted priority: add missing detection categories THEN make sound cleanup practical in UI; maintain non-destructive local-first behavior.

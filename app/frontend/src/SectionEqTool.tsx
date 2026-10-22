@@ -57,7 +57,7 @@ export function SectionEqTool({jobId,sections,files,targets,onChange,initialSect
     <summary>Parametric EQ</summary>
     <div className="timeline-loop-controls">
       <p>Three per-stem peaking bands, smoothly automatable by section. Start with modest corrections.</p>
-      <label>Section<select aria-label="EQ section" value={currentSection} onChange={e=>setSectionId(e.target.value)}>
+      <label className="subtool-section-picker">Section<select aria-label="EQ section" value={currentSection} onChange={e=>setSectionId(e.target.value)}>
         {sections.map(s=><option key={s.id} value={s.id}>{s.kind}{s.number?" "+s.number:""} ({s.start_seconds.toFixed(1)}s)</option>)}
       </select></label>
       <label>Stem<select aria-label="EQ stem" value={currentFile} onChange={e=>setFile(e.target.value)}>

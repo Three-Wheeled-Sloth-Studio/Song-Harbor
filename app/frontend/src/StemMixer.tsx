@@ -71,6 +71,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [exporting, setExporting] = useState(false);
   const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
+  const [analyzing,setAnalyzing]=useState(false);
+  const [cleanupError,setCleanupError]=useState("");
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
   const headroomFixRef=useRef<HTMLElement|null>(null);
@@ -496,6 +498,18 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
   }
 
+  async function analyzeMix(){
+    const engine=audio.current;
+    if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
+    setAnalyzing(true);setCleanupError("");setCleanupScanned(false);setCleanupFindings([]);
+    try{
+      setCleanupFindings(await engine.analyzeMix());
+      setCleanupScanned(true);
+    }catch(e){
+      setCleanupError(e instanceof Error?e.message:"Sound analysis failed");
+    }finally{setAnalyzing(false);}
+  }
+
   async function exportMix(overrideTrimDb?:number) {
     const engine=audio.current;
     if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
@@ -664,6 +678,23 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>
+        <details className="production-tool-detail" aria-label="Sound cleanup analyzer" open>
+          <summary>◇ Sound cleanup analyzer</summary>
+          <div className="timeline-loop-controls">
+            <p>Inspect the current processed mix for possible clipping and sharp sample discontinuities. No audio is changed; percussion can produce false positives.</p>
+            <button type="button" disabled={analyzing||exporting||!audioReady}
+              onClick={()=>{void analyzeMix();}}>{analyzing?"Analyzing mix…":"Analyze mix"}</button>
+            {cleanupError&&<small role="alert">{cleanupError}</small>}
+            {cleanupScanned&&<div role="status" className="song-cleanup-findings">
+              <strong>{cleanupFindings.length} candidate{cleanupFindings.length===1?"":"s"} found</strong>
+              {cleanupFindings.length===0?<p>No near-ceiling peaks or large single-sample jumps found at conservative thresholds.</p>:
+                cleanupFindings.map((finding,index)=><button type="button" key={index}
+                  className="production-tool-open" onClick={()=>seek(finding.timeSeconds)}
+                  title={finding.detail}>{timecode(finding.timeSeconds)} · {finding.label}</button>)}
+            </div>}
+            <small>First pass: peak/headroom and abrupt-transition detection only. De-essing and artifact classification are not implemented.</small>
+          </div>
+        </details>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
           targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
@@ -712,17 +743,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onClick={applyHeadroomFix}>Apply safe output trim and re-render</button>
         <button type="button" disabled={exporting} onClick={()=>setHeadroomIssue(null)}>Review master trim manually</button>
       </section>}
-      {cleanupScanned&&<details className="production-tool-detail" aria-label="Sound cleanup review" open={cleanupFindings.length>0}>
-        <summary>◇ Sound cleanup review · {cleanupFindings.length} candidate{cleanupFindings.length===1?"":"s"}</summary>
-        <div className="timeline-loop-controls">
-          <p>Non-destructive scan of the final rendered mix. Possible clicks may be legitimate drums; audition before editing. No audio has been changed.</p>
-          {cleanupFindings.length===0?<p>No near-ceiling peaks or large single-sample jumps detected at the conservative thresholds.</p>:
-            cleanupFindings.map((finding,index)=><button type="button" key={index}
-              className="production-tool-open" onClick={()=>seek(finding.timeSeconds)}
-              title={finding.detail}>{timecode(finding.timeSeconds)} · {finding.label}</button>)}
-          <small>This first pass checks peak headroom and abrupt discontinuities only. Vocal harshness, sibilance and semantic artifact detection are not yet implemented.</small>
-        </div>
-      </details>}
       {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click Download WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>}
     </div>
     <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />

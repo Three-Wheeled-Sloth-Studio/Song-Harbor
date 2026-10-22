@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { chromium } from "playwright";
+import {spawn} from "node:child_process";
 
 // Actual Chromium mount check. A successful TS compilation or HTML fetch does
 // not mean React mounted or the JavaScript chunk loaded.
@@ -31,6 +32,29 @@ const server=createServer(async(req,res)=>{
   }catch{res.writeHead(404).end("Not found");}
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+const port=server.address().port;
+const useBackend=process.argv.includes("--backend");
+let backend;
+if(useBackend){
+  await new Promise(done=>server.close(done));
+  backend=spawn(process.env.PYTHON||"python3",["app/backend/server.py"],{
+    stdio:["ignore","pipe","pipe"],
+    env:{...process.env,SONG_HARBOR_HOME:resolve("qa-runtime-browser"),
+      SONG_HARBOR_PORT:String(port),SONG_HARBOR_INSTANCE_TOKEN:"ci-browser-test"}});
+  let logs="";
+  backend.stdout.on("data",bytes=>logs+=bytes.toString());
+  backend.stderr.on("data",bytes=>logs+=bytes.toString());
+  let ready=false;
+  for(let i=0;i<80;i++){
+    if(backend.exitCode!==null)throw Error("Backend exited early:\n"+logs);
+    try{
+      const response=await fetch("http://127.0.0.1:"+port+"/api/health");
+      if(response.ok){ready=true;break;}
+    }catch{}
+    await new Promise(resolve=>setTimeout(resolve,250));
+  }
+  if(!ready)throw Error("Backend unavailable:\n"+logs);
+}
 let browser;
 try{
   browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
@@ -39,7 +63,7 @@ try{
   page.on("pageerror",e=>errors.push("JS: "+e.message));
   page.on("console",m=>{if(m.type()==="error")errors.push("Console: "+m.text());});
   page.on("response",r=>{if(r.url().includes("/assets/")&&r.status()>=400)errors.push("Asset "+r.status()+": "+r.url());});
-  await page.goto("http://127.0.0.1:"+server.address().port+"/",{waitUntil:"networkidle"});
+  await page.goto("http://127.0.0.1:"+port+"/",{waitUntil:"networkidle"});
   await page.getByRole("heading",{name:"Library"}).waitFor({timeout:12000});
   if(errors.length)throw Error("Browser mount errors:\n"+errors.join("\n"));
   console.log("PASS: rendered Library in a real Chromium browser with no JS or asset errors");
@@ -51,5 +75,6 @@ try{
   console.log("PASS: navigated to multi-track import");
 }finally{
   if(browser)await browser.close();
-  await new Promise(resolve=>server.close(resolve));
+  if(backend){backend.kill();await new Promise(resolve=>backend.once("close",resolve));}
+  else await new Promise(resolve=>server.close(resolve));
 }

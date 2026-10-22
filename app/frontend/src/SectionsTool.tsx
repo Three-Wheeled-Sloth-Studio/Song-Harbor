@@ -30,6 +30,10 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   const [message,setMessage]=useState("");
   const [error,setError]=useState("");
   const [stale,setStale]=useState(false);
+  const [captions,setCaptions]=useState("");
+  const [captionStatus,setCaptionStatus]=useState("");
+  const [captionWarnings,setCaptionWarnings]=useState<string[]>([]);
+  const [captionBusy,setCaptionBusy]=useState(false);
   const editor=useRef<HTMLTextAreaElement|null>(null);
   const loadedRevision=useRef(-1);
   const focusSection=useRef<SongSection|null>(null);
@@ -103,7 +107,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
       const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:SavedSpaceTarget[];eq_targets?:SavedEqTarget[];dynamics_targets?:SavedDynamicsTarget[];gain_targets?:SavedGainTarget[];auto_pan_targets?:SavedAutoPanTarget[];ending?:SavedEnding};
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
       onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.space_targets||[],result.eq_targets||[],result.dynamics_targets||[],result.gain_targets||[],result.auto_pan_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});
-      setDirty(false);setStale(false);
+      setDirty(false);setStale(false);setCaptions("");setCaptionStatus("");
       loadedRevision.current=-1;
       setMode("replace");
       const reload=await fetch(`/api/projects/${jobId}/sections/export`,{cache:"no-store"});
@@ -117,6 +121,32 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
       setMessage(result.auto_distributed?"Sections placed · saved reload verified":"Saved · section sheet reloaded from disk");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setSaving(false);}
+  }
+  async function prepareCaptions(){
+    if(captionBusy)return;
+    setCaptionBusy(true);setError("");setCaptionStatus("");
+    try{
+      if(dirty)throw Error("Apply or discard unsaved section-script changes before generating captions.");
+      const response=await fetch(`/api/projects/${jobId}/lyrics/captions`,{cache:"no-store"});
+      const data=await response.json() as {content?:string;cue_count?:number;excluded_directions?:number;
+        warnings?:string[];timing?:string;detail?:string};
+      if(!response.ok||!data.content)throw Error(data.detail||"No saved lyrics available");
+      setCaptions(data.content);
+      setCaptionWarnings(data.warnings||[]);
+      setCaptionStatus((data.cue_count||0)+" captions generated from saved section timing. "+
+        (data.excluded_directions||0)+" performance directions excluded. Review against playback.");
+    }catch(e){setError(e instanceof Error?e.message:"Could not generate lyric captions");}
+    finally{setCaptionBusy(false);}
+  }
+  function downloadCaptions(){
+    if(!captions.trim())return;
+    const blob=new Blob([captions],{type:"application/x-subrip;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="Song Harbor Lyrics.srt";
+    document.body.appendChild(a);a.click();a.remove();
+    window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   async function readFile(file:File|undefined){
     if(!file)return;
@@ -142,10 +172,25 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
       <label title="Append new sections"><input type="checkbox" checked={mode==="append"}
         onChange={e=>setMode(e.target.checked?"append":"replace")}/> Append</label>
       <button type="button" title="Restore authoritative saved section text" onClick={()=>{void load(true);}}>↺</button>
+      <button type="button" disabled={captionBusy||saving} title="Generate timestamped YouTube SRT subtitles from saved sections" onClick={()=>{void prepareCaptions();}}>
+        {captionBusy?"Generating...":"Lyrics SRT"}
+      </button>
       <button type="button" disabled={saving||!content.trim()} onClick={()=>{void apply();}}>
         {saving?"…":"Apply"}
       </button>
     </div>
+    {captions&&<div className="song-caption-export">
+      <div className="production-tool-heading">
+        <strong>YouTube lyric captions (.srt)</strong>
+        <button type="button" onClick={()=>{setCaptions("");setCaptionStatus("");setCaptionWarnings([]);}} title="Close lyric export preview">×</button>
+      </div>
+      <small>Estimated lyric timing is evenly distributed within each saved section. Edit caption text and times below before uploading as YouTube subtitles.</small>
+      <textarea aria-label="Editable YouTube SRT lyrics" spellCheck={false} value={captions} rows={12}
+        onChange={e=>setCaptions(e.target.value)}/>
+      {captionStatus&&<small role="status">{captionStatus}</small>}
+      {captionWarnings.map((item,i)=><small role="status" key={i}>{item}</small>)}
+      <button type="button" disabled={!captions.trim()} onClick={downloadCaptions}>Download .srt</button>
+    </div>}
     {stale&&<small role="status">Timeline changed; reload to see new timestamps (unsaved text preserved).</small>}
     {message&&<small role="status">{message}</small>}
     {error&&<small role="alert">{error}</small>}

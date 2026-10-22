@@ -350,8 +350,8 @@ async def import_tracks(request: Request, files: list[UploadFile] = File(...),
                 while chunk:=await source.read(1024*1024):
                     total+=len(chunk)
                     size+=len(chunk)
-                    if size>MAX_UPLOAD or total>MAX_UPLOAD*2:
-                        raise HTTPException(413,"Limit 1 GiB per file and 2 GiB per import")
+                    if size>MAX_UPLOAD or total>MAX_UPLOAD*16:
+                        raise HTTPException(413,"Limit 1 GiB per file and 16 GiB per import")
                     target.write(chunk)
             if size==0:raise HTTPException(400,f"Empty track: {name}")
     except Exception:
@@ -378,7 +378,7 @@ def run_track_import(job:dict[str,Any],names:list[str],title:str,manifest_bytes:
         duration=max(probe_duration(folder/"originals"/name) for name in names)
         if duration>60*15:raise ValueError("Imported tracks must be 15 minutes or shorter")
         source_names=[group["source"] for group in groups] if groups else names
-        assignments=stem_import.identity_tracks(source_names)
+        assignments=stem_import.identity_tracks(source_names,title if not groups else None)
         ffmpeg=dependency_tool("ffmpeg")
         converted=[]
         exported_channels=[]
@@ -546,7 +546,7 @@ class StemState(BaseModel):
 
 class SaveProject(BaseModel):
     title: str = Field(min_length=1, max_length=120)
-    stems: list[StemState] = Field(min_length=2, max_length=12)
+    stems: list[StemState] = Field(min_length=2, max_length=64)
 
 
 class RenameLibrarySong(BaseModel):
@@ -1346,7 +1346,7 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
 
 
 class ChannelSplitRequest(BaseModel):
-    filenames: list[str] = Field(min_length=1, max_length=6)
+    filenames: list[str] = Field(min_length=1, max_length=64)
 
 
 @app.post("/api/projects/{ident}/channels/split")

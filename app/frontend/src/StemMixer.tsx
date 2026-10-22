@@ -769,7 +769,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         onClose={()=>{setSelectedTool(null);setScriptOpen(false);}}>
         {selectedTool==="sections"&&<>
         <SectionsTool jobId={jobId} open={selectedTool==="sections"}
-          onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
+          onClose={()=>{setScriptOpen(false);setSelectedTool(null);}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
@@ -824,7 +824,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
         {selectedTool==="ab"&&<>
-        <details className="production-tool-detail" aria-label="A/B audition">
+        <details className="production-tool-detail" aria-label="A/B audition" open>
           <summary>◉ A/B comparison &amp; bypass</summary>
           <div className="timeline-loop-controls">
             <p>Audition the same stems and levels with production processing enabled or bypassed. WAV export always uses the processed mix.</p>
@@ -868,7 +868,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
         {selectedTool==="loop"&&<>
-        <details className="production-tool-detail"><summary>⇥ Region loop</summary>
+        <details className="production-tool-detail" open><summary>⇥ Region loop</summary>
           <div className="timeline-loop-controls">
             <button type="button" onClick={()=>setLoopIn(position)}>In</button>
             <button type="button" onClick={()=>setLoopOut(position)}>Out</button>
@@ -882,6 +882,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
       </ToolWindow>}
+      <div className="song-production-exports">
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
@@ -911,7 +912,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <div className="daw-handoff">
       <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
     </div>
-      </aside>
+      </div>
     </div>
     {dawOpen && <DawHandoff jobId={jobId} saveProject={saveProject} onClose={() => setDawOpen(false)} />}
     {notice && <p role="status" className="song-save-notice">{notice}</p>}

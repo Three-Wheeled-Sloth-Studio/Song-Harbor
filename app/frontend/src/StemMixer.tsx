@@ -667,13 +667,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       });
       const data=await result.json() as {detail?:string;sections?:SongSection[];pan_targets?:SavedPanTarget[];
         reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:typeof spaceTargets;
-        eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;ending?:typeof ending};
+        eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;gain_targets?:typeof gainTargets;ending?:typeof ending};
       if(!result.ok||!data.sections)throw Error(data.detail||"Could not save dynamics correction");
       setCorrection(null);
       setExternalSections(data.sections);setTimelineSections(data.sections);
       setPanTargets(data.pan_targets||[]);setReverbTargets(data.reverb_targets||[]);
       setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);
-      setEqTargets(data.eq_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);
+      setEqTargets(data.eq_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);setGainTargets(data.gain_targets||[]);
       if(data.ending)setEnding(data.ending);
       setScriptRevision(v=>v+1);setMixUrl(null);
       setNotice("Accepted "+trial.kind+" correction in section script; export uses the saved mix.");
@@ -910,13 +910,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {tool==="songText"&&<>
         <SectionsTool jobId={jobId} open={tool==="songText"}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
+          onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
             setSpaceTargets(space);
             setEqTargets(eq);
             setDynamicsTargets(dynamics);
+            setGainTargets(gain);
             setMixUrl(null);
             setEnding(finish);
             setExternalSections(items);setTimelineSections(items);

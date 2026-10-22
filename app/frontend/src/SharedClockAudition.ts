@@ -179,6 +179,7 @@ export class SharedClockAudition {
     if(!Number.isFinite(fade_seconds)||fade_seconds<0||fade_seconds>30||
        !Number.isFinite(tail_seconds)||tail_seconds<0||tail_seconds>10||
        !["linear","smooth"].includes(curve))throw Error("Invalid ending treatment");
+    if(this.ending.fade_seconds===fade_seconds&&this.ending.tail_seconds===tail_seconds&&this.ending.curve===curve)return;
     this.ending={fade_seconds,tail_seconds,curve};
     if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+tail_seconds;
     if(this.running)this.seek(this.position);

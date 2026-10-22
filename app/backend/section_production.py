@@ -76,7 +76,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             continue
         eq=EQ_TOKEN.fullmatch(token)
         if eq:
-            canonical=next((a for a in ALIASES if a.lower()==eq.group("track").lower()),None)
+            canonical=next((a for a in aliases if a.lower()==eq.group("track").lower()),None)
             if not canonical:
                 raise ValueError(f"Unknown EQ stem: {eq.group('track')}")
             band=int(eq.group("band"))
@@ -118,7 +118,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
         name = match.group("track")
         reset = match.group("reset")
         if name:
-            canonical = next((a for a in ALIASES if a.lower() == name.lower()), None)
+            canonical = next((a for a in aliases if a.lower() == name.lower()), None)
             if not canonical:
                 raise ValueError(f"Unknown stem alias: {name}")
             value = match.group("value").lower()
@@ -150,7 +150,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
                 directive = {"kind": "pan", "track": canonical, "pan": pan}
         else:
             canonical = "all" if reset.lower() == "all.reset" else next(
-                (a for a in ALIASES if a.lower() == reset[:-6].lower()), None)
+                (a for a in aliases if a.lower() == reset[:-6].lower()), None)
             if not canonical:
                 raise ValueError(f"Unknown reset scope: {reset}")
             key = canonical.lower() if canonical == "all" else canonical.lower()

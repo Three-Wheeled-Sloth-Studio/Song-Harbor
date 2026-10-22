@@ -123,7 +123,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
   const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
-  const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq"|"deess">("script");
+  const [sectionEffect,setSectionEffect]=useState<"pan"|"reverb"|"width"|"space"|"eq"|"deess">("pan");
   const [sectionEditId,setSectionEditId]=useState("");
   const [sectionPreviewActive,setSectionPreviewActive]=useState(false);
   const [sectionPreview,setSectionPreview]=useState<SectionPreview|null>(null);

@@ -1,1 +1,43 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><link rel="icon" type="image/svg+xml" href="/favicon.svg"/><title>Song Harbor | TWS Studios</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+  <title>Song Harbor | TWS Studios</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    // Show a useful failure instead of an indefinitely blank application.
+    // This runs before the compiled module and captures both asset and JS errors.
+    (() => {
+      const errors = [];
+      window.addEventListener("error", event => {
+        errors.push(event.message || "An application resource failed to load");
+      }, true);
+      window.addEventListener("unhandledrejection", event => {
+        errors.push(String(event.reason?.message || event.reason || "Unexpected startup rejection"));
+      });
+      setTimeout(() => {
+        const root = document.getElementById("root");
+        if (!root || root.childElementCount) return;
+        const panel = document.createElement("section");
+        panel.setAttribute("role", "alert");
+        panel.style.cssText = "font:15px/1.6 system-ui,sans-serif;max-width:740px;margin:10vh auto;padding:24px;background:#fff;border:1px solid #cbb;border-radius:10px;color:#232323";
+        const h = document.createElement("h1");
+        h.textContent = "Song Harbor could not load";
+        h.style.fontSize = "23px";
+        const hint = document.createElement("p");
+        hint.textContent = "The local server responded, but the application did not start. Try Ctrl+Shift+R. If it persists, copy this error and the revision from the launcher console into a bug report.";
+        const log = document.createElement("pre");
+        log.style.cssText = "white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f4f2;padding:12px;border-radius:6px;font-size:12px";
+        log.textContent = errors.slice(0,4).join("\n") || "No startup exception captured. Open Chrome DevTools (Ctrl+Shift+J) for more details.";
+        panel.append(h,hint,log);
+        root?.append(panel);
+      }, 6500);
+    })();
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

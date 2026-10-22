@@ -3,6 +3,7 @@ import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "
 import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflectionStage} from "./SpatialReflection";
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
+import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -48,6 +49,8 @@ export class SharedClockAudition {
   private nodes:ActiveNode[]=[];
   private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
+  private lastAnalysis:AudioFinding[]=[];
+  get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;
@@ -329,6 +332,7 @@ export class SharedClockAudition {
       scheduleDucking(dynamics,this.duckEnvelopes.get(filename),0,0);
     }
     const rendered=await offline.startRendering();
+    this.lastAnalysis=inspectRenderedAudio(rendered,this.outputTrimDb);
     return encodeWav24(rendered,this.outputTrimDb);
   }
 

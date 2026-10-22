@@ -1,4 +1,5 @@
 import asyncio
+import json
 import io
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -13,6 +14,8 @@ import projects
 import stem_import
 import library
 import server
+import section_import
+import track_routing
 
 
 class ImportTracksTests(unittest.TestCase):
@@ -60,6 +63,71 @@ class ImportTracksTests(unittest.TestCase):
             self.assertEqual(record["source_duration_seconds"],12.5)
             self.assertEqual(record["files"],["01 (Vocals).wav","02 (Drums).wav"])
             self.assertTrue((folder/"stems"/"02 (Drums).wav").is_file())
+
+    def test_channel_manifest_reconstructs_six_parent_stems_and_active_children(self):
+        names=["Vocals","Drums","Bass","Guitar","Piano","Other"]
+        tracks=[]
+        uploads=[]
+        for i,role in enumerate(names,1):
+            for side in ("left","right"):
+                file=f"{i:02d} - {role} - {side.capitalize()}.wav"
+                tracks.append({"source":f"Song_({role})_htdemucs_6s.wav",
+                               "stem":role,"file":file,"channel":side})
+                uploads.append(UploadFile(filename=file,file=io.BytesIO(b"source audio")))
+        manifest={"format":stem_import.MANIFEST_FORMAT,"version":1,
+                  "track_count":12,"source_project_id":"another-project","tracks":tracks}
+        data=json.dumps(manifest).encode()
+        groups=stem_import.channel_groups(data,[x.filename for x in uploads])
+        self.assertEqual(len(groups),6)
+        self.assertEqual(groups[0]["left"],"01 - Vocals - Left.wav")
+        uploads.append(UploadFile(filename="manifest.json",file=io.BytesIO(data)))
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            request=Request({"type":"http","headers":[]})
+            with patch.object(server,"DATA_ROOT",root),patch.object(server.dependencies,"resolve",return_value={"directory":str(root)}),patch.object(server,"run_track_import",lambda *args:None):
+                job=asyncio.run(server.import_tracks(request,uploads,title="Reimported"))
+            actual=server.jobs.pop(job["id"])
+            def fake_convert(command,**kwargs):
+                Path(command[-1]).write_bytes(b"working WAV"*8)
+                return SimpleNamespace(returncode=0,stderr="")
+            with patch.object(server,"DATA_ROOT",root),patch.object(server,"probe_duration",return_value=13.0),patch.object(server,"dependency_tool",return_value="ffmpeg"),patch.object(server.subprocess,"run",side_effect=fake_convert):
+                server.run_track_import(actual,[x["file"] for x in tracks],"Reimported",data)
+            self.assertEqual(actual["status"],"complete",actual["message"])
+            record=projects.read_project(root,job["id"])
+            self.assertEqual(len(record["files"]),6)
+            self.assertEqual(record["files"][0],"01 (Vocals).wav")
+            routing=track_routing.valid_children(root,record)
+            self.assertEqual(len(routing),6)
+            self.assertTrue(all(x["active"] for x in routing.values()))
+            self.assertEqual(routing["01 (Vocals).wav"]["tracks"]["left"]["file"],
+                             "01 - Vocals - Left.wav")
+            self.assertEqual(projects.stem_name(record["files"][-1]),"Other")
+
+    def test_manifest_rejects_bad_pairs_and_foreign_paths(self):
+        pairs=[{"source":"original.wav","file":"left.wav","channel":"left"},
+               {"source":"original.wav","file":"right.wav","channel":"right"}]
+        def check(tracks,uploaded):
+            payload={"format":stem_import.MANIFEST_FORMAT,"version":1,
+                     "track_count":len(tracks),"tracks":tracks}
+            return stem_import.channel_groups(json.dumps(payload).encode(),uploaded)
+        self.assertEqual(len(check(pairs,["left.wav","right.wav"])),1)
+        with self.assertRaises(ValueError):check(pairs[:1],["left.wav"])
+        with self.assertRaises(ValueError):check([dict(pairs[0],file="../left.wav"),pairs[1]],["../left.wav","right.wav"])
+        with self.assertRaises(ValueError):check(pairs,["left.wav","wrong.wav"])
+
+    def test_many_named_tracks_accept_independent_section_effects(self):
+        names=["Song - Vocals.wav"]+[f"Song - Synth {n:02d}.wav" for n in range(1,33)]
+        tracks=stem_import.identity_tracks(names)
+        self.assertEqual(len({t["stem_alias"].lower() for t in tracks}),33)
+        self.assertEqual(len({t["track_id"] for t in tracks}),33)
+        files=[f"{i:02d} ({t['stem_alias']}).wav" for i,t in enumerate(tracks,1)]
+        alias=tracks[-1]["stem_alias"]
+        block=f"{{{alias}.pan:right.60@2s:smooth {alias}.eq1:320,1.2,-2@2s:smooth}}"
+        result=section_import.apply({"files":files,"sections":[]},
+               "[Verse 0:00-0:10]\\n"+block+"\\n","replace",10)
+        self.assertEqual(len(result["section_pan_automation"]),1)
+        self.assertEqual(result["section_pan_automation"][0]["source_key"],files[-1])
+        self.assertEqual(result["section_eq_automation"][0]["source_key"],files[-1])
 
     def test_imported_project_is_discoverable_and_daw_exportable(self):
         with tempfile.TemporaryDirectory() as temp:

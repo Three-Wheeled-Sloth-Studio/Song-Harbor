@@ -10,8 +10,9 @@ type Props={
   jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedPanTarget[];
   onChange:(items:SavedPanTarget[])=>void;
+  previewEnabled?:boolean;onPreview?:(items:SavedPanTarget[])=>void;
 };
-export function SectionPanTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+export function SectionPanTool({jobId,sections,files,targets,onChange,initialSectionId,previewEnabled=false,onPreview}:Props){
   const [sectionId,setSectionId]=useState(initialSectionId||"");
   useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
@@ -56,6 +57,15 @@ export function SectionPanTool({jobId,sections,files,targets,onChange,initialSec
   function removeTarget(){
     void persist(targets.filter(t=>!(t.section_id===currentSection&&t.source_key===currentFile)));
   }
+
+  // Live preview remains a purely local draft. Save/Apply is the only API write.
+  useEffect(()=>{
+    if(!previewEnabled||!currentSection||!currentFile)return;
+    onPreview?.([...targets.filter(t=>t.section_id!==currentSection||t.source_key!==currentFile),{
+      section_id:currentSection,source_key:currentFile,pan,transition_seconds:transition,curve
+    }]);
+  // Deliberately react to editable values, not to parent re-renders.
+  },[previewEnabled,currentSection,currentFile,pan,transition,curve]);
   return <details className="production-tool-detail" open>
     <summary>Section pan (preview)</summary>
     <div className="timeline-loop-controls">

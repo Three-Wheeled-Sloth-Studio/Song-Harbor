@@ -23,6 +23,9 @@ def stem_name(filename: str) -> str:
     for name in ORDER:
         if "(" + name + ")" in filename:
             return name
+    generic = re.search(r"\(Track\d{2}\)", filename)
+    if generic:
+        return generic.group(0)[1:-1]
     raise ValueError("Unrecognized stem filename: " + filename)
 
 
@@ -100,7 +103,11 @@ def list_projects(data_root: Path) -> list[dict[str, Any]]:
     for item in folder.iterdir():
         if item.is_dir() and re.fullmatch(r"[a-f0-9]{12}", item.name):
             project = read_project(data_root, item.name)
-            if project and set(project.get("files", [])) == set(files_for_project(item)):
+            if project and (set(project.get("files", [])) == set(files_for_project(item))
+                            if not project.get("imported_tracks")
+                            else bool(project.get("files")) and all(
+                                (item / "stems" / name).is_file()
+                                for name in project["files"])):
                 result.append({
                     "id": project["id"], "title": project.get("title", project["filename"]),
                     "filename": project["filename"], "created_at": project.get("created_at"),
@@ -111,9 +118,9 @@ def list_projects(data_root: Path) -> list[dict[str, Any]]:
 
 
 def validated_stems(project: dict[str, Any], folder: Path) -> list[Path]:
-    files = files_for_project(folder)
-    if len(files) != 6 or set(files) != set(project["files"]):
-        raise ValueError("Six matching source stems are required for DAW export")
+    files = project.get("files", []) if project.get("imported_tracks") else files_for_project(folder)
+    if not files or set(files) != set(project["files"]) or not all((folder / "stems" / name).is_file() for name in files):
+        raise ValueError("Matching source tracks are required for DAW export")
     return [folder / "stems" / f for f in files]
 
 
@@ -143,13 +150,13 @@ def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path
         manifest = {"format": "song-harbor-daw-exchange", "target": target_id, "version": 1,
                     "song": project.get("title"), "source_project_id": project["id"],
                     "source_duration_seconds": project.get("source_duration_seconds"),
-                    "sample_rate_hz": 48000, "track_count": 6, "tracks": tracks}
+                    "sample_rate_hz": 48000, "track_count": len(tracks), "tracks": tracks}
         (staging / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         if target_id == "waveform":
             instructions = (
                 "Song Harbor -> Waveform Free\n\n"
                 "1. Open Waveform and create/open a project and Edit.\n"
-                "2. Import all six WAV files as SIX SEPARATE TRACKS, not end-to-end clips.\n"
+                "2. Import all WAV files as SEPARATE TRACKS, not end-to-end clips.\n"
                 "3. Place every track at 0:00; disable stretching, loops and tempo sync.\n"
                 "4. Verify complete duration and alignment before editing.\n"
                 "5. Keep this folder intact while your DAW references its files.\n"
@@ -158,7 +165,7 @@ def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path
             instructions = (
                 "Song Harbor -> MorningDAW\n\n"
                 "1. Open MorningDAW and start or open a song.\n"
-                "2. Drag the six numbered WAV files onto SEPARATE audio tracks in the arrangement.\n"
+                "2. Drag the numbered WAV files onto SEPARATE audio tracks in the arrangement.\n"
                 "3. Align every clip at the song start (0:00); do not stretch audio or tempo-sync clips.\n"
                 "4. Confirm full-length audio and timing alignment before processing.\n"
                 "5. MorningDAW refers to imported source files by path; preserve this exchange folder.\n"
@@ -167,9 +174,9 @@ def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path
             instructions = (
                 "Song Harbor -> Audacity\n\n"
                 "1. Open Audacity and start a new project.\n"
-                "2. File > Import > Audio, then select all six numbered WAVs together.\n"
+                "2. File > Import > Audio, then select all numbered WAVs together.\n"
                 "   Each WAV should become its own audio track.\n"
-                "3. Ensure all six tracks start at 0:00 and keep their original tempo.\n"
+                "3. Ensure all imported tracks start at 0:00 and keep their original tempo.\n"
                 "4. Check duration and alignment before processing or exporting.\n"
                 "5. Save the Audacity project to retain edits; keep this exchange folder.\n"
             )

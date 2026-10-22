@@ -208,13 +208,14 @@ def apply(project: dict[str, Any], content: str, mode: str,
             if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
                 raise ValueError("Lyrics text must be at most 20000 characters per section")
             lyrics[match["id"]] = item["lyrics"]
-    pan_targets = section_production.materialize_pan(validated, production, project.get("files", []))
-    reverb_targets = section_production.materialize_reverb(validated, production, project.get("files", []))
-    width_targets = section_production.materialize_width(validated, production, project.get("files", []))
-    space_targets = section_production.materialize_space(validated, production, project.get("files", []))
-    eq_targets = section_production.materialize_eq(validated, production, project.get("files", []))
-    dynamics_targets = section_production.materialize_dynamics(validated, production, project.get("files", []))
-    gain_targets = section_production.materialize_gain(validated, production, project.get("files", []))
+    effective = section_production.expand_broadcast(production, aliases)
+    pan_targets = section_production.materialize_pan(validated, effective, project.get("files", []))
+    reverb_targets = section_production.materialize_reverb(validated, effective, project.get("files", []))
+    width_targets = section_production.materialize_width(validated, effective, project.get("files", []))
+    space_targets = section_production.materialize_space(validated, effective, project.get("files", []))
+    eq_targets = section_production.materialize_eq(validated, effective, project.get("files", []))
+    dynamics_targets = section_production.materialize_dynamics(validated, effective, project.get("files", []))
+    gain_targets = section_production.materialize_gain(validated, effective, project.get("files", []))
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,

@@ -11,17 +11,21 @@ This guide covers the currently implemented local-first Song Harbor workbench. T
 5. Open **Tools > Sections**, paste or edit your arrangement, and **Apply**. Use timeline markers to correct section boundaries.
 6. Adjust production effects, listen, and use **Export mix WAV**. Once rendering completes, click **Download WAV** to save it using your browser's download settings.
 
-## Import existing tracks rather than separating a mixed recording
+## Import prepared tracks and restore split-channel exports
 
-On **Import song**, select **Multiple tracks · already separated**. Choose **2-12** WAV, FLAC, MP3, M4A, AIFF or OGG files at once. These are treated as distinct tracks in **one song**, without running Demucs or other source separation.
+On **Import song**, select **Multiple tracks · already separated**. Choose **2–64** WAV, FLAC, MP3, M4A, AIFF or OGG audio files at once. These become individual tracks in **one song**, without Demucs separation. Song Harbor suggests a title from the common filename prefix; override the editable Song title field before import if necessary.
 
-Song Harbor suggests a title from the common prefix of the filenames (for example, `Salt in the Circuit - Vocals.wav` and `Salt in the Circuit - Drums.wav` suggest `Salt in the Circuit`). **Edit the Song title field** before import whenever the suggestion is wrong. The chosen title becomes the project and Library name; the original uploaded filenames remain intact.
+**Reimport a Song Harbor stereo split export:** Select all **12 mono WAVs plus their original `manifest.json`** together (or the equivalent complete Left/Right pairs for any exported number of stems). The manifest must be `song-harbor-stereo-channel-split` version 1. It is not an optional decorative attachment: Song Harbor uses it to pair each Left/Right file with the correct original parent. Import reconstructs six stereo parents and restores **L/R active** routing so that the player behaves as though you split those stems inside Song Harbor. Source files and the manifest's original project ID are never trusted as filesystem locations; only uploaded validated filenames are used. Do not select `README.txt`.
 
-Import creates 48-kHz stereo PCM WAV working copies aligned at **0:00**. Shorter recordings are padded with silence to match the longest; this does **not** time-stretch or automatically synchronize takes with different timing. Verify all source recordings were exported from the same song start if you want them to line up. Original uploads are preserved separately under the song's local working files.
+**Arbitrary numbered/named tracks:** Unknown stems become unique, script-safe names based on the original filenames, with stable internal `track_id` values. On the mixer, the readable source filename appears with its exact section-script alias below (for example, `Synth_01`). Section pan, width, space, reverb, EQ, compression, ducking, and reset directives accept any current source alias rather than only Vocals/Drums/Bass/Guitar/Piano/Other. When an alias is unknown, Apply rejects the production script rather than silently dropping automation.
 
-Filename role identification recognizes standard Vocals/Drums/Bass/Guitar/Piano/Other labels. Additional and repeated/unrecognized parts remain independent **Track01**, **Track02**, etc., with their original filenames displayed as mixer labels. The original six named aliases are the current section-script targeting vocabulary; custom imported TrackNN aliases can be mixed and exported but don't yet have full production-script alias support.
+**Alignment and originals:** Working copies are 48-kHz PCM WAVs aligned at **0:00**. Shorter source audio is padded with silence without time stretching, BPM sync or automatic source offset detection. Unmodified original uploads remain in the local song directory. Manifest imports preserve original mono channels as active L/R child tracks and rebuild their stereo parent working copy.
 
-After import, tracks appear in the familiar synchronized mixer, timeline and Library. A future enhancement may support manually reclassifying the stem types and choosing per-track offsets.
+**Current playback limits:** The project model and import accept up to 64 parent stems (or up to 128 channel files with a complete split manifest). The shared-clock browser audition engine still has a **768 MiB decoded-audio budget** and the offline WAV renderer retains its existing 15-minute limit. Dozens of long/high-resolution tracks may exceed those memory limits even though the project and DAW exports support the track count. Chunked streaming is not implemented yet; don't treat the 64-track model limit as a guarantee that all 64 can be previewed simultaneously.
+
+**Future naming behavior:** Each imported track has a stable ID and immutable working filename, separate from its display name and script alias. The planned track-rename UI must migrate all section-script tokens and stored target references atomically when a name is changed; merely changing the visible label without updating references is not acceptable. The rename UI/migration is not implemented yet.
+
+After import, tracks appear in the standard mixer, timeline and Library. For multi-track audition, verify that related recordings originated at the same start position.
 
 ## Library and project safety
 

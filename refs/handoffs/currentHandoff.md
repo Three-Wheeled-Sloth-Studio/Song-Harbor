@@ -7,6 +7,23 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22: first-pass icon rail QA and unified Section Edit / multi-window follow-up
+
+User supplied desktop screenshot; fullscreen shell, top-right Close X, working project `The Logo and the Maw`, and 12 L/R waveform rows display. First-pass UI approved; requested: icons 2–3x bigger and narrower reserved rail, corner-resizable tools, optional multiple tool windows simultaneously, rename DAW Handoff to **Download**, consolidate all per-section effects in one **Edit sections** tool, and double-clicking section block on timeline to open editor focused on that section.
+
+**Implemented on main:**
+- `WorkbenchTools.tsx`: rail now has eight categories (Edit sections, Sound cleanup, A/B, Ending, Zoom, Loop, Split channels, Download). Old Pan/Reverb/Width/Reflections/EQ rail icons removed. Multiple windows can remain open concurrently and click-to-front reorder; each keeps initial/restored drag position. Same non-modal draggable floating panes, now resizable by CSS lower-right corner.
+- `StemMixer.tsx`: `openTools` list replaces single `selectedTool`. **Edit sections** window has shared section selector and tabs Script, Pan, Reverb, Width, Reflections, EQ. The selected effect subtool is the only one mounted; dynamics remain addressable through Script and analyzer correction A/B. `SectionEditor.onSectionDoubleClick` opens/raises `sectionEdit`, sets exact clicked section as shared selection and opens Pan tab. Tool close dismisses only that window (cleanup close also discards unaccepted correction); other windows stay open. Download icon opens existing aligned-track exporter.
+- Per-effect tools `SectionPanTool`, `SectionReverbTool`, `SectionWidthTool`, `SectionSpaceTool`, `SectionEqTool` accept optional `initialSectionId`, react to shared selection, and hide redundant internal section selectors only when embedded in unified edit panel. Local data persistence unchanged.
+- `song-harbor.css`: high-specificity workspace grid fixes previous broad ~300px reserved column; now 54px rail and 48px-wide icons with ~39px glyphs, responsive 46px rail. Floating tool defaults ~490×520 and supports native CSS resize:both (minimum 315×230) with independently scrollable content and corner handle. Multiple windows automatically stagger on initial opening; bring-to-front doesn't change original position.
+- `DawHandoff.tsx`: renamed tool/modal **Download tracks**, changed primary action to **Export tracks**, folder button **Open folder**, and optional DAW launching is explicitly separate. This still exports files to a **local folder**; a browser ZIP download is not yet implemented. Do not pretend the DAW installation helper is already gone.
+- `docs/user-guide.md` and handoff synchronized.
+- CI passed on commit `8b405754`: Frontend build + browser smoke and single-server launch smoke success (covers the refactor and CSS). Later changes were simple label/docs and have also passed through `52209dd1`. Actual multi-window drag/resize and section effect QA on Windows still outstanding.
+
+**Suggested QA**: Launch from BAT; verify 54px icon rail actually reclaims 200+px of waveform. Open Cleanup and Edit sections simultaneously; resize each from corner, drag, bring one forward, close it and verify other unaffected. In Edit sections choose Verse 2 -> EQ -> set a band; verify section selected from shared picker and saved effect persists. Double-click Bridge in waveform -> Edit sections opens/raises at Bridge (Pan tab) without a full script editor; try switching to Script and editing text, switch to another tool, return and confirm unsaved text retained. Download opens export controls, folder path, optional DAW launch separate. Test with 6 grouped stems and 12 children; no overflow or lost playback focus.
+
+---
+
 ## 2026-10-22: fullscreen app window, icon tool rail, floating edit panes and correction A/B
 
 User shallow-accepted analyzer: 03:35 peak +0.2 dBFS (Drums/Bass activity hint, suggest -1.2dB master trim) and 02:43 repeated level dips (Vocals/Drums activity hint). Asked for quick UI/UX cleanup and ideal loop-based correction workflow.

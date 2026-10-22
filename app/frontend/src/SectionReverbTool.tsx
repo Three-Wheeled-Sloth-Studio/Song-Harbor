@@ -6,11 +6,12 @@ export type SavedReverbTarget={
   curve:"linear"|"smooth";
 };
 type Props={
-  jobId:string;sections:SongSection[];files:string[];
+  jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedReverbTarget[];onChange:(items:SavedReverbTarget[])=>void;
 };
-export function SectionReverbTool({jobId,sections,files,targets,onChange}:Props){
-  const [sectionId,setSectionId]=useState("");
+export function SectionReverbTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  const [sectionId,setSectionId]=useState(initialSectionId||"");
+  useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
   const [wet,setWet]=useState(0);
   const [transition,setTransition]=useState(1);

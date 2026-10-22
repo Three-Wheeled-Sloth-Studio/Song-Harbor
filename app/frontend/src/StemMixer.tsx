@@ -753,7 +753,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <input type="range" aria-label="Playback position" min={0} max={Math.max(duration,1)}
             step={0.05} value={Math.min(position,duration||1)} onChange={e=>seek(Number(e.target.value))}/>
           <span className="timecode">{timecode(duration)}</span>
-          <label className="master-monitor" title="Monitoring volume; does not change exported mixes">
+          <label className="master-monitor" title={"Monitoring volume "+monitorVolume+"% · remembered on this device · does not change exported mixes"}>
             <span aria-hidden="true">🔊</span>
             <input type="range" min="0" max="100" step="1" value={monitorVolume}
               aria-label="Playback monitoring volume" onChange={e=>setMonitorVolume(Number(e.target.value))}/>

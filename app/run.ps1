@@ -99,6 +99,21 @@ try {
       if ($status.instance_token -eq $instanceToken -and
           $null -ne $status.separator_ready -and
           $page.StatusCode -eq 200 -and $page.Content -match '<div id="root"') {
+        # HTML alone is not readiness. Follow its compiled module URL and
+        # assert status + MIME so a blank browser page cannot be called healthy.
+        $moduleMatch = [regex]::Match($page.Content, '<script\\b[^>]*type="module"[^>]*src="([^"]+)"')
+        if (-not $moduleMatch.Success) {
+          throw 'Built HTML has no JavaScript module script tag.'
+        }
+        $modulePath = $moduleMatch.Groups[1].Value
+        if (-not $modulePath.StartsWith('/assets/') -or -not $modulePath.EndsWith('.js')) {
+          throw "Built HTML references unexpected module: $modulePath"
+        }
+        $module = Invoke-WebRequest -Uri ($url.TrimEnd('/') + $modulePath) -TimeoutSec 5 -UseBasicParsing
+        $type = [string]$module.Headers['Content-Type']
+        if ($module.StatusCode -ne 200 -or $type -notmatch '^\\s*(text|application)/javascript(?:;|$)') {
+          throw "Built module failed MIME validation: HTTP $($module.StatusCode), Content-Type '$type', URL $modulePath"
+        }
         $ready = $true
         break
       }

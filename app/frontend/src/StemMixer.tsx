@@ -778,6 +778,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <section ref={timelineRef} className="integrated-timeline" aria-label="Integrated production timeline">
           <SectionEditor jobId={jobId} duration={duration} position={position}
             initialSections={initialSections} externalSections={externalSections} insights={sectionInsights}
+            onAnalyzeSections={()=>{void analyzeMix();}} analyzingSections={analyzing}
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}

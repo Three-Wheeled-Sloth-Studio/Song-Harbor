@@ -6,6 +6,7 @@ import type { SavedStem } from "./StemMixer";
 import type { SongSection } from "./SectionEditor";
 import { FfmpegSetup } from "./FfmpegSetup";
 import { AppSettings } from "./AppSettings";
+import { HelpDialog } from "./HelpDialog";
 import { UpdateControl } from "./UpdateControl";
 import { LibraryHome } from "./LibraryHome";
 import "@tws-ui/core/tokens.css";
@@ -42,6 +43,7 @@ function App() {
   const [project, setProject] = useState<SongProject | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const pendingSeparation = useRef(false);
   const pendingMixRetry = useRef<(() => void) | null>(null);
 
@@ -209,8 +211,13 @@ function App() {
           <span aria-hidden="true">⚙</span>
           {missingCount > 0 && <span className="dependency-count">{missingCount}</span>}
         </button>
+        <button type="button" className="dependency-indicator song-help-trigger" title="Help and user guide"
+          aria-label="Open Song Harbor help" aria-haspopup="dialog" onClick={()=>setHelpOpen(true)}>
+          <span aria-hidden="true">i</span>
+        </button>
       </div>
     </header>
+    <HelpDialog open={helpOpen} onOpenChange={setHelpOpen}/>
     <AppSettings open={settingsOpen} onOpenChange={setSettingsOpen} health={health} onReady={next => setHealth(next)} />
     <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}

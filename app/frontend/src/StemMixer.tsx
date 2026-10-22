@@ -74,6 +74,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
   const [cleanupError,setCleanupError]=useState("");
+  const analysisRevision=useRef(0);
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
   const headroomFixRef=useRef<HTMLElement|null>(null);
@@ -345,6 +346,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setDuration(engine.duration);
   },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,timelineSections,files]);
 
+  // Findings describe a specific processed mix; edits invalidate those results.
+  useEffect(()=>{
+    analysisRevision.current++;
+    setCleanupScanned(false);setCleanupFindings([]);
+  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,channels]);
+
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
 
@@ -502,9 +509,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   async function analyzeMix(){
     const engine=audio.current;
     if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
+    const revision=analysisRevision.current;
     setAnalyzing(true);setCleanupError("");setCleanupScanned(false);setCleanupFindings([]);
     try{
-      setCleanupFindings(await engine.analyzeMix());
+      const results=await engine.analyzeMix();
+      if(analysisRevision.current!==revision){
+        setCleanupError("The mix changed during analysis. Re-analyze the new settings.");
+        return;
+      }
+      setCleanupFindings(results);
       setCleanupScanned(true);
     }catch(e){
       setCleanupError(e instanceof Error?e.message:"Sound analysis failed");
@@ -687,6 +700,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setLoopOut(Math.min(duration,end));
             setLoopEnabled(true);
             seek(Math.max(0,Math.min(start,duration)));
+            if(!playRef.current)void togglePlayback();
           }}/>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
           targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>

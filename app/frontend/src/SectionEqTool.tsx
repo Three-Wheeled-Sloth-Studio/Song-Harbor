@@ -3,10 +3,11 @@ import type {SongSection} from "./SectionEditor";
 
 export type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;
   q:number;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
-type Props={jobId:string;sections:SongSection[];files:string[];
+type Props={jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedEqTarget[];onChange:(items:SavedEqTarget[])=>void};
-export function SectionEqTool({jobId,sections,files,targets,onChange}:Props){
-  const [sectionId,setSectionId]=useState("");
+export function SectionEqTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  const [sectionId,setSectionId]=useState(initialSectionId||"");
+  useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
   const [band,setBand]=useState(1);
   const [frequency,setFrequency]=useState(1000);

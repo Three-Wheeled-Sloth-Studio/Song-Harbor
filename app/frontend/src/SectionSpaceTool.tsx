@@ -5,10 +5,11 @@ export type SavedSpaceTarget={
   section_id:string;source_key:string;amount:number;transition_seconds:number;
   curve:"linear"|"smooth";
 };
-type Props={jobId:string;sections:SongSection[];files:string[];
+type Props={jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
   targets:SavedSpaceTarget[];onChange:(next:SavedSpaceTarget[])=>void};
-export function SectionSpaceTool({jobId,sections,files,targets,onChange}:Props){
-  const [sectionId,setSectionId]=useState("");
+export function SectionSpaceTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  const [sectionId,setSectionId]=useState(initialSectionId||"");
+  useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
   const [amount,setAmount]=useState(0);
   const [transition,setTransition]=useState(2);

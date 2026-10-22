@@ -414,8 +414,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   // Findings describe a specific processed mix; edits invalidate those results.
   useEffect(()=>{
     analysisRevision.current++;
-    setCleanupScanned(false);setCleanupFindings([]);
-  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,channels]);
+    setCleanupScanned(false);setCleanupFindings([]);setSectionInsights([]);
+  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);

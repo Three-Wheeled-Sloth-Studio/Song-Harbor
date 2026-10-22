@@ -116,7 +116,7 @@ The previous DAW Handoff tool is now **Download**. Its panel says Download track
 
 ## Dynamics visibility and section-aware de-essing
 
-The **A/B comparison** tool now shows live per-stem gain-reduction readouts when there is measurable processing. Compression uses the Web Audio compressor's live gain-reduction estimate; vocal-keyed ducking and de-essing read their scheduled AudioParam attenuation. These values are *per stem, approximate*, and not integrated loudness measurements.
+The **A/B comparison** tool now has an independent **Bypass deess** checkbox alongside compression and ducking. It shows live per-stem gain-reduction readouts when there is measurable processing. Compression uses the Web Audio compressor's live gain-reduction estimate; vocal-keyed ducking and de-essing read their scheduled AudioParam attenuation. These values are *per stem, approximate*, and not integrated loudness measurements.
 
 In Sound cleanup, a **Repeated loudness dips** or **Sibilance-like high-frequency burst** candidate can open **Try correction A/B**. Use **A Saved** versus **B Proposed** while listening to the same loop. The correction tool now shows separate compressor, ducking and de-esser meters. To make a subtle change easier to identify, set **Audition strength → Exaggerated · 3×**. The exaggeration affects only the current live preview and never changes the accepted values. For loudness dips, prefer checking whether the original gain-reduction meter actually moves before deciding to adjust compression/ducking.
 
@@ -131,7 +131,7 @@ It supports this section production directive:
 
 The four values are **center frequency Hz** (3000–11000), **Q** (.4–8), **detector threshold dBFS** (-70 to -10) and **maximum frequency-band reduction dB** (0–12). Transition duration is .05–30 seconds. A stem reset restores neutral de-essing. Older projects without this directive do not de-ess by default.
 
-For a sibilance-like finding, choose **Try correction A/B**, select **Targeted de-esser**, then adjust band frequency, Q, threshold and maximum reduction. **Accept** writes a validated instruction for the containing section; **Discard** restores previous processing. The live audition and offline WAV render share the same detector and filter graph; no original WAV is overwritten.
+You can access the de-esser directly through **Edit sections → De-ess**, choosing the section and track before adjusting center frequency, Q, threshold and maximum reduction. The **Script** tab remains the complete original text editor. For a sibilance-like finding, choose **Try correction A/B** to audition the same de-esser controls in context. **Accept** writes a validated instruction for the containing section; **Discard** restores previous processing. The live audition and offline WAV render share the same detector and filter graph; no original WAV is overwritten.
 
 **Limits:** This is a spectral heuristic, not a voice or sibilant classifier. Cymbals, strings, synths and industrial distortion can cause similar high-frequency triggers. There is no guaranteed level-matched A/B, machine-learned artifact recognition, or automatic repair yet. An exaggerated preview is explicitly *not* the saved processed sound. Confirm actual 1× comparison before accepting.
 

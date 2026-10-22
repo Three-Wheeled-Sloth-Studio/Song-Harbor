@@ -1,11 +1,16 @@
 import {useEffect,useState} from "react";
-import type {SongSection} from "./SectionTimeline";
+import type {SongSection} from "./SectionEditor";
+import type {SavedPanTarget} from "./SectionPanTool";
+import type {SavedReverbTarget} from "./SectionReverbTool";
+import type {SavedWidthTarget} from "./SectionWidthTool";
+import type {SavedSpaceTarget} from "./SectionSpaceTool";
+import type {SavedEqTarget} from "./SectionEqTool";
 
 type Target={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";
   frequency?:number;q?:number;threshold_db:number;max_reduction_db?:number;
   ratio:number;depth_db:number;transition_seconds:number;curve:"smooth"|"linear"};
-type Result={sections:SongSection[];pan_targets:unknown[];reverb_targets:unknown[];
-  width_targets:unknown[];space_targets:unknown[];eq_targets:unknown[];
+type Result={sections:SongSection[];pan_targets:SavedPanTarget[];reverb_targets:SavedReverbTarget[];
+  width_targets:SavedWidthTarget[];space_targets:SavedSpaceTarget[];eq_targets:SavedEqTarget[];
   dynamics_targets:Target[];ending:{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}};
 export function SectionDeEssTool({jobId,sections,files,initialSectionId,targets,onSaved}:{
   jobId:string;sections:SongSection[];files:string[];initialSectionId?:string;

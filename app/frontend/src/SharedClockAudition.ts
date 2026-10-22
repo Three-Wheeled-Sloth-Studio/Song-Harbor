@@ -1,4 +1,5 @@
-import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
+import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
+import {scheduleAutomation, valueAt, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
 import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflectionStage} from "./SpatialReflection";
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
@@ -251,6 +252,47 @@ export class SharedClockAudition {
     scheduleAutomation(this.reverbDrive.gain,
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
+  /** Estimate section dry-bus pan contributions from aligned decoded stems.
+   * This is a bounded first-pass solver; final rendered analysis is authoritative.
+   */
+  solveSectionAutoPan(start:number,end:number,protectedSources:readonly string[],
+    curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[]}>):AutoPanResult{
+    const stats=new Map<string,{l:number;r:number;cross:number;n:number}>();
+    const fixed=new Set(protectedSources);
+    for(const track of this.tracks){
+      const filename=track.source.filename;
+      const level=this.renderedLevels[filename]??0;
+      if(level<=0)continue;
+      const buf=track.buffer,from=Math.max(0,Math.floor(start*buf.sampleRate));
+      const to=Math.min(buf.length,Math.ceil(end*buf.sampleRate));
+      const step=Math.max(1,Math.floor((to-from)/32000));
+      let row=stats.get(filename);
+      if(!row){row={l:0,r:0,cross:0,n:0};stats.set(filename,row);}
+      const a=buf.getChannelData(0);
+      const b=buf.numberOfChannels>1?buf.getChannelData(1):a;
+      for(let i=from;i<to;i+=step){
+        let l=a[i],r=b[i];
+        // Split child tracks arrive as mono; preserve their locked native L/R routing.
+        if(track.source.pan===-1){l=a[i];r=0;}
+        else if(track.source.pan===1){l=0;r=a[i];}
+        row.l+=l*l;row.r+=r*r;row.cross+=l*r;row.n++;
+      }
+    }
+    const time=start+(end-start)*.5;
+    const stems:AutoStem[]=[];
+    for(const [filename,row] of stats){
+      const level=this.renderedLevels[filename]??0;
+      const curve=curves[filename];
+      const sectionGain=curve?.gain?valueAt(curve.gain,time):1;
+      stems.push({filename,leftPower:row.l/Math.max(1,row.n),
+        rightPower:row.r/Math.max(1,row.n),
+        crossPower:row.cross/Math.max(1,row.n),
+        pan:curve?.pan?valueAt(curve.pan,time):0,
+        gain:level*sectionGain,locked:fixed.has(filename)});
+    }
+    return solveAutoPan(stems);
+  }
+
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
     this.automation=curves;

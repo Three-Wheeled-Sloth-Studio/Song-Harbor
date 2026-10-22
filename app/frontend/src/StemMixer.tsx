@@ -894,6 +894,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
+        {selectedTool==="channels"&&<>
+          <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg}
+            onCompleted={()=>{void refreshChannels();}} />
+        </>}
+        {selectedTool==="daw"&&<div className="song-tool-handoff">
+          <button type="button" onClick={()=>setDawOpen(true)}>Prepare DAW export…</button>
+        </div>}
       </ToolWindow>}
       <div className="song-production-exports">
     <div className="mix-footer">
@@ -921,10 +928,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       </section>}
       {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click Download WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>}
     </div>
-    <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />
-    <div className="daw-handoff">
-      <IconButton icon="🎚" label="Export to DAW" onClick={() => setDawOpen(true)}/>
-    </div>
+
       </div>
     </div>
     {dawOpen && <DawHandoff jobId={jobId} saveProject={saveProject} onClose={() => setDawOpen(false)} />}

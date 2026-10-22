@@ -96,7 +96,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
   const [eqTargets,setEqTargets]=useState<SavedEqTarget[]>([]);
-  const [dynamicsTargets,setDynamicsTargets]=useState<{section_id:string;source_key:string;kind:"comp"|"duck";threshold_db:number;ratio:number;depth_db:number;transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
+  const [dynamicsTargets,setDynamicsTargets]=useState<{section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
   const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
@@ -107,6 +107,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [sectionEditId,setSectionEditId]=useState("");
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
   const [correctionSaving,setCorrectionSaving]=useState(false);
+  const [meters,setMeters]=useState<{filename:string;compressionDb:number;duckDb:number;deessDb:number}[]>([]);
   const [correctionError,setCorrectionError]=useState("");
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
   const [scriptRevision,setScriptRevision]=useState(0);
@@ -117,6 +118,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const audio=useRef<SharedClockAudition|null>(null);
   const [audioLoad,setAudioLoad]=useState<{ready:number;total:number}|null>(null);
   const [audioReady,setAudioReady]=useState(false);
+  useEffect(()=>{
+    if(!audioReady)return;
+    const timer=window.setInterval(()=>{
+      if(document.visibilityState!=="visible")return;
+      setMeters(audio.current?.dynamicsMeters||[]);
+    },130);
+    return ()=>window.clearInterval(timer);
+  },[audioReady]);
   const monitorRef=useRef(monitorVolume);
   monitorRef.current=monitorVolume;
   const playRef = useRef(false);
@@ -327,12 +336,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         item.source_key===correction.file&&item.kind===correction.kind)),{
         section_id:correction.sectionId,source_key:correction.file,kind:correction.kind,
         threshold_db:correction.threshold,ratio:correction.ratio,depth_db:correction.depth,
+        frequency:correction.frequency,q:correction.q,max_reduction_db:correction.maxReduction,
         transition_seconds:correction.transition,curve:"smooth" as const
       }]:dynamicsTargets;
     for(const filename of files){
       const settings=staged.filter(item=>item.source_key===filename);
       if(!settings.length)continue;
-      const compile=(kind:"comp"|"duck",field:"threshold_db"|"ratio"|"depth_db",initial:number,min:number,max:number)=>{
+      const compile=(kind:"comp"|"duck"|"deess",field:"threshold_db"|"ratio"|"depth_db"|"frequency"|"q"|"max_reduction_db",initial:number,min:number,max:number)=>{
         const desired=settings.filter(item=>item.kind===kind).flatMap(item=>{
           const section=sectionById.get(item.section_id);
           return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
@@ -343,6 +353,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       try{
         const hasComp=settings.some(item=>item.kind==="comp");
         const hasDuck=settings.some(item=>item.kind==="duck");
+        const hasDeess=settings.some(item=>item.kind==="deess");
         const dynamics={
           ...(hasComp?{compressor:{
             threshold:compile("comp","threshold_db",-18,-60,0),
@@ -350,6 +361,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}:{}),
           ...(hasDuck&&vocal?{duck:{
             keyFilename:vocal,depthDb:compile("duck","depth_db",0,0,12).map(point=>({...point,value:-point.value}))
+          }}:{}),
+          ...(hasDeess?{deess:{
+            frequency:compile("deess","frequency",6500,3000,11000),
+            q:compile("deess","q",2,.4,8),
+            threshold:compile("deess","threshold_db",-32,-70,-10),
+            maxReduction:compile("deess","max_reduction_db",0,0,12)
           }}:{})
         };
         byFile[filename]={...(byFile[filename]||{}),dynamics};
@@ -545,7 +562,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const suggestedStem=preferred?.source_key||
       files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
       files.find(f=>f.includes("(Drums)"))||files[0];
-    const kind=finding.kind==="headroom"?"trim":(preferred?.kind||"duck");
+    const kind=finding.kind==="headroom"?"trim":finding.kind==="sibilance"?"deess":(preferred?.kind==="deess"?"duck":preferred?.kind||"duck");
     const file=(kind==="duck"&&suggestedStem?.includes("(Vocals)"))?
       files.find(f=>!f.includes("(Vocals)"))||suggestedStem:suggestedStem;
     const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
@@ -554,6 +571,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
       threshold:preferred?.threshold_db??-18,ratio:1,depth:0,transition:1.5,
+      frequency:6500,q:2,maxReduction:4,
       trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
     });
     loopAround(finding.timeSeconds-1,finding.timeSeconds+2);
@@ -574,6 +592,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(!alias){setCorrectionError("Track has no script-safe stem alias.");return;}
     const directive=trial.kind==="comp"?
       `${alias}.comp:${trial.threshold},${trial.ratio}@${trial.transition}s:smooth`:
+      trial.kind==="deess"?
+      `${alias}.deess:${trial.frequency},${trial.q},${trial.threshold},${trial.maxReduction}@${trial.transition}s:smooth`:
       `${alias}.duck:${trial.depth}@${trial.transition}s:smooth`;
     setCorrectionSaving(true);
     try{

@@ -29,9 +29,26 @@ type SongProject = {id: string; title: string; stems: SavedStem[]; sections?: So
 type Health = { instance_token?:string;ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
+function suggestTrackTitle(files:File[]):string{
+  if(!files.length)return "";
+  const roles=/[\\s._-]*\\(?(?:vocals?|vox|voice|drums?|percussion|perc|beats|bass|guitars?|gtr|piano|keys|keyboard|other|instrumental|instruments|music)\\)?(?:[\\s._-]*\\d{1,2})?$/i;
+  const parts=files.map(file=>file.name.replace(/\\.[^.]+$/,"").replace(roles,"").split(/[\\s._-]+/).filter(Boolean));
+  const words:string[]=[];
+  for(const matches of Array.from({length:Math.min(...parts.map(p=>p.length))},(_,i)=>parts.map(p=>p[i]))){
+    if(matches.some(word=>word.toLowerCase()!==matches[0].toLowerCase()))break;
+    words.push(matches[0]);
+  }
+  return words.join(" ")||"Imported song";
+}
+
 function App() {
   const [view, setView] = useState<"library"|"song">("library");
   const [file, setFile] = useState<File | null>(null);
+  const [importMode,setImportMode]=useState<"recording"|"tracks">("recording");
+  const [trackFiles,setTrackFiles]=useState<File[]>([]);
+  const [trackTitle,setTrackTitle]=useState("");
+  const [suggestedTitle,setSuggestedTitle]=useState("");
+  const [titleManuallyEdited,setTitleManuallyEdited]=useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [busy, setBusy] = useState(false);
@@ -158,6 +175,23 @@ function App() {
     }
   }
 
+  async function importSelectedTracks(){
+    if(busy||trackFiles.length<2||trackFiles.length>12)return;
+    setBusy(true);setError("");setJob(null);setProject(null);
+    const data=new FormData();
+    for(const track of trackFiles)data.append("files",track);
+    data.append("title",trackTitle.trim()||suggestedTitle);
+    try{
+      const response=await fetch(API+"/jobs/import-tracks",{method:"POST",body:data});
+      if(!response.ok){
+        const details=await response.json().catch(()=>({})) as {detail?:string};
+        throw Error(details.detail||"Track import failed");
+      }
+      setJob(await response.json() as Job);
+    }catch(e){setError(e instanceof Error?e.message:"Track import failed");}
+    finally{setBusy(false);}
+  }
+
   async function openFolder() {
     if (!job) return;
     const result = await fetch(API + "/jobs/" + job.id + "/open-folder", { method: "POST" });
@@ -243,6 +277,13 @@ function App() {
                 onClick={openSong}>{openingSong ? "Opening…" : "Open"}</Button>
             </div>
           </details>}
+          <div className="song-import-mode" role="group" aria-label="Import source type">
+            <button type="button" aria-pressed={importMode==="recording"}
+              onClick={()=>setImportMode("recording")}>Single recording · separate stems</button>
+            <button type="button" aria-pressed={importMode==="tracks"}
+              onClick={()=>setImportMode("tracks")}>Multiple tracks · already separated</button>
+          </div>
+          {importMode==="recording"?<>
           <FormField label="Choose a recording" hint="WAV, FLAC, MP3, M4A, AIFF, or OGG · Up to 1 GiB">
             <input className="source-picker" type="file" accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
               disabled={!!running || busy} onChange={e => { setFile(e.target.files?.[0] || null); setJob(null); setProject(null); setError(""); }} />
@@ -266,6 +307,36 @@ function App() {
             </span>
             {running && <Button variant="secondary" onClick={cancel}>Cancel</Button>}
           </div>
+
+          </>:<>
+            <FormField label="Choose aligned tracks" hint="Select 2-12 WAV, FLAC, MP3, M4A, AIFF or OGG files · starts at 0:00">
+              <input className="source-picker" type="file" multiple accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
+                disabled={busy} onChange={event=>{
+                  const chosen=Array.from(event.target.files||[]);
+                  const suggestion=suggestTrackTitle(chosen);
+                  setTrackFiles(chosen);setSuggestedTitle(suggestion);
+                  if(!titleManuallyEdited)setTrackTitle(suggestion);
+                  setError("");
+                }}/>
+            </FormField>
+            {trackFiles.length>0&&<>
+              <label className="song-track-title-label" htmlFor="import-tracks-title">Song title <small>(suggested, editable)</small></label>
+              <input id="import-tracks-title" className="song-track-title" value={trackTitle}
+                maxLength={120} onChange={event=>{setTrackTitle(event.target.value);setTitleManuallyEdited(true);}}
+                placeholder="Song title"/>
+              <div className="song-import-track-list" aria-label="Selected tracks">
+                {trackFiles.map((track,i)=><div key={i} className="selected-file">
+                  <span title={track.name}>{i+1}. {track.name}</span>
+                  <small>{(track.size/1048576).toFixed(1)} MB</small>
+                </div>)}
+              </div>
+              <small>Working copies are aligned to the longest track without time stretching. Original files are preserved.</small>
+            </>}
+            <div className="action-row">
+              <Button variant="primary" size="compact" disabled={busy||trackFiles.length<2||trackFiles.length>12||!trackTitle.trim()}
+                onClick={()=>{void importSelectedTracks();}}>{busy?"Importing tracks…":`Import ${trackFiles.length} tracks as one song`}</Button>
+            </div>
+          </>}
           {error && <div className="error-message" role="alert">{error}</div>}
 
         </Panel>}

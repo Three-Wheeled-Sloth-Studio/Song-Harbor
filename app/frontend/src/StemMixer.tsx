@@ -605,6 +605,20 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
             onSectionDoubleClick={section=>{setScriptFocus(section);setScriptOpen(true);}}/>
+          {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
+            <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
+              <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
+              <div className="song-cleanup-marker-track">
+                {cleanupFindings.filter(item=>item.timeSeconds>=viewStart&&item.timeSeconds<=viewEnd)
+                  .map((item,index)=><button type="button"
+                    key={item.kind+":"+item.timeSeconds+":"+index}
+                    className={"song-cleanup-marker"+(item.severity==="warning"?" is-warning":"")}
+                    style={{left:`${100*(item.timeSeconds-viewStart)/(viewEnd-viewStart)}%`}}
+                    aria-label={timecode(item.timeSeconds)+" "+item.label}
+                    title={timecode(item.timeSeconds)+" · "+item.label}
+                    onClick={()=>seek(item.timeSeconds)}/>)}
+              </div>
+            </div>}
           <StemWaveforms jobId={jobId} files={stems.map(s=>({
             filename:s.filename,label:s.name,
             children:channels[s.filename]?.active?(["left","right"] as const).map(channel=>({

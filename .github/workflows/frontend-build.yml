@@ -21,3 +21,9 @@ jobs:
         run: npm install --prefix app/frontend
       - name: Typecheck and bundle
         run: npm run build --prefix app/frontend
+      - name: Install Chromium smoke dependencies
+        run: |
+          npm install --prefix app/frontend --no-save playwright
+          cd app/frontend && npx playwright install --with-deps chromium
+      - name: Verify application renders in Chromium
+        run: node app/frontend/scripts/browser-smoke.mjs

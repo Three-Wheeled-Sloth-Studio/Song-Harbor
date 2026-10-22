@@ -24,9 +24,9 @@ import type { SongSection } from "./SectionEditor";
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
-type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"compression"|"ducking";
-const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","compression","ducking","ending"];
-const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,compression:false,ducking:false,ending:false};
+type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"compression"|"ducking"|"deess";
+const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","compression","ducking","deess","ending"];
+const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,compression:false,ducking:false,deess:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -135,7 +135,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const stemsRef = useRef(stems);
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
-  useEffect(()=>{audio.current?.setEffectBypass(correction?{...bypassed,compression:false,ducking:false}:bypassed);},[bypassed,audioReady,correction]);
+  useEffect(()=>{audio.current?.setEffectBypass(correction?{...bypassed,compression:false,ducking:false,deess:false}:bypassed);},[bypassed,audioReady,correction]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb+(correction?.kind==="trim"&&correction.proposed?correction.trimDelta:0));},[masterTrimDb,correction,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
@@ -920,7 +920,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>!bypassed[k])}
                 onClick={()=>setBypassed({...DEFAULT_BYPASS})}>A · Processed</button>
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>bypassed[k])}
-                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,compression:true,ducking:true,ending:true})}>B · Original</button>
+                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,compression:true,ducking:true,deess:true,ending:true})}>B · Original</button>
             </div>
             {EFFECT_KEYS.map(key=><label key={key}>
               <input type="checkbox" checked={bypassed[key]}

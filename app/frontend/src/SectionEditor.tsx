@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import type {SectionInsight} from "./SectionInsights.ts";
 
 export type SongSection = {
   id: string; kind: string; number: number | null;
@@ -8,14 +9,27 @@ export type SongSection = {
 const kinds = ["Intro", "Verse", "Pre-Chorus", "Chorus", "Bridge", "Instrumental", "Guitar Solo", "Outro", "End"];
 const MIN_LENGTH = 0.1;
 function clamp(x:number,min:number,max:number) {return Math.min(max,Math.max(min,x));}
+function sectionFill(insight:SectionInsight){
+  const hue=Math.round(205-180*insight.intensity);
+  const missing=clamp(1-Math.pow(10,-Math.abs(insight.balanceDb)/20),0,.42);
+  return {
+    left:insight.balanceDb>=0?"0":`${(missing*100).toFixed(1)}%`,
+    width:`${((1-missing)*100).toFixed(1)}%`,
+    background:`hsla(${hue},65%,55%,${(.24+insight.intensity*.27).toFixed(2)})`
+  };
+}
+function insightTitle(insight:SectionInsight){
+  const balance=Math.abs(insight.balanceDb)<.1?"center":(insight.balanceDb>0?"L":"R")+" +"+Math.abs(insight.balanceDb).toFixed(2)+" dB";
+  return `Energy ${Math.round(insight.intensity*100)}% relative · RMS ${insight.rmsDbfs.toFixed(1)} dBFS · peak ${insight.peakDbfs.toFixed(1)} dBFS · balance ${balance} · side/mid ${insight.widthDb.toFixed(1)} dB`;
+}
 function stamp(seconds:number) {
   const minutes=Math.floor(seconds/60);
   return `${minutes}:${(seconds%60).toFixed(2).padStart(5,"0")}`;
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[];
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections,insights=[]}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[]; insights?:readonly SectionInsight[];
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -149,6 +163,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   const a=Math.min(start??position,end??position);
   const b=Math.max(start??position,end??position);
   const selectedSection=sections.find(s=>s.id===selected);
+  const insightsById=new Map(insights.map(item=>[item.sectionId,item]));
 
   return <section className="section-editor section-editor-rail" aria-label="Song sections">
     <div className="section-inline-row">
@@ -171,7 +186,8 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
         </details>
       </div>
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
-      {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"#587b8e",border:"1px solid #fff8",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
+      {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} title={insightsById.has(s.id)?insightTitle(insightsById.get(s.id)!):"Run Sound cleanup → Analyze mix to color sections by relative energy and stereo balance."} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"var(--tws-color-surface-raised, #37434d)",border:"1px solid #fff6",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
+        {insightsById.has(s.id)&&<span aria-hidden="true" style={{position:"absolute",insetBlock:0,borderRadius:3,pointerEvents:"none",...sectionFill(insightsById.get(s.id)!)}}/>}
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
           title="Drag to resize start. Arrow keys adjust by 0.1s."
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"start",e.key==="ArrowLeft"?-1:1);}}}

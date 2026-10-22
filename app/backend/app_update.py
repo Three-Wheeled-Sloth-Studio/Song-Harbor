@@ -12,24 +12,43 @@ from typing import Any
 
 
 def local_version(repository: Path) -> dict[str, str]:
-    """Read installed checkout identity without fetching or modifying the tree."""
-    if not (repository / ".git").exists():
-        return {"label": "local", "branch": "", "revision": ""}
+    """Human-readable Version:Revision:Build identifier, with Git details for support.
+
+    Version comes from the frontend package. Revision is the product's current
+    development revision (1); build is the monotonically increasing Git history
+    count within the checked-out branch. Never show a bare hash as the badge.
+    """
+    import json
+    version = "0.1.0"
+    manifest = repository / "app" / "frontend" / "package.json"
     try:
-        flags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        version = str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    revision = "1"
+    result = {"version": version, "revision": revision, "build": "local",
+              "label": f"{version}:{revision}:local", "branch": "", "commit": ""}
+    if not (repository / ".git").exists():
+        return result
+    try:
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         def read(*args: str) -> str:
-            result=subprocess.run(["git", "-C", str(repository), *args],
-                                  text=True, capture_output=True, timeout=5,
-                                  creationflags=flags)
-            if result.returncode:
+            response = subprocess.run(["git", "-C", str(repository), *args],
+                                      text=True, capture_output=True, timeout=5,
+                                      creationflags=flags)
+            if response.returncode:
                 raise RuntimeError("Could not inspect checkout revision")
-            return result.stdout.strip()
-        revision=read("rev-parse", "--short=8", "HEAD")
-        branch=read("branch", "--show-current") or "detached"
-        return {"label": branch + "@" + revision,
-                "branch": branch, "revision": revision}
-    except (OSError, subprocess.TimeoutExpired, RuntimeError):
-        return {"label": "local", "branch": "", "revision": ""}
+            return response.stdout.strip()
+        build = read("rev-list", "--count", "HEAD")
+        branch = read("branch", "--show-current") or "detached"
+        commit = read("rev-parse", "--short=8", "HEAD")
+        if not build.isdigit():
+            raise ValueError("Invalid build number")
+        result.update(build=build, branch=branch, commit=commit,
+                      label=f"{version}:{revision}:{build}")
+    except (OSError, subprocess.TimeoutExpired, RuntimeError, ValueError):
+        pass
+    return result
 
 
 def git_info(repository: Path) -> dict[str, Any]:

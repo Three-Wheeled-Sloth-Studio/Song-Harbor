@@ -1,3 +1,12 @@
+## 2026-10-22 — Section intelligence and accepted automation roadmap
+
+User approved hue-by-intensity section-header rendering with neutral empty opposing edge for stereo bias, generalized all.effect and auto.effect namespaces, auto.pan:center, auto.gain:0 compensation for an explicit Drums.gain:+0.75 boost, longer independent effect-return tails, per-section stem gain and level-matched A/B.
+
+Implemented: frontend SectionInsights.ts computes post-mix per-section RMS, sample peak, L/R balance and side/mid width from offline mix; SharedClockAudition.analyzeMix(section ranges) exposes sectionInsights; StemMixer feeds SectionEditor. Sections receive subtle cool-to-warm hue based on song-relative intensity and neutral edge on opposite side of louder channel (left-heavy => neutral right edge). Hover reports exact metrics. Re-analysis using Sound cleanup > Analyze mix required after changes. Stale stats cleared on effect/stem/section or bypass modifications. Regression tests in app/frontend/tests/section-insights.test.mjs. No DSP changes.
+
+Scoped but NOT implemented yet: all.effect / auto.effect DSL, stem.gain section directives, wet return tail enhancement, loudness-matched A/B. Grammar rules and safety priorities documented in docs/section-intelligence-sprint.md; current production importer intentionally rejects new tags. Follow existing parser, preview and render architecture. Browser QA section hues and alignment remains. CI status must be verified separately.
+
+---
 ## 2026-10-22: pre-release acoustic signal screening (non-destructive)
 
 User asked whether Suno source C2PA metadata naturally disappears when Song Harbor exports WAV; confirmed from the actual `encodeWav24` implementation in `SharedClockAudition.ts`: output RIFF has **only the 44-byte PCM WAV header with fmt and data chunks**, no source metadata forwarding, so original C2PA provenance chunk is not copied. Distinguish **source-file provenance/soft-binding fingerprint metadata** from **actual acoustic watermark**; no claim that re-rendering erases fingerprints computed from content or provider-specific embedded audio watermark.

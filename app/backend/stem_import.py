@@ -5,6 +5,7 @@ Original audio is retained; working WAVs are rendered to one common duration.
 from __future__ import annotations
 
 import re
+import json
 from pathlib import Path
 
 ROLES=("Vocals","Drums","Bass","Guitar","Piano","Other")
@@ -66,3 +67,64 @@ def assign_tracks(filenames:list[str])->list[dict[str,str]]:
         used.add(role)
         result.append({"original_filename":filename,"stem_alias":role})
     return result
+
+MAX_TRACKS=64
+MAX_UPLOADS=128
+MANIFEST_FORMAT="song-harbor-stereo-channel-split"
+
+
+def channel_groups(manifest_bytes:bytes, uploaded_names:list[str])->list[dict[str,str]]:
+    """Validate the exported split manifest against the actual uploaded mono files.
+
+    Never trust original project IDs or manifest paths. Track pairs are grouped
+    by source identity and each source has exactly one L and one R channel.
+    """
+    if len(manifest_bytes)>256*1024:raise ValueError("Channel manifest exceeds 256 KiB")
+    try:
+        payload=json.loads(manifest_bytes.decode("utf-8"))
+    except (ValueError,UnicodeDecodeError) as exc:
+        raise ValueError("Invalid JSON channel manifest") from exc
+    if not isinstance(payload,dict) or payload.get("format")!=MANIFEST_FORMAT or payload.get("version")!=1:
+        raise ValueError("Expected Song Harbor stereo-channel-split manifest v1")
+    tracks=payload.get("tracks")
+    if not isinstance(tracks,list) or not 2<=len(tracks)<=MAX_UPLOADS:
+        raise ValueError("Manifest must list 2-128 channel files")
+    if payload.get("track_count")!=len(tracks):
+        raise ValueError("Channel manifest track count mismatch")
+    uploaded=set(uploaded_names)
+    if len(uploaded)!=len(uploaded_names):raise ValueError("Duplicate uploaded filenames")
+    groups:dict[str,dict[str,str]]={}
+    used=set()
+    for item in tracks:
+        if not isinstance(item,dict):raise ValueError("Invalid manifest track")
+        filename=item.get("file")
+        source=item.get("source")
+        channel=item.get("channel")
+        if (not isinstance(filename,str) or not isinstance(source,str)
+            or not filename or Path(filename).name!=filename
+            or not source or len(source)>200 or channel not in ("left","right")
+            or filename not in uploaded or filename in used):
+            raise ValueError("Manifest contains missing, duplicate or unsafe channel file")
+        used.add(filename)
+        item_group=groups.setdefault(source,{})
+        if channel in item_group:raise ValueError("Repeated channel in manifest")
+        item_group[channel]=filename
+    if used!=uploaded:raise ValueError("Selected files do not exactly match the channel manifest")
+    if any(set(group)!={"left","right"} for group in groups.values()):
+        raise ValueError("Each source must have a Left and Right channel")
+    if len(groups)>MAX_TRACKS:raise ValueError("Maximum 64 grouped stems")
+    return [{"source":source,"left":pair["left"],"right":pair["right"]}
+            for source,pair in groups.items()]
+
+
+def identity_tracks(filenames:list[str])->list[dict[str,str]]:
+    """Create stable track IDs and unique script-friendly aliases for arbitrary stems."""
+    used:set[str]=set()
+    items=[]
+    for index,item in enumerate(assign_tracks(filenames),start=1):
+        name=item["stem_alias"]
+        if name in used:raise ValueError("Internal alias collision")
+        used.add(name)
+        item["track_id"]=f"trk{index:04d}"
+        items.append(item)
+    return items

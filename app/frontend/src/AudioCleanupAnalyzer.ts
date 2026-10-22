@@ -1,4 +1,4 @@
-import {screenAcousticSignals} from "./SignalAudit";
+import {screenAcousticSignals} from "./SignalAudit.ts";
 /** Non-destructive, mix-level QC. These are listening candidates, never a diagnosis.
  * Runs on the exact rendered float mix used for WAV packing, before output trim.
  * Analysis uses bounded windows: O(frames + (frames/4096)*2048*log(2048)).

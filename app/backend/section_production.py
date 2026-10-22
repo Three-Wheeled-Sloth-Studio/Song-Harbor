@@ -43,8 +43,8 @@ DEESS_TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 GAIN_TOKEN = re.compile(
-    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.gain:(?P<gain>[+-]?\\d+(?:\\.\\d{1,2})?)"
-    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.gain:(?P<gain>[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2}))"
+    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 

@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from "react";
 import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCleanupAnalyzer";
 
-const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics"] as const;
+const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics","Signal audit"] as const;
 const stamp=(seconds:number)=>{
   const whole=Math.floor(Math.max(0,seconds));
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
@@ -37,7 +37,7 @@ export function CleanupReview({
         {scanned&&<small>{warningCount} warning{warningCount===1?"":"s"} · {findings.length} candidate{findings.length===1?"":"s"}</small>}
       </div>
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}
-      {!scanned&&<p className="song-cleanup-description">Inspect levels, abrupt transitions, high-frequency texture, possible vocal harshness, noisy quiet passages, stereo cancellation and repeated loudness dips. No audio is changed.</p>}
+      {!scanned&&<p className="song-cleanup-description">Inspect levels, abrupt transitions, high-frequency texture, possible vocal harshness, noisy quiet passages, stereo cancellation, dynamics and unusually persistent tonal signals. No audio is changed, and this is not a watermark verifier.</p>}
       {scanned&&<>
         <label className="song-cleanup-filter">Findings
           <select aria-label="Filter sound cleanup findings" value={filter} onChange={e=>setFilter(e.target.value)}>
@@ -78,7 +78,7 @@ export function CleanupReview({
         {nextItem&&<button type="button" className="song-cleanup-next"
           onClick={()=>onSeek(nextItem.timeSeconds)}>Jump to first unreviewed finding</button>}
       </>}
-      <small className="song-cleanup-limits">Heuristic listening suggestions, not diagnoses. Sibilance-like energy may be cymbals; harshness may be intended instrumentation. Stem hints reflect raw audio activity, not proven artifact sources. Automatic de-essing and repairs are not implemented.</small>
+      <small className="song-cleanup-limits">Heuristic listening suggestions, not diagnoses. Sibilance-like energy may be cymbals; harshness may be intended instrumentation. Stem hints reflect raw audio activity, not proven artifact sources. Signal anomalies are not evidence of fingerprints or acoustic watermarks. Nothing is removed or filtered automatically.</small>
     </div>
   </details>;
 }

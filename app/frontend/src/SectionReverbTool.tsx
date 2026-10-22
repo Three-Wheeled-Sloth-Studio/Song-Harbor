@@ -52,7 +52,7 @@ export function SectionReverbTool({jobId,sections,files,targets,onChange,initial
     <summary>Section reverb</summary>
     <div className="timeline-loop-controls">
       <p>Diffuse room reverb send. Dry stem and original L/R routing stay intact.</p>
-      <label>Section
+      <label className="subtool-section-picker">Section
         <select aria-label="Reverb section" value={currentSection} onChange={e=>setSectionId(e.target.value)}>
           {sections.map(s=><option key={s.id} value={s.id}>
             {s.kind}{s.number?" "+s.number:""} ({s.start_seconds.toFixed(1)}s)

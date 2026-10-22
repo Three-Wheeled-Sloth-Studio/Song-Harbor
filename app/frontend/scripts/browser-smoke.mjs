@@ -71,6 +71,28 @@ try{
   await page.getByRole("heading",{name:"Import song"}).waitFor({timeout:5000});
   await page.getByRole("button",{name:"Multiple tracks · already separated"}).click();
   await page.getByText("Choose aligned tracks").waitFor({timeout:5000});
+  // Exercise real compiled popup CSS with native browser wheel scrolling.
+  // This catches scroll containment regressions even without an imported song fixture.
+  await page.evaluate(()=>{
+    const popup=document.createElement("section");
+    popup.className="song-floating-tool";
+    popup.style.cssText="position:fixed;top:120px;left:80px;right:auto;width:370px;height:240px;z-index:99999";
+    popup.innerHTML='<div class="song-floating-tool-header">QA Tool</div>'+
+      '<div class="song-floating-tool-content" id="qa-wheel-popup">'+
+      Array.from({length:90},(_,i)=>'<div style="height:32px">Effect row '+i+'</div>').join("")+
+      '</div>';
+    document.body.append(popup);
+  });
+  const region=page.locator("#qa-wheel-popup");
+  const box=await region.boundingBox();
+  if(!box)throw Error("Floating scroll container not visible");
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  await page.mouse.wheel(0,280);
+  await page.waitForTimeout(200);
+  const offset=await region.evaluate(element=>element.scrollTop);
+  if(offset<=0)throw Error("Mouse wheel failed to scroll floating tool content");
+  await page.evaluate(()=>document.querySelector("#qa-wheel-popup")?.parentElement?.remove());
+  console.log("PASS: native mouse wheel scrolls floating tool content");
   if(errors.length)throw Error("Import screen errors:\n"+errors.join("\n"));
   console.log("PASS: navigated to multi-track import");
 }finally{

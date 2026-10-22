@@ -14,6 +14,7 @@ import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
+import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -66,6 +67,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
+  const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
+  const [cleanupScanned,setCleanupScanned]=useState(false);
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
   const headroomFixRef=useRef<HTMLElement|null>(null);
@@ -531,12 +534,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setError("");
     setNotice("");
     setHeadroomIssue(null);
+    setCleanupScanned(false);
+    setCleanupFindings([]);
     try{
       if(overrideTrimDb!==undefined){
         engine.setOutputTrimDb(overrideTrimDb);
         setMasterTrimDb(overrideTrimDb);
       }
       const blob=await engine.renderWav24();
+      setCleanupFindings(engine.cleanupFindings);
+      setCleanupScanned(true);
       if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);
       renderedUrl.current=URL.createObjectURL(blob);
       setMixUrl(renderedUrl.current);
@@ -728,6 +735,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onClick={applyHeadroomFix}>Apply safe output trim and re-render</button>
         <button type="button" disabled={exporting} onClick={()=>setHeadroomIssue(null)}>Review master trim manually</button>
       </section>}
+      {cleanupScanned&&<details className="production-tool-detail" aria-label="Sound cleanup review" open={cleanupFindings.length>0}>
+        <summary>◇ Sound cleanup review · {cleanupFindings.length} candidate{cleanupFindings.length===1?"":"s"}</summary>
+        <div className="timeline-loop-controls">
+          <p>Non-destructive scan of the final rendered mix. Possible clicks may be legitimate drums; audition before editing. No audio has been changed.</p>
+          {cleanupFindings.length===0?<p>No near-ceiling peaks or large single-sample jumps detected at the conservative thresholds.</p>:
+            cleanupFindings.map((finding,index)=><button type="button" key={index}
+              className="production-tool-open" onClick={()=>seek(finding.timeSeconds)}
+              title={finding.detail}>{timecode(finding.timeSeconds)} · {finding.label}</button>)}
+          <small>This first pass checks peak headroom and abrupt discontinuities only. Vocal harshness, sibilance and semantic artifact detection are not yet implemented.</small>
+        </div>
+      </details>}
       {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click Download WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>}
     </div>
     <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg} onCompleted={()=>{void refreshChannels();}} />

@@ -1,3 +1,19 @@
+## 2026-10-22: pre-release acoustic signal screening (non-destructive)
+
+User asked whether Suno source C2PA metadata naturally disappears when Song Harbor exports WAV; confirmed from the actual `encodeWav24` implementation in `SharedClockAudition.ts`: output RIFF has **only the 44-byte PCM WAV header with fmt and data chunks**, no source metadata forwarding, so original C2PA provenance chunk is not copied. Distinguish **source-file provenance/soft-binding fingerprint metadata** from **actual acoustic watermark**; no claim that re-rendering erases fingerprints computed from content or provider-specific embedded audio watermark.
+
+User approved **audio signal screening without any automatic action**. Implemented directly on `main`:
+- New `app/frontend/src/SignalAudit.ts` independent deterministic scanner, streaming bounded 4096-sample Hann-windowed FFT analysis across song (at most 600 windows); searches for persistent high-frequency (>4kHz to 11.5kHz, where supported) narrowband lines >22dB above nearby band with >62% sampled active-window persistence and at least 12 windows/10 seconds, returns up to 3 *possible* anomalies (timestamp, duration, Hz, spectral contrast, prevalence). Limited by design: ignores low bands, short bursts, spread spectrum and provider-specific embedded signals. A normal synth or resonant instrument can trigger; a negative result does not prove watermark absent.
+- `AudioCleanupAnalyzer.ts` merges those with existing non-destructive `AudioFinding` results as `signal_audit`, severity Review, safe text with explicit no-identification language; output mixes and audio remain unchanged.
+- `CleanupReview.tsx` adds **Signal audit** category, warnings about false positives and no automatic filtering/removal. Ordinary loop-to-review/timestamp workflow reused.
+- `app/frontend/tests/audio-cleanup.test.mjs` adds synthesized persistent 6kHz reference, silence/low-note/short-clip negatives, source-buffer immutability. Frontend CI synthetic DSP tests **passed at `99aabfbd`**, as did TS bundle and initial Chromium UI mount; full backend-served browser smoke still in progress at last check.
+- `docs/user-guide.md` updated on clean RIFF export, feature behavior, uncertainty and privacy. No source metadata byte manipulation API, no fingerprint verification, no cloud upload.
+- GitHub Actions initially failed in Node test runner because import extension was omitted; fixed by explicit `./SignalAudit.ts` import (tsconfig already has `allowImportingTsExtensions=true`). Avoid reversing fix.
+
+QA: After pulling latest, run Sound cleanup > Analyze mix > filter Signal audit; expect maybe 0 results on Salt in the Circuit because no obvious stable narrowband tone earlier. Test intentionally sustained synthetic tone separately. No "watermark detected" or automatic correction should appear. Consider future metadata-reporting separate from audio detector if useful, but do not implement auto-removal.
+
+---
+
 ---
 type: Handoff
 title: Current Song Harbor Handoff

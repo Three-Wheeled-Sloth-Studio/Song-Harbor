@@ -23,6 +23,8 @@ jobs:
         run: python -m py_compile app/backend/server.py app/backend/projects.py app/backend/dependencies.py app/backend/daw.py app/backend/audacity_handoff.py app/backend/library.py app/backend/stem_import.py
       - name: Verify two-line section production notation
         run: python -m unittest discover -s app/backend/tests -p 'test_section_production.py' -v
+      - name: Verify human-readable Version Revision Build format
+        run: python -m unittest discover -s app/backend/tests -p 'test_version_badge.py' -v
       - name: Verify dynamics scripts
         run: python -m unittest discover -s app/backend/tests -p 'test_section_dynamics.py' -v
       - name: Verify externally imported tracks and title inference

@@ -103,7 +103,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
   const [scriptOpen,setScriptOpen]=useState(false);
-  const [selectedTool,setSelectedTool]=useState<WorkbenchTool|null>(null);
+  const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
+  const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq">("script");
+  const [sectionEditId,setSectionEditId]=useState("");
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
   const [correctionSaving,setCorrectionSaving]=useState(false);
   const [correctionError,setCorrectionError]=useState("");
@@ -711,7 +713,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
-            onSectionDoubleClick={section=>{setScriptFocus(section);setScriptOpen(true);setSelectedTool("sections");}}/>
+            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setScriptOpen(true);setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
           {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
             <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
               <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
@@ -771,19 +773,47 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <aside className="song-tool-rail" aria-label="Production tools">
         {TOOL_ITEMS.map(item=><button type="button" key={item.id}
           className="song-tool-icon" title={item.label} aria-label={"Open "+item.label+" tool"}
-          aria-pressed={selectedTool===item.id}
+          aria-pressed={openTools.includes(item.id)}
           onClick={()=>{
-            if(selectedTool===item.id){setSelectedTool(null);setScriptOpen(false);setCorrection(null);}
-            else {setSelectedTool(item.id);setScriptOpen(item.id==="sections");setCorrection(null);}
+            if(item.id==="sectionEdit")setSectionEditId(current=>current||timelineSections[0]?.id||"");
+            if(item.id==="cleanup"&&openTools.includes("cleanup"))setCorrection(null);
+            setOpenTools(existing=>existing.includes(item.id)?
+              existing.filter(x=>x!==item.id):[...existing,item.id]);
           }}>
           <span aria-hidden="true">{item.icon}</span>
         </button>)}
       </aside>
-      {selectedTool&&<ToolWindow key={selectedTool} name={TOOL_ITEMS.find(item=>item.id===selectedTool)?.label||"Tool"}
-        onClose={()=>{setSelectedTool(null);setScriptOpen(false);setCorrection(null);}}>
-        {selectedTool==="sections"&&<>
-        <SectionsTool jobId={jobId} open={selectedTool==="sections"}
-          onClose={()=>{setScriptOpen(false);setSelectedTool(null);}} focused={scriptFocus} revision={scriptRevision}
+      {openTools.map((tool,order)=><ToolWindow key={tool}
+        name={TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order}
+        onFocus={()=>setOpenTools(current=>current[current.length-1]===tool?current:
+          [...current.filter(item=>item!==tool),tool])}
+        onClose={()=>{
+          setOpenTools(items=>items.filter(item=>item!==tool));
+          if(tool==="cleanup")setCorrection(null);
+        }}>
+        {tool==="sectionEdit"&&<>
+          <div className="song-section-edit-context">
+            <label>Section
+              <select aria-label="Selected edit section" value={timelineSections.some(x=>x.id===sectionEditId)?sectionEditId:timelineSections[0]?.id||""}
+                onChange={e=>{setSectionEditId(e.target.value);setScriptFocus(timelineSections.find(x=>x.id===e.target.value)||null);}}>
+                {timelineSections.map(section=><option key={section.id} value={section.id}>
+                  {section.kind}{section.number?" "+section.number:""} · {timecode(section.start_seconds)}
+                </option>)}
+              </select>
+            </label>
+            <div className="song-section-effect-tabs" role="tablist" aria-label="Section edit effect">
+              {(["script","pan","reverb","width","space","eq"] as const).map(effect=>
+                <button key={effect} type="button" role="tab" aria-selected={sectionEffect===effect}
+                  onClick={()=>setSectionEffect(effect)}>
+                  {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect[0].toUpperCase()+effect.slice(1)}
+                </button>)}
+            </div>
+          </div>
+        </>}
+
+        {tool==="sectionEdit"&&sectionEffect==="script"&&<>
+        <SectionsTool jobId={jobId} open={tool==="sectionEdit"&&sectionEffect==="script"}
+          onClose={()=>{setScriptOpen(false);setOpenTools(items=>items.filter(x=>x!=="sectionEdit"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
@@ -798,6 +828,34 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
 
         </>}
+
+        {tool==="sectionEdit"&&sectionEffect==="pan"&&<>
+        <SectionPanTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
+          targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
+
+        </>}
+        {tool==="sectionEdit"&&sectionEffect==="reverb"&&<>
+        <SectionReverbTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
+          targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
+
+        </>}
+        {tool==="sectionEdit"&&sectionEffect==="width"&&<>
+        <SectionWidthTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
+          targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+        {tool==="sectionEdit"&&sectionEffect==="space"&&<>
+        <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
+          targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+
+        {tool==="sectionEdit"&&sectionEffect==="eq"&&<>
+        <SectionEqTool jobId={jobId} sections={timelineSections} files={files} initialSectionId={sectionEditId}
+          targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+
         {selectedTool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
@@ -816,26 +874,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
             onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
-        </>}
-        {selectedTool==="pan"&&<>
-        <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
-          targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
-
-        </>}
-        {selectedTool==="reverb"&&<>
-        <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
-          targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
-
-        </>}
-        {selectedTool==="width"&&<>
-        <SectionWidthTool jobId={jobId} sections={timelineSections} files={files}
-          targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
-
-        </>}
-        {selectedTool==="space"&&<>
-        <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files}
-          targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
-
         </>}
         {selectedTool==="ab"&&<>
         <details className="production-tool-detail" aria-label="A/B audition" open>
@@ -858,17 +896,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
-        {selectedTool==="eq"&&<>
-        <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
-          targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
-
-        </>}
-        {selectedTool==="ending"&&<>
+        {tool==="ending"&&<>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
 
         </>}
-        {selectedTool==="zoom"&&<>
+        {tool==="zoom"&&<>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>
           <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>
@@ -881,7 +914,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </div>
 
         </>}
-        {selectedTool==="loop"&&<>
+        {tool==="loop"&&<>
         <details className="production-tool-detail" open><summary>⇥ Region loop</summary>
           <div className="timeline-loop-controls">
             <button type="button" onClick={()=>setLoopIn(position)}>In</button>
@@ -895,14 +928,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
-        {selectedTool==="channels"&&<>
+        {tool==="channels"&&<>
           <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg}
             onCompleted={()=>{void refreshChannels();}} />
         </>}
-        {selectedTool==="daw"&&<div className="song-tool-handoff">
-          <button type="button" onClick={()=>setDawOpen(true)}>Prepare DAW export…</button>
+        {tool==="download"&&<div className="song-tool-handoff">
+          <button type="button" onClick={()=>setDawOpen(true)}>Download tracks…</button>
         </div>}
-      </ToolWindow>}
+
+      </ToolWindow>)}
       <div className="song-production-exports">
     <div className="mix-footer">
       <div className="mix-actions">

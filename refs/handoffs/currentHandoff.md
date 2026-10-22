@@ -1,3 +1,41 @@
+## 2026-10-22 PI REVIEW - ACTIVE DECISIONS / START HERE
+
+**User-approved priorities and QA state**
+- Track *The Logo and the Maw*: user reports rich, balanced audio and intentional environmental rightward swing in the second pre-chorus. Fade-out accepted. Preserve accepted artistic panning; do not chase numeric zero in every section.
+- Section header: compact scan icon and 5-pixel bottom color strip accepted. Hover text with intensity, RMS, peak, L/R balance and width accepted.
+- YouTube timed lyrics (.srt): implemented (saved section timing, editable preview/download) but **user Windows QA postponed until tomorrow**. Do not mark v0.2.1 released or formally accepted before that gate and current CI.
+- Documentation catch-up approved; roadmap reconciled in `refs/planning/roadmap.yaml` and detailed PI gates below. Historical notes further down are snapshots and can contain obsolete "not implemented" descriptions. Latest dated active record takes precedence.
+
+**P1 flexible stems and track lifecycle (approved)**
+- Existing multitrack importer supports 2-64 parent tracks and channel-pair manifest reimport; neither 16/33-track Windows audio QA nor adding a new track to an EXISTING song is proved.
+- Full acceptance: import 16+, add new named stem to saved song, control by human-readable alias, rename alias and automatically migrate all active script directives/drafts/reference mappings; preserve immutable track_id/source. Save/reopen/export after rename, catch collisions and rollback failures.
+- Existing code still has hardcoded `ALIASES` assumptions in `section_production.materialize_reverb` and several individual section UI setter routes in `server.py`. Shared-clock decoded audio guard is 768 MiB. Do not claim arbitrary stem effects and high-count playback validated until these are fixed and tested.
+- Exact QA matrix: `docs/multitrack-import-qa.md`. Next implementation priorities: add-to-existing-song API, stable alias rename transaction, replace hardcoded effect targets, large-track memory/streaming strategy.
+
+**P1 mix versions / level-matched A/B (approved)**
+- Save named non-destructive mix candidates, allow accept/reject/revert and actual matched-loudness comparison; current bypass/test modes are not the same thing. Avoid applying auto.gain:0 to the accepted track just to fill roadmap.
+
+**P1 Ardour optional round trip (approved, narrow scope)**
+- Ardour is installed on the user's Windows machine; no Ardour target has yet been added to `app/backend/daw.py`.
+- One proof only: Song Harbor -> aligned stems/sections -> Ardour scripted pan/gain via documented Lua/OSC where feasible -> Ardour processed stem export -> import back into Song Harbor as a NEW reversible track version.
+- Stop instead of building generic Ardour project exporter/plugin host if public interfaces are unreliable. See `docs/ardour-roundtrip-spike.md`.
+
+**P2 Second Take additive generation (approved)**
+- Primary request: "Add some cello to this section, harmonically and rhythmically fitting existing instrumentation." Require an independent new stem, retained original stems, alignment/transition checks, 2-3 candidate A/B where possible, immutable model/provenance. Test ACE-Step/YuE2 capabilities rather than assume they can output isolated conditioned stems. Evaluate symbolic/MIDI instrument alternative if needed.
+- See `docs/second-take-additive-generation.md`.
+
+**P2 surgical phrase editing**
+- Under consideration only; defer until ordinary short sections fail a real workflow. Do not schedule region-editing engine as approved near-term work.
+
+**Delivery order**
+1. Tomorrow: Windows SRT preview/download QA + current checks; release baseline v0.2.1 only if verified.
+2. 16+ track import/export/control and add/rename propagation, with tests.
+3. Small Ardour automation/render/reimport probe in parallel only if bounded.
+4. Named versions + matched-loudness candidate A/B, then additive Second Take cello prototype.
+5. Conventional plugin racks, long-tail surgical editing, and auto.gain remain deferred.
+
+---
+
 ## 2026-10-22 — Section intelligence and accepted automation roadmap
 
 User approved hue-by-intensity section-header rendering with neutral empty opposing edge for stereo bias, generalized all.effect and auto.effect namespaces, auto.pan:center, auto.gain:0 compensation for an explicit Drums.gain:+0.75 boost, longer independent effect-return tails, per-section stem gain and level-matched A/B.

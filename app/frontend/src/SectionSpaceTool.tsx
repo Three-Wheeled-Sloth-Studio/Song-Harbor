@@ -48,7 +48,7 @@ export function SectionSpaceTool({jobId,sections,files,targets,onChange,initialS
     <summary>Spatial reflections</summary>
     <div className="timeline-loop-controls">
       <p>Small offset reflections across the stereo image; creates depth even for near-mono stems. Use modest settings, and check mono compatibility.</p>
-      <label>Section
+      <label className="subtool-section-picker">Section
         <select aria-label="Reflection section" value={selectedSection} onChange={e=>setSectionId(e.target.value)}>
           {sections.map(s=><option key={s.id} value={s.id}>{s.kind}{s.number?" "+s.number:""} ({s.start_seconds.toFixed(1)}s)</option>)}
         </select>

@@ -666,6 +666,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>
+        <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
+          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
+          onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
+          onLoop={(start,end)=>{
+            setLoopIn(Math.min(start,duration));
+            setLoopOut(Math.min(duration,end));
+            setLoopEnabled(true);
+            seek(Math.max(0,Math.min(start,duration)));
+            if(!playRef.current)void togglePlayback();
+          }}/>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
         <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
@@ -692,16 +702,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>
-        <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
-          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
-          onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
-          onLoop={(start,end)=>{
-            setLoopIn(Math.min(start,duration));
-            setLoopOut(Math.min(duration,end));
-            setLoopEnabled(true);
-            seek(Math.max(0,Math.min(start,duration)));
-            if(!playRef.current)void togglePlayback();
-          }}/>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
           targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}

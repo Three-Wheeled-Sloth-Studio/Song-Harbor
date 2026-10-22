@@ -572,3 +572,6 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-floating-tool .production-section-tool textarea{min-height:180px;resize:vertical}
 @media(max-width:980px){.workspace--song-session .production-workspace,.mixer .production-workspace{grid-template-columns:minmax(0,1fr) 54px}}
 @media(max-width:570px){.song-tool-rail{width:46px}.song-tool-icon{width:40px;min-width:40px;min-height:42px;flex-basis:42px;font-size:31px}.workspace--song-session .production-workspace,.mixer .production-workspace{grid-template-columns:minmax(0,1fr) 46px}.song-floating-tool{min-width:0;resize:vertical}}
+
+/* One shared section selector in Edit Sections; nested effect selectors are redundant. */
+.song-floating-tool-content .subtool-section-picker{display:none!important}

@@ -233,6 +233,27 @@ function App() {
     }
   }
 
+  const [quitting,setQuitting]=useState(false);
+  async function quitApplication(){
+    // Confirmation guards unsaved browser edits; backend rejects active jobs.
+    if(!window.confirm("Close Song Harbor? Apply/save any unsaved section or mixer changes first."))return;
+    if(!health?.instance_token){window.alert("This browser is not linked to a dedicated Song Harbor instance. Close its window manually.");return;}
+    setQuitting(true);
+    try{
+      const response=await fetch("/api/runtime/quit",{method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({instance_token:health.instance_token})});
+      if(!response.ok){
+        const error=await response.json() as {detail?:string};
+        throw Error(error.detail||"Cannot close this Song Harbor instance");
+      }
+      window.close();
+      // Browsers may forbid script closing a user-owned tab.
+      document.body.innerHTML="<main style='font:18px system-ui;padding:12vh 12vw'>Song Harbor has closed. You can close this browser tab.</main>";
+    }catch(error){window.alert(error instanceof Error?error.message:"Could not close Song Harbor");}
+    finally{setQuitting(false);}
+  }
+
   return <div className="app-shell">
     <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden="true">◈</span><span>TWS STUDIOS</span><span className="brand-divider">/</span><strong>Song Harbor</strong></div>
@@ -249,6 +270,8 @@ function App() {
           aria-label="Open Song Harbor help" aria-haspopup="dialog" onClick={()=>setHelpOpen(true)}>
           <span aria-hidden="true">i</span>
         </button>
+        <button type="button" className="song-close-app" aria-label="Close Song Harbor"
+          title="Close Song Harbor" disabled={quitting} onClick={()=>{void quitApplication();}}>×</button>
       </div>
     </header>
     <HelpDialog open={helpOpen} onOpenChange={setHelpOpen}/>

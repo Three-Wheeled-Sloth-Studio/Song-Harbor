@@ -1,6 +1,6 @@
 version: 1
 schema: refs/schemas/schemaRegistry.yaml
-updated: 2026-10-21
+updated: 2026-10-22
 roadmap:
   - id: SH-RM-000
     horizon: now
@@ -33,7 +33,7 @@ roadmap:
   - id: SH-RM-060
     horizon: next
     status: planned
-    summary: Build Second Take region regeneration, candidate comparisons, preserve locks, and safe transition replacement.
+    summary: Build Second Take additive accompaniment first: generate a harmonically and rhythmically compatible new stem for a selected section (e.g. cello), audition A/B, and preserve all existing stems; region replacement follows after the additive proof.
   - id: SH-RM-090
     horizon: next
     status: planned
@@ -60,22 +60,53 @@ roadmap:
     status: implemented-in-development
     summary: Section-scriptable pan, stereo width, spatial reflections, reverb, master fade/tail and three-band EQ in phase-coherent playback and 24-bit WAV export; EQ listening accepted, regression/Windows build gates still apply.
   - id: SH-RM-130
-    horizon: next
-    status: planned
-    summary: Build conservative section/phrase-aware compression, gain reduction metering, source-aware vocal-keyed ducking and frequency-selective de-essing; ensure consistent live/offline graphs and reversible scripted settings.
+    horizon: now
+    status: implemented-in-development
+    summary: Section compression, ducking, gain reduction metering and frequency-selective de-essing are implemented; keep cross-platform playback/export listening parity QA open.
   - id: SH-RM-140
-    horizon: next
-    status: planned
-    summary: Build detect-first cleanup and mix QA; localize clips, peaks, sibilance, spectral harshness and phase anomalies, audition bounded region repair, compare and accept/revert without replacing original audio.
+    horizon: now
+    status: implemented-in-development
+    summary: Non-destructive mix scan and targeted correction previews exist; continue accuracy, confidence, and false-positive QA before calling repair production-grade.
   - id: SH-RM-150
     horizon: next
     status: planned
     summary: Add time-range/phrase automation, dynamic EQ, tempo-synchronized stereo delay, loudness-matched A/B, and export destination/open-folder with persisted master trim.
   - id: SH-RM-160
-    horizon: later
-    status: planned
+    horizon: now
+    status: implemented-in-development
     summary: Refactor right-side Tools into compact icon-first palette with pop-out inspectors, preserving waveform/timeline width and shared TWS UI principles.
   - id: SH-RM-170
     horizon: later
     status: planned
     summary: Deliver full general effects rack and third-party plugin hosting after defining Windows plugin format, security/sandboxing, licensing, realtime scheduling and deterministic offline export.
+
+  # Product increment priorities accepted 2026-10-22. These augment the
+  # historical foundation plan above; they are the active delivery order.
+  - id: SH-RM-180
+    horizon: now
+    status: in-progress
+    summary: Stabilize v0.2.1. Verify SRT lyric export on Windows, section hover metrics, latest CI, and consistent docs; no gratuitous remixing of accepted track.
+  - id: SH-RM-190
+    horizon: next
+    status: approved
+    summary: Prove 16+ independently named stems: import, saved controls, script automation, playback/export, reopening, and DAW exchange; correct hardcoded six-role handlers and decoded-audio capacity limits.
+  - id: SH-RM-200
+    horizon: next
+    status: approved
+    summary: Add a track to an EXISTING project, assign/change its editable human name and script alias, migrate all saved and draft guidance safely, preserve immutable track_id and source references, provide atomic rollback, and test name collisions.
+  - id: SH-RM-210
+    horizon: next
+    status: approved-limited-spike
+    summary: Ardour optional interoperability POC only. Transfer aligned stems/section boundaries, push one scripted pan/gain change, render a processed single-track stem in Ardour and reimport to Song Harbor as a non-destructive version. Stop if reliable automated round-trip requires deep Ardour internals.
+  - id: SH-RM-220
+    horizon: next
+    status: approved
+    summary: Second Take additive generation. Request a new section-scoped cello or other instrument layer conditioned on existing music; preserve key/tempo/timing and unmodified original stems, support candidate A/B and reversible acceptance.
+  - id: SH-RM-230
+    horizon: next
+    status: approved
+    summary: Named mix snapshots and real integrated-loudness-matched A/B with easy accept/revert, before broader conventional effects.
+  - id: SH-RM-240
+    horizon: later
+    status: deferred-pending-evidence
+    summary: Surgical sub-section audio editing; first determine whether adding or resizing ordinary song sections already provides the needed user value.

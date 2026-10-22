@@ -51,6 +51,7 @@ export const HELP_TOPICS:Topic[]=[
      "Compression: Track.comp:-18,2 means threshold -18 dBFS and 2:1 ratio; supported ratio 1-4. The compressor defaults to neutral 1:1 when no instruction is active.",
      "Vocal-keyed ducking: Guitar.duck:3 requests up to 3 dB reduction when the detected vocal signal is active. Ducking operates on non-vocal stems only, with 0-12 dB allowed. It is an approximate envelope rather than a fully adjustable external sidechain.",
      "Endings belong to the final section: Master.fade:4s:smooth and Master.tail:3s. The fade reduces dry audio and new reverb excitation; the wet decay may continue into the tail.",
+     "Edit sections > De-ess provides the same frequency, Q, detector threshold and max-reduction sliders for the selected section. Edit sections > Script still exposes the full original production block; using Apply preserves lyrics and other directives.",
      "Frequency-selective per-stem de-essing: Vocals.deess:6500,2,-40,4@2s:smooth (frequency 3000-11000 Hz, Q .4-8, detector threshold -70 to -10 dBFS, maximum band reduction 0-12 dB). Neutral unless scripted or accepted from a correction trial. Live gain-reduction meters are available in A/B and correction tools. A full effects rack, plugin hosting, precise artifact repairs and reliable level-matched audition remain planned."
    ],
    examples:["{Vocals.eq1:320,1.2,-2@2s:smooth Other.comp:-18,2@2s:smooth Guitar.duck:3@1s:smooth}"]},

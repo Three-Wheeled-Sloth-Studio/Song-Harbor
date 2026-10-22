@@ -7,9 +7,9 @@ export type SavedReverbTarget={
 };
 type Props={
   jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
-  targets:SavedReverbTarget[];onChange:(items:SavedReverbTarget[])=>void;
+  targets:SavedReverbTarget[];previewEnabled?:boolean;onPreview?:(items:SavedReverbTarget[])=>void;onChange:(items:SavedReverbTarget[])=>void;
 };
-export function SectionReverbTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+export function SectionReverbTool({jobId,sections,files,targets,onChange,initialSectionId,previewEnabled=false,onPreview}:Props){
   const [sectionId,setSectionId]=useState(initialSectionId||"");
   useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
@@ -48,6 +48,15 @@ export function SectionReverbTool({jobId,sections,files,targets,onChange,initial
       wet,transition_seconds:transition,curve};
     void persist([...targets.filter(t=>t.section_id!==currentSection||t.source_key!==currentFile),item]);
   }
+
+  // Live preview remains a purely local draft. Save/Apply is the only API write.
+  useEffect(()=>{
+    if(!previewEnabled||!currentSection||!currentFile)return;
+    onPreview?.([...targets.filter(t=>t.section_id!==currentSection||t.source_key!==currentFile),{
+      section_id:currentSection,source_key:currentFile,wet,transition_seconds:transition,curve
+    }]);
+  // Deliberately react to editable values, not to parent re-renders.
+  },[previewEnabled,currentSection,currentFile,wet,transition,curve]);
   return <details className="production-tool-detail" open>
     <summary>Section reverb</summary>
     <div className="timeline-loop-controls">

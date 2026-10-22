@@ -15,6 +15,7 @@ import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
+import {CleanupReview} from "./CleanupReview";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -678,23 +679,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>
-        <details className="production-tool-detail" aria-label="Sound cleanup analyzer" open>
-          <summary>◇ Sound cleanup analyzer</summary>
-          <div className="timeline-loop-controls">
-            <p>Inspect the current processed mix for possible clipping and sharp sample discontinuities. No audio is changed; percussion can produce false positives.</p>
-            <button type="button" disabled={analyzing||exporting||!audioReady}
-              onClick={()=>{void analyzeMix();}}>{analyzing?"Analyzing mix…":"Analyze mix"}</button>
-            {cleanupError&&<small role="alert">{cleanupError}</small>}
-            {cleanupScanned&&<div role="status" className="song-cleanup-findings">
-              <strong>{cleanupFindings.length} candidate{cleanupFindings.length===1?"":"s"} found</strong>
-              {cleanupFindings.length===0?<p>No near-ceiling peaks or large single-sample jumps found at conservative thresholds.</p>:
-                cleanupFindings.map((finding,index)=><button type="button" key={index}
-                  className="production-tool-open" onClick={()=>seek(finding.timeSeconds)}
-                  title={finding.detail}>{timecode(finding.timeSeconds)} · {finding.label}</button>)}
-            </div>}
-            <small>First pass: peak/headroom and abrupt-transition detection only. De-essing and artifact classification are not implemented.</small>
-          </div>
-        </details>
+        <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
+          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
+          onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
+          onLoop={(start,end)=>{
+            setLoopIn(Math.min(start,duration));
+            setLoopOut(Math.min(duration,end));
+            setLoopEnabled(true);
+            seek(Math.max(0,Math.min(start,duration)));
+          }}/>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
           targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}

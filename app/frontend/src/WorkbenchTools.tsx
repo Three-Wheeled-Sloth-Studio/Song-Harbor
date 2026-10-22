@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState,type ReactNode,type PointerEvent} from "react";
-export type WorkbenchTool="sections"|"cleanup"|"pan"|"reverb"|"width"|"space"|"ab"|"eq"|"ending"|"zoom"|"loop";
+export type WorkbenchTool="sections"|"cleanup"|"pan"|"reverb"|"width"|"space"|"ab"|"eq"|"ending"|"zoom"|"loop"|"channels"|"daw";
 export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"sections",icon:"≡",label:"Sections"},
   {id:"cleanup",icon:"◇",label:"Sound cleanup"},
@@ -11,7 +11,9 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"eq",icon:"≋",label:"EQ"},
   {id:"ending",icon:"⇥",label:"Ending"},
   {id:"zoom",icon:"⌕",label:"Zoom"},
-  {id:"loop",icon:"↻",label:"Region loop"}
+  {id:"loop",icon:"↻",label:"Region loop"},
+  {id:"channels",icon:"◫",label:"Split channels"},
+  {id:"daw",icon:"⇩",label:"DAW handoff"}
 ];
 export function ToolWindow({name,onClose,children}:{name:string;onClose:()=>void;children:ReactNode}){
   const [pos,setPos]=useState<{x:number;y:number}|null>(null);

@@ -317,20 +317,29 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
     stems={alias:filename for filename in files for alias in aliases
            if "(" + alias + ")" in filename}
     protected=set()
+    protected_gain=set()
     output=[]
     for section in sorted(sections,key=lambda x:x["start_seconds"]):
         directives=blocks.get(section["id"],[])
         for d in directives:
             if d["kind"]=="reset":
-                if d["track"]=="all": protected.clear()
-                else: protected.discard(d["track"])
+                if d["track"]=="all":
+                    protected.clear()
+                    protected_gain.clear()
+                else:
+                    protected.discard(d["track"])
+                    protected_gain.discard(d["track"])
             elif d["kind"]=="pan":
                 if d["track"]=="all": protected.update(stems)
                 else: protected.add(d["track"])
+            elif d["kind"]=="gain":
+                if d["track"]=="all": protected_gain.update(stems)
+                else: protected_gain.add(d["track"])
         for d in directives:
             if d["kind"]=="auto_pan":
                 output.append({"section_id":section["id"],"target":"center",
-                               "protected_sources":[stems[a] for a in protected if a in stems],
+                               "protected_sources":[stems[a] for a in aliases if a in protected and a in stems],
+                               "protected_gain_sources":[stems[a] for a in aliases if a in protected_gain and a in stems],
                                "transition_seconds":d["transition_seconds"],"curve":d["curve"]})
     return output
 

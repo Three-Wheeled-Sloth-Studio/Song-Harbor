@@ -7,6 +7,21 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22: expanded sound-cleanup detection and review UI
+
+User reports A/B compression/ducking bypass works, and first on-demand scan found `03:35 Peak exceeds 0 dBFS`. Accepted priority: add missing detection categories THEN make sound cleanup practical in UI; maintain non-destructive local-first behavior.
+
+**Code delivered on `main`:**
+- `AudioCleanupAnalyzer.ts`: deterministic, bounded peak and sample discontinuity, flat-topped waveform, FFT spectral sibilance-like bursts (5–9.5 kHz), high presence emphasis (2.5–4.9 kHz), upper-band fizz, quiet high-frequency residue, stereo negative-correlation mono risk, repeated RMS level troughs. These are signal heuristics and may flag creative music; don't claim confirmed de-essing or AI artifact identification. Conservative type-specific cooldown/max findings, severities and suggested next action; optimized precomputed 2048-bin FFT twiddles; output-trim-aware peak suggestion aiming for -1 dBFS sample ceiling (not true peak).
+- `SharedClockAudition.ts`: `analyzeMix()` and processed `renderWav24()` use same offline AudioContext render graph. Findings annotated with up to 2 prominent *raw stem activity* hints (not causal attribution), accounting for stem level and split-child buffers.
+- `CleanupReview.tsx`: analyzer appears directly below Sections in existing narrow Tools column; per-category filters, count/severity, temporary reviewed toggle, click-to-seek, **Loop ± context** that sets an audition region and starts playback, suggestion copy and active source hints. No workspace width loss or automatic media modifications.
+- `StemMixer.tsx`: published scan results cleared when stem balance, trim, effects, ending or channel routing changes, avoiding stale review on changed mix; analysis started during a mix change refuses stale completion. Prior successful WAV export also publishes findings.
+- Documentation synced in in-app Help and `docs/user-guide.md`; QA plan `docs/dynamics-cleanup-qa.md`. Synthetic deterministic regression tests `app/frontend/tests/audio-cleanup.test.mjs` wired into `.github/workflows/frontend-build.yml`.
+
+**Verification needs:** At checkpoint time GitHub Actions runners were queued heavily after commits; treat synthetic tests, actual Windows audio scan, runtime speed and UI loop behavior as **pending** until explicit evidence arrives. Do not claim de-essing, accurate artifact classification, stem attribution, or sound quality improvements. User's known 03:35 peak is the first useful validation target. User asked for "missing analysis", not yet automatic surgical repair; next stage could add precise de-esser and artifact cleanup actions after listening QA.
+
+---
+
 ## 2026-10-22 laptop QA: explicit dynamics A/B, sound cleanup, zoom, build identity
 
 User on a production laptop deferred multi-track import test. Screenshot confirmed Tools A/B offered one opaque `Bypass dynamics` toggle rather than separate compression/ducking, and sound cleanup was hidden until processed WAV export and poorly discoverable. Mouse-wheel waveform zoom hijacked normal page scrolling. The Git SHA badge `main@... ` was not usable as release identity. User requested **Version:Revision:Build** rather than hash; later true fullscreen desktop-mode app and far-right topbar close X.

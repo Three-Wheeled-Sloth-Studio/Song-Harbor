@@ -1,3 +1,4 @@
+import {screenAcousticSignals} from "./SignalAudit";
 /** Non-destructive, mix-level QC. These are listening candidates, never a diagnosis.
  * Runs on the exact rendered float mix used for WAV packing, before output trim.
  * Analysis uses bounded windows: O(frames + (frames/4096)*2048*log(2048)).
@@ -5,7 +6,7 @@
  */
 export type AudioFindingKind=
   "headroom"|"transient"|"clip_shape"|"sibilance"|"harshness"|
-  "fizz"|"noise"|"phase"|"pumping";
+  "fizz"|"noise"|"phase"|"pumping"|"signal_audit";
 export type AudioFinding={
   kind:AudioFindingKind;
   timeSeconds:number;
@@ -21,7 +22,7 @@ export const FINDING_GROUPS:Record<AudioFindingKind,string>={
   headroom:"Levels",clip_shape:"Levels",transient:"Transitions",
   sibilance:"Vocal / high frequency",harshness:"Vocal / high frequency",
   fizz:"Vocal / high frequency",noise:"Quiet passages",
-  phase:"Stereo / mono",pumping:"Dynamics"
+  phase:"Stereo / mono",pumping:"Dynamics",signal_audit:"Signal audit"
 };
 type AudioLike=Pick<AudioBuffer,"length"|"sampleRate"|"numberOfChannels"|"getChannelData">;
 const db=(level:number)=>20*Math.log10(Math.max(1e-10,level));
@@ -214,6 +215,15 @@ export function inspectRenderedAudio(buffer:AudioLike,outputTrimDb=0,maxFindings
           detail,suggestion},6);
       }else sustain[kind]=0;
     }
+  }
+  // This is anomaly screening, NOT watermark detection or fingerprint matching.
+  // It never modifies PCM samples and has no access to vendor-specific keys.
+  // Reserve up to three findings and share the ordinary seek/loop/review UI.
+  for(const observation of screenAcousticSignals(buffer)){
+    offer({kind:"signal_audit",timeSeconds:observation.timeSeconds,
+      durationSeconds:observation.durationSeconds,severity:"review",
+      label:observation.label,detail:observation.detail,
+      suggestion:"Listen to this feature in the mix and individual stems. A stable tone is not proof of a watermark; no filtering or removal is recommended automatically."},0);
   }
   return findings.sort((a,b)=>a.severity===b.severity?a.timeSeconds-b.timeSeconds:
     a.severity==="warning"?-1:1).slice(0,maxFindings);

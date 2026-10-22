@@ -39,11 +39,12 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, initialSections, initialTitle, onSaved }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
   trackLabels?: Record<string,string>;
+  trackAliases?: Record<string,string>;
   initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
@@ -622,8 +623,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
         </div>
         <div className="mixer-tracks">
-      {stems.map(s => <div className="mixer-track" key={s.filename}>
-        <strong className="stem-icon-name" title={s.name} aria-label={s.name}><AudioIcon kind={s.name} size={32}/><span className="sr-only">{s.name}</span></strong>
+      {stems.map(s => <div className={"mixer-track"+(trackLabels?.[s.filename]?" mixer-track--named":"")} key={s.filename}>
+        <strong className={"stem-icon-name"+(trackLabels?.[s.filename]?" stem-icon-name--named":"")}
+          title={s.name+" · script: "+(trackAliases?.[s.filename]||labelOf(s.filename))}
+          aria-label={s.name}><AudioIcon kind={trackAliases?.[s.filename]||labelOf(s.filename)} size={32}/>
+          {trackLabels?.[s.filename]?<span className="mixer-stem-names"><span className="mixer-stem-name">{s.name}</span>
+            <small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small></span>:<span className="sr-only">{s.name}</span>}
+        </strong>
         <div className="track-actions">
           <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
             aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>

@@ -7,6 +7,14 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-21: first external testers and in-app Help
+
+User reports additional people are now testing Song Harbor. Added an always-available **i** Help icon immediately beside header Settings. Opens a TWS Dialog with offline searchable user guidance: quick start, Library, synchronized transport/mixer, non-destructive section script grammar, supported pan/width/space/reverb/EQ/compression/vocal ducking, fade/tail, WAV versus original stem DAW export, safe update/version, troubleshooting and feedback. Help content is maintained in `app/frontend/src/HelpDialog.tsx`; external user-facing guide in `docs/user-guide.md`. Tester QA checklist in `docs/help-qa-checklist.md`. `README.md` links guide and updates capabilities. Frontend TypeScript/build passed at `02713968` for final UI/CSS changes; actual Windows modal/accessibility acceptance pending.
+
+**New documentation gate:** For any feature or renamed control, update in-app Help AND `docs/user-guide.md` in the same change. Keep user descriptions limited to implemented behavior. Avoid modal/sidebar UI that reduces timeline width. Continue receiving tester version badge and steps with each bug.
+
+---
+
 ## 2026-10-21 follow-up: updater acceptance, version badge, scoped Outro correction
 
 User reports soft update/relaunch apparently successful on Windows. This is preliminary user acceptance for the main happy path only; conflict protection and busy-job refusal remain separate checks. Added compact always-visible `main@<8-char-sha>` badge alongside the in-app update icon. `GET /api/runtime/version` uses local Git commands only, no network fetch, and falls back to `local` when unavailable. Badge refreshes on relaunch and after an explicit update check. No invented semver.

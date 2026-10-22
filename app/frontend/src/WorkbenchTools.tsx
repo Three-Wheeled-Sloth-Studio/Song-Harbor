@@ -44,6 +44,6 @@ export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;
       <strong>{name}</strong>
       <button ref={first} type="button" aria-label={"Close "+name} title="Dismiss tool" onPointerDown={e=>e.stopPropagation()} onClick={onClose}>×</button>
     </div>
-    <div className="song-floating-tool-content">{children}</div>
+    <div className="song-floating-tool-content" onWheel={event=>{event.stopPropagation();}}>{children}</div>
   </section>;
 }

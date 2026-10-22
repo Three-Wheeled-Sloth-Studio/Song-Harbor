@@ -255,10 +255,11 @@ export class SharedClockAudition {
   /** Estimate section dry-bus pan contributions from aligned decoded stems.
    * This is a bounded first-pass solver; final rendered analysis is authoritative.
    */
-  solveSectionAutoPan(start:number,end:number,protectedSources:readonly string[],
+  solveSectionAutoPan(start:number,end:number,protectedSources:readonly string[],protectedGains:readonly string[],
     curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[]}>):AutoPanResult{
     const stats=new Map<string,{l:number;r:number;cross:number;n:number}>();
     const fixed=new Set(protectedSources);
+    const lockedGains=new Set(protectedGains);
     for(const track of this.tracks){
       const filename=track.source.filename;
       const level=this.renderedLevels[filename]??0;
@@ -288,7 +289,7 @@ export class SharedClockAudition {
         rightPower:row.r/Math.max(1,row.n),
         crossPower:row.cross/Math.max(1,row.n),
         pan:curve?.pan?valueAt(curve.pan,time):0,
-        gain:level*sectionGain,locked:fixed.has(filename)});
+        gain:level*sectionGain,locked:fixed.has(filename),gainLocked:lockedGains.has(filename)});
     }
     return solveAutoPan(stems);
   }

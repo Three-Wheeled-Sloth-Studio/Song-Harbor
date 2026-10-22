@@ -1221,6 +1221,19 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "end_terminator_ignored": changed["end_terminator_ignored"]}
 
 
+@app.get("/api/projects/{ident}/lyrics/captions")
+def export_lyric_captions(ident: str) -> dict[str, Any]:
+    """Produce an estimated SRT from persisted lyric sections, never unsaved drafts."""
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    import lyric_captions
+    try:
+        return lyric_captions.render_srt(record)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/api/projects/{ident}/sections/export")
 def export_song_sections(ident: str) -> dict[str, Any]:
     record = projects.read_project(DATA_ROOT, ident)

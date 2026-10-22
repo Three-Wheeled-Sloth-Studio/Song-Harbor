@@ -12,6 +12,7 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
 ];
 export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void}){
   const [pos,setPos]=useState<{x:number;y:number}|null>(null);
+  const initialPlacement=useRef({right:75+order*24,top:90+order*26});
   const drag=useRef<{x:number;y:number;startX:number;startY:number}|null>(null);
   const previousFocus=useRef<HTMLElement|null>(null);
   const first=useRef<HTMLButtonElement|null>(null);
@@ -36,7 +37,7 @@ export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;
   }
   return <section className="song-floating-tool" role="dialog" aria-label={name}
       onPointerDown={onFocus}
-      style={{...(pos?{left:pos.x,top:pos.y,right:"auto"}:{right:75+order*24,top:90+order*26}),zIndex:110+order}}
+      style={{...(pos?{left:pos.x,top:pos.y,right:"auto"}:initialPlacement.current),zIndex:110+order}}
       onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();onClose();}}}>
     <div className="song-floating-tool-header" onPointerDown={begin} onPointerMove={move}
       onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>

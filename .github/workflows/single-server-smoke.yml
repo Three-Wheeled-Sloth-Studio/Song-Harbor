@@ -75,6 +75,17 @@ jobs:
                       assert health["instance_token"] == "ci-smoke-single-server"
                       assert '<div id="root"' in page
                       assert "assets/" in page
+                      import re
+                      scripts = re.findall(r'<script\\b[^>]*type="module"[^>]*src="([^"]+)"', page)
+                      assert scripts, "No built module found in served HTML"
+                      for script in scripts:
+                          assert script.startswith("/assets/") and script.endswith(".js"), script
+                          with urllib.request.urlopen(f"http://127.0.0.1:{port}{script}",timeout=3) as asset:
+                              mime=asset.headers.get_content_type()
+                              assert asset.status==200, (script,asset.status)
+                              assert mime in ("text/javascript","application/javascript"), (script,mime)
+                              assert len(asset.read(64))>0, "Empty JS module"
+                      print("PASS: Windows FastAPI serves real JS assets with strict module MIME")
                       print("PASS: one Python server served health and built UI, no Vite")
                       break
                   except (OSError, TimeoutError):

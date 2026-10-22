@@ -4,7 +4,7 @@
  */
 export type AutoStem={
   filename:string;leftPower:number;rightPower:number;crossPower:number;
-  pan:number;gain:number;locked:boolean
+  pan:number;gain:number;locked:boolean;gainLocked?:boolean
 };
 export type AutoPanAdjustment={filename:string;pan:number;gainDb:number};
 export type AutoPanResult={
@@ -67,6 +67,7 @@ export function solveAutoPan(stems:AutoStem[],maxPanMove=.24,maxGainDb=.35):Auto
   if(Math.abs(balance(active,pans,gains))>.25){
     for(let iter=0;iter<2;iter++){
       for(const s of free){
+        if(s.gainLocked)continue;
         let best=0,cost=score();
         for(let i=-4;i<=4;i++){
           const candidate=i*maxGainDb/4;

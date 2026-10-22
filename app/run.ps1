@@ -88,6 +88,7 @@ $backend = Start-Process -FilePath $python -ArgumentList @(
 ) -WorkingDirectory $Root -PassThru -NoNewWindow
 try {
   $ready = $false
+  $lastStartupError = ""
   for ($i=0; $i -lt 100; $i++) {
     $backend.Refresh()
     if ($backend.HasExited) {
@@ -118,11 +119,12 @@ try {
         break
       }
     } catch {
-      # Startup may take a few seconds on lower-end hardware.
+      # A missing asset or bad MIME must never silently pass readiness.
+      $lastStartupError = $_.Exception.Message
     }
     Start-Sleep -Milliseconds 250
   }
-  if (-not $ready) { throw "Song Harbor did not become ready at $url. See console output." }
+  if (-not $ready) { throw "Song Harbor did not become ready at $url. Last startup error: $lastStartupError" }
   if (-not $NoBrowser) {
     $url = "http://127.0.0.1:$port/"
     $launched = $false

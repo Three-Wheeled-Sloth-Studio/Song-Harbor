@@ -61,6 +61,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
         gain_match=GAIN_TOKEN.fullmatch(token)
         if gain_match:
             canonical=next((a for a in aliases if a.lower()==gain_match.group("track").lower()),None)
+            if not canonical and gain_match.group("track").lower()=="all": canonical="all"
             if not canonical: raise ValueError("Unknown gain stem")
             gain_db=float(gain_match.group("gain"))
             duration=float(gain_match.group("seconds") or 1)
@@ -124,6 +125,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
         eq=EQ_TOKEN.fullmatch(token)
         if eq:
             canonical=next((a for a in aliases if a.lower()==eq.group("track").lower()),None)
+            if not canonical and eq.group("track").lower()=="all": canonical="all"
             if not canonical:
                 raise ValueError(f"Unknown EQ stem: {eq.group('track')}")
             band=int(eq.group("band"))
@@ -166,6 +168,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
         reset = match.group("reset")
         if name:
             canonical = next((a for a in aliases if a.lower() == name.lower()), None)
+            if not canonical and name.lower()=="all": canonical="all"
             if not canonical:
                 raise ValueError(f"Unknown stem alias: {name}")
             value = match.group("value").lower()
@@ -206,7 +209,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             raise ValueError(f"{canonical}.reset conflicts with other {canonical} settings in this section. To reset compression only, use {canonical}.comp:-18,1@2s:smooth and retain explicit pan/width/space values.")
         if key in touched or ("all" in touched):
             raise ValueError("Duplicate or conflicting production directives within a section")
-        if canonical == "all" and any(not x.startswith("master.") for x in touched):
+        if canonical == "all" and directive["kind"] == "reset" and any(not x.startswith("master.") for x in touched):
             raise ValueError("all.reset cannot be combined with stem directives")
         touched.add(key)
         duration = float(match.group("seconds") or 1)
@@ -255,6 +258,31 @@ def render_block(directives: list[dict[str, Any]]) -> str:
             head = f"{d['track']}.pan:{pos}"
         rendered.append(head + suffix)
     return "{" + " ".join(rendered) + "}"
+
+
+
+def expand_broadcast(blocks: dict[str, list[dict[str, Any]]],
+                     aliases: tuple[str,...]) -> dict[str, list[dict[str, Any]]]:
+    """Compile all.effect defaults without altering the authored script.
+
+    Explicit stem/effect directives win regardless of textual ordering.
+    EQ overrides are per band, not whole-EQ. This does not implement auto solvers.
+    """
+    result={}
+    for section_id, directives in blocks.items():
+        explicit={(d["track"].lower(),d["kind"],d.get("band"))
+                  for d in directives if d["track"].lower() not in ("all","master")}
+        expanded=[]
+        for directive in directives:
+            if directive["track"].lower()!="all" or directive["kind"]=="reset":
+                expanded.append(directive)
+                continue
+            for alias in aliases:
+                if (alias.lower(),directive["kind"],directive.get("band")) in explicit:
+                    continue
+                expanded.append({**directive,"track":alias})
+        result[section_id]=expanded
+    return result
 
 
 def materialize_pan(sections: list[dict[str, Any]],

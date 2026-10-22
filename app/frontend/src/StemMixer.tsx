@@ -13,7 +13,7 @@ import { SectionSpaceTool,type SavedSpaceTarget } from "./SectionSpaceTool";
 import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
-import { compileSectionAutomation } from "./SectionAutomation";
+import { compileSectionAutomation, valueAt } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import type {SectionInsight} from "./SectionInsights.ts";

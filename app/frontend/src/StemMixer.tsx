@@ -915,6 +915,19 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
                 onChange={e=>setBypassed(v=>({...v,[key]:e.target.checked}))}/>
               Bypass {key==="space"?"spatial reflections":key}
             </label>)}
+            <div className="song-dynamics-meter" aria-label="Live per-stem gain reduction">
+              <strong>Live gain reduction</strong>
+              {meters.filter(item=>item.compressionDb>.05||item.duckDb>.05||item.deessDb>.05)
+                .sort((a,b)=>(b.compressionDb+b.duckDb+b.deessDb)-(a.compressionDb+a.duckDb+a.deessDb))
+                .slice(0,6).map(item=><div key={item.filename} className="song-dynamics-meter-row">
+                  <span title={item.filename}>{item.filename.match(/\(([^)]+)\)/)?.[1]||item.filename}</span>
+                  <meter min="0" max="12" value={Math.min(12,item.compressionDb+item.duckDb+item.deessDb)}/>
+                  <output>{(item.compressionDb+item.duckDb+item.deessDb).toFixed(1)} dB</output>
+                </div>)}
+              {!meters.some(item=>item.compressionDb>.05||item.duckDb>.05||item.deessDb>.05)&&
+                <small>No significant gain reduction at the current playback position.</small>}
+              <small>Actual WebAudio compressor reduction plus scheduled duck/de-ess attenuation. Values are approximate and may update while playing.</small>
+            </div>
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>

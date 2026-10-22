@@ -1,3 +1,8 @@
+import asyncio
+import io
+from types import SimpleNamespace
+from unittest.mock import patch
+from fastapi import Request, UploadFile
 import sys
 import tempfile
 import unittest
@@ -7,6 +12,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import projects
 import stem_import
 import library
+import server
 
 
 class ImportTracksTests(unittest.TestCase):
@@ -28,6 +34,32 @@ class ImportTracksTests(unittest.TestCase):
                "Song_(Guitar)_htdemucs_6s.wav","Song Guitarist Strings.wav"]
         self.assertEqual([item["stem_alias"] for item in stem_import.assign_tracks(names)],
                          ["Vocals","Drums","Guitar","Track01"])
+
+    def test_import_endpoint_preserves_title_override_and_converts_tracks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            uploads=[UploadFile(filename="A Song - Vocals.mp3",file=io.BytesIO(b"VOCAL")),
+                     UploadFile(filename="A Song - Drums.wav",file=io.BytesIO(b"DRUMS"))]
+            request=Request({"type":"http","headers":[]})
+            with patch.object(server,"DATA_ROOT",root),patch.object(server.dependencies,"resolve",return_value={"directory":str(root)}),patch.object(server,"run_track_import",lambda *args:None):
+                job=asyncio.run(server.import_tracks(request,uploads,title="My override"))
+            self.assertEqual(job["filename"],"My override.wav")
+            self.assertEqual(job["status"],"queued")
+            folder=root/"jobs"/job["id"]
+            self.assertEqual((folder/"originals"/"A Song - Vocals.mp3").read_bytes(),b"VOCAL")
+            self.assertEqual((folder/"originals"/"A Song - Drums.wav").read_bytes(),b"DRUMS")
+            real_job=server.jobs.pop(job["id"])
+            def fake_convert(command,**kwargs):
+                Path(command[-1]).write_bytes(b"converted audio")
+                return SimpleNamespace(returncode=0,stderr="")
+            with patch.object(server,"DATA_ROOT",root),patch.object(server,"probe_duration",return_value=12.5),patch.object(server,"dependency_tool",return_value="ffmpeg"),patch.object(server.subprocess,"run",side_effect=fake_convert):
+                server.run_track_import(real_job,["A Song - Vocals.mp3","A Song - Drums.wav"],"My override")
+            self.assertEqual(real_job["status"],"complete")
+            record=projects.read_project(root,job["id"])
+            self.assertEqual(record["title"],"My override")
+            self.assertEqual(record["source_duration_seconds"],12.5)
+            self.assertEqual(record["files"],["01 (Vocals).wav","02 (Drums).wav"])
+            self.assertTrue((folder/"stems"/"02 (Drums).wav").is_file())
 
     def test_imported_project_is_discoverable_and_daw_exportable(self):
         with tempfile.TemporaryDirectory() as temp:

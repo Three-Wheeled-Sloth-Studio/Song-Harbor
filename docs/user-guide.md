@@ -114,6 +114,18 @@ The right-hand tool rail is **54px wide**, with icons enlarged to occupy most of
 
 The previous DAW Handoff tool is now **Download**. Its panel says Download tracks and provides local aligned track export, with optional DAW launch explicitly separate. Processed mix WAV export remains in the song's existing export footer.
 
+## Session safety and Section Edit audition
+
+**Monitoring volume now persists on this device and browser profile.** Song Harbor saves the Playback monitoring volume slider locally after every adjustment and restores that value when relaunched. A fresh installation/browser profile defaults to **25%**, rather than the previous louder 75%. This setting affects listening only, not the saved stem balances or rendered WAV. Browser storage restrictions can prevent persistence; Song Harbor falls back to 25% rather than interrupting playback.
+
+**Floating tool wheel scrolling:** Place the pointer anywhere within a tool's scrollable content and roll the mouse wheel to scroll that tool instead of the waveform/page. The window's resizable corner is independent of scrolling; scrollbars also remain available.
+
+**Edit sections → Edit whole-song section text…** opens a distinct, wide, resizable **Whole-song section text** floating window. It loads the authoritative section export containing **all section headers, their full production blocks and all lyrics**, not just the currently selected section. You may edit the complete song and click **Apply** to validate and save it. This command deliberately remains outside the primary row of effect tabs. Unapplied edits stay in memory while switching tools; save them before restarting the app. The Section dropdown still scopes the individual effect tabs.
+
+**Section Edit A/B (effect tabs):** The floating section editor has an **A · Saved / B · Draft preview** switch. Select a section and an effect tab (Pan, Reverb, Width, Reflections, EQ or De-ess), choose B and the selected section loops automatically. Adjust the controls while the music plays; those values are temporary, and changing them does not save the project. Switch to A to hear the saved settings. Click the effect's **Save / Apply** to commit a setting; closing the tool or choosing a different section/effect discards the temporary preview. The rendered WAV remains tied to saved settings; export is blocked while an unsaved B preview is active. Direct edits in the whole-song text editor are not previewed until Apply—they go through complete grammar validation.
+
+These A/B switches are separate from the analyzer's correction-trial A/B. This is an initial live audition mechanism, **not** a fully loudness-matched blind test. When in doubt, return to A, reopen B at modest values and verify differences on a short loop.
+
 ## Dynamics visibility and section-aware de-essing
 
 The **A/B comparison** tool now has an independent **Bypass deess** checkbox alongside compression and ducking. It shows live per-stem gain-reduction readouts when there is measurable processing. Compression uses the Web Audio compressor's live gain-reduction estimate; vocal-keyed ducking and de-essing read their scheduled AudioParam attenuation. These values are *per stem, approximate*, and not integrated loudness measurements.

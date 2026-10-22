@@ -11,6 +11,18 @@ This guide covers the currently implemented local-first Song Harbor workbench. T
 5. Open **Tools > Sections**, paste or edit your arrangement, and **Apply**. Use timeline markers to correct section boundaries.
 6. Adjust production effects, listen, and use **Export mix WAV**. Once rendering completes, click **Download WAV** to save it using your browser's download settings.
 
+## Import existing tracks rather than separating a mixed recording
+
+On **Import song**, select **Multiple tracks · already separated**. Choose **2-12** WAV, FLAC, MP3, M4A, AIFF or OGG files at once. These are treated as distinct tracks in **one song**, without running Demucs or other source separation.
+
+Song Harbor suggests a title from the common prefix of the filenames (for example, `Salt in the Circuit - Vocals.wav` and `Salt in the Circuit - Drums.wav` suggest `Salt in the Circuit`). **Edit the Song title field** before import whenever the suggestion is wrong. The chosen title becomes the project and Library name; the original uploaded filenames remain intact.
+
+Import creates 48-kHz stereo PCM WAV working copies aligned at **0:00**. Shorter recordings are padded with silence to match the longest; this does **not** time-stretch or automatically synchronize takes with different timing. Verify all source recordings were exported from the same song start if you want them to line up. Original uploads are preserved separately under the song's local working files.
+
+Filename role identification recognizes standard Vocals/Drums/Bass/Guitar/Piano/Other labels. Additional and repeated/unrecognized parts remain independent **Track01**, **Track02**, etc., with their original filenames displayed as mixer labels. The original six named aliases are the current section-script targeting vocabulary; custom imported TrackNN aliases can be mixed and exported but don't yet have full production-script alias support.
+
+After import, tracks appear in the familiar synchronized mixer, timeline and Library. A future enhancement may support manually reclassifying the stem types and choosing per-track offsets.
+
 ## Library and project safety
 
 - Songs can be reopened from Library. Use the row action menu or right-click for available rename, grouping, collection, remove and restore options.

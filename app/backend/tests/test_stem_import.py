@@ -23,6 +23,12 @@ class ImportTracksTests(unittest.TestCase):
         self.assertEqual([x["stem_alias"] for x in stems],
                          ["Vocals","Drums","Track01","Track02","Track03"])
 
+    def test_recognizes_demucs_parenthesized_stems(self):
+        names=["Song_(Vocals)_htdemucs_6s.wav","Song_(Drums)_htdemucs_6s.wav",
+               "Song_(Guitar)_htdemucs_6s.wav","Song Guitarist Strings.wav"]
+        self.assertEqual([item["stem_alias"] for item in stem_import.assign_tracks(names)],
+                         ["Vocals","Drums","Guitar","Track01"])
+
     def test_imported_project_is_discoverable_and_daw_exportable(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

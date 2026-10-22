@@ -7,6 +7,28 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22: gain reduction / exaggerated A/B and per-section de-esser milestone
+
+User accepted Song Harbor layout, full section Script access, double-click to Edit sections, multi-window z-order, and analyzer report (03:35 +0.2 dBFS peak, 02:43 loudness dips). User could not hear compression/ducking trial differences and approved next two priorities: **visible gain-reduction feedback and meaningful A/B**, then **targeted section-aware de-essing**. Continued directly on `main`.
+
+**Implemented:**
+- `SectionDynamics.ts`: per-stem neutral-by-default peaking Biquad de-esser between compressor and duck gain. A deterministic two-pole high-pass envelope detector monitors sibilance-band activity (attack ~12ms, release ~120ms) and schedules dynamic negative peaking-filter gain up to the section's max reduction. Two-pole detector rejects low vocal fundamentals better than one-pole. Frequency 3-11kHz, Q .4-8, threshold -70..-10 dBFS, maximum 0-12dB. Preview/offline renderer both schedule identical curve; original buffers untouched.
+- `SharedClockAudition.ts`: builds deesser on each source bus in live AudioContext and offline 24-bit WAV render; mirrors section automation and L/R derived buffers; schedules cleanup/bypass and releases nodes. `dynamicsMeters` reports live WebAudio compressor.reduction, duck GainNode attenuation and de-esser Biquad gain (dB) per parent stem. A/B has independent compressor/duck/de-ess bypass keys and B Original removes all three in audition only.
+- `section_production.py`: new `Vocals.deess:6500,2,-40,4@2s:smooth` parsed, validated, round-tripped, inherited and reset; `materialize_dynamics` persists `kind=deess` targets. Direct Script interface remains fully intact; old songs neutral without deess. `section_import.apply` and server's existing import/export route persist with no new ad-hoc file mutation.
+- `StemMixer.tsx`: compiles `kind=deess` per-section frequency/Q/threshold/max reduction curves; live meters refreshed ~130ms only while visible. Correction trial adds de-esser for analyzer sibilance-like findings and chooses Vocals as suggested stem. **3× audition strength** previews exaggerated reduction only and never writes boosted values. Unboosted values go through validated script import on Accept. Full offline WAV always uses accepted production directives, not audition A/B bypass or unaccepted trial.
+- `CorrectionWorkbench.tsx`: direct adjustable frequency, Q, threshold, max reduction, updated live meters (comp/duck/deess) and "Actual 1× / Exaggerated audition 3×" selector. Intended to reveal subtle processing without misrepresenting delivered sound. `CleanupReview.tsx` offers Try correction on sibilance-like findings.
+- `SectionDeEssTool.tsx`: new **Edit sections → De-ess** tab, follows shared section selection; sliders and Apply safely rewrite one targeted de-esser script token via authoritative `GET sections/export` / `POST sections/import`. Script tab remains accessible for full text. Updates all frontend project production targets on success.
+- Documentation updated in `docs/user-guide.md`, in-app `HelpDialog.tsx`, `docs/dynamics-cleanup-qa.md`.
+- Regression tests: backend `test_section_deess.py` checks notation, range, normal reset, conflict and materialization (wired to Song projects CI). Frontend `section-deess.test.mjs` builds DSP module with esbuild and tests synthesized HF/low-frequency/silent/max reduction/split input behavior (wired to frontend CI).
+
+**Important limits**: A/B is **not yet genuinely integrated-loudness-matched**; exaggerated trial is instead a deliberately marked 3× audition diagnostic. Browser compressor gain reduction is read from WebAudio, duck/deess attenuation read from scheduled AudioParams; these are live approximations, not integrated LUFS or true peak. The detector is not a trained vocal/sibilant classifier, and cymbals, hi-hats, guitar and synth noise may be flagged. No automatic de-essing or destructive edit. De-ess affects a whole named section and may inherit until changed; do not call it a phrase-isolated repair.
+
+**Verification:** Backend projects CI passed at `d4efa673` (before latest frontend); the new Section de-ess test workflow was started. Frontend build passed at `2c75b3d8` after initial de-esser data wiring, with later UI/test work queued heavily. Do not claim newest changes or actual audio preview/export parity tested until latest CI and user Windows listening checks succeed. First Windows QA: check Edit sections → De-ess, Script roundtrip, sibilance trial actual 1× vs exaggerated 3×, live gain reduction, A/B deess bypass, 24-bit WAV processed rendering and preservation of other directives/lyrics. Compare sibilants and cymbals to avoid over-deessing intentional textures.
+
+**Next after QA**: integrated LUFS and oversampled true-peak analysis, and gain-level-matched blind A/B comparisons; avoid adding a conventional broad effects rack ahead of section-oriented correction workflows.
+
+---
+
 ## 2026-10-22: first-pass icon rail QA and unified Section Edit / multi-window follow-up
 
 User supplied desktop screenshot; fullscreen shell, top-right Close X, working project `The Logo and the Maw`, and 12 L/R waveform rows display. First-pass UI approved; requested: icons 2–3x bigger and narrower reserved rail, corner-resizable tools, optional multiple tool windows simultaneously, rename DAW Handoff to **Download**, consolidate all per-section effects in one **Edit sections** tool, and double-clicking section block on timeline to open editor focused on that section.

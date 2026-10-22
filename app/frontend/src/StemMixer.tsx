@@ -20,9 +20,9 @@ import type { SongSection } from "./SectionEditor";
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
-type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"dynamics";
-const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","dynamics","ending"];
-const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,dynamics:false,ending:false};
+type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"compression"|"ducking";
+const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","compression","ducking","ending"];
+const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,compression:false,ducking:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -120,38 +120,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const visibleSeconds=duration>0?duration/zoom:0;
   const viewStart=duration>0?(duration-visibleSeconds)*viewportOffset:0;
   const viewEnd=duration>0?viewStart+visibleSeconds:0;
-  // Timeline wheel zooms around the pointer; Shift+wheel pans the visible window.
-  // Native non-passive handler ensures preventDefault works in Chromium.
-  useEffect(()=>{
-    const element=timelineRef.current;
-    if(!element)return;
-    const choices=[1,2,4,8,16];
-    function wheel(event:WheelEvent){
-      if(!duration)return;
-      const source=event.target;
-      if(source instanceof Element && source.closest("input,select,textarea,[contenteditable=true],button:not(.waveform-seek)"))return;
-      const amount=event.deltaY||event.deltaX;
-      if(!amount)return;
-      event.preventDefault();
-      if(event.shiftKey){
-        setViewportOffset(current=>Math.max(0,Math.min(1,current+Math.sign(amount)*0.07)));
-        return;
-      }
-      const bounds=(element!.querySelector(".waveform-seek")||element!).getBoundingClientRect();
-      const fraction=Math.max(0,Math.min(1,(event.clientX-bounds.left)/Math.max(1,bounds.width)));
-      const currentZoom=zoom;
-      const currentIndex=choices.indexOf(currentZoom);
-      const nextZoom=choices[Math.max(0,Math.min(choices.length-1,currentIndex+(amount>0?-1:1)))];
-      if(nextZoom===currentZoom)return;
-      const point=(duration-duration/currentZoom)*viewportOffset+fraction*duration/currentZoom;
-      const nextWidth=duration/nextZoom;
-      const nextOffset=nextZoom===1?0:(point-fraction*nextWidth)/(duration-nextWidth);
-      setZoom(nextZoom);
-      setViewportOffset(Math.max(0,Math.min(1,nextOffset)));
-    }
-    element.addEventListener("wheel",wheel,{passive:false});
-    return ()=>element.removeEventListener("wheel",wheel);
-  },[duration,zoom,viewportOffset]);
+  // Native wheel scroll remains page scrolling everywhere, including the waveform.
+  // Zoom uses the visible Tools control and its slider; no wheel interception.
 
   const refreshChannels=useCallback(async()=>{
     const r=await fetch("/api/projects/"+jobId+"/channels");
@@ -684,7 +654,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>!bypassed[k])}
                 onClick={()=>setBypassed({...DEFAULT_BYPASS})}>A · Processed</button>
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>bypassed[k])}
-                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,dynamics:true,ending:true})}>B · Original</button>
+                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,compression:true,ducking:true,ending:true})}>B · Original</button>
             </div>
             {EFFECT_KEYS.map(key=><label key={key}>
               <input type="checkbox" checked={bypassed[key]}

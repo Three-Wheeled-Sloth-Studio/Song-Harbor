@@ -50,7 +50,7 @@ def parse_untimed(line: str) -> dict[str, Any]:
     return {"kind": kind, "number": number, "spatial": directives}
 
 
-def parse(content: str) -> list[dict[str, Any]]:
+def parse(content: str, aliases:tuple[str,...]=section_production.ALIASES) -> list[dict[str, Any]]:
     stripped = content.strip()
     if not stripped:
         raise ValueError("No sections supplied")
@@ -80,7 +80,7 @@ def parse(content: str) -> list[dict[str, Any]]:
             if "production" in result[-1]:
                 raise ValueError(f"Line {index}: Only one production block per section")
             try:
-                result[-1]["production"] = section_production.parse_block(stripped_line)
+                result[-1]["production"] = section_production.parse_block(stripped_line,aliases)
             except ValueError as exc:
                 raise ValueError(f"Line {index}: {exc}") from exc
             continue
@@ -162,7 +162,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
           duration: float | None) -> dict[str, Any]:
     if mode not in ("replace", "append"):
         raise ValueError("Mode must be replace or append")
-    imported = parse(content)
+    aliases=section_production.source_aliases(project.get("files",[])) or section_production.ALIASES
+    imported = parse(content,aliases)
     old = project.get("sections", [])
     imported, distributed, end_terminator = assign_initial_times(imported, mode, old, duration)
     # Editing the timed text of the existing arrangement should preserve stable
@@ -200,7 +201,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
             if not isinstance(item["production"], list):
                 raise ValueError("Production directives must be a list")
             # Normalize even JSON imports through the same constrained grammar.
-            parsed = section_production.parse_block(section_production.render_block(item["production"]))
+            parsed = section_production.parse_block(section_production.render_block(item["production"]),aliases)
             if parsed:
                 production[match["id"]] = parsed
         if "lyrics" in item:

@@ -15,7 +15,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
  */
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1};
 export type AuditionLevel = {gain:number};
-type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;panner?:StereoPannerNode};
+type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;panner?:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
 export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
@@ -48,7 +48,7 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
+  private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
   get dynamicsMeters(){
@@ -145,9 +145,11 @@ export class SharedClockAudition {
         let panner:StereoPannerNode|undefined;
         panner=this.context.createStereoPanner();
         panner.pan.value=src.pan;
-        gain.connect(panner).connect(this.eqStages.get(src.filename)![0]);
+        const sectionGain=this.context.createGain();
+        sectionGain.gain.value=1;
+        gain.connect(sectionGain).connect(panner).connect(this.eqStages.get(src.filename)![0]);
         gain.gain.value=0;
-        this.tracks.push({source:src,buffer,gain,panner});
+        this.tracks.push({source:src,buffer,gain,sectionGain,panner});
         onProgress?.(i+1,sources.length);
       }
       this.sourceDurationSeconds=maxDuration;
@@ -218,6 +220,10 @@ export class SharedClockAudition {
   }
   get comparingOriginal(){return Object.values(this.bypassEffects).every(Boolean);}
   private configurePreviewNodes(at:number,offset:number){
+    for(const track of this.tracks){
+      scheduleAutomation(track.sectionGain.gain,
+        this.automation[track.source.filename]?.gain||[{time:0,value:1}],offset,at);
+    }
     const bypass=this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
       const eq=this.eqStages.get(filename);
@@ -246,7 +252,7 @@ export class SharedClockAudition {
       bypass.reverb?[{time:0,value:0}]:bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
+  setAutomation(curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
     this.automation=curves;
     this.duckEnvelopes.clear();
     this.refreshDuckingEnvelopes();
@@ -395,7 +401,10 @@ export class SharedClockAudition {
       gain.gain.value=this.renderedLevels[track.source.filename]??0;
       const childPan=offline.createStereoPanner();
       childPan.pan.value=track.source.pan;
-      source.connect(gain).connect(childPan).connect(eqs.get(track.source.filename)![0]);
+      const sectionGain=offline.createGain();
+      scheduleAutomation(sectionGain.gain,
+        this.automation[track.source.filename]?.gain||[{time:0,value:1}],0,0);
+      source.connect(gain).connect(sectionGain).connect(childPan).connect(eqs.get(track.source.filename)![0]);
       source.start(0);
     }
     for(const [filename,bus] of group){

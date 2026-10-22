@@ -47,7 +47,7 @@ GAIN_TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 AUTO_PAN_TOKEN = re.compile(
-    r"(?i)^auto\\.pan:center(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s"
+    r"(?i)^auto\.pan:center(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s"
     r"(?::(?P<curve>smooth|linear))?)?$"
 )
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")

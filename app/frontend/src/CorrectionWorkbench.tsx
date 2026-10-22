@@ -3,7 +3,11 @@ export type CorrectionDraft={
   finding:AudioFinding;
   sectionId:string;
   file:string;
-  kind:"comp"|"duck"|"trim";
+  kind:"comp"|"duck"|"deess"|"trim";
+  frequency:number;
+  q:number;
+  maxReduction:number;
+  auditionBoost:number;
   threshold:number;
   ratio:number;
   depth:number;
@@ -11,16 +15,18 @@ export type CorrectionDraft={
   transition:number;
   proposed:boolean;
 };
-export function CorrectionWorkbench({draft,files,trimBase,busy,onChange,onAccept,onCancel}:{
+export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChange,onAccept,onCancel}:{
   draft:CorrectionDraft;
   files:string[];
   trimBase:number;
   busy:boolean;
+  reduction?:{compressionDb:number;duckDb:number;deessDb:number};
   onChange:(next:CorrectionDraft)=>void;
   onAccept:()=>void;
   onCancel:()=>void;
 }){
   const edit=(patch:Partial<CorrectionDraft>)=>onChange({...draft,...patch});
+  const reductionItems=[["Compression",reduction?.compressionDb||0],["Ducking",reduction?.duckDb||0],["De-esser",reduction?.deessDb||0]] as const;
   return <section className="song-correction-workbench" aria-label="Correction trial">
     <div className="song-correction-heading">
       <strong>Correction trial · {draft.finding.label}</strong>
@@ -33,15 +39,36 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,onChange,onAccept
       <button type="button" aria-pressed={draft.proposed} onClick={()=>edit({proposed:true})}>B · Proposed</button>
     </div>
     {draft.kind!=="trim"&&<>
-      <label>Effect<select value={draft.kind} onChange={e=>edit({kind:e.target.value as "comp"|"duck"})}>
+      <div className="song-dynamics-meter" aria-label="Live dynamics gain reduction">
+        {reductionItems.map(([name,value])=><div key={name} className="song-dynamics-meter-row">
+          <span>{name}</span><meter min={0} max={12} value={Math.min(12,value)}/><output>{value.toFixed(1)} dB</output>
+        </div>)}
+      </div>
+      <label className="song-audition-strength">Audition strength
+        <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true})}>
+          <option value={1}>Actual setting · 1×</option><option value={3}>Exaggerated audition · 3×</option>
+        </select>
+        <small>3× exaggerates reduction only during audition; Accept saves the unboosted values shown below.</small>
+      </label>
+      <label>Effect<select value={draft.kind} onChange={e=>edit({kind:e.target.value as "comp"|"duck"|"deess"})}>
         <option value="comp">Compression</option>
         <option value="duck">Vocal-keyed ducking</option>
+        <option value="deess">Targeted de-esser</option>
       </select></label>
       <label>Track<select value={draft.file} onChange={e=>edit({file:e.target.value})}>
         {files.filter(f=>draft.kind!=="duck"||!f.includes("(Vocals)")).map(f=>
           <option key={f} value={f}>{f.match(/\(([^)]+)\)/)?.[1]||f}</option>)}
       </select></label>
-      {draft.kind==="comp"?<>
+      {draft.kind==="deess"?<>
+        <label>Frequency <strong>{draft.frequency} Hz</strong><input type="range" min="3000" max="11000" step="100" value={draft.frequency}
+          onChange={e=>edit({frequency:Number(e.target.value),proposed:true})}/></label>
+        <label>Bandwidth / Q <strong>{draft.q.toFixed(1)}</strong><input type="range" min=".4" max="8" step=".1" value={draft.q}
+          onChange={e=>edit({q:Number(e.target.value),proposed:true})}/></label>
+        <label>Threshold <strong>{draft.threshold} dBFS</strong><input type="range" min="-70" max="-10" step="1" value={draft.threshold}
+          onChange={e=>edit({threshold:Number(e.target.value),proposed:true})}/></label>
+        <label>Maximum reduction <strong>{draft.maxReduction} dB</strong><input type="range" min="0" max="12" step=".5" value={draft.maxReduction}
+          onChange={e=>edit({maxReduction:Number(e.target.value),proposed:true})}/></label>
+      </>:draft.kind==="comp"?<>
         <label>Threshold <strong>{draft.threshold} dBFS</strong>
           <input type="range" min="-40" max="-6" step="1" value={draft.threshold}
             onChange={e=>edit({threshold:Number(e.target.value),proposed:true})}/></label>

@@ -27,6 +27,8 @@ jobs:
         run: python -m unittest discover -s app/backend/tests -p 'test_runtime_quit.py' -v
       - name: Verify human-readable Version Revision Build format
         run: python -m unittest discover -s app/backend/tests -p 'test_version_badge.py' -v
+      - name: Verify section de-esser parsing and roundtrip
+        run: python -m unittest discover -s app/backend/tests -p 'test_section_deess.py' -v
       - name: Verify dynamics scripts
         run: python -m unittest discover -s app/backend/tests -p 'test_section_dynamics.py' -v
       - name: Verify externally imported tracks and title inference

@@ -17,7 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -305,7 +305,7 @@ async def submit(request: Request, file: UploadFile = File(...)) -> dict[str, An
 
 @app.post("/api/jobs/import-tracks")
 async def import_tracks(request: Request, files: list[UploadFile] = File(...),
-                        title: str = "") -> dict[str, Any]:
+                        title: str = Form("")) -> dict[str, Any]:
     """Import aligned audio tracks without source separation or destructive edits."""
     require_local_origin(request)
     if not 2 <= len(files) <= 12:

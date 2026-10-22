@@ -7,6 +7,26 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22 pre-test: L/R manifest restore and dozens of named tracks
+
+User specifically blocked acceptance testing until native Song Harbor split export (`12 mono WAV + manifest.json`) and arbitrary named track support are addressed.
+
+**Implemented on main:**
+- New `stem_import.channel_groups` validates the real `song-harbor-stereo-channel-split` v1 manifest, checks exact uploaded files, safe flat filenames, complete unique L/R pairs, group count, and rejects malformed/incomplete manifests. Input is WAVs plus `manifest.json`; do not include README.txt. Support up to 64 paired parents / 128 mono children.
+- `POST /api/jobs/import-tracks` now separates `manifest.json` from audio uploads. For a valid manifest it reconstructs each stereo working parent from its two mono channels using FFmpeg, copies immutable mono originals into a new per-job `Channels-Imported-<id>` folder and writes a remapped project-local channel manifest. Sets `channel_children[parent].active=true`; existing playback/route switching sees it just like an in-app stereo split.
+- Standalone multi-track import supports 2-64 parents. Input media ceiling 1GiB per audio file and 16GiB per batch; source originals preserved. Custom names sanitized to unique aliases from original filenames, each with `track_id` stable across display-name changes. `stem_name`, `channel_split`, `SaveProject`, channel split API no longer require fixed six aliases/count.
+- `section_production` derives allowed stem aliases from current project working WAVs; `section_import.apply` passes them to the script parser. Pan, width, space, reverb, EQ, compression, ducking, reset can address arbitrary aliases, not only initial six; supports up to 512 production tokens per section. Mixer displays original imported source names and the exact script alias in a compact extra label; classic six-stem mixer retains original icon layout.
+- Import screen accepts up to 64 standalone files or 128 mono+manifest with title inference from manifest parent source names; user override remains.
+- Tests: `test_stem_import.py` verifies exact 12-file manifest reimport to six parents with active L/R routing, malformed manifests, and 33 named source aliases in section pan/EQ scripts. Python backend CI passed at `1a57d74a` for parser fix; additional later changes in tests/docs/alias UI should be rechecked. Frontend build passed at `f69df049`, and post-named-stem builds need verification.
+- Ran actual local FFmpeg filter smoke on synthetic float-mono Left/Right WAVs; produced a valid 48 kHz stereo working parent. This is command validation, not end-to-end audio QA on user's Windows song.
+- Documentation: `docs/user-guide.md`, in-app `HelpDialog.tsx`, and `docs/multitrack-import-qa.md` updated.
+
+**Limits and future contract:** Browser shared-clock preview still limits decoded AudioBuffers to 768MiB; long mixes containing dozens of tracks may need future chunked streaming even though project save/reopen/DAW handoff accept 64. Source track IDs are stable, script alias is human-readable. When implementing editor track rename, do not change immutable `track_id`/media keys; instead perform atomic validation/migration of every section block, all stored production/spatial references and derived targets to the renamed alias. Renaming UI and atomic alias migration are explicitly *future work*, not implemented now. Do not let a cosmetic edit silently orphan production references.
+
+**Next user test:** Reimport exact 12 mono WAVs PLUS their manifest from a known six-stem split; confirm Library opens 6 parents, all in L/R active state, stereo toggle works, audio is aligned, and WAV export matches expectations. Then import 16+ named tracks and test per-name section script, subject to decoded-audio limit. Rollback checkpoint remains available.
+
+---
+
 ## 2026-10-22: first-class multi-track import
 
 Requested: Import screen must accept multiple existing stems/tracks into **one song**, suggest title from their common filename portion and offer manual override. Implemented directly on `main`:

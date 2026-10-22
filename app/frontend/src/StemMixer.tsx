@@ -256,7 +256,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   useEffect(()=>{
     const engine=audio.current;
     if(!engine?.ready||!panLoaded)return;
-    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>;dynamics?:{compressor?:{threshold:ReturnType<typeof compileSectionAutomation>;ratio:ReturnType<typeof compileSectionAutomation>};duck?:{depthDb:ReturnType<typeof compileSectionAutomation>;keyFilename:string}}}>={};
+    const byFile:Record<string,{pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>;dynamics?:{compressor?:{threshold:ReturnType<typeof compileSectionAutomation>;ratio:ReturnType<typeof compileSectionAutomation>};duck?:{depthDb:ReturnType<typeof compileSectionAutomation>;keyFilename:string};deess?:{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;threshold:ReturnType<typeof compileSectionAutomation>;maxReduction:ReturnType<typeof compileSectionAutomation>}}}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
     for(const filename of files){
       const saved=panTargets.filter(item=>item.source_key===filename);
@@ -346,7 +346,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         const desired=settings.filter(item=>item.kind===kind).flatMap(item=>{
           const section=sectionById.get(item.section_id);
           return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
-            value:item[field],transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+            value:item[field]??initial,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
         });
         return compileSectionAutomation(desired,initial,{min,max});
       };

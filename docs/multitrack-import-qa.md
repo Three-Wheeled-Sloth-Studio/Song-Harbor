@@ -8,6 +8,54 @@
 
 
 
+## Accepted 16+ stem PI acceptance contract (October 22)
+
+The acceptance target now includes both **initial multitrack import** and
+**adding another track to an already saved song**. These are separate flows.
+The former is implemented with limits; the latter and transactional renaming
+are requirements, not features claimed working today.
+
+### Core user story: add, address, rename
+
+1. Import sixteen uniquely named tracks; keep all sixteen through library
+   reopen, scripted pan/gain/EQ/reverb, mute/solo, WAV export and DAW handoff.
+   Repeat with at least 33 short tracks as a metadata/control stress fixture.
+2. Open the sixteen-track project; add one more aligned cello stem without
+   deleting or reimporting any other stem, its cues, its automation or its
+   balance. Verify the new track begins at 0, silence-padded where needed,
+   with original file hash preserved.
+3. Assign distinct **display name** and script-safe **alias** (e.g.
+   `Cello_Accent`). Track identity is an immutable `track_id`, separate
+   from names, source filename and generated output filename. Save a directive:
+   `Cello_Accent.pan:right.22@2s:smooth`.
+4. Rename `Cello_Accent` to `CounterCello`. All authored section-script
+   tokens, saved parsed directives, unresolved editable drafts where safely
+   migratable, UI selectors, and queued/render manifests must refer to the
+   new alias. No old alias should silently become a different track.
+5. Verify rename persists after project reopen, and the original audio and
+   `track_id` remain unchanged. A second distinct cello track must not be
+   merged or overwritten. Check all effect kinds, not just pan, including
+   EQ, gain, reverb, width, spatial effects, dynamics and reset.
+6. Reject invalid aliases, reserved names (`all`, `auto`, `Master`),
+   case-insensitive duplicates, in-use file collisions, ambiguous legacy
+   directives, and concurrent/stale revisions. Rename must be atomic or
+   fully rolled back with a useful error. Do not rewrite lyric prose or
+   unrelated quoted words while migrating structured tokens.
+7. Renaming while unsaved whole-song script edits exist must prompt to
+   apply, discard or cancel, OR correctly migrate the dirty draft without
+   loss. Never silently overwrite the draft.
+8. Test `all.pan:center` on custom aliases and direct edits through every
+   section-effect UI; inspect old six-role materializers and route handlers
+   for custom-name assumptions before local acceptance.
+9. Measure decoded-audio RAM at 16 tracks of practical song length. The
+   current browser shared-clock 768 MiB limit is an intentional guard;
+   streaming/segmented decoding or adaptive memory budget is the follow-on.
+   Never falsely report a project as fully auditionable beyond that limit.
+
+**Exit gate:** A user can say "add cello to this song", immediately mix the
+new track, rename it, see the edited names in ALL script guidance, and export
+and reopen without manual token repair.
+
 ## New user-facing flow
 
 Import song > **Multiple tracks · already separated**.

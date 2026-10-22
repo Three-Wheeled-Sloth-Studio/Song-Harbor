@@ -28,6 +28,35 @@ Unsupported `auto.*`, `all.comp`, `all.duck`, and `all.deess` are
 rejected until dedicated semantics are implemented. CI and local audition QA
 are required before this slice can be considered fully verified.
 
+## Fourth slice: hybrid auto-pan (implementation awaiting local listening QA)
+
+`auto.pan:center@6s:smooth` now compiles into a section-scoped, bounded solver.
+The backend persists request metadata, explicit/inherited protected pan sources,
+and separately protected explicit/inherited gain sources. Browser-side DSP uses
+decoded stems and saved mixer faders, estimates dry-stem section channel energy,
+and selects small complementary pan corrections on unprotected stems.
+
+- Explicit/inherited stem or broadcast pan remains locked; `all.reset` clears
+  protection for subsequent sections.
+- The pan-search cap is 0.24 pan units from the current setting; gain compensation
+  is secondary and limited to +/-0.35 dB, never on explicit gain-protected stems.
+- Smooth transitions default to 8 seconds; specify `@6s:smooth` to change.
+- The solver runs on section/mixer updates, not as a continuously moving servo.
+- It reports predicted before/after stereo balance and warns when the target
+  is unattainable with available stems. The estimate is computed from *dry*
+  source energy and does not account for downstream EQ, compression, space,
+  reverb or inter-stem phase interactions. Sound Cleanup > Analyze Mix remains
+  the authoritative effects-processed measurement after rendering.
+- No automatic master loudness adjustment and no `auto.gain:0` solver yet.
+  Offline WAV export and playback use the same generated curves, with a strict
+  peak/headroom check still required before publishing.
+
+**Important:** A song sheet that explicitly pans every stem in every section
+leaves the solver with no freedom. For the Logo and the Maw, import
+`docs/qa-the-logo-and-the-maw-auto-pan.txt`, which preserves intentionally
+placed vocals/bass/guitar while leaving drums/piano/other eligible for balancing.
+Do not compare auto-pan using the old fully pinned sheet and expect it to move.
+
 ## Next steps — remaining syntax accepted in principle, not yet executable
 
 Example proposed section: 
@@ -37,7 +66,7 @@ Example proposed section:
 {Vocals.pan:left.32@4s:smooth Drums.gain:+0.75@3s:smooth auto.pan:center@8s:smooth auto.gain:0@8s:smooth}
 ```
 
-The importer supports the bounded broadcast effects listed above; automatic `auto.<effect>` solvers remain unimplemented. Only `all.reset` exists. Do not copy the example into saved sections until grammar and DSP are implemented.
+The importer supports explicit/broadcast effects and `auto.pan:center`. Other `auto.<effect>` solvers, including `auto.gain:0`, remain unimplemented. Do not copy the full illustrative example into saved sections until `auto.gain` exists.
 
 - `Stem.effect`: explicit, highest priority; must never be silently overridden by automation.
 - `all.effect`: default target broadcast to all eligible stems not explicitly set in that section. Explicit stem directive wins. This is not an analyzer.

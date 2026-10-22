@@ -197,7 +197,7 @@ export function inspectRenderedAudio(buffer:AudioLike,outputTrimDb=0,maxFindings
       sibilance:rms>.018&&high>.44&&high>presence*1.5,
       harshness:rms>.045&&presence>.53&&presence>mid*.85,
       fizz:rms>.028&&air>.28&&high>.38,
-      noise:rms<.02&&rms>.003&&high>.37&&air>.13
+      noise:rms<.02&&rms>.003&&(high+air)>.37&&air>.13
     };
     const rules=[
       ["sibilance",3,"Sibilance-like high-frequency burst","Energy from roughly 5–9.5 kHz dominates an audible passage; this could be sibilants, cymbals or synth texture.","Compare the vocal stem and try localized de-essing only if voices sound harsh."],

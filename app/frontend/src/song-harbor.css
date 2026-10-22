@@ -430,3 +430,22 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-update-status button{cursor:pointer}
 .song-update-status button[aria-label="Close update status"]{position:absolute;top:5px;right:7px}
 .song-update-error{position:absolute;top:100%;right:0;z-index:100;background:var(--tws-color-surface-panel,#222);padding:6px;max-width:270px}
+
+/* Help is a modal reference, never a sidebar that consumes waveform width. */
+.song-help-trigger span{display:inline-flex;width:19px;height:19px;align-items:center;justify-content:center;border:1.6px solid currentColor;border-radius:50%;font:700 13px/1 Arial,sans-serif}
+.song-help{display:grid;gap:12px;width:min(100%,700px);max-height:min(68vh,680px);font-size:13px;color:var(--tws-color-text-primary)}
+.song-help-search-label{font-weight:650;font-size:12px}
+.song-help-search{width:100%;padding:9px 11px;border:1px solid var(--tws-color-border-strong);border-radius:7px;background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary)}
+.song-help-search:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+.song-help-topic-list{display:grid;gap:7px;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:5px}
+.song-help-topic{border:1px solid var(--tws-color-border-normal);border-radius:7px;background:var(--tws-color-surface-inset);min-width:0}
+.song-help-topic summary{cursor:pointer;padding:10px 12px}
+.song-help-topic summary:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+.song-help-topic summary strong{font-size:13px;margin-right:8px}
+.song-help-topic summary span{font-size:11px;color:var(--tws-color-text-muted)}
+.song-help-topic-body{padding:0 13px 10px;line-height:1.55}
+.song-help-topic-body p{margin:9px 0}
+.song-help-topic-body pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c171e;padding:10px;border-radius:6px;font:12px/1.5 Consolas,monospace}
+.song-help-feedback{font-size:11px;color:var(--tws-color-text-muted);margin:0}
+.song-help-feedback a{color:var(--tws-color-action-primary)}
+@media(max-width:650px){.header-actions{gap:5px}.song-help-topic summary span{display:block;margin:4px 0 0}}

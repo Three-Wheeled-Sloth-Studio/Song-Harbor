@@ -79,6 +79,29 @@ The importer supports explicit/broadcast effects and `auto.pan:center`. Other `a
 
 Suggested implementation sequence: Section visualization → per-section stem gain → all.effect grammar and overrides → auto.pan:center → auto.gain reference matching → independent longer reverb returns / dry fade → loudness-matched A/B. Gain-before-auto.gain reduces moving parts.
 
+## Fifth slice: audible atmospheric ending and visible scan diagnostics
+
+- When `Master.tail` is nonzero, the deterministic room impulse grows from
+  1.7 seconds to as much as 7 seconds, decaying more slowly.
+- Dry audio follows `Master.fade`; wet excitation stays active through most
+  of the musical fade, ramps down during the last 0.8 seconds, and previously
+  produced reverb continues naturally into the post-roll.
+- The same convolution impulse and wet-drive envelope run in synchronized
+  playback and offline export. Existing songs without a tail retain the short
+  impulse response.
+- Timeline color scanning is still **on demand**. In a screenshot showing
+  `Scan`, no measurements are currently available. Click Scan, and the
+  button changes to Redo with stronger visible intensity hues. Errors now
+  appear directly under the section lane, not only in Sound Cleanup.
+- QA script: `docs/qa-the-logo-and-the-maw-extended-fade.txt` includes all
+  13 sections, adjusts the final outro to `Master.fade:7s:smooth`,
+  `Master.tail:5s`, and increases the outro vocal reverb send from 35 to 45.
+  Confirm the resulting 4:05 export rings naturally rather than chopping.
+  Compare against the earlier 4:03 version using level-matched listening.
+- Long convolution buffers cost extra RAM and DSP. For now, tail settings
+  are limited to 10 seconds and the impulse is capped to 7 seconds.
+  Real-time/local listening and export peak QA remain required.
+
 ## Ending treatment
 
 Retain separate dry bus and wet return. The existing 1.7-second room impulse decays quickly, so the current exported extra seconds contain little reverberant energy. Add longer adjustable IR/decay and separately automated wet-return levels/width at the end. Source stops, effect return rings naturally; allow vocal to fade into environmental texture rather than cut off. Verify offline export and synchronized audition match.

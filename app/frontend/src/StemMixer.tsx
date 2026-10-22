@@ -68,7 +68,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [handoffFolder, setHandoffFolder] = useState("");
   const [notice, setNotice] = useState("");
   const [playing, setPlaying] = useState(false);
-  const [monitorVolume, setMonitorVolume] = useState(75);
+  const [monitorVolume, setMonitorVolume] = useState(()=>{
+    try{
+      const value=Number(window.localStorage.getItem("song-harbor:monitor-volume"));
+      return Number.isFinite(value)&&window.localStorage.getItem("song-harbor:monitor-volume")!==null
+        ?Math.max(0,Math.min(100,value)):25;
+    }catch{return 25;}
+  });
+  useEffect(()=>{
+    try{window.localStorage.setItem("song-harbor:monitor-volume",String(monitorVolume));}
+    catch{/* Private browser settings should not break playback. */}
+  },[monitorVolume]);
   const [bypassed,setBypassed]=useState<Record<EffectKey,boolean>>(DEFAULT_BYPASS);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(expectedDuration || 0);

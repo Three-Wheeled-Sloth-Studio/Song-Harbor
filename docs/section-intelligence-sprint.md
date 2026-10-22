@@ -102,6 +102,31 @@ Suggested implementation sequence: Section visualization → per-section stem ga
   are limited to 10 seconds and the impulse is capped to 7 seconds.
   Real-time/local listening and export peak QA remain required.
 
+## Pre-0.2.1 completion: timestamped YouTube captions and section hover diagnostics
+
+- Current track is accepted musically; no `auto.gain:0` treatment is needed for
+  *The Logo and the Maw*. The right-biased second pre-chorus is deliberate.
+- The center draggable section title hover now exposes the same scanned
+  intensity, RMS, peak, stereo balance, and side/mid width metrics as its
+  background strip. Hovering no longer loses the analysis to the drag hint.
+- Whole Song Section Text now includes **Lyrics SRT**. After applying the
+  saved section sheet, generate an editable, timestamped .srt preview, inspect
+  it against the vocals, and download a UTF-8 YouTube-compatible caption file
+  named after the song.
+- Caption grouping defaults to two lyric lines per cue, uses three short lines
+  when practical without stranding the last line, or a single exceptionally
+  long line. Timing is estimated by evenly distributing lyric lines between
+  saved section boundaries. Blank lines and standalone parenthetical performance
+  directions are excluded. Instrumental sections with no lyric text produce no
+  cue. Lyric export never changes saved source data.
+- Captions are *estimated*, not phoneme-aligned. Review the exported file
+  against playback and adjust the editable SRT preview for actual entrances
+  and holds. YouTube Studio > Subtitles > Upload file > With timing accepts
+  plain UTF-8 SRT.
+- Backend SRT unit tests cover deterministic output, cue grouping, timing,
+  skipped directions, skipped lyric-less sections and missing-data errors.
+  Full user QA of timed lyrics is pending.
+
 ## Ending treatment
 
 Retain separate dry bus and wet return. The existing 1.7-second room impulse decays quickly, so the current exported extra seconds contain little reverberant energy. Add longer adjustable IR/decay and separately automated wet-return levels/width at the end. Source stops, effect return rings naturally; allow vocal to fade into environmental texture rather than cut off. Verify offline export and synchronized audition match.

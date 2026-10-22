@@ -4,8 +4,8 @@ import type {SongSection} from "./SectionEditor";
 export type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;
   q:number;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
 type Props={jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;
-  targets:SavedEqTarget[];onChange:(items:SavedEqTarget[])=>void};
-export function SectionEqTool({jobId,sections,files,targets,onChange,initialSectionId}:Props){
+  targets:SavedEqTarget[];previewEnabled?:boolean;onPreview?:(items:SavedEqTarget[])=>void;onChange:(items:SavedEqTarget[])=>void};
+export function SectionEqTool({jobId,sections,files,targets,onChange,initialSectionId,previewEnabled=false,onPreview}:Props){
   const [sectionId,setSectionId]=useState(initialSectionId||"");
   useEffect(()=>{if(initialSectionId)setSectionId(initialSectionId);},[initialSectionId]);
   const [file,setFile]=useState("");
@@ -53,6 +53,15 @@ export function SectionEqTool({jobId,sections,files,targets,onChange,initialSect
   const valid=Number.isFinite(frequency)&&Number.isFinite(q)&&Number.isFinite(gain)&&
     Number.isFinite(transition)&&frequency>=30&&frequency<=16000&&q>=.3&&q<=12&&
     gain>=-12&&gain<=12&&transition>=.05&&transition<=30;
+
+  // Live preview remains a purely local draft. Save/Apply is the only API write.
+  useEffect(()=>{
+    if(!previewEnabled||!currentSection||!currentFile)return;
+    onPreview?.([...targets.filter(t=>t.section_id!==currentSection||t.source_key!==currentFile||t.band!==band),{
+      section_id:currentSection,source_key:currentFile,band,frequency,q,gain_db:gain,transition_seconds:transition,curve
+    }]);
+  // Deliberately react to editable values, not to parent re-renders.
+  },[previewEnabled,currentSection,currentFile,band,frequency,q,gain,transition,curve]);
   return <details className="production-tool-detail" open>
     <summary>Parametric EQ</summary>
     <div className="timeline-loop-controls">

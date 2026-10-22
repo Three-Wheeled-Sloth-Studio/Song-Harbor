@@ -354,7 +354,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),dynamics};
       }catch(e){setError(e instanceof Error?e.message:"Invalid dynamics automation");return;}
     }
-    engine.setAutomation(byFile);
+    engine.setAutomation(byFile,Boolean(correction));
     engine.setEnding(ending);
     setDuration(engine.duration);
   },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,dynamicsTargets,ending,timelineSections,files,correction]);

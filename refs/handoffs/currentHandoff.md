@@ -7,6 +7,21 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22 laptop QA: explicit dynamics A/B, sound cleanup, zoom, build identity
+
+User on a production laptop deferred multi-track import test. Screenshot confirmed Tools A/B offered one opaque `Bypass dynamics` toggle rather than separate compression/ducking, and sound cleanup was hidden until processed WAV export and poorly discoverable. Mouse-wheel waveform zoom hijacked normal page scrolling. The Git SHA badge `main@... ` was not usable as release identity. User requested **Version:Revision:Build** rather than hash; later true fullscreen desktop-mode app and far-right topbar close X.
+
+**Implemented on main:**
+- Frontend A/B exposes independent **Bypass compression** and **Bypass ducking** controls, plus previous individual effects. B Original bypasses both; A Processed restores both. SharedClockAudition schedule separately disables compressor and duck envelope only in audition, while offline rendered audio remains processed.
+- Restored native mouse-wheel screen scrolling over waveform and timeline. Zoom remains available through Tools dropdown and slider. Removed non-passive wheel handler to avoid scroll capture.
+- Sound cleanup analyzer is now an always discoverable Tools section with **Analyze mix** button, candidate timestamp list with click-to-seek. Uses same OfflineAudioContext render graph as WAV export but does not encode/download a WAV or change source audio. Successful WAV export still refreshes findings. Analysis detects near-ceiling peaks and extreme single-sample jumps only; can false-positive percussion and won't de-ess.
+- Version badge is `Version:Revision:Build`, e.g. `0.1.0:1:412`. Package version read from `app/frontend/package.json`; revision development epoch is `1`; build is git `rev-list --count HEAD`; full short Git commit/branch only in tooltip. No network access needed; fallback build=local. `test_version_badge.py` in backend CI.
+- In-app Help + docs/user-guide.md updated to reflect behavior and no wheel zoom.
+- **Deferred shell request:** True fullscreen desktop-style startup and far-right close X must be implemented as a platform-aware shell strategy. Browser window.close() cannot reliably close the host or backend for self-opened tabs; avoid pretending it is implemented. Design a safe explicit local quit endpoint guarded by instance token, confirmation of unsaved work, and fullscreen-window startup with browser kiosk/app mode where appropriate, with a normal window opt-out. Avoid killing unrelated browser sessions or orphaning backend.
+- QA: Confirm each bypass toggles independently with `Other.comp:-18,2` and `Guitar.duck:3`; run Analyze mix before export, seek results, then render WAV; verify native page scrolling when pointer is over waveform and Tools Zoom works; confirm version badge uses three fields and tooltip contains diagnostic commit. Performance caveat: analyzer offline-renders full mix even before WAV, so consider recording memory/cpu impact on long songs. Last frontend real Chromium build at `87daecc2` succeeded; newest commits await CI. No actual Windows listening QA.
+
+---
+
 ## 2026-10-22 pre-test: L/R manifest restore and dozens of named tracks
 
 User specifically blocked acceptance testing until native Song Harbor split export (`12 mono WAV + manifest.json`) and arbitrary named track support are addressed.

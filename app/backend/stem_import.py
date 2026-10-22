@@ -117,14 +117,35 @@ def channel_groups(manifest_bytes:bytes, uploaded_names:list[str])->list[dict[st
             for source,pair in groups.items()]
 
 
-def identity_tracks(filenames:list[str])->list[dict[str,str]]:
-    """Create stable track IDs and unique script-friendly aliases for arbitrary stems."""
+def identity_tracks(filenames:list[str],title:str|None=None)->list[dict[str,str]]:
+    """Stable IDs and unique script-safe aliases, derived from source names.
+
+    A future UI rename may change display_name and update section tokens,
+    but it must never mutate track_id or working WAV filename.
+    """
+    if len(filenames)>MAX_TRACKS:raise ValueError("Maximum 64 stems")
+    prefix=(title or guess_song_title(filenames)).strip()
     used:set[str]=set()
     items=[]
     for index,item in enumerate(assign_tracks(filenames),start=1):
-        name=item["stem_alias"]
-        if name in used:raise ValueError("Internal alias collision")
-        used.add(name)
+        alias=item["stem_alias"]
+        if alias.startswith("Track") and alias[5:].isdigit():
+            raw=Path(item["original_filename"]).stem
+            if prefix and raw.casefold().startswith(prefix.casefold()):
+                raw=raw[len(prefix):].strip(" ._-")
+            # Remove common separators, numbers, and reserved effects punctuation.
+            candidate=re.sub(r"[^A-Za-z0-9_-]","_",raw).strip("_-")[:32]
+            if candidate and candidate[0].isalpha() and candidate.lower() not in (
+                    "all","master","reset") and not candidate.lower().startswith("track0"):
+                alias=candidate
+        base=alias
+        suffix=2
+        while alias.casefold() in used:
+            alias=f"{base[:26]}_{suffix}"
+            suffix+=1
+        used.add(alias.casefold())
+        item["stem_alias"]=alias
         item["track_id"]=f"trk{index:04d}"
+        item["display_name"]=Path(item["original_filename"]).stem
         items.append(item)
     return items

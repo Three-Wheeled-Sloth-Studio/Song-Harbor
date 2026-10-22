@@ -15,8 +15,8 @@ export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"
 type SavedGainTarget={section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
 type SavedAutoPanTarget={section_id:string;target:"center";protected_sources:string[];transition_seconds:number;curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
-export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
-  jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
+export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onApplied}:{
+  jobId:string;songTitle:string;open:boolean;onClose:()=>void;focused:SongSection|null;
   revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding)=>void;
 }){
   const [content,setContent]=useState(()=>temporarySectionDrafts.get(jobId)||"");
@@ -144,7 +144,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url;
-    a.download="Song Harbor Lyrics.srt";
+    a.download=(songTitle.replace(/[\\/:*?"<>|]/g,"").trim()||"Song Harbor")+" - Lyrics.srt";
     document.body.appendChild(a);a.click();a.remove();
     window.setTimeout(()=>URL.revokeObjectURL(url),1000);
   }

@@ -46,6 +46,10 @@ GAIN_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.gain:(?P<gain>[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2}))"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+AUTO_PAN_TOKEN = re.compile(
+    r"(?i)^auto\\.pan:center(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s"
+    r"(?::(?P<curve>smooth|linear))?)?$"
+)
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
@@ -58,6 +62,18 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        auto_pan=AUTO_PAN_TOKEN.fullmatch(token)
+        if auto_pan:
+            if "auto.pan" in touched or "all" in touched:
+                raise ValueError("Duplicate or conflicting auto.pan")
+            duration=float(auto_pan.group("seconds") or 8)
+            if not (.05<=duration<=30):
+                raise ValueError("Auto-pan transition must be .05-30 seconds")
+            touched.add("auto.pan")
+            directives.append({"kind":"auto_pan","track":"auto",
+                               "transition_seconds":duration,
+                               "curve":(auto_pan.group("curve") or "smooth").lower()})
+            continue
         gain_match=GAIN_TOKEN.fullmatch(token)
         if gain_match:
             canonical=next((a for a in aliases if a.lower()==gain_match.group("track").lower()),None)
@@ -224,6 +240,9 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "auto_pan":
+            rendered.append(f"auto.pan:center@{d['transition_seconds']:g}s:{d['curve']}")
+            continue
         if d["kind"] in ("fade", "tail"):
             head = f"Master.{d['kind']}:{float(d['seconds']):g}s"
             if d["kind"] == "fade":
@@ -285,6 +304,37 @@ def expand_broadcast(blocks: dict[str, list[dict[str, Any]]],
     return result
 
 
+
+def materialize_auto_pan(sections: list[dict[str, Any]],
+                         blocks: dict[str, list[dict[str, Any]]],
+                         files: list[str]) -> list[dict[str, Any]]:
+    """Emit per-section intent and protected inherited pan positions.
+
+    Auto pan is not implicitly sticky; each requesting section is independent.
+    Explicit and broadcast pan settings persist as protection until reset.
+    """
+    aliases=source_aliases(files)
+    stems={alias:filename for filename in files for alias in aliases
+           if "(" + alias + ")" in filename}
+    protected=set()
+    output=[]
+    for section in sorted(sections,key=lambda x:x["start_seconds"]):
+        directives=blocks.get(section["id"],[])
+        for d in directives:
+            if d["kind"]=="reset":
+                if d["track"]=="all": protected.clear()
+                else: protected.discard(d["track"])
+            elif d["kind"]=="pan":
+                if d["track"]=="all": protected.update(stems)
+                else: protected.add(d["track"])
+        for d in directives:
+            if d["kind"]=="auto_pan":
+                output.append({"section_id":section["id"],"target":"center",
+                               "protected_sources":[stems[a] for a in protected if a in stems],
+                               "transition_seconds":d["transition_seconds"],"curve":d["curve"]})
+    return output
+
+
 def materialize_pan(sections: list[dict[str, Any]],
                     blocks: dict[str, list[dict[str, Any]]],
                     files: list[str]) -> list[dict[str, Any]]:
@@ -302,7 +352,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "auto_pan"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -328,7 +378,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "auto_pan"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:

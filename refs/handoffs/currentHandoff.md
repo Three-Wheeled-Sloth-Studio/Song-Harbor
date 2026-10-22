@@ -7,6 +7,20 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-21 late: post-checkpoint dynamics and cleanup milestone
+
+User explicitly confirms a safely downloaded rollback checkpoint exists and prioritizes continued development rather than release freeze. Implemented and committed to `main`:
+
+- A/B comparison now includes `dynamics` key; B Original bypasses compression and ducking during live audition. Processed WAV bounce ignores audition bypass.
+- `SharedClockAudition.setLevels` no longer calls `setAutomation`/seek or restarts sources when stem levels change. Only changed sidechain-key gains rebuild and reschedule downstream duck GainNode; monitor-only volume changes do not recompute ducking. Stem gain uses a brief target ramp.
+- First non-destructive audio cleanup inspector scans the float render prior to 24-bit WAV encoding for near-ceiling peaks and very large single-sample changes. Tools presents a clickable `Sound cleanup review` after successful render; this is **candidate detection**, not automatic repair, de-essing, or general artifact detection.
+- Documentation updated: `docs/user-guide.md`, `app/frontend/src/HelpDialog.tsx`, QA checklist `docs/dynamics-cleanup-qa.md`.
+- Frontend build passed at `cf20f1ec` for integrated analyzer UI, and older `02713968` passed; the most recent docs/UI jobs may still be pending. No user-machine listening QA done. Do not state full playback/export parity verified.
+
+**Next:** Validate listening transport during repeated vocal gain drags, B-original dynamics bypass, user-facing candidate false positives and CPU cost, fade/tail export. Optimize detector caching/scheduling and continue with gain-reduction visibility/de-essing work if QA allows. User's upcoming track release can use their downloaded safe checkpoint independently of development.
+
+---
+
 ## 2026-10-21: first external testers and in-app Help
 
 User reports additional people are now testing Song Harbor. Added an always-available **i** Help icon immediately beside header Settings. Opens a TWS Dialog with offline searchable user guidance: quick start, Library, synchronized transport/mixer, non-destructive section script grammar, supported pan/width/space/reverb/EQ/compression/vocal ducking, fade/tail, WAV versus original stem DAW export, safe update/version, troubleshooting and feedback. Help content is maintained in `app/frontend/src/HelpDialog.tsx`; external user-facing guide in `docs/user-guide.md`. Tester QA checklist in `docs/help-qa-checklist.md`. `README.md` links guide and updates capabilities. Frontend TypeScript/build passed at `02713968` for final UI/CSS changes; actual Windows modal/accessibility acceptance pending.

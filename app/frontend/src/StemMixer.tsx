@@ -632,6 +632,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   async function exportMix(overrideTrimDb?:number) {
     const engine=audio.current;
+    if(correction){setError("Accept or discard the correction trial before exporting the saved mix.");return;}
     if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
     stop();
     setExporting(true);
@@ -799,7 +800,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </>}
         {selectedTool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
-          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
+          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
           onLoop={(start,end)=>{
             setLoopIn(Math.min(start,duration));
@@ -906,7 +907,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
-          disabled={exporting} onClick={()=>{void exportMix();}}/>
+          disabled={exporting||Boolean(correction)} onClick={()=>{void exportMix();}}/>
         {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">Download WAV</a>}
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready to download</Status> : null}

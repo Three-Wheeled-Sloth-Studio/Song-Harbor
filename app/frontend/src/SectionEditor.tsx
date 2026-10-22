@@ -15,7 +15,7 @@ function sectionFill(insight:SectionInsight){
   return {
     left:insight.balanceDb>=0?"0":`${(missing*100).toFixed(1)}%`,
     width:`${((1-missing)*100).toFixed(1)}%`,
-    background:`hsla(${hue},78%,55%,${(.40+insight.intensity*.38).toFixed(2)})`
+    background:`hsla(${hue},85%,58%,${(.58+insight.intensity*.32).toFixed(2)})`
   };
 }
 function insightTitle(insight:SectionInsight){
@@ -28,8 +28,8 @@ function stamp(seconds:number) {
 }
 type Drag = {id:string; mode:"move"|"start"|"end"; x:number; original:SongSection; originals:SongSection[]; limits:[number,number]; width:number; changed:boolean};
 
-export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections,insights=[],onAnalyzeSections,analyzingSections=false}:{
-  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[]; insights?:readonly SectionInsight[]; onAnalyzeSections?:()=>void; analyzingSections?:boolean;
+export function SectionEditor({jobId,duration,position,initialSections,onSeek,viewStart=0,viewEnd=duration,onSectionsChange,onPersisted,onSectionDoubleClick,externalSections,insights=[],onAnalyzeSections,analyzingSections=false,sectionAnalysisError=""}:{
+  jobId:string; duration:number; position:number; initialSections?:SongSection[]; onSeek:(seconds:number)=>void; viewStart?:number; viewEnd?:number; onSectionsChange?:(sections:SongSection[])=>void; onPersisted?:()=>void; onSectionDoubleClick?:(s:SongSection)=>void; externalSections?:SongSection[]; insights?:readonly SectionInsight[]; onAnalyzeSections?:()=>void; analyzingSections?:boolean; sectionAnalysisError?:string;
 }) {
   const [sections,setSections]=useState<SongSection[]>(initialSections||[]);
   const [kind,setKind]=useState("Chorus");
@@ -211,6 +211,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       <div aria-hidden="true" style={{position:"absolute",left:`${100*(position-viewStart)/(viewEnd-viewStart)}%`,top:0,bottom:0,borderLeft:"2px solid #f2c46c",pointerEvents:"none"}}/>
     </div>}
     </div>
+    {sectionAnalysisError&&<small role="alert">Section color analysis: {sectionAnalysisError}</small>}
     {error&&<small role="alert">{error}</small>}
     {message&&<small role="status">{message}</small>}
   </section>;

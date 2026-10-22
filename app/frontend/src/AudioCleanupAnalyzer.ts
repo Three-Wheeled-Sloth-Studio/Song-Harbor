@@ -10,6 +10,7 @@ export type AudioFinding={
   kind:AudioFindingKind;
   timeSeconds:number;
   durationSeconds?:number;
+  sources?:string[];
   severity:"warning"|"review";
   label:string;
   detail:string;

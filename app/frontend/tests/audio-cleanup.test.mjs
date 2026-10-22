@@ -65,3 +65,22 @@ test("finding groups include all supported sound-cleanup categories",()=>{
   assert.equal(FINDING_GROUPS.phase,"Stereo / mono");
   assert.equal(FINDING_GROUPS.pumping,"Dynamics");
 });
+
+test("signal audit flags a stable high-frequency line without claiming a watermark",()=>{
+  const signal=audio(16,t=>.13*Math.sin(2*Math.PI*6000*t));
+  const matching=inspectRenderedAudio(signal).filter(x=>x.kind==="signal_audit");
+  assert.ok(matching.length>0,"Sustained 6kHz line should be reviewable");
+  assert.equal(matching[0].severity,"review");
+  assert.match(matching[0].detail,/not identify an acoustic watermark or fingerprint/i);
+});
+test("signal audit ignores silence, ordinary lows and too-short samples",()=>{
+  assert.equal(kinds(inspectRenderedAudio(audio(16,()=>0))).has("signal_audit"),false);
+  assert.equal(kinds(inspectRenderedAudio(audio(16,t=>.13*Math.sin(2*Math.PI*330*t)))).has("signal_audit"),false);
+  assert.equal(kinds(inspectRenderedAudio(audio(3,t=>.12*Math.sin(2*Math.PI*6000*t)))).has("signal_audit"),false);
+});
+test("signal audit is observational and leaves all input audio unchanged",()=>{
+  const signal=audio(13,t=>.1*Math.sin(2*Math.PI*6200*t));
+  const before=signal.getChannelData(0).slice();
+  inspectRenderedAudio(signal);
+  assert.deepEqual(signal.getChannelData(0),before);
+});

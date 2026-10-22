@@ -11,6 +11,7 @@ import { SectionReverbTool, type SavedReverbTarget } from "./SectionReverbTool";
 import { SectionWidthTool, type SavedWidthTarget } from "./SectionWidthTool";
 import { SectionSpaceTool } from "./SectionSpaceTool";
 import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
+import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
@@ -103,7 +104,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
   const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
-  const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq">("script");
+  const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq"|"deess">("script");
   const [sectionEditId,setSectionEditId]=useState("");
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
   const [correctionSaving,setCorrectionSaving]=useState(false);
@@ -825,10 +826,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               </select>
             </label>
             <div className="song-section-effect-tabs" role="tablist" aria-label="Section edit effect">
-              {(["script","pan","reverb","width","space","eq"] as const).map(effect=>
+              {(["script","pan","reverb","width","space","eq","deess"] as const).map(effect=>
                 <button key={effect} type="button" role="tab" aria-selected={sectionEffect===effect}
                   onClick={()=>setSectionEffect(effect)}>
-                  {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect[0].toUpperCase()+effect.slice(1)}
+                  {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect==="deess"?"De-ess":effect[0].toUpperCase()+effect.slice(1)}
                 </button>)}
             </div>
           </div>
@@ -879,6 +880,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
 
+        {tool==="sectionEdit"&&sectionEffect==="deess"&&<>
+          <SectionDeEssTool jobId={jobId} sections={timelineSections} files={files}
+            initialSectionId={sectionEditId} targets={dynamicsTargets}
+            onSaved={data=>{
+              setExternalSections(data.sections);setTimelineSections(data.sections);
+              setPanTargets(data.pan_targets);setReverbTargets(data.reverb_targets);
+              setWidthTargets(data.width_targets);setSpaceTargets(data.space_targets);
+              setEqTargets(data.eq_targets);setDynamicsTargets(data.dynamics_targets);
+              setEnding(data.ending);setMixUrl(null);setScriptRevision(v=>v+1);
+            }}/>
+        </>}
         {tool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}

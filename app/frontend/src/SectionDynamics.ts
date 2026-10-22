@@ -88,7 +88,7 @@ export function makeDeEssEnvelope(buffers:readonly AudioBuffer[],curve:DeEssCurv
   const length=Math.min(...buffers.map(buffer=>buffer.length));
   const step=Math.max(1,Math.floor(sr*stepSeconds));
   const result:AutomationPoint[]=[{time:0,value:0}];
-  const state=buffers.map(buffer=>Array.from({length:buffer.numberOfChannels},()=>({previous:0,filtered:0})));
+  const state=buffers.map(buffer=>Array.from({length:buffer.numberOfChannels},()=>({previous:0,filtered:0,previous2:0,filtered2:0})));
   let envelope=0;
   for(let start=0;start<length;start+=step){
     const end=Math.min(length,start+step),time=end/sr;
@@ -105,7 +105,9 @@ export function makeDeEssEnvelope(buffers:readonly AudioBuffer[],curve:DeEssCurv
           const sample=samples[i];
           filter.filtered=alpha*(filter.filtered+sample-filter.previous);
           filter.previous=sample;
-          power+=filter.filtered*filter.filtered;
+          filter.filtered2=alpha*(filter.filtered2+filter.filtered-filter.previous2);
+          filter.previous2=filter.filtered;
+          power+=filter.filtered2*filter.filtered2;
           count++;
         }
       }

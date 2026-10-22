@@ -7,6 +7,24 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22: first-class multi-track import
+
+Requested: Import screen must accept multiple existing stems/tracks into **one song**, suggest title from their common filename portion and offer manual override. Implemented directly on `main`:
+
+- Import screen toggle `Single recording · separate stems` vs `Multiple tracks · already separated`; latter accepts 2-12 files, previews names/sizes, guesses title from filename common prefix and offers editable override.
+- `POST /api/jobs/import-tracks`: accepts multipart `files` and `title` Form, streams files to `jobs/<id>/originals` (original bytes retained), converts each locally via FFmpeg to aligned 48k stereo 24-bit WAV under `stems`. Shorter stems padded silently to longest with no time stretching. Background job progress flows through existing polling; max 15 minutes, 1 GiB/file and 2 GiB/batch; invalid or duplicate names rejected. Demucs separator is NOT called.
+- `stem_import.py`: infers canonical labels Vocals/Drums/Bass/Guitar/Piano/Other, including the `(Vocals)_htdemucs_6s` pattern. Unknown or repeated labels become independent TrackNN. `source_tracks` mapping persists original filenames and working aliases.
+- `projects.py`, `server.py`, `library.py`: 2-12 imported stem projects can be saved, reopened, indexed in Library and exchanged via DAW export without the old exact-six constraint. Legacy separation still requires its six stems.
+- Mixer shows original names for imported tracks. Existing waveform/timeline and A/B engine are reused.
+- Added backend tests (`test_stem_import.py`, CI backend project workflow), guide/Help and `docs/multitrack-import-qa.md`.
+- **Verification:** latest frontend build at `f54b0a6a` passed. Backend project CI at `d18155d7` passed including mocked track conversion. Windows smoke at `f54b0a6a` passed; Windows end-to-end real audio import and playback still require user QA.
+
+Limits: original six canonical aliases are the section effect grammar; additional TrackNN files can be mixed/exported but not yet individually addressed by section scripts. No automatic offset alignment, stem role reassignment or time stretching. Do not call this a source synchronization tool.
+
+**Next:** User should update/relaunch, try imported 2-6 existing stems including a manually overridden title, check Library reopen and listen for track sync; extend dynamic script grammar to custom aliases as future scoped work.
+
+---
+
 ## 2026-10-21 late: post-checkpoint dynamics and cleanup milestone
 
 User explicitly confirms a safely downloaded rollback checkpoint exists and prioritizes continued development rather than release freeze. Implemented and committed to `main`:

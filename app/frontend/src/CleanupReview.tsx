@@ -61,6 +61,7 @@ export function CleanupReview({
                   </div>
                 </div>
                 <p>{item.detail}</p>
+                {!!item.sources?.length&&<p className="song-cleanup-sources">Active raw stems: {item.sources.join(", ")} <span>(hint, not confirmed cause)</span></p>}
                 {item.suggestion&&<p className="song-cleanup-suggestion">{item.suggestion}</p>}
                 <div className="song-cleanup-actions">
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>

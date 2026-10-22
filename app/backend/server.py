@@ -33,6 +33,7 @@ import waveform_peaks
 import track_routing
 import app_update
 import library
+import stem_import
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -300,6 +301,106 @@ async def submit(request: Request, file: UploadFile = File(...)) -> dict[str, An
     job["message"] = "Waiting to start"
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
     return snapshot(job)
+
+
+@app.post("/api/jobs/import-tracks")
+async def import_tracks(request: Request, files: list[UploadFile] = File(...),
+                        title: str = "") -> dict[str, Any]:
+    """Import aligned audio tracks without source separation or destructive edits."""
+    require_local_origin(request)
+    if not 2 <= len(files) <= 12:
+        raise HTTPException(400,"Choose between 2 and 12 audio tracks")
+    if not dependencies.resolve(APP_ROOT):
+        raise HTTPException(409,"Configure FFmpeg before importing tracks")
+    names=[safe_name(item.filename or "track.wav") for item in files]
+    if any(Path(name).suffix not in ALLOWED for name in names):
+        raise HTTPException(400,"Unsupported audio format in track selection")
+    if len(set(name.casefold() for name in names)) != len(names):
+        raise HTTPException(400,"Two tracks have the same filename; rename one and retry")
+    requested=title.strip() or stem_import.guess_song_title(names)
+    if not 1<=len(requested)<=120:
+        raise HTTPException(400,"Song title must contain 1-120 characters")
+    with lock:
+        if any(j["status"] in ("uploading","queued","running") for j in jobs.values()):
+            raise HTTPException(409,"Finish the active import or separation first")
+        ident=uuid.uuid4().hex[:12]
+        folder=DATA_ROOT/"jobs"/ident
+        originals=folder/"originals"
+        originals.mkdir(parents=True)
+        job={"id":ident,"filename":requested+".wav","model":"imported tracks",
+             "status":"uploading","message":"Importing original tracks",
+             "created_at":time.time(),"elapsed_seconds":None,"files":[],"logs":[],
+             "input_path":folder/"originals"/names[0],
+             "output_path":folder/"stems","process":None}
+        jobs[ident]=job
+    try:
+        total=0
+        for source,name in zip(files,names):
+            size=0
+            with (originals/name).open("wb") as target:
+                while chunk:=await source.read(1024*1024):
+                    total+=len(chunk)
+                    size+=len(chunk)
+                    if size>MAX_UPLOAD or total>MAX_UPLOAD*2:
+                        raise HTTPException(413,"Limit 1 GiB per file and 2 GiB per import")
+                    target.write(chunk)
+            if size==0:raise HTTPException(400,f"Empty track: {name}")
+    except Exception:
+        shutil.rmtree(folder,ignore_errors=True)
+        with lock:jobs.pop(ident,None)
+        raise
+    finally:
+        for source in files:await source.close()
+    job["status"]="queued"
+    job["message"]="Preparing aligned WAV tracks"
+    threading.Thread(target=run_track_import,args=(job,names,requested),daemon=True).start()
+    return snapshot(job)
+
+
+def run_track_import(job:dict[str,Any],names:list[str],title:str)->None:
+    started=time.monotonic()
+    folder=DATA_ROOT/"jobs"/job["id"]
+    output=folder/"stems"
+    output.mkdir(exist_ok=True)
+    job["status"]="running"
+    job["message"]="Converting tracks to aligned WAV"
+    try:
+        duration=max(probe_duration(folder/"originals"/name) for name in names)
+        if duration>60*15:raise ValueError("Imported tracks must be 15 minutes or shorter")
+        assignments=stem_import.assign_tracks(names)
+        ffmpeg=dependency_tool("ffmpeg")
+        converted=[]
+        for idx,(name,entry) in enumerate(zip(names,assignments),start=1):
+            alias=entry["stem_alias"]
+            filename=f"{idx:02d} ({alias}).wav"
+            destination=output/filename
+            # Pad shorter tracks with silence: all start at zero, never time-stretch.
+            result=subprocess.run([ffmpeg,"-hide_banner","-loglevel","error","-nostdin",
+                "-y","-i",str(folder/"originals"/name),"-map","0:a:0","-vn",
+                "-af",f"apad,atrim=duration={duration:.6f},asetpts=PTS-STARTPTS",
+                "-ac","2","-ar","48000","-c:a","pcm_s24le",str(destination)],
+                capture_output=True,text=True,timeout=360,
+                creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+            if result.returncode:raise RuntimeError((result.stderr or "Audio conversion failed")[-500:])
+            converted.append(filename)
+            entry["working_filename"]=filename
+            job["message"]=f"Prepared track {idx} of {len(names)}"
+        job["files"]=converted
+        job["source_duration_seconds"]=round(duration,3)
+        projects.write_project(DATA_ROOT,{
+            "version":projects.PROJECT_VERSION,"id":job["id"],"filename":job["filename"],
+            "title":title,"source_filename":names[0],"created_at":job["created_at"],
+            "model":"imported tracks","imported_tracks":True,"files":converted,
+            "source_tracks":assignments,"stems":projects.default_settings(converted),
+            "source_duration_seconds":round(duration,3)})
+        job["status"]="complete"
+        job["message"]=f"{len(converted)} aligned tracks imported; originals preserved"
+    except Exception as exc:
+        job["status"]="error"
+        job["message"]=f"Track import failed: {exc}"
+        job["logs"].append(str(exc))
+    finally:
+        job["elapsed_seconds"]=round(time.monotonic()-started,2)
 
 
 def run_job(job: dict[str, Any]) -> None:

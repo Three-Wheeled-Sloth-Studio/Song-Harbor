@@ -529,9 +529,22 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   function tryCorrection(finding:AudioFinding){
     const section=timelineSections.find(item=>finding.timeSeconds>=item.start_seconds&&finding.timeSeconds<item.end_seconds);
-    const suggestedStem=files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
+    const currentIndex=timelineSections.findIndex(item=>item.id===section?.id);
+    const relevant=dynamicsTargets.filter(item=>{
+      const i=timelineSections.findIndex(value=>value.id===item.section_id);
+      return i>=0&&i<=currentIndex&&
+        (item.kind==="duck"&&item.depth_db>0||item.kind==="comp"&&item.ratio>1);
+    }).sort((a,b)=>timelineSections.findIndex(item=>item.id===b.section_id)-
+                    timelineSections.findIndex(item=>item.id===a.section_id));
+    const preferred=relevant.find(item=>item.kind==="duck"&&
+      finding.sources?.some(name=>item.source_key.includes("("+name+")")))||
+      relevant.find(item=>item.kind==="comp"&&
+        finding.sources?.some(name=>item.source_key.includes("("+name+")")))||
+      relevant.find(item=>item.kind==="duck")||relevant[0];
+    const suggestedStem=preferred?.source_key||
+      files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
       files.find(f=>f.includes("(Drums)"))||files[0];
-    const kind=finding.kind==="headroom"?"trim":"duck";
+    const kind=finding.kind==="headroom"?"trim":(preferred?.kind||"duck");
     const file=(kind==="duck"&&suggestedStem?.includes("(Vocals)"))?
       files.find(f=>!f.includes("(Vocals)"))||suggestedStem:suggestedStem;
     const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
@@ -539,7 +552,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrectionError("");
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
-      threshold:-18,ratio:1.5,depth:0,transition:1.5,
+      threshold:preferred?.threshold_db??-18,ratio:1,depth:0,transition:1.5,
       trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
     });
     loopAround(finding.timeSeconds-1,finding.timeSeconds+2);

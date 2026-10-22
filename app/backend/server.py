@@ -1742,12 +1742,32 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
     return {"opened": True}
 
 
+class FrontendStaticFiles(StaticFiles):
+    """Serve compiled modules with explicit MIME, independent of Windows registry.
+
+    Python's mimetypes database can inherit machine-specific Windows mappings;
+    browsers reject ES modules served as text/plain, even if the bytes are valid.
+    """
+    async def get_response(self, path: str, scope: dict[str, Any]):
+        response = await super().get_response(path, scope)
+        extension = Path(path).suffix.lower()
+        if response.status_code == 200:
+            if extension in (".js", ".mjs"):
+                response.headers["content-type"] = "text/javascript; charset=utf-8"
+            elif extension == ".css":
+                response.headers["content-type"] = "text/css; charset=utf-8"
+            # The build's JS/CSS filenames are content-hashed. Avoid caching a
+            # stale module across updater relaunches and in-place UI rebuilds.
+            response.headers["cache-control"] = "no-store"
+        return response
+
+
 # The installed build and API share ONE HTTP server. Vite is build-time only;
 # no Vite proxy, hot-reload server, or fixed second port is needed to launch.
 if UI_DIST.is_dir():
     assets = UI_DIST / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=str(assets)), name="ui-assets")
+        app.mount("/assets", FrontendStaticFiles(directory=str(assets)), name="ui-assets")
 
 
 @app.get("/favicon.svg", include_in_schema=False)

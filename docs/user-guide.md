@@ -44,6 +44,8 @@ After import, tracks appear in the standard mixer, timeline and Library. For mul
 - Derived L/R channels replace their original stereo parent when enabled: they do not play alongside it.
 - All stems use one shared playback clock. Long songs can encounter a decoded-audio memory limit rather than silently falling back to unsynchronized streams.
 
+For timeline zoom, use the **Tools > Zoom** dropdown or slider. The mouse wheel scrolls the page normally, even when the pointer is over a waveform; it does not change waveform zoom. True fullscreen app mode and a far-right topbar close control are planned, not yet implemented.
+
 ## Sections: notation and persistence
 
 Each section uses a header, optionally **one** production-directive line, and optional lyrics:
@@ -83,21 +85,21 @@ The compressor has conservative fixed attack/release and no automatic makeup gai
 
 **Export mix WAV** uses the current saved production settings, stem levels, end fade and reverb tail. The WAV is a rendered stereo mix. You must click **Download WAV** after rendering; the browser handles the save destination. If a clipping warning appears, apply the suggested master output trim and render again. Master trim is session-only at present.
 
-The A/B bypass is **audition-only**; it does not change the saved mix or processed WAV. **B · Original** now also bypasses section compression and vocal-keyed ducking. Changes to stem levels no longer intentionally restart the player just to rebuild ducking.
+A/B bypass is **audition-only**, not saved in WAV. **Bypass compression** and **Bypass ducking** are independent checkboxes so each new dynamics effect can be heard separately. **B · Original** bypasses both; **A · Processed** restores both. Changing stem levels no longer intentionally restarts playback just to rebuild ducking.
 
 **Export to DAW** prepares six original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
 
 ## Initial sound cleanup review
 
-After a **successful Export mix WAV**, expand **Sound cleanup review** in Tools. This first-pass non-destructive scan checks the same rendered floating-point mix used for the 24-bit WAV and flags:
+Open **Sound cleanup analyzer** in the Tools sidebar and click **Analyze mix**, even before exporting. This first-pass non-destructive scan runs the same offline processing graph as the 24-bit WAV mix and flags:
 - Peak samples at or above -0.18 dBFS (approximately 0.98 linear), including clipping candidates. The scan accounts for master output trim.
 - Single-sample jumps of at least 0.7 linear amplitude, separated by at least 80 ms, as **possible** clicks or other discontinuities. Drums and deliberately distorted audio may trigger false positives.
 
-Click a reported timestamp to seek the audition transport. This is *suggestion-only* QA; it neither repairs sound nor changes exports. The list is capped to keep it usable. It currently runs during mix export, not continuously while playing. Sibilance, separation artifacts, broadband noise, pumping analysis, stem attribution and waveform marker overlays are not yet implemented.
+Click a reported timestamp to seek the audition transport. Findings also refresh after successful WAV rendering. This is *suggestion-only* QA; it neither repairs sound nor changes exports. The list is capped to keep it usable. The scan is on-demand and does not run continuously during playback. Sibilance, separation artifacts, broadband noise, pumping analysis, stem attribution and waveform marker overlays are not yet implemented.
 
 ## Updates, Settings and version
 
-- The header revision badge (such as `main@1234abcd`) identifies the Git checkout that is installed; this is **not** a semantic release version.
+- The header badge uses **Version:Revision:Build**, such as `0.1.0:1:320`. Version comes from the frontend package version; revision identifies the development revision; build is the current Git commit count. Hover to view diagnostic branch/short SHA. This is a development identity, not a published stable release.
 - The circular update icon checks for available source updates. Checking does not overwrite local files. On Windows, approved install/relaunch attempts a safe Git fast-forward and restarts the application.
 - The updater will not intentionally discard conflicting checkout changes or interrupt an active processing job. Always **Apply** unsaved script edits before restarting.
 - Settings controls your local working directory and component dependencies. A new directory may require restart; existing files are not automatically moved.

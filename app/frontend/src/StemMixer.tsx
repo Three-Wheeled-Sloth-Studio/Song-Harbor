@@ -574,7 +574,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrectionError("");
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
-      threshold:preferred?.threshold_db??-18,ratio:1,depth:0,transition:1.5,
+      threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1,depth:0,transition:1.5,
       frequency:6500,q:2,maxReduction:4,auditionBoost:1,
       trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
     });

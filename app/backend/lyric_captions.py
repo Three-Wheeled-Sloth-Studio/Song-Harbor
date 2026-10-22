@@ -20,7 +20,7 @@ def _chunks(lines: list[str]) -> list[list[str]]:
         first = lines[index]
         if len(first) >= _MAX_CAPTION_CHARS:
             count = 1
-        elif index + 2 < len(lines) and all(
+        elif index + 2 < len(lines) and len(lines) - index != 4 and all(
             len(x) <= _SHORT_LINE_CHARS for x in lines[index:index + 3]
         ):
             count = 3

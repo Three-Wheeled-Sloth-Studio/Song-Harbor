@@ -335,8 +335,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       [...dynamicsTargets.filter(item=>!(item.section_id===correction.sectionId&&
         item.source_key===correction.file&&item.kind===correction.kind)),{
         section_id:correction.sectionId,source_key:correction.file,kind:correction.kind,
-        threshold_db:correction.threshold,ratio:correction.ratio,depth_db:correction.depth,
-        frequency:correction.frequency,q:correction.q,max_reduction_db:correction.maxReduction,
+        threshold_db:correction.threshold,
+        ratio:Math.min(4,1+(correction.ratio-1)*correction.auditionBoost),
+        depth_db:Math.min(12,correction.depth*correction.auditionBoost),
+        frequency:correction.frequency,q:correction.q,
+        max_reduction_db:Math.min(12,correction.maxReduction*correction.auditionBoost),
         transition_seconds:correction.transition,curve:"smooth" as const
       }]:dynamicsTargets;
     for(const filename of files){
@@ -563,15 +566,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
       files.find(f=>f.includes("(Drums)"))||files[0];
     const kind=finding.kind==="headroom"?"trim":finding.kind==="sibilance"?"deess":(preferred?.kind==="deess"?"duck":preferred?.kind||"duck");
+    const deessStem=kind==="deess"?files.find(f=>f.includes("(Vocals)")):undefined;
     const file=(kind==="duck"&&suggestedStem?.includes("(Vocals)"))?
-      files.find(f=>!f.includes("(Vocals)"))||suggestedStem:suggestedStem;
+      files.find(f=>!f.includes("(Vocals)"))||suggestedStem:(deessStem||suggestedStem);
     const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
     const peak=peakMatch?Number(peakMatch[1]):0;
     setCorrectionError("");
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
       threshold:preferred?.threshold_db??-18,ratio:1,depth:0,transition:1.5,
-      frequency:6500,q:2,maxReduction:4,
+      frequency:6500,q:2,maxReduction:4,auditionBoost:1,
       trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
     });
     loopAround(finding.timeSeconds-1,finding.timeSeconds+2);
@@ -890,6 +894,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </>}
         {tool==="cleanup"&&correction&&<>
           <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
+            reduction={meters.find(item=>item.filename===correction.file)}
             busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
             onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}

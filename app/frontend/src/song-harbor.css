@@ -575,3 +575,11 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 
 /* One shared section selector in Edit Sections; nested effect selectors are redundant. */
 .song-floating-tool-content .subtool-section-picker{display:none!important}
+
+.song-dynamics-meter{display:grid;gap:5px;width:100%;padding:8px;border:1px solid var(--tws-color-border-normal);border-radius:7px;background:var(--tws-color-surface-inset)}
+.song-dynamics-meter>strong{font-size:11px}
+.song-dynamics-meter-row{display:grid;grid-template-columns:minmax(65px,1fr) minmax(60px,2fr) 52px;gap:7px;align-items:center;min-width:0;font:11px/1.3 system-ui,sans-serif}
+.song-dynamics-meter-row>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.song-dynamics-meter-row>meter{width:100%;height:12px;accent-color:#67b7c0}
+.song-dynamics-meter-row>output{text-align:right;font:11px/1.3 Consolas,monospace}
+.song-audition-strength{border-top:1px solid var(--tws-color-border-normal);padding-top:8px}

@@ -42,6 +42,10 @@ DEESS_TOKEN = re.compile(
     r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+GAIN_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.gain:(?P<gain>[+-]?\\d+(?:\\.\\d{1,2})?)"
+    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+)
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
@@ -54,6 +58,22 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        gain_match=GAIN_TOKEN.fullmatch(token)
+        if gain_match:
+            canonical=next((a for a in aliases if a.lower()==gain_match.group("track").lower()),None)
+            if not canonical: raise ValueError("Unknown gain stem")
+            gain_db=float(gain_match.group("gain"))
+            duration=float(gain_match.group("seconds") or 1)
+            if not (-24<=gain_db<=12 and .05<=duration<=30):
+                raise ValueError("Stem gain must be -24..+12 dB with .05..30s transition")
+            key=canonical.lower()+".gain"
+            if key in touched or "all" in touched or canonical.lower() in touched:
+                raise ValueError("Duplicate or conflicting gain directive")
+            touched.add(key)
+            directives.append({"kind":"gain","track":canonical,"gain_db":gain_db,
+                               "transition_seconds":duration,
+                               "curve":(gain_match.group("curve") or "smooth").lower()})
+            continue
         deess=DEESS_TOKEN.fullmatch(token)
         if deess:
             canonical=next((a for a in aliases if a.lower()==deess.group("track").lower()),None)
@@ -210,6 +230,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
+        elif d["kind"] == "gain":
+            head = f"{d['track']}.gain:{float(d['gain_db']):+g}"
         elif d["kind"] == "deess":
             head = f"{d['track']}.deess:{d['frequency']},{float(d['q']):g},{float(d['threshold_db']):g},{float(d['max_reduction_db']):g}"
         elif d["kind"] == "comp":
@@ -252,7 +274,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -278,7 +300,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -419,3 +441,24 @@ def materialize_dynamics(sections: list[dict[str, Any]],
                                 "max_reduction_db":directive.get("max_reduction_db",0) if kind!="reset" else 0,
                                 "transition_seconds":directive["transition_seconds"],"curve":directive["curve"]})
     return out
+
+def materialize_gain(sections: list[dict[str, Any]],
+                     blocks: dict[str, list[dict[str, Any]]],
+                     files: list[str]) -> list[dict[str, Any]]:
+    """Section gain in dB relative to saved mixer level; resets are neutral."""
+    stems={alias:filename for filename in files for alias in source_aliases(files)
+           if "(" + alias + ")" in filename}
+    output=[]
+    for section in sorted(sections,key=lambda item:item["start_seconds"]):
+        for directive in blocks.get(section["id"],[]):
+            if directive["kind"] not in ("gain","reset"):
+                continue
+            targets=list(stems) if directive["kind"]=="reset" and directive["track"]=="all" else [directive["track"]]
+            for alias in targets:
+                if alias not in stems:
+                    raise ValueError("Gain target not in project")
+                output.append({"section_id":section["id"],"source_key":stems[alias],
+                               "gain_db":directive["gain_db"] if directive["kind"]=="gain" else 0.0,
+                               "transition_seconds":directive["transition_seconds"],
+                               "curve":directive["curve"]})
+    return output

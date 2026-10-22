@@ -261,7 +261,19 @@ export class SharedClockAudition {
    * levels and section curves as playback. Monitoring volume is excluded.
    * Throws rather than silently limiting a clipping mix differently from preview.
    */
+  async analyzeMix():Promise<readonly AudioFinding[]>{
+    const rendered=await this.renderMixBuffer();
+    this.lastAnalysis=inspectRenderedAudio(rendered,this.outputTrimDb);
+    return this.lastAnalysis;
+  }
+
   async renderWav24():Promise<Blob>{
+    const rendered=await this.renderMixBuffer();
+    this.lastAnalysis=inspectRenderedAudio(rendered,this.outputTrimDb);
+    return encodeWav24(rendered,this.outputTrimDb);
+  }
+
+  private async renderMixBuffer():Promise<AudioBuffer>{
     if(!this.ready)throw Error("Synchronized audio must finish loading before export");
     const sampleRate=this.context.sampleRate;
     const frames=Math.ceil(this.durationSeconds*sampleRate);
@@ -331,9 +343,7 @@ export class SharedClockAudition {
       scheduleCompressor(dynamics,this.automation[filename]?.dynamics?.compressor,0,0);
       scheduleDucking(dynamics,this.duckEnvelopes.get(filename),0,0);
     }
-    const rendered=await offline.startRendering();
-    this.lastAnalysis=inspectRenderedAudio(rendered,this.outputTrimDb);
-    return encodeWav24(rendered,this.outputTrimDb);
+    return offline.startRendering();
   }
 
   async play(){

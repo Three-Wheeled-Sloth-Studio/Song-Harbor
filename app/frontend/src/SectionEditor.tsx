@@ -168,7 +168,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
   return <section className="section-editor section-editor-rail" aria-label="Song sections">
     <div className="section-inline-row">
       <div className="section-inline-tools">
-        {onAnalyzeSections&&<button type="button" className="section-insight-trigger" disabled={analyzingSections} onClick={onAnalyzeSections} aria-label="Analyze section intensity and stereo balance" title="Analyze colors: measure rendered section loudness and stereo balance. Re-run after edits.">{analyzingSections?"...":insights.length?"Redo":"Scan"}</button>}
+        {onAnalyzeSections&&<button type="button" className="section-insight-trigger" disabled={analyzingSections} onClick={onAnalyzeSections} aria-label={insights.length?"Rescan section intensity and stereo balance":"Scan section intensity and stereo balance"} title={insights.length?"Rescan current mix for section colors":"Scan current mix for intensity and channel balance"}>{analyzingSections?<span aria-hidden="true" className="section-scan-spinner">◌</span>:<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V4h4M20 16v4h-4"/><path d="M4.8 12a7.2 7.2 0 0 1 12-5.3M19.2 12a7.2 7.2 0 0 1-12 5.3"/><path d="m16.8 6.7 2.2 0v-2.2M7.2 17.3 5 17.3v2.2"/></svg>}</button>}
         <details className="section-manual-controls" title="Create section at playhead">
           <summary aria-label="Manual section tools" title="Section tools">≡</summary>
           <div className="section-manual-popover">
@@ -188,7 +188,7 @@ export function SectionEditor({jobId,duration,position,initialSections,onSeek,vi
       </div>
     {duration>0&&<div data-section-lane="" aria-label="Draggable section timeline aligned to playback" style={{height:45,position:"relative",margin:"12px 0",background:"var(--color-surface-secondary, #7773)",borderRadius:4,overflow:"hidden"}}>
       {sections.filter(s=>s.end_seconds>viewStart&&s.start_seconds<viewEnd).map(s=><div key={s.id} title={insightsById.has(s.id)?insightTitle(insightsById.get(s.id)!):"Select Analyze colors to measure section intensity and stereo balance."} style={{position:"absolute",left:`${100*(s.start_seconds-viewStart)/(viewEnd-viewStart)}%`,width:`${100*(s.end_seconds-s.start_seconds)/(viewEnd-viewStart)}%`,top:5,height:34,background:selected===s.id?"#3a778f":"var(--tws-color-surface-raised, #37434d)",border:"1px solid #fff6",borderRadius:4,minWidth:3,display:"flex",alignItems:"center",touchAction:"none"}}>
-        {insightsById.has(s.id)&&<span aria-hidden="true" style={{position:"absolute",insetBlock:0,borderRadius:3,pointerEvents:"none",...sectionFill(insightsById.get(s.id)!)}}/>}
+        {insightsById.has(s.id)&&<span aria-hidden="true" style={{position:"absolute",bottom:0,height:5,borderRadius:"0 0 2px 2px",pointerEvents:"none",...sectionFill(insightsById.get(s.id)!)}}/>}
         <div role="slider" tabIndex={0} aria-label={`Resize start of ${s.kind}`} aria-valuemin={bounds(s.id)[0]} aria-valuemax={s.end_seconds-MIN_LENGTH} aria-valuenow={s.start_seconds}
           title="Drag to resize start. Arrow keys adjust by 0.1s."
           onKeyDown={e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();nudge(s,"start",e.key==="ArrowLeft"?-1:1);}}}

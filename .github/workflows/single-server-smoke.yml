@@ -76,7 +76,7 @@ jobs:
                       assert '<div id="root"' in page
                       assert "assets/" in page
                       import re
-                      scripts = re.findall(r'<script\\b[^>]*type="module"[^>]*src="([^"]+)"', page)
+                      scripts = re.findall(r'<script\b[^>]*type="module"[^>]*src="([^"]+)"', page)
                       assert scripts, "No built module found in served HTML"
                       for script in scripts:
                           assert script.startswith("/assets/") and script.endswith(".js"), script

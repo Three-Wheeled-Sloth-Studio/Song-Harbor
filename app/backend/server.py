@@ -477,7 +477,7 @@ def get_job(ident: str) -> dict[str, Any] | None:
     if ident in jobs:
         return jobs[ident]
     record = projects.read_project(DATA_ROOT, ident)
-    if not record or len(record.get("files", [])) != 6:
+    if not record or not record.get("files") or (not record.get("imported_tracks") and len(record["files"]) != 6):
         return None
     folder = DATA_ROOT / "jobs" / ident
     if not all((folder / "stems" / f).is_file() for f in record["files"]):
@@ -488,7 +488,7 @@ def get_job(ident: str) -> dict[str, Any] | None:
         "created_at": record.get("created_at"), "elapsed_seconds": None,
         "files": record["files"], "logs": [],
         "source_duration_seconds": record.get("source_duration_seconds"),
-        "input_path": folder / record["source_filename"],
+        "input_path": folder / "originals" / record["source_filename"] if record.get("imported_tracks") else folder / record["source_filename"],
         "output_path": folder / "stems", "process": None,
     }
     with lock:
@@ -504,7 +504,7 @@ class StemState(BaseModel):
 
 class SaveProject(BaseModel):
     title: str = Field(min_length=1, max_length=120)
-    stems: list[StemState] = Field(min_length=6, max_length=6)
+    stems: list[StemState] = Field(min_length=2, max_length=12)
 
 
 class RenameLibrarySong(BaseModel):
@@ -604,7 +604,7 @@ def load_project(ident: str) -> dict[str, Any]:
     record = projects.read_project(DATA_ROOT, ident) if re.fullmatch(r"[a-f0-9]{12}", ident) else None
     job = get_job(ident)
     if not record or not job:
-        raise HTTPException(404, "Saved song unavailable; verify its six stem files")
+        raise HTTPException(404, "Saved song unavailable; verify its track files")
     return {"project": record, "job": snapshot(job)}
 
 
@@ -616,8 +616,8 @@ def save_project(ident: str, request: Request, body: SaveProject) -> dict[str, A
     if not job or job["status"] != "complete" or not record:
         raise HTTPException(404, "Saved song not found")
     received = [s.filename for s in body.stems]
-    if len(set(received)) != 6 or set(received) != set(job["files"]):
-        raise HTTPException(400, "Settings must contain exactly the six source stems")
+    if len(received)!=len(job["files"]) or len(set(received))!=len(received) or set(received)!=set(job["files"]):
+        raise HTTPException(400,"Settings must include exactly the song tracks")
     record["title"] = body.title.strip()
     if not record["title"]:
         raise HTTPException(400, "Song title cannot be blank")

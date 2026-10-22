@@ -25,7 +25,7 @@ def split_stems(
     originals = projects.validated_stems(project, folder)
     by_name = {p.name: p for p in originals}
     if not filenames or len(filenames) != len(set(filenames)) or any(f not in by_name for f in filenames):
-        raise ValueError("Select one or more of the six original stems")
+        raise ValueError("Select one or more source stems")
     # Maintain canonical stem order, regardless of client order.
     chosen = [p for p in originals if p.name in filenames]
     exports = folder / "exports"
@@ -34,7 +34,7 @@ def split_stems(
     with tempfile.TemporaryDirectory(prefix=".channels-", dir=exports) as staging_name:
         staging = Path(staging_name)
         tracks: list[dict[str, Any]] = []
-        for source in chosen:
+        for index, source in enumerate(chosen,start=1):
             probe = run([
                 ffprobe, "-v", "error", "-select_streams", "a:0",
                 "-show_entries", "stream=channels,sample_rate",
@@ -46,7 +46,6 @@ def split_stems(
                 raise ValueError(f"{source.name} must contain exactly two audio channels")
             rate = int(streams[0]["sample_rate"])
             name = projects.stem_name(source.name)
-            index = projects.ORDER.index(name) + 1
             for channel, number in (("Left", 0), ("Right", 1)):
                 output = f"{index:02d} - {name} - {channel}.wav"
                 run([

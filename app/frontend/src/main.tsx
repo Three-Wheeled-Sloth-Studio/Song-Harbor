@@ -25,7 +25,7 @@ type Job = {
   source_duration_seconds?: number;
 };
 type RecentSong = {id: string; title: string; filename: string; created_at: number; recovered?: boolean};
-type SongProject = {id: string; title: string; stems: SavedStem[]; sections?: SongSection[]; source_tracks?: {original_filename:string;working_filename:string;stem_alias:string}[]; source_duration_seconds?: number | null};
+type SongProject = {id: string; title: string; stems: SavedStem[]; sections?: SongSection[]; source_tracks?: {original_filename:string;working_filename:string;stem_alias:string;track_id?:string}[]; source_duration_seconds?: number | null};
 type Health = { instance_token?:string;ready: boolean; separator_ready: boolean; model: string; model_directory: string; ffmpeg?: {directory:string} | null; needs_setup?: string[] };
 const API = "/api";
 
@@ -359,7 +359,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.original_filename.replace(/\\.[^.]+$/,"")])):undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
+            <StemMixer key={job.id} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.original_filename.replace(/\\.[^.]+$/,"")])):undefined} trackAliases={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.stem_alias])):undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

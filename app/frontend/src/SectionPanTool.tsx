@@ -55,7 +55,7 @@ export function SectionPanTool({jobId,sections,files,targets,onChange}:Props){
   function removeTarget(){
     void persist(targets.filter(t=>!(t.section_id===currentSection&&t.source_key===currentFile)));
   }
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Section pan (preview)</summary>
     <div className="timeline-loop-controls">
       <p>Animate individual stems between sections. Changes are reversible and saved.</p>

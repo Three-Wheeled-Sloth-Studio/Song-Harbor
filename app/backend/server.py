@@ -323,10 +323,12 @@ async def import_tracks(request: Request, files: list[UploadFile] = File(...),
     if len(set(name.casefold() for name in names)) != len(names):
         raise HTTPException(400,"Two tracks have the same filename; rename one and retry")
     manifest_bytes=await manifest_uploads[0].read(256*1024+1) if manifest_uploads else None
+    groups=None
     if manifest_bytes is not None:
-        try:stem_import.channel_groups(manifest_bytes,names)
+        try:groups=stem_import.channel_groups(manifest_bytes,names)
         except ValueError as exc:raise HTTPException(400,str(exc)) from exc
-    requested=title.strip() or stem_import.guess_song_title(names)
+    suggested=stem_import.guess_song_title([group["source"] for group in groups] if groups else names)
+    requested=title.strip() or suggested
     if not 1<=len(requested)<=120:
         raise HTTPException(400,"Song title must contain 1-120 characters")
     with lock:

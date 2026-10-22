@@ -11,7 +11,7 @@ type SavedReverbTarget={section_id:string;source_key:string;wet:number;transitio
 type SavedWidthTarget={section_id:string;source_key:string;width:number;transition_seconds:number;curve:"linear"|"smooth"};
 type SavedSpaceTarget={section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"};
 type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;q:number;gain_db:number;transition_seconds:number;curve:"linear"|"smooth"};
-export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck";threshold_db:number;ratio:number;depth_db:number;transition_seconds:number;curve:"smooth"|"linear"};
+export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
 export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   jobId:string;open:boolean;onClose:()=>void;focused:SongSection|null;
@@ -119,7 +119,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
   if(!open)return null;
   return <section className="production-section-tool" aria-label="Section script editor">
     <div className="production-tool-heading">
-      <strong>Section script</strong>
+      <strong>Whole-song script · all sections and lyrics</strong>
       <button type="button" title="Close section script" aria-label="Close section script" onClick={onClose}>×</button>
     </div>
     <textarea ref={editor} aria-label="Section script" spellCheck={false}
@@ -143,7 +143,7 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     {error&&<small role="alert">{error}</small>}
     <details className="production-tool-help">
       <summary>Section notation</summary>
-      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Reverb sends use syntax such as <code>{"{Vocals.reverb:30@2s:smooth}"}</code>. Ending instructions belong to the last section: <code>{"{Master.fade:6s:smooth Master.tail:3s}"}</code>. Width uses <code>{"{Vocals.width:125@2s:smooth}"}</code> (0-150%, 100% unchanged). Early reflections use <code>{"{Vocals.space:20@2s:smooth}"}</code> (0-40%). Three EQ bands per stem use <code>{"{Vocals.eq1:320,1.2,-2@2s:smooth}"}</code> (30-16000 Hz, Q .3-12, gain -12 to +12 dB). Compression and vocal-keyed ducking are available via section script (Other.comp:-18,2 and Guitar.duck:3). De-essing and gain-reduction meters remain planned. Width cues in legacy headers remain proposals.</small>
+      <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Reverb sends use syntax such as <code>{"{Vocals.reverb:30@2s:smooth}"}</code>. Ending instructions belong to the last section: <code>{"{Master.fade:6s:smooth Master.tail:3s}"}</code>. Width uses <code>{"{Vocals.width:125@2s:smooth}"}</code> (0-150%, 100% unchanged). Early reflections use <code>{"{Vocals.space:20@2s:smooth}"}</code> (0-40%). Three EQ bands per stem use <code>{"{Vocals.eq1:320,1.2,-2@2s:smooth}"}</code> (30-16000 Hz, Q .3-12, gain -12 to +12 dB). Compression and vocal-keyed ducking are available via section script (Other.comp:-18,2 and Guitar.duck:3). De-essing is available as Vocals.deess:6500,2,-40,4@2s:smooth. Live gain-reduction meters appear in the A/B tool. This editor contains the complete song script (all sections and lyrics), not just the currently selected section. Apply validates and persists the entire song. Width cues in legacy headers remain proposals.</small>
     </details>
   </section>;
 }

@@ -547,3 +547,9 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-correction-switch button,.song-correction-actions button{padding:7px 11px;border:1px solid var(--tws-color-border-normal);border-radius:6px;cursor:pointer;background:var(--tws-color-surface-panel);color:inherit}
 .song-correction-switch button[aria-pressed="true"]{border-color:var(--tws-color-action-primary)}
 .song-correction-workbench small{color:var(--tws-color-text-muted);line-height:1.4}
+
+/* Floating tool header owns dismissal; nested duplicate chrome and onboarding
+ * paragraphs are redundant once the tool has its own labeled context. */
+.song-floating-tool-content .production-tool-heading>button[aria-label="Close section script"]{display:none}
+.song-floating-tool-content .production-tool-detail:not(.song-cleanup-panel) .timeline-loop-controls>p:first-child{display:none}
+.song-floating-tool-content .production-tool-detail:not(.song-cleanup-panel) .timeline-loop-controls>small:last-child{display:none}

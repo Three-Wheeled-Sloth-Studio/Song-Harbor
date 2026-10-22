@@ -56,7 +56,8 @@ export const HELP_TOPICS:Topic[]=[
      "Use Export mix WAV to render the current stems and saved production settings. After rendering, explicitly click Download WAV; the browser decides the destination.",
      "If the mix would clip, Song Harbor reports an additional master trim recommendation. Master trim is session-only at present; keep track of the value before restarting.",
      "Export to DAW prepares six original aligned stems for an external editor. Audacity and Waveform workflows depend on the application installed on your computer; a prepared bundle is separate from Song Harbor's processed stereo mix.",
-     "A/B effect bypass affects listening only. The WAV always uses saved production settings, not temporary comparison bypass selections."
+     "A/B effect bypass affects listening only. The WAV always uses saved production settings, not temporary comparison bypass selections.",
+     "After a successful mix render, Sound cleanup review lists timestamped candidate near-ceiling peaks and sharp single-sample jumps. Click a finding to seek. These are possible faults, not proof of defects; percussion and intentional distortion can be flagged. The scan does not alter audio and currently cannot detect sibilance or separation artifacts."
    ]},
   {id:"updates",title:"Updates and settings",summary:"Version badge, relaunch and local working files.",
    body:[

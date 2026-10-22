@@ -118,7 +118,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
   const [eqTargets,setEqTargets]=useState<SavedEqTarget[]>([]);
-  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";protected_sources:string[];transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
+  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";protected_sources:string[];protected_gain_sources?:string[];transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
   const [autoPanReports,setAutoPanReports]=useState<string[]>([]);
   const [gainTargets,setGainTargets]=useState<{section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
   const [dynamicsTargets,setDynamicsTargets]=useState<DynamicsTarget[]>([]);
@@ -434,7 +434,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if(!section)continue;
       // As automatic edits are added, downstream sections inherit them naturally.
       const result=engine.solveSectionAutoPan(section.start_seconds,section.end_seconds,
-        request.protected_sources,byFile);
+        request.protected_sources,request.protected_gain_sources||[],byFile);
       reports.push(section.kind+" "+section.start_seconds.toFixed(1)+"s: "+
         result.beforeDb.toFixed(2)+" dB -> "+result.predictedDb.toFixed(2)+
         " dB predicted; "+result.reason);
@@ -478,7 +478,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,correction,sectionPreviewActive,sectionPreview]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,stems,correction,sectionPreviewActive,sectionPreview]);
 
   // Findings describe a specific processed mix; edits invalidate those results.
   useEffect(()=>{

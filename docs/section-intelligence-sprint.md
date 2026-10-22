@@ -15,6 +15,19 @@ Gain inheritance is sticky across sections and `all.reset` restores a neutral 0 
 section offset. Added parser/import/reset regression tests. This does not implement
 `auto.gain` or `all.gain`. Local build and listening QA are still required.
 
+## Delivered third slice: broadcast defaults and editor focus
+
+Whole-song editor no longer re-selects a section header on every text change.
+Broadcast directives now support `all.gain`, `all.pan`, `all.width`,
+`all.reverb`, `all.space`, and `all.eq1` through `all.eq3`.
+Explicit stem/effect directives override broadcast defaults in the same
+section, regardless of token order. EQ precedence is per band. The authored
+`all.*` notation persists in round-trip exports; import expands it for
+the existing DSP pipelines. `all.reset` remains an exclusive operation.
+Unsupported `auto.*`, `all.comp`, `all.duck`, and `all.deess` are
+rejected until dedicated semantics are implemented. CI and local audition QA
+are required before this slice can be considered fully verified.
+
 ## Next steps — remaining syntax accepted in principle, not yet executable
 
 Example proposed section: 
@@ -24,7 +37,7 @@ Example proposed section:
 {Vocals.pan:left.32@4s:smooth Drums.gain:+0.75@3s:smooth auto.pan:center@8s:smooth auto.gain:0@8s:smooth}
 ```
 
-The importer **does not yet implement** `all.<effect>` or `auto.<effect>` names; explicit stem gain is now supported. Only `all.reset` exists. Do not copy the example into saved sections until grammar and DSP are implemented.
+The importer supports the bounded broadcast effects listed above; automatic `auto.<effect>` solvers remain unimplemented. Only `all.reset` exists. Do not copy the example into saved sections until grammar and DSP are implemented.
 
 - `Stem.effect`: explicit, highest priority; must never be silently overridden by automation.
 - `all.effect`: default target broadcast to all eligible stems not explicitly set in that section. Explicit stem directive wins. This is not an analyzer.

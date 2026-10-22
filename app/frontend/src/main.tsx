@@ -31,8 +31,8 @@ const API = "/api";
 
 function suggestTrackTitle(files:File[]):string{
   if(!files.length)return "";
-  const roles=/[\\s._-]*\\(?(?:vocals?|vox|voice|drums?|percussion|perc|beats|bass|guitars?|gtr|piano|keys|keyboard|other|instrumental|instruments|music)\\)?(?:[\\s._-]*\\d{1,2})?$/i;
-  const parts=files.map(file=>file.name.replace(/\\.[^.]+$/,"").replace(roles,"").split(/[\\s._-]+/).filter(Boolean));
+  const roles=/[\s._-]*\(?(?:vocals?|vox|voice|drums?|percussion|perc|beats|bass|guitars?|gtr|piano|keys|keyboard|other|instrumental|instruments|music)\)?(?:[\s._-]*\d{1,2})?$/i;
+  const parts=files.map(file=>file.name.replace(/\.[^.]+$/,"").replace(roles,"").split(/[\s._-]+/).filter(Boolean));
   const words:string[]=[];
   for(const matches of Array.from({length:Math.min(...parts.map(p=>p.length))},(_,i)=>parts.map(p=>p[i]))){
     if(matches.some(word=>word.toLowerCase()!==matches[0].toLowerCase()))break;

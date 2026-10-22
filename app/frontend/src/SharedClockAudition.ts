@@ -4,6 +4,7 @@ import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflection
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,makeDeEssEnvelope,scheduleDeEss,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
+import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionInsights.ts";
 /**
  * Song Harbor shared-clock audition engine.
  *
@@ -58,6 +59,8 @@ export class SharedClockAudition {
     }));
   }
   private lastAnalysis:AudioFinding[]=[];
+  private lastSectionInsights:SectionInsight[]=[];
+  get sectionInsights():readonly SectionInsight[]{return this.lastSectionInsights;}
   get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
   private loadController:AbortController|null=null;
   private offset=0;
@@ -326,8 +329,9 @@ export class SharedClockAudition {
     });
   }
 
-  async analyzeMix():Promise<readonly AudioFinding[]>{
+  async analyzeMix(sections:readonly SectionRange[]=[]):Promise<readonly AudioFinding[]>{
     const rendered=await this.renderMixBuffer();
+    this.lastSectionInsights=analyzeSections(rendered,sections,this.outputTrimDb);
     this.lastAnalysis=this.inspectWithSources(rendered);
     return this.lastAnalysis;
   }

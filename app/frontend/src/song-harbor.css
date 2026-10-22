@@ -449,3 +449,14 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-help-feedback{font-size:11px;color:var(--tws-color-text-muted);margin:0}
 .song-help-feedback a{color:var(--tws-color-action-primary)}
 @media(max-width:650px){.header-actions{gap:5px}.song-help-topic summary span{display:block;margin:4px 0 0}}
+
+/* Two import workflows: a single recording for separation or aligned source tracks. */
+.song-import-mode{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 14px}
+.song-import-mode button{border:1px solid var(--tws-color-border-strong);border-radius:7px;padding:8px 10px;background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);cursor:pointer;font-size:12px}
+.song-import-mode button[aria-pressed="true"]{border-color:var(--tws-color-action-primary);background:var(--tws-color-action-subtle)}
+.song-import-mode button:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+.song-track-title-label{display:block;font-size:12px;font-weight:700;margin:10px 0 5px}
+.song-track-title-label small{font-weight:400;color:var(--tws-color-text-muted)}
+.song-track-title{width:100%;border:1px solid var(--tws-color-border-strong);border-radius:7px;background:var(--tws-color-surface-inset);color:var(--tws-color-text-primary);padding:9px 10px}
+.song-import-track-list{max-height:170px;overflow-y:auto;margin:9px 0;display:grid;gap:3px}
+.song-import-track-list .selected-file{margin:0;padding:6px 8px}

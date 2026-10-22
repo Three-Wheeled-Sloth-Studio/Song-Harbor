@@ -2,7 +2,7 @@ import {scheduleAutomation, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
 import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflectionStage} from "./SpatialReflection";
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
-import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
+import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,makeDeEssEnvelope,scheduleDeEss,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
 /**
  * Song Harbor shared-clock audition engine.
@@ -49,6 +49,14 @@ export class SharedClockAudition {
   private nodes:ActiveNode[]=[];
   private automation:Record<string,{pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
+  private deessEnvelopes=new Map<string,AutomationPoint[]>();
+  get dynamicsMeters(){
+    return [...this.dynamicsStages.entries()].map(([filename,stage])=>({filename,
+      compressionDb:Math.max(0,-stage.compressor.reduction),
+      duckDb:Math.max(0,-20*Math.log10(Math.max(.0001,stage.duckGain.gain.value))),
+      deessDb:Math.max(0,-stage.deesser.gain.value)
+    }));
+  }
   private lastAnalysis:AudioFinding[]=[];
   get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
   private loadController:AbortController|null=null;
@@ -160,7 +168,9 @@ export class SharedClockAudition {
     }
     // Only a change in the actual key stem requires sidechain recalculation.
     // Never call setAutomation/seek here: fader drags must not restart stems.
-    if(changedKeys.size)this.refreshDuckingEnvelopes(changedKeys);
+    if(changedKeys.size){this.refreshDuckingEnvelopes(changedKeys);this.refreshDeEssEnvelopes();
+      if(this.running)this.configurePreviewNodes(this.context.currentTime+.03,this.position);
+    }
   }
   /** Non-destructive master trim, downstream of all stem and effect sends. */
   setOutputTrimDb(value:number){
@@ -213,6 +223,7 @@ export class SharedClockAudition {
       if(dynamics){
         scheduleCompressor(dynamics,bypass.compression?undefined:this.automation[filename]?.dynamics?.compressor,offset,at);
         scheduleDucking(dynamics,bypass.ducking?undefined:this.duckEnvelopes.get(filename),offset,at);
+        scheduleDeEss(dynamics,this.automation[filename]?.dynamics?.deess,this.deessEnvelopes.get(filename),offset,at);
       }
       scheduleAutomation(bus.pan,
         !bypass.pan&&this.automation[filename]?.pan||[{time:0,value:0}],offset,at);
@@ -236,12 +247,24 @@ export class SharedClockAudition {
     this.automation=curves;
     this.duckEnvelopes.clear();
     this.refreshDuckingEnvelopes();
+    this.refreshDeEssEnvelopes();
     if(liveTrial&&this.running){
       // Update existing per-stem AudioParams in place. Do not restart transport
       // on each correction slider movement; offline render still uses saved mix.
       this.configurePreviewNodes(this.context.currentTime+0.03,this.position);
     }else if(this.running)this.seek(this.position);
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
+  }
+  private refreshDeEssEnvelopes(){
+    this.deessEnvelopes.clear();
+    for(const [filename,settings] of Object.entries(this.automation)){
+      const curve=settings.dynamics?.deess;
+      if(!curve)continue;
+      const tracks=this.tracks.filter(track=>track.source.filename===filename);
+      if(!tracks.length)continue;
+      this.deessEnvelopes.set(filename,makeDeEssEnvelope(
+        tracks.map(track=>track.buffer),curve,this.renderedLevels[filename]??0));
+    }
   }
   private refreshDuckingEnvelopes(changedKeys?:Set<string>){
     const at=this.context.currentTime+0.03;
@@ -384,6 +407,7 @@ export class SharedClockAudition {
       const dynamics=dynamicsStages.get(filename)!;
       scheduleCompressor(dynamics,this.automation[filename]?.dynamics?.compressor,0,0);
       scheduleDucking(dynamics,this.duckEnvelopes.get(filename),0,0);
+      scheduleDeEss(dynamics,this.automation[filename]?.dynamics?.deess,this.deessEnvelopes.get(filename),0,0);
     }
     return offline.startRendering();
   }
@@ -444,7 +468,7 @@ export class SharedClockAudition {
       for(const node of [...stage.direct,...stage.cross])node.gain.cancelScheduledValues(this.context.currentTime);
     }
     for(const stage of this.dynamicsStages.values()){
-      for(const param of [stage.compressor.threshold,stage.compressor.ratio,stage.compressor.attack,stage.compressor.release,stage.duckGain.gain])param.cancelScheduledValues(this.context.currentTime);
+      for(const param of [stage.compressor.threshold,stage.compressor.ratio,stage.compressor.attack,stage.compressor.release,stage.duckGain.gain,stage.deesser.gain,stage.deesser.frequency,stage.deesser.Q])param.cancelScheduledValues(this.context.currentTime);
     }
     for(const filters of this.eqStages.values())for(const filter of filters){
       filter.frequency.cancelScheduledValues(this.context.currentTime);
@@ -473,9 +497,9 @@ export class SharedClockAudition {
     for(const eq of this.eqStages.values())for(const filter of eq)filter.disconnect();
     this.eqStages.clear();
     for(const stage of this.dynamicsStages.values()){
-      stage.compressor.disconnect();stage.duckGain.disconnect();
+      stage.compressor.disconnect();stage.duckGain.disconnect();stage.deesser.disconnect();
     }
-    this.dynamicsStages.clear();this.duckEnvelopes.clear();
+    this.dynamicsStages.clear();this.duckEnvelopes.clear();this.deessEnvelopes.clear();
     for(const stage of this.spaceStages.values()){
       stage.input.disconnect();stage.output.disconnect();
       for(const node of [...stage.sends,...stage.delays])node.disconnect();

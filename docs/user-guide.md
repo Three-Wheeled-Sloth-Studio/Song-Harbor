@@ -147,6 +147,16 @@ You can access the de-esser directly through **Edit sections → De-ess**, choos
 
 **Limits:** This is a spectral heuristic, not a voice or sibilant classifier. Cymbals, strings, synths and industrial distortion can cause similar high-frequency triggers. There is no guaranteed level-matched A/B, machine-learned artifact recognition, or automatic repair yet. An exaggerated preview is explicitly *not* the saved processed sound. Confirm actual 1× comparison before accepting.
 
+## Acoustic signal audit (release screening)
+
+Sound cleanup now includes a separate **Signal audit** category in the normal **Analyze mix** pass. This performs a conservative **local, non-destructive acoustic screening** on the actual processed mix that will be exported, looking for a stable narrowband spectral feature (e.g. a long-lived high-frequency tonal line). Findings include a timestamp, frequency in hertz, a sampled persistence percentage, and local spectral prominence. Click to seek or loop and evaluate the passage in context. The scanner does not inspect external servers, send audio to anyone, mute/filter tones or rewrite media.
+
+**Do not interpret a finding as a watermark or fingerprint.** Common synth notes, resonances, feedback and other intended musical elements can produce persistent high-frequency lines. Absence of narrowband findings also cannot rule out spread-spectrum, time-domain or provider-specific acoustic watermarking; definitive provider watermark or fingerprint verification requires the provider's detector or another validated matching system. Song Harbor deliberately gives no "watermark detected" verdict.
+
+**C2PA metadata is separate from acoustic screening.** Song Harbor's processed WAV export writes a fresh 44-byte PCM RIFF header containing `fmt ` and `data` chunks only (24-bit stereo). It does **not** copy or embed source C2PA (`c2pa`), ID3, INFO or provider-specific metadata from the input file. Consequently the source's C2PA chunk is not present in the newly rendered WAV. This is a property of the **new file**, not evidence that an acoustic fingerprint has vanished or would stop matching; no watermark removal step is performed. Re-encoding or editing media does not guarantee an audio-content fingerprint ceases to identify it.
+
+The screen is intentionally limited to durable, high-prominence narrowband features lasting over ten seconds; ordinary transient/cymbal energy should not dominate it. Heavy audio analysis can take several seconds on long tracks. Findings remain suggestions, and exporting never automatically removes or changes a suspected signal.
+
 ## Sound cleanup analyzer: detection and review
 
 Open **Tools → Sound cleanup** and select **Analyze mix**. Song Harbor builds the same non-destructive offline processing graph used for the WAV export, then checks the rendered floating-point audio (with master output trim). It does **not** download a WAV or change stored audio, sections, or effects.

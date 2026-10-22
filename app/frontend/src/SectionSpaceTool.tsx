@@ -43,7 +43,7 @@ export function SectionSpaceTool({jobId,sections,files,targets,onChange}:Props){
     void persist([...targets.filter(t=>t.section_id!==selectedSection||t.source_key!==selectedFile),
       {section_id:selectedSection,source_key:selectedFile,amount,transition_seconds:transition,curve}]);
   }
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Spatial reflections</summary>
     <div className="timeline-loop-controls">
       <p>Small offset reflections across the stereo image; creates depth even for near-mono stems. Use modest settings, and check mono compatibility.</p>

@@ -7,6 +7,31 @@ tags: [handoff]
 ---
 # Current Handoff
 
+## 2026-10-22 QA follow-up: persisted listening volume, scrollable floating tools, whole-song text and section A/B
+
+User tested full-window workspace, floating windows, Section Edit, and analyzer; reports: (1) monitor playback volume resets loudly each app restart, (2) mousewheel does not scroll tool popovers, (3) analyzer A/B good, (4) Section Edit effect controls should have their own real-time non-destructive A/B before Apply, and (5) discoverable **full raw section script covering the entire song** is missing from present UI.
+
+**Implemented on `main`:**
+
+- `StemMixer.tsx`: monitoring slider reads/writes local browser storage key `song-harbor:monitor-volume`, clamped 0–100, safe first-launch/fallback **25%** (previous 75%). Shared across song sessions within the same dedicated Chromium browser profile. The monitor slider still affects audition only, not stem gain/project save or WAV mix.
+- `WorkbenchTools.tsx` and `song-harbor.css`: ToolWindow content stops wheel event propagation to underlying workspace while preserving native scrolling; removes overscroll containment in tool content and cleanup list, retains flex child `min-height:0`, inner independent scrolling and visible scrollbars. Added Chromium smoke check to inject an actual CSS floating window and verify mousewheel changes `scrollTop` rather than the page.
+- `StemMixer.tsx` now displays a prominent **Edit whole-song section text…** action inside Edit sections, launching a separate wide/resizable floating window **Whole-song section text** (not a primary effect tab). It mounts the existing `SectionsTool` backing `GET /api/projects/:id/sections/export` and `POST .../sections/import`, so the user can see/edit the full authoritative source: every section header, every curly-brace production block, and all lyrics across the song. Script drafts retained in memory while switching tools; Apply validates and persists. Full text editing is *not* live-previewed without validated Apply. The main Section Edit window keeps shared section dropdown + Pan/Reverb/Width/Reflections/EQ/De-ess tabs.
+- `SectionPanTool.tsx`, `SectionReverbTool.tsx`, `SectionWidthTool.tsx`, `SectionSpaceTool.tsx`, `SectionEqTool.tsx`, and `SectionDeEssTool.tsx`: accept optional previewEnabled/onPreview and generate temporary proposed target arrays in frontend on slider/select changes when B Draft is enabled; they do **not** write to the API until their explicit Save/Apply action. Their existing saved targets still come from validated backend on successful Save.
+- `StemMixer.tsx`: isolated `SectionPreview` union holds unsaved per-effect target curves. **A · Saved / B · Draft preview** in Edit sections above effect tabs; choosing B sets loop bounds for selected section, seeks to its beginning and plays if stopped. While B, existing shared-clock per-stem automation compiles from staged target arrays (pan, reverb, width, space, EQ, de-ess) using `engine.setAutomation(byFile,true)`; no saved song mutation. Choose A to hear saved curves, switch effect/section or close Edit sections to discard staged preview. Effect Save/Apply writes the backend and ends the draft. WAV export disabled during B preview. If analyzer correction is active, choosing B clears analyzer preview so two trial lanes don't silently compose. Scripts are not directly live-previewed: whole-song editor validation is needed.
+- `SectionsTool.tsx` identifies **Whole-song script · all sections and lyrics**, supports de-ess in typed targets and updated syntax help. `HelpDialog.tsx` and `docs/user-guide.md` updated for discoverability and safe volume.
+- `app/frontend/scripts/browser-smoke.mjs` now tests wheel scrolling in real Chromium against compiled CSS. Earliest compiled frontend at `446a1521` and later at `68fcea36` passed; newest smoke test and code changes need final CI confirmation. No direct Windows listener or persistence cross-relaunch QA yet.
+
+**Windows QA**:
+1. Set monitor volume to 12%, restart Song Harbor through the BAT, reopen same or different song: slider should remain 12%; no loud 75% initial blast. A brand-new Chromium browser profile should begin at 25%. These settings must not affect exported audio.
+2. Open two floating tools; scroll inside each, verify content moves with wheel and main waveform/page position does not. Resize panels and check scrollbars at smaller heights. Mousewheel over *waveform* should still scroll the page, not zoom.
+3. Open Edit sections -> Edit whole-song section text…; verify complete lyrics + every section's production block visible, not just chosen section. Change a safe directive, Apply, close/reopen, verify persisted; don't change lyrics unless intended. Whole-song raw text must be prominent and editable, not a read-only dump.
+4. Select a section and Pan/EQ/De-ess etc.; choose B Draft, play and adjust slider: hear immediate change and loop stays aligned. Choose A: saved sound returns. Close tool without saving: project/export unchanged; reopen and compare. Save while B -> effect persists after relaunch; output WAV reflects accepted target. Switching section/effect cancels unsaved preview. While B, WAV export should be unavailable.
+5. Confirm existing analyzer A/B still works unaffected and no accidental 3× audition settings enter saved mix.
+
+**Limitations:** Section Edit preview covers current effect tabs, **not direct text parsing of unsaved entire-song script**; user must press Apply for script text. A/B is not loudness-matched blind testing. Monitor preference relies on browser profile's localStorage (and will reset if that profile is erased). Chromium smoke fixture tests scrolling mechanics, not actual Windows mouse hardware; require real QA.
+
+---
+
 ## 2026-10-22: gain reduction / exaggerated A/B and per-section de-esser milestone
 
 User accepted Song Harbor layout, full section Script access, double-click to Edit sections, multi-window z-order, and analyzer report (03:35 +0.2 dBFS peak, 02:43 loudness dips). User could not hear compression/ducking trial differences and approved next two priorities: **visible gain-reduction feedback and meaningful A/B**, then **targeted section-aware de-essing**. Continued directly on `main`.

@@ -116,6 +116,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
   const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq"|"deess">("script");
   const [sectionEditId,setSectionEditId]=useState("");
+  const [sectionPreviewActive,setSectionPreviewActive]=useState(false);
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
   const [correctionSaving,setCorrectionSaving]=useState(false);
   const [meters,setMeters]=useState<{filename:string;compressionDb:number;duckDb:number;deessDb:number}[]>([]);
@@ -747,7 +748,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
-            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
+            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setSectionPreviewActive(false);setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
           {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
             <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
               <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
@@ -818,7 +819,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </button>)}
       </aside>
       {openTools.map((tool,order)=><ToolWindow key={tool}
-        name={TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order}
+        name={tool==="songText"?"Whole-song section text":TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order}
         onFocus={()=>setOpenTools(current=>current[current.length-1]===tool?current:
           [...current.filter(item=>item!==tool),tool])}
         onClose={()=>{
@@ -835,19 +836,23 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
                 </option>)}
               </select>
             </label>
+            <button type="button" className="song-open-full-script"
+              onClick={()=>setOpenTools(items=>items.includes("songText")?items:[...items,"songText"])}>
+              <span aria-hidden="true">{"{}"}</span> Edit whole-song section text…
+            </button>
             <div className="song-section-effect-tabs" role="tablist" aria-label="Section edit effect">
-              {(["script","pan","reverb","width","space","eq","deess"] as const).map(effect=>
+              {(["pan","reverb","width","space","eq","deess"] as const).map(effect=>
                 <button key={effect} type="button" role="tab" aria-selected={sectionEffect===effect}
-                  onClick={()=>setSectionEffect(effect)}>
+                  onClick={()=>{setSectionPreviewActive(false);setSectionEffect(effect);}}>
                   {effect==="script"?"Script":effect==="width"?"Width":effect==="space"?"Reflections":effect==="eq"?"EQ":effect==="deess"?"De-ess":effect[0].toUpperCase()+effect.slice(1)}
                 </button>)}
             </div>
           </div>
         </>}
 
-        {tool==="sectionEdit"&&sectionEffect==="script"&&<>
-        <SectionsTool jobId={jobId} open={tool==="sectionEdit"&&sectionEffect==="script"}
-          onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="sectionEdit"));}} focused={scriptFocus} revision={scriptRevision}
+        {tool==="songText"&&<>
+        <SectionsTool jobId={jobId} open={tool==="songText"}
+          onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);

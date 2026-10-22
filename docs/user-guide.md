@@ -106,6 +106,14 @@ For **Peak exceeds 0 dBFS** and **Repeated loudness dips**, choose **Try correct
 
 Switching an adjustment while playing may reschedule the current audio sources; seamless instantaneous sample-level trial switching is not yet guaranteed. The tool is intentionally conservative: it does not auto-accept suggested changes or claim sound improvement without listening.
 
+### Updated floating tool layout
+
+The right-hand tool rail is **54px wide**, with icons enlarged to occupy most of the reserved width. It no longer retains the old wide inspector column. Open multiple tools at once by clicking their icons; each window can be dragged by its title bar, resized by the lower-right corner, brought to front, and dismissed individually. Content outside those windows remains interactive.
+
+**Edit sections** replaces the separate Pan, Reverb, Stereo width, Reflections, and EQ icons. Choose the shared **Section** dropdown, then select an effect tab or **Script** for the full production block. Double-clicking any section on the playback timeline opens Edit sections with that section selected and Pan shown. The child effect editor inherits the shared section selection. Unapplied script edits are retained in memory when switching tabs or tools, but only Apply persists them.
+
+The previous DAW Handoff tool is now **Download**. Its panel says Download tracks and provides local aligned track export, with optional DAW launch explicitly separate. Processed mix WAV export remains in the song's existing export footer.
+
 ## Sound cleanup analyzer: detection and review
 
 Open **Tools → Sound cleanup** and select **Analyze mix**. Song Harbor builds the same non-destructive offline processing graph used for the WAV export, then checks the rendered floating-point audio (with master output trim). It does **not** download a WAV or change stored audio, sections, or effects.

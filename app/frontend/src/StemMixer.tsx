@@ -519,6 +519,86 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
   }
 
+  function loopAround(start:number,end:number){
+    const from=Math.max(0,Math.min(start,duration));
+    const to=Math.max(from+.1,Math.min(end,duration));
+    setLoopIn(from);setLoopOut(to);setLoopEnabled(true);
+    seek(from);
+    if(!playRef.current)void togglePlayback();
+  }
+
+  function tryCorrection(finding:AudioFinding){
+    const section=timelineSections.find(item=>finding.timeSeconds>=item.start_seconds&&finding.timeSeconds<item.end_seconds);
+    const suggestedStem=files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
+      files.find(f=>f.includes("(Drums)"))||files[0];
+    const kind=finding.kind==="headroom"?"trim":"duck";
+    const file=(kind==="duck"&&suggestedStem?.includes("(Vocals)"))?
+      files.find(f=>!f.includes("(Vocals)"))||suggestedStem:suggestedStem;
+    const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
+    const peak=peakMatch?Number(peakMatch[1]):0;
+    setCorrectionError("");
+    setCorrection({
+      finding,sectionId:section?.id||"",file,kind,
+      threshold:-18,ratio:1.5,depth:0,transition:1.5,
+      trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
+    });
+    loopAround(finding.timeSeconds-1,finding.timeSeconds+2);
+  }
+
+  async function acceptCorrection(){
+    const trial=correction;
+    if(!trial)return;
+    setCorrectionError("");
+    if(trial.kind==="trim"){
+      setMasterTrimDb(Math.max(-60,masterTrimDb+trial.trimDelta));
+      setCorrection(null);setMixUrl(null);
+      return;
+    }
+    const index=timelineSections.findIndex(section=>section.id===trial.sectionId);
+    if(index<0){setCorrectionError("Align a saved section before accepting a dynamics correction.");return;}
+    const alias=trial.file.match(/\(([^)]+)\)/)?.[1];
+    if(!alias){setCorrectionError("Track has no script-safe stem alias.");return;}
+    const directive=trial.kind==="comp"?
+      `${alias}.comp:${trial.threshold},${trial.ratio}@${trial.transition}s:smooth`:
+      `${alias}.duck:${trial.depth}@${trial.transition}s:smooth`;
+    setCorrectionSaving(true);
+    try{
+      const response=await fetch("/api/projects/"+jobId+"/sections/export",{cache:"no-store"});
+      const saved=await response.json() as {content?:string;detail?:string};
+      if(!response.ok||!saved.content)throw Error(saved.detail||"Could not load saved section script");
+      const lines=saved.content.split("\n");
+      const sectionHeaders=lines.map((line,i)=>/^\[[^\n]+\]$/.test(line.trim())?i:-1).filter(i=>i>=0);
+      const header=sectionHeaders[index];
+      if(header===undefined)throw Error("Saved section sequence differs from the timeline. Reload the song and retry.");
+      const nextHeader=sectionHeaders[index+1]??lines.length;
+      let blockIndex=-1;
+      for(let i=header+1;i<nextHeader;i++)if(/^\{.*\}$/.test(lines[i].trim())){blockIndex=i;break;}
+      if(blockIndex<0){lines.splice(header+1,0,"{"+directive+"}");}
+      else{
+        const existing=lines[blockIndex].trim().slice(1,-1).trim().split(/\s+/).filter(Boolean);
+        const without=existing.filter(token=>!token.startsWith(alias+"."+trial.kind+":"));
+        lines[blockIndex]="{"+[...without,directive].join(" ")+"}";
+      }
+      const result=await fetch("/api/projects/"+jobId+"/sections/import",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({content:lines.join("\n"),mode:"replace"})
+      });
+      const data=await result.json() as {detail?:string;sections?:SongSection[];pan_targets?:SavedPanTarget[];
+        reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:typeof spaceTargets;
+        eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;ending?:typeof ending};
+      if(!result.ok||!data.sections)throw Error(data.detail||"Could not save dynamics correction");
+      setCorrection(null);
+      setExternalSections(data.sections);setTimelineSections(data.sections);
+      setPanTargets(data.pan_targets||[]);setReverbTargets(data.reverb_targets||[]);
+      setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);
+      setEqTargets(data.eq_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);
+      if(data.ending)setEnding(data.ending);
+      setScriptRevision(v=>v+1);setMixUrl(null);
+      setNotice("Accepted "+trial.kind+" correction in section script; export uses the saved mix.");
+    }catch(error){setCorrectionError(error instanceof Error?error.message:"Could not accept correction");}
+    finally{setCorrectionSaving(false);}
+  }
+
   async function analyzeMix(){
     const engine=audio.current;
     if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
@@ -707,7 +787,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {selectedTool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
-          onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
+          onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
           onLoop={(start,end)=>{
             setLoopIn(Math.min(start,duration));
             setLoopOut(Math.min(duration,end));
@@ -716,6 +796,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(!playRef.current)void togglePlayback();
           }}/>
 
+        </>}
+        {selectedTool==="cleanup"&&correction&&<>
+          <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
+            busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
+            onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
+          {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}
         {selectedTool==="pan"&&<>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files}

@@ -291,8 +291,8 @@ export class SharedClockAudition {
       }
       const ranked=[...scores.entries()].sort((a,b)=>b[1]-a[1]).slice(0,2)
         .filter(([,power])=>power>.00001).map(([filename])=>{
-          const match=filename.match(/\\(([^)]+)\\)/);
-          return match?match[1]:filename.replace(/\\.[^.]+$/,"");
+          const match=filename.match(/\(([^)]+)\)/);
+          return match?match[1]:filename.replace(/\.[^.]+$/,"");
         });
       return {...finding,sources:ranked};
     });
@@ -306,7 +306,7 @@ export class SharedClockAudition {
 
   async renderWav24():Promise<Blob>{
     const rendered=await this.renderMixBuffer();
-    this.lastAnalysis=inspectRenderedAudio(rendered,this.outputTrimDb);
+    this.lastAnalysis=this.inspectWithSources(rendered);
     return encodeWav24(rendered,this.outputTrimDb);
   }
 

@@ -72,18 +72,24 @@ export function SectionsTool({jobId,open,onClose,focused,revision,onApplied}:{
     setContent(temporarySectionDrafts.get(jobId)||"");
     setDirty(temporarySectionDrafts.has(jobId));
   },[jobId]);
+  // Focus a section only when the navigation target changes, never on typing.
+  // React re-renders with each keystroke; watching content here forced the
+  // caret back to the header and made the script effectively uneditable.
+  const navigationKey=focused?focused.id:null;
   useEffect(()=>{
-    if(!open||!focused)return;
+    if(!open||!focused||dirty)return;
     const node=editor.current;
     if(!node)return;
-    const tags=[...content.matchAll(/^\[[^\n]*\]/gm)];
+    const tags=[...node.value.matchAll(/^\[[^\n]*\]/gm)];
     const match=tags.find(x=>x[0].startsWith("["+focused.kind) &&
-      x[0].includes(focused.start_seconds>=0?" "+timeStamp(focused.start_seconds)+"-":"\uffff"));
+      x[0].includes(" "+timeStamp(focused.start_seconds)+"-"));
     if(match){
       node.focus();
       node.setSelectionRange(match.index||0,(match.index||0)+match[0].length);
     }
-  },[focused,open,content]);
+  // Section navigation depends on selected ID and opening the tool, not editor content.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[navigationKey,open]);
 
   async function apply(){
     if(!content.trim()||saving)return;

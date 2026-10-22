@@ -51,7 +51,7 @@ export function SectionWidthTool({jobId,sections,files,targets,onChange,initialS
     <summary>Section stereo width</summary>
     <div className="timeline-loop-controls">
       <p>Mid/side width for each reconstructed stereo stem. 100% is original; 0% mono; above 100% expands existing stereo differences.</p>
-      <label>Section
+      <label className="subtool-section-picker">Section
         <select aria-label="Width section" value={selectedSection} onChange={e=>setSectionId(e.target.value)}>
           {sections.map(s=><option key={s.id} value={s.id}>
             {s.kind}{s.number?" "+s.number:""} ({s.start_seconds.toFixed(1)}s)

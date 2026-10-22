@@ -79,7 +79,7 @@ Use recognized stem aliases **Vocals**, **Drums**, **Bass**, **Guitar**, **Piano
 | Vocal ducking | `Guitar.duck:3@1s:smooth` | Up to 3 dB attenuation when vocal detected; 0-12 dB range |
 | Ending | `Master.fade:4s:smooth Master.tail:3s` | Final section only, preserves wet reverb decay |
 
-The compressor has conservative fixed attack/release and no automatic makeup gain. Ducking currently uses a deterministic envelope from the separated vocals, not an unrestricted external sidechain. Dynamic EQ, a full effects rack, plugin hosting, de-essing, phrase-level artifact repairs and gain-reduction meters are planned, **not** available.
+The compressor has conservative fixed attack/release and no automatic makeup gain. Ducking currently uses a deterministic envelope from the separated vocals, not an unrestricted external sidechain. Dynamic EQ, a full effects rack, plugin hosting and phrase-level artifact repairs are planned; conservative per-stem de-essing and live dynamics meters are available.
 
 ## Export and external DAWs
 
@@ -113,6 +113,27 @@ The right-hand tool rail is **54px wide**, with icons enlarged to occupy most of
 **Edit sections** replaces the separate Pan, Reverb, Stereo width, Reflections, and EQ icons. Choose the shared **Section** dropdown, then select an effect tab or **Script** for the full production block. Double-clicking any section on the playback timeline opens Edit sections with that section selected and Pan shown. The child effect editor inherits the shared section selection. Unapplied script edits are retained in memory when switching tabs or tools, but only Apply persists them.
 
 The previous DAW Handoff tool is now **Download**. Its panel says Download tracks and provides local aligned track export, with optional DAW launch explicitly separate. Processed mix WAV export remains in the song's existing export footer.
+
+## Dynamics visibility and section-aware de-essing
+
+The **A/B comparison** tool now shows live per-stem gain-reduction readouts when there is measurable processing. Compression uses the Web Audio compressor's live gain-reduction estimate; vocal-keyed ducking and de-essing read their scheduled AudioParam attenuation. These values are *per stem, approximate*, and not integrated loudness measurements.
+
+In Sound cleanup, a **Repeated loudness dips** or **Sibilance-like high-frequency burst** candidate can open **Try correction A/B**. Use **A Saved** versus **B Proposed** while listening to the same loop. The correction tool now shows separate compressor, ducking and de-esser meters. To make a subtle change easier to identify, set **Audition strength → Exaggerated · 3×**. The exaggeration affects only the current live preview and never changes the accepted values. For loudness dips, prefer checking whether the original gain-reduction meter actually moves before deciding to adjust compression/ducking.
+
+A conservative per-stem **de-esser** now supports a frequency-targeted peaking filter controlled by the energy of the target stem above an adjustable high-frequency cutoff. A detector with short attack and release dynamically attenuates the selected band rather than globally reducing all treble.
+
+It supports this section production directive:
+
+```text
+[Chorus 1:42-2:05]
+{Vocals.deess:6500,2,-40,4@2s:smooth}
+```
+
+The four values are **center frequency Hz** (3000–11000), **Q** (.4–8), **detector threshold dBFS** (-70 to -10) and **maximum frequency-band reduction dB** (0–12). Transition duration is .05–30 seconds. A stem reset restores neutral de-essing. Older projects without this directive do not de-ess by default.
+
+For a sibilance-like finding, choose **Try correction A/B**, select **Targeted de-esser**, then adjust band frequency, Q, threshold and maximum reduction. **Accept** writes a validated instruction for the containing section; **Discard** restores previous processing. The live audition and offline WAV render share the same detector and filter graph; no original WAV is overwritten.
+
+**Limits:** This is a spectral heuristic, not a voice or sibilant classifier. Cymbals, strings, synths and industrial distortion can cause similar high-frequency triggers. There is no guaranteed level-matched A/B, machine-learned artifact recognition, or automatic repair yet. An exaggerated preview is explicitly *not* the saved processed sound. Confirm actual 1× comparison before accepting.
 
 ## Sound cleanup analyzer: detection and review
 

@@ -102,7 +102,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
-  const [scriptOpen,setScriptOpen]=useState(false);
   const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
   const [sectionEffect,setSectionEffect]=useState<"script"|"pan"|"reverb"|"width"|"space"|"eq">("script");
   const [sectionEditId,setSectionEditId]=useState("");
@@ -713,7 +712,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
-            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setScriptOpen(true);setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
+            onSectionDoubleClick={section=>{setScriptFocus(section);setSectionEditId(section.id);setSectionEffect("pan");setOpenTools(items=>[...items.filter(x=>x!=="sectionEdit"),"sectionEdit"]);}}/>
           {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
             <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
               <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
@@ -813,7 +812,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         {tool==="sectionEdit"&&sectionEffect==="script"&&<>
         <SectionsTool jobId={jobId} open={tool==="sectionEdit"&&sectionEffect==="script"}
-          onClose={()=>{setScriptOpen(false);setOpenTools(items=>items.filter(x=>x!=="sectionEdit"));}} focused={scriptFocus} revision={scriptRevision}
+          onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="sectionEdit"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);

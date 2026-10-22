@@ -36,6 +36,12 @@ DYNAMICS_TOKEN = re.compile(
     r"(?P<value>-?\d+(?:\.\d+)?)(?:,(?P<ratio>\d+(?:\.\d+)?))?"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+DEESS_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.deess:"
+    r"(?P<freq>\d{4,5}),(?P<q>\d+(?:\.\d{1,2})?),"
+    r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
+    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+)
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
@@ -48,6 +54,27 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        deess=DEESS_TOKEN.fullmatch(token)
+        if deess:
+            canonical=next((a for a in aliases if a.lower()==deess.group("track").lower()),None)
+            if not canonical:raise ValueError("Unknown de-esser stem")
+            frequency=int(deess.group("freq"))
+            q=float(deess.group("q"))
+            threshold=float(deess.group("threshold"))
+            reduction=float(deess.group("reduction"))
+            transition=float(deess.group("seconds") or 1)
+            if not (3000<=frequency<=11000 and .4<=q<=8 and -70<=threshold<=-10
+                    and 0<=reduction<=12 and .05<=transition<=30):
+                raise ValueError("De-esser requires frequency 3000-11000 Hz, Q .4-8, threshold -70..-10 dBFS and reduction 0..12 dB")
+            key=canonical.lower()+".deess"
+            if key in touched or "all" in touched or canonical.lower() in touched:
+                raise ValueError("Duplicate or conflicting de-esser directive")
+            touched.add(key)
+            directives.append({"kind":"deess","track":canonical,"frequency":frequency,
+                               "q":q,"threshold_db":threshold,"max_reduction_db":reduction,
+                               "transition_seconds":transition,
+                               "curve":(deess.group("curve") or "smooth").lower()})
+            continue
         dynamics=DYNAMICS_TOKEN.fullmatch(token)
         if dynamics:
             canonical=next((a for a in aliases if a.lower()==dynamics.group("track").lower()),None)
@@ -183,6 +210,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
+        elif d["kind"] == "deess":
+            head = f"{d['track']}.deess:{d['frequency']},{float(d['q']):g},{float(d['threshold_db']):g},{float(d['max_reduction_db']):g}"
         elif d["kind"] == "comp":
             head = f"{d['track']}.comp:{float(d['threshold_db']):g},{float(d['ratio']):g}"
         elif d["kind"] == "duck":
@@ -223,7 +252,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -249,7 +278,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:
@@ -371,13 +400,13 @@ def materialize_dynamics(sections: list[dict[str, Any]],
     for section in sorted(sections,key=lambda item:item["start_seconds"]):
         for directive in blocks.get(section["id"],[]):
             kind=directive["kind"]
-            if kind not in ("comp","duck","reset"):
+            if kind not in ("comp","duck","deess","reset"):
                 continue
             targets=list(stems) if kind=="reset" and directive["track"]=="all" else [directive["track"]]
             for alias in targets:
                 if alias not in stems:
                     raise ValueError(f"Dynamics target {alias} not found")
-                for operation in (("comp","duck") if kind=="reset" else (kind,)):
+                for operation in (("comp","duck","deess") if kind=="reset" else (kind,)):
                     if operation=="duck" and alias=="Vocals":
                         continue
                     out.append({"section_id":section["id"],"source_key":stems[alias],
@@ -385,5 +414,8 @@ def materialize_dynamics(sections: list[dict[str, Any]],
                                 "threshold_db":directive.get("threshold_db",-18) if kind!="reset" else -18,
                                 "ratio":directive.get("ratio",1) if kind!="reset" else 1,
                                 "depth_db":directive.get("depth_db",0) if kind!="reset" else 0,
+                                "frequency":directive.get("frequency",6500) if kind!="reset" else 6500,
+                                "q":directive.get("q",2) if kind!="reset" else 2,
+                                "max_reduction_db":directive.get("max_reduction_db",0) if kind!="reset" else 0,
                                 "transition_seconds":directive["transition_seconds"],"curve":directive["curve"]})
     return out

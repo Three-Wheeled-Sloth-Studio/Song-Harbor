@@ -124,7 +124,7 @@ class ImportTracksTests(unittest.TestCase):
         alias=tracks[-1]["stem_alias"]
         block=f"{{{alias}.pan:right.60@2s:smooth {alias}.eq1:320,1.2,-2@2s:smooth}}"
         result=section_import.apply({"files":files,"sections":[]},
-               "[Verse 0:00-0:10]\\n"+block+"\\n","replace",10)
+               "[Verse 0:00-0:10]\n"+block+"\n","replace",10)
         self.assertEqual(len(result["section_pan_automation"]),1)
         self.assertEqual(result["section_pan_automation"][0]["source_key"],files[-1])
         self.assertEqual(result["section_eq_automation"][0]["source_key"],files[-1])

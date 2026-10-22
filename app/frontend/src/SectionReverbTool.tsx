@@ -47,7 +47,7 @@ export function SectionReverbTool({jobId,sections,files,targets,onChange}:Props)
       wet,transition_seconds:transition,curve};
     void persist([...targets.filter(t=>t.section_id!==currentSection||t.source_key!==currentFile),item]);
   }
-  return <details className="production-tool-detail">
+  return <details className="production-tool-detail" open>
     <summary>Section reverb</summary>
     <div className="timeline-loop-controls">
       <p>Diffuse room reverb send. Dry stem and original L/R routing stay intact.</p>

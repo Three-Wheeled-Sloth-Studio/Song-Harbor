@@ -19,9 +19,9 @@ import type { SongSection } from "./SectionEditor";
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
 type ChannelSets = Record<string,ChildSet>;
-type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq";
-const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","ending"];
-const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,ending:false};
+type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"dynamics";
+const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","dynamics","ending"];
+const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,dynamics:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
@@ -670,7 +670,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>!bypassed[k])}
                 onClick={()=>setBypassed({...DEFAULT_BYPASS})}>A · Processed</button>
               <button type="button" aria-pressed={EFFECT_KEYS.every(k=>bypassed[k])}
-                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,ending:true})}>B · Original</button>
+                onClick={()=>setBypassed({pan:true,width:true,space:true,reverb:true,eq:true,dynamics:true,ending:true})}>B · Original</button>
             </div>
             {EFFECT_KEYS.map(key=><label key={key}>
               <input type="checkbox" checked={bypassed[key]}

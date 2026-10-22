@@ -16,6 +16,7 @@ import { compileSectionAutomation } from "./SectionAutomation";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import {CleanupReview} from "./CleanupReview";
+import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import type { SongSection } from "./SectionEditor";
 
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -101,6 +102,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
   const [scriptOpen,setScriptOpen]=useState(false);
+  const [selectedTool,setSelectedTool]=useState<WorkbenchTool|null>(null);
   const [scriptFocus,setScriptFocus]=useState<SongSection|null>(null);
   const [scriptRevision,setScriptRevision]=useState(0);
   const [externalSections,setExternalSections]=useState<SongSection[]|undefined>(undefined);
@@ -604,7 +606,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onSeek={seek} viewStart={viewStart} viewEnd={viewEnd}
             onSectionsChange={setTimelineSections}
             onPersisted={()=>setScriptRevision(v=>v+1)}
-            onSectionDoubleClick={section=>{setScriptFocus(section);setScriptOpen(true);}}/>
+            onSectionDoubleClick={section=>{setScriptFocus(section);setScriptOpen(true);setSelectedTool("sections");}}/>
           {cleanupScanned&&cleanupFindings.length>0&&viewEnd>viewStart&&
             <div className="song-cleanup-marker-row" aria-label="Sound cleanup timeline markers">
               <span className="song-cleanup-marker-label">QC · {cleanupFindings.length}</span>
@@ -661,12 +663,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         :"Original stereo stems active. Expand split channels with their track buttons."}</div>
     </div>
       </main>
-      <aside className="production-tools" aria-label="Production tools">
-        <div className="production-tools-heading"><strong>Tools</strong><span aria-hidden="true">⚙</span></div>
-        <button type="button" className="production-tool-open" aria-expanded={scriptOpen}
-          onClick={()=>{setScriptFocus(null);setScriptOpen(v=>!v);}}
-          title="Open canonical time-stamped arrangement text">≡ Sections</button>
-        <SectionsTool jobId={jobId} open={scriptOpen}
+      <aside className="song-tool-rail" aria-label="Production tools">
+        {TOOL_ITEMS.map(item=><button type="button" key={item.id}
+          className="song-tool-icon" title={item.label} aria-label={"Open "+item.label+" tool"}
+          aria-pressed={selectedTool===item.id}
+          onClick={()=>{
+            if(selectedTool===item.id){setSelectedTool(null);setScriptOpen(false);}
+            else {setSelectedTool(item.id);setScriptOpen(item.id==="sections");}
+          }}>
+          <span aria-hidden="true">{item.icon}</span>
+        </button>)}
+      </aside>
+      {selectedTool&&<ToolWindow key={selectedTool} name={TOOL_ITEMS.find(item=>item.id===selectedTool)?.label||"Tool"}
+        onClose={()=>{setSelectedTool(null);setScriptOpen(false);}}>
+        {selectedTool==="sections"&&<>
+        <SectionsTool jobId={jobId} open={selectedTool==="sections"}
           onClose={()=>setScriptOpen(false)} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,finish)=>{
             setPanTargets(targets);
@@ -680,6 +691,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setExternalSections(items);setTimelineSections(items);
             setZoom(1);setViewportOffset(0);setScriptRevision(v=>v+1);
           }}/>
+
+        </>}
+        {selectedTool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
@@ -690,14 +704,29 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             seek(Math.max(0,Math.min(start,duration)));
             if(!playRef.current)void togglePlayback();
           }}/>
+
+        </>}
+        {selectedTool==="pan"&&<>
         <SectionPanTool jobId={jobId} sections={timelineSections} files={files}
           targets={panTargets} onChange={items=>{setPanTargets(items);setMixUrl(null);}}/>
+
+        </>}
+        {selectedTool==="reverb"&&<>
         <SectionReverbTool jobId={jobId} sections={timelineSections} files={files}
           targets={reverbTargets} onChange={items=>{setReverbTargets(items);setMixUrl(null);}}/>
+
+        </>}
+        {selectedTool==="width"&&<>
         <SectionWidthTool jobId={jobId} sections={timelineSections} files={files}
           targets={widthTargets} onChange={items=>{setWidthTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+        {selectedTool==="space"&&<>
         <SectionSpaceTool jobId={jobId} sections={timelineSections} files={files}
           targets={spaceTargets} onChange={items=>{setSpaceTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+        {selectedTool==="ab"&&<>
         <details className="production-tool-detail" aria-label="A/B audition">
           <summary>◉ A/B comparison &amp; bypass</summary>
           <div className="timeline-loop-controls">
@@ -716,10 +745,19 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>Audition-only: individual stem balance, saved production instructions, and WAV render stay intact. Original mode retains active split-channel routing and master output trim.</small>
           </div>
         </details>
+
+        </>}
+        {selectedTool==="eq"&&<>
         <SectionEqTool jobId={jobId} sections={timelineSections} files={files}
           targets={eqTargets} onChange={items=>{setEqTargets(items);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+        {selectedTool==="ending"&&<>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>
+
+        </>}
+        {selectedTool==="zoom"&&<>
         <div className="production-tools-zoom">
           <strong>Zoom</strong>
           <select aria-label="Timeline zoom" value={zoom} onChange={e=>setZoom(Number(e.target.value))}>
@@ -730,6 +768,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           {zoom>1&&<input type="range" aria-label="Timeline horizontal position" min="0" max="1" step=".001"
             value={viewportOffset} onChange={e=>setViewportOffset(Number(e.target.value))}/>}
         </div>
+
+        </>}
+        {selectedTool==="loop"&&<>
         <details className="production-tool-detail"><summary>⇥ Region loop</summary>
           <div className="timeline-loop-controls">
             <button type="button" onClick={()=>setLoopIn(position)}>In</button>
@@ -741,6 +782,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <button type="button" onClick={()=>{setLoopEnabled(false);setLoopIn(null);setLoopOut(null);}}>×</button>
           </div>
         </details>
+
+        </>}
+      </ToolWindow>}
     <div className="mix-footer">
       <div className="mix-actions">
         <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}

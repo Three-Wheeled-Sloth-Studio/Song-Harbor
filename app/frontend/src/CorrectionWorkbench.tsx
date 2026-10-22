@@ -27,7 +27,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,onChange,onAccept
       <button type="button" onClick={onCancel} title="Discard trial" aria-label="Close correction trial">×</button>
     </div>
     <small>Loop audition compares saved mix (A) to an unsaved proposed change (B).
-      Only Accept writes a production directive. No source WAV is modified.</small>
+      Only Accept writes a production directive. No source WAV is modified. Mix export is unavailable during an unsaved trial.</small>
     <div className="song-correction-switch" role="group" aria-label="Correction comparison">
       <button type="button" aria-pressed={!draft.proposed} onClick={()=>edit({proposed:false})}>A · Saved</button>
       <button type="button" aria-pressed={draft.proposed} onClick={()=>edit({proposed:true})}>B · Proposed</button>
@@ -59,7 +59,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,onChange,onAccept
       <input type="range" min="-12" max="0" step=".1" value={draft.trimDelta}
         onChange={e=>edit({trimDelta:Number(e.target.value),proposed:true})}/></label>}
     <div className="song-correction-actions">
-      <button type="button" disabled={busy} onClick={onAccept}>{busy?"Saving…":"Accept correction"}</button>
+      <button type="button" disabled={busy||!draft.proposed} onClick={onAccept}>{busy?"Saving…":"Accept correction"}</button>
       <button type="button" onClick={onCancel}>Discard</button>
     </div>
     {draft.kind==="trim"&&<small>Master output trim is currently session-only.

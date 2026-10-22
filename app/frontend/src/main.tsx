@@ -176,7 +176,7 @@ function App() {
   }
 
   async function importSelectedTracks(){
-    if(busy||trackFiles.length<2||trackFiles.length>12)return;
+    if(busy||trackFiles.length<2||trackFiles.length>129)return;
     setBusy(true);setError("");setJob(null);setProject(null);
     const data=new FormData();
     for(const track of trackFiles)data.append("files",track);
@@ -309,14 +309,25 @@ function App() {
           </div>
 
           </>:<>
-            <FormField label="Choose aligned tracks" hint="Select 2-12 WAV, FLAC, MP3, M4A, AIFF or OGG files · starts at 0:00">
-              <input className="source-picker" type="file" multiple accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
+            <FormField label="Choose aligned tracks" hint="2-64 audio tracks, or a channel-split export (12 mono WAVs + manifest.json) · starts at 0:00">
+              <input className="source-picker" type="file" multiple accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,.json,audio/*"
                 disabled={busy} onChange={event=>{
                   const chosen=Array.from(event.target.files||[]);
-                  const suggestion=suggestTrackTitle(chosen);
-                  setTrackFiles(chosen);setSuggestedTitle(suggestion);
-                  if(!titleManuallyEdited)setTrackTitle(suggestion);
-                  setError("");
+                  const manifest=chosen.find(file=>file.name.toLowerCase()==="manifest.json");
+                  const audio=chosen.filter(file=>file!==manifest);
+                  setTrackFiles(chosen);setError("");
+                  const updateTitle=(suggestion:string)=>{
+                    setSuggestedTitle(suggestion);
+                    if(!titleManuallyEdited)setTrackTitle(suggestion);
+                  };
+                  if(manifest){
+                    void manifest.text().then(text=>{
+                      const parsed=JSON.parse(text) as {format?:string;tracks?:{source?:string}[]};
+                      if(parsed.format!=="song-harbor-stereo-channel-split")throw Error("Unsupported channel manifest");
+                      const sources=[...new Set((parsed.tracks||[]).map(t=>t.source).filter((value):value is string=>!!value))];
+                      updateTitle(suggestTrackTitle(sources.map(name=>({name} as File))));
+                    }).catch(()=>setError("Invalid split-channel manifest; include the original manifest.json"));
+                  }else updateTitle(suggestTrackTitle(audio));
                 }}/>
             </FormField>
             {trackFiles.length>0&&<>
@@ -330,10 +341,10 @@ function App() {
                   <small>{(track.size/1048576).toFixed(1)} MB</small>
                 </div>)}
               </div>
-              <small>Working copies are aligned to the longest track without time stretching. Original files are preserved.</small>
+              <small>Working copies are aligned at 0:00; originals remain intact. Add manifest.json from a Song Harbor channel export to automatically reunite L/R pairs with the original split routing.</small>
             </>}
             <div className="action-row">
-              <Button variant="primary" size="compact" disabled={busy||trackFiles.length<2||trackFiles.length>12||!trackTitle.trim()}
+              <Button variant="primary" size="compact" disabled={busy||trackFiles.length<2||trackFiles.length>129||!trackTitle.trim()}
                 onClick={()=>{void importSelectedTracks();}}>{busy?"Importing tracks…":`Import ${trackFiles.length} tracks as one song`}</Button>
             </div>
           </>}

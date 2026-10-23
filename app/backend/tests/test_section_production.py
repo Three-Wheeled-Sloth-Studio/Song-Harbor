@@ -24,6 +24,27 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(section_import.apply(project, rendered, "replace", 40)["section_pan_automation"],
                          result["section_pan_automation"])
 
+    def test_16_custom_tracks_reverb_and_broadcast(self):
+        files=[f"song (Synth_{i:02d}).wav" for i in range(1,17)]
+        sheet=("[Verse 0:00-0:10]\\n"
+               "{all.reverb:12 Synth_16.reverb:35 Synth_01.pan:right.20 "
+               "Synth_15.gain:+1@2s:smooth}\\n"
+               "[Outro 0:10-0:20]\\n{all.reset@2s:smooth}\\n")
+        project={"sections":[],"files":files}
+        changed=section_import.apply(project,sheet,"replace",20)
+        sends=[x for x in changed["section_reverb_automation"]
+               if x["section_id"]==changed["sections"][0]["id"]]
+        self.assertEqual(len(sends),16)
+        self.assertEqual(next(x["wet"] for x in sends
+                              if "(Synth_16)" in x["source_key"]),.35)
+        self.assertEqual(next(x["wet"] for x in sends
+                              if "(Synth_01)" in x["source_key"]),.12)
+        self.assertEqual(len(changed["section_reverb_automation"]),32)
+        restored=section_import.apply({**project,**changed},
+            section_import.render_tags({**project,**changed}),"replace",20)
+        self.assertEqual(changed["section_reverb_automation"],
+                         restored["section_reverb_automation"])
+
     def test_reverb_send_and_reset_round_trip(self):
         script = ("[Verse 0:00-0:10]\n{Vocals.pan:left.30@2s:smooth Vocals.reverb:25@3s:smooth}\n"
                   "[Chorus 0:10-0:20]\n{Vocals.reverb:40@2s:smooth}\n"

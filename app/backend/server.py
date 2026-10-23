@@ -2026,6 +2026,45 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
 
 
 
+# Managed local ACE runtime: start without model initialization, stop only owned PID.
+import ace_service
+
+ACE_HOME = Path(os.environ.get("SONG_HARBOR_ACE_HOME", r"D:\\Apps\\Tools\\ACE-Step-1.5"))
+ace_manager = ace_service.AceServiceManager(
+    ACE_HOME, log_directory=DATA_ROOT / "logs")
+
+
+@app.get("/api/ace/service")
+def ace_service_status() -> dict[str, Any]:
+    return ace_manager.status()
+
+
+@app.post("/api/ace/service/start")
+def ace_service_start(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return ace_manager.start()
+    except ace_service.AceServiceError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/ace/service/stop")
+def ace_service_stop(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    # Do not terminate an in-flight candidate run.
+    for record_path in (DATA_ROOT / "jobs").glob("*/generated/ace-candidates/*/candidate.json"):
+        try:
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            if record.get("state") in ("generating", "processing"):
+                raise HTTPException(409, "ACE generation is active. Finish or cancel it before stopping ACE.")
+        except (OSError, ValueError):
+            continue
+    try:
+        return ace_manager.stop()
+    except ace_service.AceServiceError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 # ACE accompaniment candidates are project-owned assets, not imported tracks.
 # Runtime startup and model switching remain a separate, explicitly gated step.
 import ace_adapter

@@ -32,10 +32,10 @@ export function AceServiceControls({open}:{open:boolean}){
     const id=window.setInterval(()=>{void refresh();},3000);
     return()=>window.clearInterval(id);
   },[open]);
-  async function change(action:"start"|"stop"){
+  async function change(action:"start"|"stop"|"initialize"){
     setBusy(true);setError("");
     try{
-      const response=await fetch("/api/ace/service/"+action,{method:"POST"});
+      const response=await fetch("/api/ace/service/"+action,{method:"POST",headers:action==="initialize"?{"Content-Type":"application/json"}:undefined,body:action==="initialize"?JSON.stringify({model:"acestep-v15-turbo"}):undefined});
       const data=await response.json() as AceServiceState&{detail?:string};
       if(!response.ok)throw Error(data.detail||"ACE "+action+" failed");
       setStatus(data);
@@ -62,6 +62,7 @@ export function AceServiceControls({open}:{open:boolean}){
     </div>
     <div className="setting-controls">
       {status?.can_start&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("start")}>Enable ACE</Button>}
+      {state==="running_uninitialized"&&status?.runtime?.models?.some(m=>m.name==="acestep-v15-turbo")&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("initialize")}>Load turbo model</Button>}
       {status?.can_stop&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("stop")}>Stop ACE</Button>}
       <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void refresh()}>Refresh</Button>
     </div>

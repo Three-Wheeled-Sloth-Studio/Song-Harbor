@@ -489,14 +489,34 @@ export class SharedClockAudition {
       const sectionGain=offline.createGain();
       scheduleAutomation(sectionGain.gain,
         this.automation[track.source.filename]?.gain||[{time:0,value:1}],0,0);
-      source.connect(gain).connect(sectionGain).connect(childPan).connect(eqs.get(track.source.filename)![0]);
+      const childGain=offline.createGain();
+      scheduleAutomation(childGain.gain,
+        track.source.key!==track.source.filename&&this.automation[track.source.key]?.gain
+          ||[{time:0,value:1}],0,0);
+      const childPanCurve=track.source.key!==track.source.filename
+        ?this.automation[track.source.key]?.pan:undefined;
+      if(childPanCurve)scheduleAutomation(childPan.pan,childPanCurve,0,0);
+      source.connect(gain).connect(sectionGain).connect(childGain).connect(childPan);
+      if(track.source.key!==track.source.filename){
+        const childEq=createEqStage(offline);
+        childPan.connect(childEq[0]);
+        scheduleEq(childEq,this.automation[track.source.key]?.eq||{},0,0);
+        childEq[2].connect(eqs.get(track.source.filename)![0]);
+        const childSend=offline.createGain();
+        const wet=this.automation[track.source.key]?.reverb
+          ||this.automation[track.source.filename]?.reverb;
+        if(wet)scheduleAutomation(childSend.gain,wet,0,0);
+        else childSend.gain.value=0;
+        childEq[2].connect(childSend).connect(reverbDrive);
+      }else childPan.connect(eqs.get(track.source.filename)![0]);
       source.start(0);
     }
     for(const [filename,bus] of group){
       const curve=this.automation[filename]?.pan;
       if(curve)scheduleAutomation(bus.pan,curve,0,0);
       const wet=this.automation[filename]?.reverb;
-      if(wet)scheduleAutomation(sends.get(filename)!.gain,wet,0,0);
+      if(wet&&!this.tracks.some(t=>t.source.filename===filename&&t.source.key!==filename))
+        scheduleAutomation(sends.get(filename)!.gain,wet,0,0);
       const width=this.automation[filename]?.width;
       if(width)scheduleStereoWidth(widths.get(filename)!,width,0,0);
       const space=this.automation[filename]?.space;

@@ -84,7 +84,7 @@ FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|l
 
 def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any]]:
     if len(text) > 32768 or not text.startswith("{") or not text.endswith("}"):
-        raise ValueError("Production instructions must occupy one {...} line")
+        raise ValueError("Production instructions must be enclosed in one {...} block")
     tokens = text[1:-1].strip().split()
     if len(tokens) > 512:
         raise ValueError("Maximum 512 production directives per section")
@@ -326,7 +326,7 @@ def render_block(directives: list[dict[str, Any]]) -> str:
                 pos = ("left" if value < 0 else "right") + f".{round(abs(value)*100)}"
             head = f"{d['track']}.pan:{pos}"
         rendered.append(head + suffix)
-    return "{" + " ".join(rendered) + "}"
+    return "{\\n  " + "\\n  ".join(rendered) + "\\n}" if len(rendered)>1 else "{" + " ".join(rendered) + "}"
 
 
 

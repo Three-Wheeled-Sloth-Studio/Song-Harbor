@@ -326,7 +326,7 @@ def render_block(directives: list[dict[str, Any]]) -> str:
                 pos = ("left" if value < 0 else "right") + f".{round(abs(value)*100)}"
             head = f"{d['track']}.pan:{pos}"
         rendered.append(head + suffix)
-    return "{\\n  " + "\\n  ".join(rendered) + "\\n}" if len(rendered)>1 else "{" + " ".join(rendered) + "}"
+    return "{\n  " + "\n  ".join(rendered) + "\n}" if len(rendered)>1 else "{" + " ".join(rendered) + "}"
 
 
 

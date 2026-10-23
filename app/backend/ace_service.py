@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ace_adapter import AceClient
+from ace_adapter import AceClient, AceError, unwrap
 
 class AceServiceError(RuntimeError):
     pass
@@ -88,6 +88,36 @@ class AceServiceManager:
             except OSError as exc:
                 raise AceServiceError(f"Cannot start local ACE-Step API: {exc}") from exc
             return self.status()
+
+    def initialize_model(self, name: str) -> dict[str, Any]:
+        """Load an existing local checkpoint only; ACE /v1/init can otherwise download."""
+        with self._lock:
+            if self.client.discover().get("status") != "connected":
+                raise AceServiceError("Start or connect ACE before loading a model")
+            if name != "acestep-v15-turbo":
+                raise AceServiceError("Only the verified installed turbo checkpoint is enabled for this release")
+            directory = self.installation / "checkpoints" / name
+            config = directory / "config.json"
+            if not directory.is_dir() or not config.is_file():
+                raise AceServiceError("The selected ACE checkpoint is not verified on disk")
+            try:
+                import json
+                settings = json.loads(config.read_text(encoding="utf-8"))
+                if settings.get("is_turbo") is not True:
+                    raise AceServiceError("Local checkpoint config is not confirmed turbo")
+                # Confirm ACE independently sees the exact same installed checkpoint.
+                inventory = unwrap(self.client.request("/v1/model_inventory"))
+                if not any(row.get("name") == name for row in inventory.get("models", [])
+                           if isinstance(row, dict)):
+                    raise AceServiceError("ACE inventory does not contain the local checkpoint")
+                self.client.request("/v1/init", {"model": name, "slot": 1,
+                                                  "init_llm": False, "lm_model_path": None})
+                result = self.client.discover()
+                if not result.get("ready") or result.get("loaded_model") != name:
+                    raise AceServiceError("ACE initialized but model readiness was not confirmed")
+                return self.status()
+            except (OSError, ValueError, AceError) as exc:
+                raise AceServiceError(f"ACE initialization failed: {exc}") from exc
 
     def stop(self) -> dict[str, Any]:
         with self._lock:

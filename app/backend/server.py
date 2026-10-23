@@ -685,6 +685,98 @@ def load_project(ident: str) -> dict[str, Any]:
     return {"project": record, "job": snapshot(job)}
 
 
+@app.post("/api/projects/{ident}/tracks/add")
+async def add_project_track(ident: str, request: Request,
+                            file: UploadFile = File(...),
+                            stem_alias: str = Form(...),
+                            display_name: str = Form(...)) -> dict[str, Any]:
+    """Add a 0-aligned new source without touching existing stems or scripts."""
+    require_local_origin(request)
+    if not track_lifecycle.ALIAS.fullmatch(stem_alias) or stem_alias.casefold() in track_lifecycle.RESERVED:
+        raise HTTPException(400,"Invalid or reserved script alias")
+    if not 1<=len(display_name.strip())<=100:
+        raise HTTPException(400,"Display name must have 1-100 characters")
+    source_name=safe_name(file.filename or "")
+    if Path(source_name).suffix not in ALLOWED:
+        raise HTTPException(400,"Unsupported audio format")
+    if not dependencies.resolve(APP_ROOT):
+        raise HTTPException(409,"Configure FFmpeg before adding tracks")
+    job=get_job(ident)
+    if not job:raise HTTPException(404,"Song unavailable")
+    with lock:
+        record=projects.read_project(DATA_ROOT,ident)
+        if job.get("status")!="complete" or not record:
+            raise HTTPException(409,"Song must be complete before adding a stem")
+        rows=track_lifecycle.ensure_identities(record)
+        if len(rows)>=stem_import.MAX_TRACKS:
+            raise HTTPException(400,"Maximum 64 source tracks")
+        if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
+            raise HTTPException(409,"Script alias already belongs to a track")
+        # Block mixing/export and conflicting operations until media validation
+        # and one manifest replacement succeed or roll back.
+        job["status"]="running"
+        job["message"]="Importing new stem"
+    folder=DATA_ROOT/"jobs"/ident
+    original_dir=folder/"originals"
+    original_dir.mkdir(parents=True,exist_ok=True)
+    track_id="trk_"+uuid.uuid4().hex[:16]
+    original=original_dir/(track_id+"_"+source_name)
+    final_name=track_id+" ("+stem_alias+").wav"
+    final=folder/"stems"/final_name
+    staging=folder/"stems"/(track_id+".staging")
+    try:
+        length=0
+        with original.open("xb") as target:
+            while chunk:=await file.read(1024*1024):
+                length+=len(chunk)
+                if length>MAX_UPLOAD:
+                    raise ValueError("Stem exceeds 1 GiB import limit")
+                target.write(chunk)
+        if length==0:raise ValueError("Stem audio is empty")
+        original_duration=probe_duration(original)
+        song_duration=resolved_song_duration(record,job)
+        if original_duration>song_duration+DURATION_TOLERANCE_SECONDS:
+            raise ValueError("New stem is longer than the song; trim it deliberately before importing")
+        ffmpeg=dependency_tool("ffmpeg")
+        command=[ffmpeg,"-hide_banner","-loglevel","error","-nostdin","-y",
+                 "-i",str(original),"-map","0:a:0","-vn",
+                 "-af",f"apad,atrim=duration={song_duration:.6f},asetpts=PTS-STARTPTS",
+                 "-ac","2","-ar","48000","-c:a","pcm_s24le","-f","wav",str(staging)]
+        result=subprocess.run(command,capture_output=True,text=True,timeout=360,
+                              creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+        if result.returncode or not staging.is_file() or staging.stat().st_size<44:
+            raise ValueError("Audio conversion failed: "+(result.stderr or "")[-300:])
+        os.replace(staging,final)
+        updated=track_lifecycle.ensure_identities(record)
+        if len(updated)>=stem_import.MAX_TRACKS:raise ValueError("Maximum 64 source tracks")
+        updated.append({"track_id":track_id,"original_filename":original.name,
+                        "working_filename":final_name,"stem_alias":stem_alias,
+                        "display_name":display_name.strip()})
+        record["source_tracks"]=updated
+        record["files"]=list(record["files"])+[final_name]
+        record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]
+        record["imported_tracks"]=True
+        record["updated_at"]=time.time()
+        with lock:
+            # The manifest is replaced once; don't change job file routing first.
+            projects.write_project(DATA_ROOT,record)
+            job["files"]=record["files"]
+            job["status"]="complete"
+            job["message"]="New stem added"
+        return {"project":record,"job":snapshot(job)}
+    except (ValueError,OSError,subprocess.SubprocessError) as exc:
+        final.unlink(missing_ok=True)
+        original.unlink(missing_ok=True)
+        raise HTTPException(400,str(exc)) from exc
+    finally:
+        staging.unlink(missing_ok=True)
+        await file.close()
+        with lock:
+            if job.get("status")=="running":
+                job["status"]="complete"
+                job["message"]="Add stem failed; original mix preserved"
+
+
 @app.get("/api/projects/{ident}/tracks")
 def list_project_tracks(ident: str) -> dict[str, Any]:
     """Upgrade legacy stem metadata without modifying the saved WAVs."""

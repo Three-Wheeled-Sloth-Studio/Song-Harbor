@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -90,7 +90,16 @@ class CandidateTests(unittest.TestCase):
             def crop(ffmpeg, source, destination, start, end, rate=48000):
                 calls.append((start, end))
                 destination.write_bytes(b"cropped")
-            with patch("ace_candidates.ffmpeg_extract", side_effect=crop):
+            def wave_info(path, mode):
+                reader = MagicMock()
+                reader.getframerate.return_value = 48000
+                reader.getnframes.return_value = (
+                    result["samples"]["crop_end"] + 1 if str(path).endswith("generated.wav")
+                    else result["samples"]["crop_end"] - result["samples"]["crop_start"]
+                )
+                reader.__enter__.return_value = reader
+                return reader
+            with patch("ace_candidates.ffmpeg_extract", side_effect=crop), patch("ace_candidates.wave.open", side_effect=wave_info):
                 ready = crop_generated_candidate(folder, result["candidate_id"], generated, "ffmpeg")
             self.assertEqual(ready["state"], "ready")
             self.assertEqual(calls[0], (result["samples"]["crop_start"],

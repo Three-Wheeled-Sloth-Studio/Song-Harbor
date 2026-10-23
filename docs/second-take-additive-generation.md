@@ -42,6 +42,47 @@ the new layer they like. This is NOT simply remixing the entire mixed song.
    Reject keeps the original mix. The user may then edit/pan/gain/script
    the new stem by alias; renaming propagates through scripted guidance.
 
+## Alignment UX decision (October 22, 2026)
+
+**Approved design, defer implementation and QA until ACE-Step accompaniment proof.**
+
+Imported/generated short stems must remain immutable, with their original
+duration retained. Store a separate song-relative `start_offset_seconds`
+(or equivalent sample-accurate timeline position) on the clip/track
+instance; silence outside the audio region is virtual/soft-padding.
+Do **not** destructively prepend or append silence to the source, and
+do not require aligned full-song WAV conversion for this use case.
+
+- Import offers **Align to section** as an initial placement convenience,
+  using the selected section's boundary. Also permit song start or a
+  manually chosen position.
+- Show the short waveform as a freely draggable clip on the same timeline
+  as the song sections. Moving it changes the clip instance offset, not
+  the original audio, track_id, script alias, or source file.
+- Display section boundaries as snap guides. Provide a visible candidate
+  alignment and optional subtle snap preview, but **never force** the clip
+  to snap. User can position before/after boundaries and fine-tune by ear.
+- Display exact clip start/end and original recording duration. Support
+  fine adjustments (milliseconds/sample-level via keyboard or numeric
+  entry when feasible) without needing to zoom the entire song.
+- Imported audio should not be stretched or truncated merely because the
+  section is shorter/different; clip offset and fades are independent.
+- Keep production directives anchored to absolute **song** time; preserve
+  timeline alignment through live audition, mix export, project reopen,
+  and Ardour exchange.
+- UI must make silence before/after the clip visually distinct from
+  the actual waveform. Moving the clip must be reversible (undo/reset).
+- Any conventional full-song WAV handoff to an external DAW may render
+  a padded copy on export, without rewriting or replacing the source.
+- Existing `/tracks/add` currently starts at 0 and physically pads the
+  working WAV to song duration. It does **not** meet this accepted UX;
+  don't claim it does. Keep working baseline intact until the generation
+  experiment justifies implementing the new clip placement model.
+
+**Testing timing:** User expects meaningful acceptance testing together
+with the first ACE-Step accompaniment generation experiment, not before.
+Avoid spending a standalone sprint on this ahead of that proof.
+
 ## Prerequisites before a coding sprint
 
 - 16+ stem import/add and stable rename semantics are validated.

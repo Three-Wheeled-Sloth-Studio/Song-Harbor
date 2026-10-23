@@ -49,6 +49,7 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
+  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
@@ -179,6 +180,53 @@ export class SharedClockAudition {
       this.loadController=null;
     }
   }
+  /** Temporary accompaniment lives only on the shared playback clock, not in project tracks. */
+  async loadCandidatePreview(url:string,startSeconds:number){
+    if(!this.ready||!Number.isFinite(startSeconds)||startSeconds<0)throw Error("Invalid candidate placement");
+    const response=await fetch(url,{cache:"no-store"});
+    if(!response.ok)throw Error("Cannot fetch candidate audio");
+    const payload=await response.arrayBuffer();
+    const buffer=await this.context.decodeAudioData(payload);
+    if(this.disposed)throw Error("Audio engine closed");
+    if(startSeconds+buffer.duration>this.sourceDurationSeconds+.15)
+      throw Error("Candidate extends beyond the song");
+    this.clearCandidatePreview();
+    const gain=this.context.createGain();
+    gain.gain.value=0;
+    gain.connect(this.dryMaster);
+    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false};
+    if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
+  }
+  setCandidatePreviewEnabled(value:boolean){
+    if(!this.candidatePreview)return;
+    this.candidatePreview.enabled=value;
+    this.candidatePreview.gain.gain.setTargetAtTime(value?1:0,this.context.currentTime,.008);
+  }
+  clearCandidatePreview(){
+    const candidate=this.candidatePreview;
+    if(!candidate)return;
+    try{candidate.source?.stop();}catch{/* already ended */}
+    candidate.source?.disconnect();
+    candidate.gain.disconnect();
+    this.candidatePreview=null;
+  }
+  private scheduleCandidate(at:number,offset:number){
+    const candidate=this.candidatePreview;
+    if(!candidate)return;
+    try{candidate.source?.stop();}catch{/* already ended */}
+    candidate.source?.disconnect();
+    candidate.source=null;
+    const clipEnd=candidate.startSeconds+candidate.buffer.duration;
+    if(offset>=clipEnd)return;
+    const source=this.context.createBufferSource();
+    source.buffer=candidate.buffer;
+    source.connect(candidate.gain);
+    candidate.source=source;
+    candidate.gain.gain.setValueAtTime(candidate.enabled?1:0,at);
+    if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
+    else source.start(at,offset-candidate.startSeconds);
+  }
+
   setLevels(levels:Record<string,AuditionLevel>,monitor:number){
     this.monitorLevel=Math.max(0,Math.min(1,monitor));
     this.updateMasterOutput();
@@ -580,6 +628,7 @@ export class SharedClockAudition {
         if(offset<=clipStart)node.start(startAt+clipStart-offset,0);
         else node.start(startAt,offset-clipStart);
       }
+      this.scheduleCandidate(startAt,offset);
       this.nodes=made.map(item=>item.node).filter(node=>node.numberOfOutputs>0);
       this.offset=offset;
       this.startAt=startAt;
@@ -591,6 +640,11 @@ export class SharedClockAudition {
     }
   }
   private stopSources(){
+    if(this.candidatePreview?.source){
+      try{this.candidatePreview.source.stop();}catch{/* already stopped */}
+      this.candidatePreview.source.disconnect();
+      this.candidatePreview.source=null;
+    }
     this.running=false;
     this.dryMaster.gain.cancelScheduledValues(this.context.currentTime);
     this.reverbDrive.gain.cancelScheduledValues(this.context.currentTime);
@@ -616,6 +670,7 @@ export class SharedClockAudition {
     this.nodes=[];
   }
   private clearTracks(){
+    this.clearCandidatePreview();
     this.prepared=false;
     this.stopSources();
     for(const track of this.tracks){

@@ -129,6 +129,74 @@ class ImportTracksTests(unittest.TestCase):
         self.assertEqual(result["section_pan_automation"][0]["source_key"],files[-1])
         self.assertEqual(result["section_eq_automation"][0]["source_key"],files[-1])
 
+    def test_add_stem_to_existing_song_is_non_destructive_and_persistent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            ident="abcdef123456"
+            folder=root/"jobs"/ident
+            (folder/"stems").mkdir(parents=True)
+            files=["01 (Vocals).wav","02 (Drums).wav"]
+            for name in files:(folder/"stems"/name).write_bytes(b"existing WAV")
+            original={"version":projects.PROJECT_VERSION,"id":ident,
+                      "filename":"Song.wav","title":"Song",
+                      "source_filename":"Song.wav","files":files,
+                      "stems":projects.default_settings(files),"source_duration_seconds":10}
+            projects.write_project(root,original)
+            job={"id":ident,"status":"complete","files":list(files),"message":"ready"}
+            upload=UploadFile(filename="solo cello.wav",file=io.BytesIO(b"new source"))
+            request=Request({"type":"http","headers":[]})
+            def convert(command,**_):
+                Path(command[-1]).write_bytes(b"working 48k WAV"*6)
+                return SimpleNamespace(returncode=0,stderr="")
+            with (patch.object(server,"DATA_ROOT",root),
+                  patch.object(server,"jobs",{ident:job}),
+                  patch.object(server.dependencies,"resolve",return_value={"directory":str(root)}),
+                  patch.object(server,"probe_duration",return_value=8.5),
+                  patch.object(server,"dependency_tool",return_value="ffmpeg"),
+                  patch.object(server.subprocess,"run",side_effect=convert)):
+                result=asyncio.run(server.add_project_track(
+                    request,upload,stem_alias="Cello_Accent",display_name="Cello Accent"))
+            saved=projects.read_project(root,ident)
+            self.assertEqual(len(saved["files"]),3)
+            self.assertEqual(saved["files"][:2],files)
+            self.assertEqual([x["gain"] for x in saved["stems"]],[1,1,1])
+            self.assertEqual(saved["source_tracks"][-1]["stem_alias"],"Cello_Accent")
+            self.assertTrue(saved["source_tracks"][-1]["track_id"].startswith("trk_"))
+            self.assertEqual(result["job"]["status"],"complete")
+            self.assertTrue((folder/"stems"/saved["files"][-1]).is_file())
+            self.assertTrue((folder/"stems"/files[0]).read_bytes()==b"existing WAV")
+
+    def test_add_stem_conversion_error_does_not_modify_existing_project(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            ident="abcdef123456"
+            folder=root/"jobs"/ident
+            (folder/"stems").mkdir(parents=True)
+            names=["01 (Vocals).wav","02 (Drums).wav"]
+            for name in names:(folder/"stems"/name).write_bytes(b"existing")
+            project={"version":projects.PROJECT_VERSION,"id":ident,
+                     "filename":"Song.wav","title":"Song","source_filename":"Song.wav",
+                     "files":names,"stems":projects.default_settings(names),
+                     "source_duration_seconds":10}
+            projects.write_project(root,project)
+            job={"id":ident,"status":"complete","files":list(names),"message":"ready"}
+            upload=UploadFile(filename="cello.wav",file=io.BytesIO(b"audio"))
+            request=Request({"type":"http","headers":[]})
+            with (patch.object(server,"DATA_ROOT",root),
+                  patch.object(server,"jobs",{ident:job}),
+                  patch.object(server.dependencies,"resolve",return_value={"directory":str(root)}),
+                  patch.object(server,"probe_duration",return_value=8.5),
+                  patch.object(server,"dependency_tool",return_value="ffmpeg"),
+                  patch.object(server.subprocess,"run",return_value=SimpleNamespace(returncode=1,stderr="bad audio"))):
+                with self.assertRaises(Exception):
+                    asyncio.run(server.add_project_track(request,upload,
+                        stem_alias="Cello",display_name="Cello"))
+            self.assertEqual(projects.read_project(root,ident),project)
+            self.assertEqual(job["status"],"complete")
+            self.assertEqual(job["files"],names)
+            self.assertEqual(list((folder/"stems").glob("*.wav")),[
+                folder/"stems"/names[0],folder/"stems"/names[1]])
+    
     def test_imported_project_is_discoverable_and_daw_exportable(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

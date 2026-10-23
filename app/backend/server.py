@@ -2025,6 +2025,133 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
     return {"opened": True}
 
 
+
+# ACE accompaniment candidates are project-owned assets, not imported tracks.
+# Runtime startup and model switching remain a separate, explicitly gated step.
+import ace_adapter
+import ace_candidates
+import ace_transport
+
+
+class AceCandidateRequest(BaseModel):
+    from_section_id: str = Field(min_length=32, max_length=32)
+    to_section_id: str = Field(min_length=32, max_length=32)
+    context_before: float = Field(default=0, ge=0, le=240)
+    context_after: float = Field(default=0, ge=0, le=240)
+    model: str = Field(default="acestep-v15-turbo", max_length=100)
+    prompt: str = Field(min_length=1, max_length=2000)
+    seed: int = Field(default=150719, ge=0, le=4294967295)
+    bpm: int | None = Field(default=None, ge=30, le=300)
+    key: str = Field(default="", max_length=80)
+
+
+@app.get("/api/ace/discovery")
+def ace_discovery() -> dict[str, Any]:
+    return ace_adapter.AceClient().discover()
+
+
+def _ace_project(ident: str) -> tuple[dict[str, Any], Path, Path]:
+    project = projects.read_project(DATA_ROOT, ident)
+    folder = DATA_ROOT / "jobs" / ident
+    if not project:
+        raise HTTPException(404, "Song Harbor project not found")
+    original = folder / str(project.get("source_filename") or "")
+    if not original.is_file() or original.resolve().parent != folder.resolve():
+        raise HTTPException(409, "Project original recording is unavailable")
+    return project, folder, original
+
+
+def _run_ace_candidate(folder: Path, candidate_id: str, bpm: int | None, key: str) -> None:
+    """Detached Song Harbor job; never writes a source-track manifest."""
+    directory = ace_candidates.candidate_directory(folder, candidate_id)
+    record = ace_candidates.load_record(folder, candidate_id)
+    client = ace_adapter.AceClient(timeout=10)
+    try:
+        record["state"] = "generating"
+        ace_candidates.save_record(directory, record)
+        context = directory / record["context_file"]
+        task_id = ace_transport.submit_cover(
+            client, context, record["model"], record["prompt"], record["seed"],
+            bpm=bpm, key=key, duration=record["samples"]["context_end"] / 48000 -
+            record["samples"]["context_start"] / 48000)
+        record["ace_task_id"] = task_id
+        ace_candidates.save_record(directory, record)
+        # Poll for a bounded time; unknown ACE IDs are never considered success.
+        deadline = time.monotonic() + 900
+        while time.monotonic() < deadline:
+            result = ace_transport.poll_cover(client, task_id)
+            state = result["state"]
+            if state == "ready":
+                if not result["assets"]:
+                    raise ace_adapter.AceError("ACE completed without an audio artifact")
+                record["state"] = "processing"
+                ace_candidates.save_record(directory, record)
+                source = ace_transport.download_candidate(client, result["assets"][0],
+                                                          directory / "generated.wav")
+                ace_candidates.crop_generated_candidate(folder, candidate_id, source,
+                                                        dependency_tool("ffmpeg"))
+                return
+            if state in ("failed", "cancelled"):
+                raise ace_adapter.AceError("ACE " + state + ": " +
+                                           str(result.get("error") or result.get("stage") or "unknown"))
+            time.sleep(1)
+        raise ace_adapter.AceError("ACE candidate generation timed out")
+    except Exception as exc:
+        # Retain prepared context and metadata for debugging/retry.
+        record = ace_candidates.load_record(folder, candidate_id)
+        record["state"] = "failed"
+        record["error"] = str(exc)[:500]
+        ace_candidates.save_record(directory, record)
+
+
+@app.post("/api/projects/{ident}/ace/candidates")
+def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
+                          request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    project, folder, original = _ace_project(ident)
+    client = ace_adapter.AceClient()
+    capabilities = client.discover()
+    if capabilities["status"] != "connected":
+        raise HTTPException(409, "ACE API is not connected; start ACE first")
+    if not capabilities.get("ready") or capabilities.get("loaded_model") != body.model:
+        raise HTTPException(409, "Selected ACE model must be loaded before generation")
+    try:
+        record = ace_candidates.create_candidate(
+            project, folder, original, body.from_section_id, body.to_section_id,
+            body.context_before, body.context_after, body.model, body.prompt,
+            "cover", capabilities, dependency_tool("ffmpeg"), body.seed)
+    except (ValueError, OSError, ace_adapter.AceError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    threading.Thread(target=_run_ace_candidate,
+                     args=(folder, record["candidate_id"], body.bpm, body.key),
+                     daemon=True).start()
+    return record
+
+
+@app.get("/api/projects/{ident}/ace/candidates/{candidate_id}")
+def ace_candidate_status(ident: str, candidate_id: str) -> dict[str, Any]:
+    _, folder, _ = _ace_project(ident)
+    try:
+        return ace_candidates.load_record(folder, candidate_id)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(404, "ACE candidate not found") from exc
+
+
+@app.get("/api/projects/{ident}/ace/candidates/{candidate_id}/audio")
+def ace_candidate_audio(ident: str, candidate_id: str):
+    _, folder, _ = _ace_project(ident)
+    try:
+        record = ace_candidates.load_record(folder, candidate_id)
+        if record.get("state") != "ready":
+            raise HTTPException(409, "Candidate has not finished processing")
+        path = ace_candidates.candidate_directory(folder, candidate_id) / "target.wav"
+        if not path.is_file():
+            raise HTTPException(404, "Candidate audio unavailable")
+        return FileResponse(path, media_type="audio/wav")
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 class FrontendStaticFiles(StaticFiles):
     """Serve compiled modules with explicit MIME, independent of Windows registry.
 

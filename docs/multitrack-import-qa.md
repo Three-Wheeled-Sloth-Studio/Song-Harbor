@@ -8,6 +8,18 @@
 
 
 
+## First implementation slice: six-role effects removal (2026-10-22)
+
+Completed in code:
+- Direct section pan/reverb/width/space/EQ handlers now resolve the project's actual sanitized alias list instead of hardcoded `Vocals, Drums, Bass, Guitar, Piano, Other`.
+- Reverb materialization, including `all.reverb` and `all.reset`, now also uses actual project track aliases.
+- Added a 16-track synthetic script regression with `Synth_01`-`Synth_16`, `all.reverb`, a track override, gain and pan, plus round-trip/reload. CI and real Windows audio acceptance are separate gates.
+
+Still explicitly NOT implemented in this slice: adding a track to an existing
+project; editable alias rename with transactional script/automation migration;
+track groups; scalable chunked decoding. Those remain the primary next
+work items. No claim that a 16-track audio export was auditioned.
+
 ## Accepted 16+ stem PI acceptance contract (October 22)
 
 The acceptance target now includes both **initial multitrack import** and

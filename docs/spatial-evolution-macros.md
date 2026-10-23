@@ -88,3 +88,100 @@ Target the `Other` stem first, evolving from intimate, narrow and relatively dry
 3. What correlation/mono-compatibility thresholds and loudness tolerances are acceptable for automatic protection?
 4. Can existing `space` reflections provide the required asymmetry, or do we need dedicated decorrelated stereo ambience/predelay?
 5. How should a macro behave if split L/R child routing is disabled? Prefer a documented parent-stereo fallback rather than a silent no-op.
+
+## Architecture review (2026-10-23) — recommendation, not implementation approval
+
+**Assessment:** Strong product direction. Prioritize deterministic, inspectable
+automation over any opaque, model-driven 'make it menacing' effect. The
+existing engine provides parent gain/pan/width/EQ/reverb, simple 13/19 ms
+cross-reflections, and split-child gain/pan/EQ/reverb. There is no need for
+a new model, GPU or external process for a first proof. Actual DSP
+quality/mono safety still requires measured listening tests.
+
+### Decisions proposed for an initial spike
+
+1. **Keep macro intent distinct from explicit effect directives.** The
+   illustrative `Other.auto.space:menacing@20s:smooth` is not accepted
+   grammar. The `.auto.` namespace is already associated with solver
+   behavior (`auto.pan`) and `Other.space` means a bounded reflection send,
+   not a scene-level transformation. Consider
+   `Other.evolve:menacing@20s:smooth` as a clearer separate family,
+   or explicitly standardize `Other.auto.space` if preserving that
+   vocabulary matters. Do not silently reuse the numeric `.space` token.
+2. **Define the target as a song-time span.** `@20s` describes evolution
+   duration, not a transition reset at the next section boundary. Store
+   an anchored start time, macro duration, intensity/defaults, schema
+   version, source track ID, and resolved envelope revision. Support
+   deterministic re-resolution when the user intentionally refreshes,
+   but preserve already accepted rendered automation in saved mixes.
+3. **Prefer an inspectable macro compilation layer:** authored intent ->
+   versioned resolution -> existing typed target curves -> the same live
+   and offline audio graph. Show the resolved child EQ/gain/reverb and
+   parent width/pan/space curves, with manual A/B/bypass and restore.
+   Do not paste expanded macros into lyric lines or overwrite the
+   user's carefully maintained whole-song script without an explicit
+   accept operation.
+4. **Precedence must be effect-specific and stable:** manual child
+   directive wins for that child/effect; manual parent directive wins
+   for parent effect; macro fills unclaimed targets. This rule should
+   hold independent of textual directive ordering. Same-effect macro
+   collisions should be rejected or surfaced for explicit choice.
+   `all.*` remains a parent baseline. Source alias changes must
+   migrate macro references by immutable track ID.
+5. **The current DSP only enables a partial first result.** Parent
+   mid/side width cannot widen truly mono input. Existing `space`
+   cross-reflections have fixed delay times and symmetric send
+   automation, so they provide decorrelation but do not implement the
+   promised independently evolving reflection balance/predelay.
+   The single common reverb convolver has limited channel-isolated
+   placement, and split-child reverb is tapped before parent bus FX.
+   First test an all-existing-effects preset; add distinct bounded
+   L/R reflection sends and/or predelay only if listening demonstrates
+   the missing effect.
+6. **Split-state behavior must be explicit.** Split-child EQ/reverb
+   curves operate only with active children. If unsplit stereo is
+   selected, do not report that child asymmetry is active; either
+   provide a documented parent-only fallback with reduced capability
+   or require splitting with an actionable warning. Never silently
+   split tracks, duplicate stems or swap native L/R routing.
+7. **Safeguards are measurements before they are promises.** Track
+   stereo correlation, frequency-dependent side energy, mono
+   fold-down loss, integrated loudness and true peak, including short
+   moving windows. The existing sound cleanup checks are not a
+   comprehensive true-peak / integrated-LUFS verification. Start by
+   warning/limiting parameter ranges and matching loudness in A/B.
+   Add adaptive constraints only after calibration on representative
+   music; don't apply an unmeasured 'safe' threshold.
+8. **Preserve the musical anchor.** The macro targets only `Other`
+   in the pilot. The contrasting narrow/dry `Vocals` progression is
+   an explicit separate script or another accepted macro. Never
+   spread macro directions to unrelated drums/bass/vocals implicitly.
+
+### Suggested staged LOE (engineering estimates, not measurements)
+
+- **Proof with existing automation and level-matched listening:**
+  ~0.5–1 day. Build a manually expanded `Other` progression for the
+  specified bridge/final chorus, compare to `width` alone, and record
+  stereo/mono observations. No new parser token yet.
+- **First usable deterministic macro resolver and UI preview:**
+  ~2–4 days if using existing DSP. Extend typed manifest/scripts,
+  resolve immutable envelopes, provide clear precedence/overrides,
+  enable/reject/accept/bypass and test reopening/export parity.
+- **Refined asymmetric reflections/predelay, robust automation
+  collision handling and objective safeguards:** another ~3–7 days
+  depending on signal-path and QA findings. Especially test
+  per-child routing with parent processing and true mono compatibility.
+- **Overall targeted pilot:** approximately 1–2 engineering weeks
+  for a polished adaptive effect, potentially shorter for a deliberately
+  constrained `menacing` preset. The macro family is out of scope.
+
+### Release gates
+
+- Listening tests on highly correlated `Other`, broad stereo
+  ambience, and bleed-heavy separated material.
+- Separate loudness-matched stereo and mono auditions; no automatic
+  claim of human-like or 'naturally wide' sound from detector scores.
+- Smooth behavior on play, seek, loop, sections shorter than macro
+  duration, save/reopen, and full-duration 24-bit export.
+- Macro versioning, precedence, renamed stems, split-on/off and
+  undo/revert semantics verified by regression tests.

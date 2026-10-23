@@ -13,7 +13,6 @@ import re
 import subprocess
 import tempfile
 import uuid
-import wave
 from pathlib import Path
 from typing import Any
 
@@ -161,6 +160,23 @@ def create_candidate(project: dict[str, Any], project_folder: Path, source_audio
         raise
 
 
+def probe_audio_duration(ffmpeg: str, source: Path) -> float:
+    """Use FFprobe instead of wave.open: ACE may emit IEEE float WAV (format 3)."""
+    tool = Path(ffmpeg).with_name("ffprobe.exe" if Path(ffmpeg).suffix.lower() == ".exe" else "ffprobe")
+    try:
+        result = subprocess.run(
+            [str(tool), "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(source)],
+            capture_output=True, text=True, check=True, timeout=30,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        duration = float(result.stdout.strip())
+    except (OSError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise AceError("Cannot inspect generated audio duration with FFprobe") from exc
+    if not math.isfinite(duration) or duration <= 0:
+        raise AceError("Generated candidate has invalid audio duration")
+    return duration
+
+
 def crop_generated_candidate(project_folder: Path, candidate_id: str,
                              generated_file: Path, ffmpeg: str) -> dict[str, Any]:
     """Materialize the requested target from a context-aligned ACE output."""
@@ -174,18 +190,19 @@ def crop_generated_candidate(project_folder: Path, candidate_id: str,
     from_start = samples["crop_start"]
     to_end = samples["crop_end"]
     destination = directory / "target.wav"
-    with wave.open(str(generated_file), "rb") as source:
-        rate = source.getframerate()
-        frames = source.getnframes()
-    if rate != record["sample_rate_hz"]:
-        raise AceError("Generated WAV sample rate differs from the candidate contract")
-    if frames < to_end:
-        raise AceError("Generated context audio is shorter than the requested target crop")
+    # Decode any valid WAV encoding, including ACE's IEEE float (format 3).
+    # ffmpeg_extract resamples before applying sample-accurate 48 kHz bounds.
+    duration = probe_audio_duration(ffmpeg, generated_file)
+    required_seconds = to_end / record["sample_rate_hz"]
+    if duration + 0.002 < required_seconds:
+        raise AceError(
+            f"Generated context is too short ({duration:.3f}s; needs {required_seconds:.3f}s)")
     ffmpeg_extract(ffmpeg, generated_file, destination, from_start, to_end)
-    with wave.open(str(destination), "rb") as result:
-        if result.getframerate() != rate or abs(result.getnframes() - (to_end - from_start)) > 2:
-            destination.unlink(missing_ok=True)
-            raise AceError("Target crop length does not match the selected section interval")
+    actual = probe_audio_duration(ffmpeg, destination)
+    expected = (to_end - from_start) / record["sample_rate_hz"]
+    if abs(actual - expected) > 0.003:
+        destination.unlink(missing_ok=True)
+        raise AceError(f"Candidate crop length mismatch ({actual:.3f}s vs {expected:.3f}s)")
     record["variants"].append({"kind": "raw-cover-crop" if record["task_type"] == "cover"
                                else "native-generated", "file": destination.name,
                                "isolation": record["isolation"]})

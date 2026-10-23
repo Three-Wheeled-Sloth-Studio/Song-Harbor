@@ -8,6 +8,64 @@
 
 
 
+## Second implementation slice: persistent identity, rename and add-track (2026-10-22)
+
+**Code implemented, real Windows audio acceptance still pending.**
+
+- Every project exposes durable `track_id` via `GET /api/projects/{id}/tracks`.
+  Legacy six-stem projects receive metadata backfill with stable IDs;
+  source WAV files are not renamed or overwritten.
+- Source aliases and display names live separately from immutable
+  `working_filename`. All section script materializers now resolve the
+  project mapping rather than assuming alias is embedded in the filename.
+- Mixer offers a pencil action on each stem. Renaming verifies the previously
+  loaded alias to reject stale edits, rejects reserved/colliding/invalid aliases,
+  rewrites structured production directives and spatial proposals, and
+  revalidates/rematerializes saved pan, gain, EQ, reverb, width, space, dynamics,
+  auto-pan and ending before one atomic manifest replacement. Lyrics remain
+  unchanged. The renamed identity follows DAW exchange exports.
+- Mixer offers **+ Add stem** for audio already prepared externally. Its
+  `POST /api/projects/{id}/tracks/add` path saves the untouched uploaded
+  source under originals, converts to a stereo 48 kHz working WAV, pads shorter
+  inputs to the existing song duration without extending it, assigns a new
+  permanent ID and editable alias, and adds neutral mixer settings. Longer
+  sources are rejected rather than silently truncated. Conversion failures
+  remove staging files and leave the original project manifest unchanged.
+- The mixer saves currently staged faders before a successful add/rename and
+  reloads the project and audio engine to include the resulting changes.
+  Whole Song Section Text must be closed first; apply or discard its draft.
+- Regressions: `test_track_lifecycle.py` verifies all-effects rename,
+  alias validation, preserved source filenames/IDs and legacy identity
+  backfill. Backend CI and frontend typecheck are necessary but do not prove
+  the audio conversion path on the user's Windows host.
+
+### Local acceptance script
+
+1. Open an existing six-stem project. Rename `Guitar` to
+   `Guitar_Lead` (display name `Lead Guitar`). Verify every scripted
+   `Guitar.<effect>` becomes `Guitar_Lead.<effect>` and exports still play.
+2. Add a short prepared cello WAV. Name it `Cello Accent` with alias
+   `Cello_Accent`. Confirm it appears as a separate seventh mixer track,
+   with correct alignment and silence padding.
+3. Add `{Cello_Accent.pan:right.25@2s:smooth Cello_Accent.gain:+1}`
+   to one section while preserving the rest of the whole-song text.
+4. Rename `Cello_Accent` to `CounterCello`. Confirm script changes
+   automatically, sound remains identical, source filename and permanent
+   track ID remain unchanged.
+5. Try duplicate `Vocals`, invalid `1Cello` and reserved `auto`.
+   All must fail without changing any existing directions or files.
+6. Save, close, reopen Library and export mix plus DAW exchange. Both
+   should contain the added stem with the updated readable name. Run
+   loudness/headroom verification after any substantive gain changes.
+7. Repeat with sixteen prepared stems and then a 33-stem short synthetic
+   fixture. The 768 MiB browser decode limit is still active: memory
+   failures must be explicit, not silent omission.
+
+**Out of scope for this slice:** additive generative creation of a cello,
+batch append, 33+ practical-duration browser streaming, automated Ardour
+round-trip, or a polished non-modal rename dialog. Current UI uses simple
+name/alias prompts until the compact track inspector is designed.
+
 ## First implementation slice: six-role effects removal (2026-10-22)
 
 Completed in code:

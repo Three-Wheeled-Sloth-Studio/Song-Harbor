@@ -128,7 +128,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if(!await saveProject())return;
       const response=await fetch("/api/projects/"+jobId+"/tracks/rename",{
         method:"PUT",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({track_id:track.track_id,display_name:display,stem_alias:alias})
+        body:JSON.stringify({track_id:track.track_id,expected_alias:track.stem_alias,display_name:display,stem_alias:alias})
       });
       const data=await response.json();
       if(!response.ok)throw Error(data.detail||"Could not rename track");

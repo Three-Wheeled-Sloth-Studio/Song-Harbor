@@ -7,6 +7,8 @@ export function UpdateControl({instanceToken}:{instanceToken:string}){
   const [state,setState]=useState<UpdateState|null>(null);
   const [installedVersion,setInstalledVersion]=useState("0.1.0:1:local");
   const [versionDetail,setVersionDetail]=useState("Development build");
+  const runtimeUrl=window.location.origin;
+  const [copied,setCopied]=useState(false);
   useEffect(()=>{
     let active=true;
     void fetch("/api/runtime/version",{cache:"no-store"})
@@ -47,11 +49,13 @@ export function UpdateControl({instanceToken}:{instanceToken:string}){
   }
   return <div className="song-update-control">
     <small className="song-version-badge" aria-label={"Installed Song Harbor version "+installedVersion}
-      title={"Version:Revision:Build · "+installedVersion+" · "+versionDetail}>{installedVersion}</small>
+      title={"Version:Revision:Build · "+installedVersion+" · "+versionDetail+"\\nSong Harbor UI/API: "+runtimeUrl+"\\nACE: separate local service; port may differ."}>{installedVersion}</small>
     <button type="button" className="dependency-indicator" title="Check Song Harbor updates"
       aria-label="Check Song Harbor updates" disabled={checking||restarting}
       onClick={()=>{void check();}}>{checking?"…":"↻"}</button>
     {state&&<div className="song-update-status" role="status">
+      <small>Song Harbor UI/API: <code>{runtimeUrl}</code></small>
+      <button type="button" title="Copy active Song Harbor address" onClick={()=>{void navigator.clipboard.writeText(runtimeUrl).then(()=>setCopied(true)).catch(()=>setError("Unable to copy address"));}}>{copied?"Copied":"Copy address"}</button>
       {state.supported
         ?<><strong>{state.update_available?"Update available":"Up to date"}</strong>
             <small>{state.branch} · {state.current} → {state.latest}</small>

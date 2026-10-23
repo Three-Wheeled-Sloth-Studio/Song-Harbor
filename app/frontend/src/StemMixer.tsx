@@ -18,6 +18,7 @@ import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./Sh
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
+import {ForensicsReview} from "./ForensicsReview";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import type { SongSection } from "./SectionEditor";
@@ -1106,6 +1107,19 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               setWidthTargets(data.width_targets);setSpaceTargets(data.space_targets);
               setEqTargets(data.eq_targets);setDynamicsTargets(data.dynamics_targets);
               setEnding(data.ending);setMixUrl(null);setScriptRevision(v=>v+1);
+            }}/>
+        </>}
+        {tool==="forensics"&&<>
+          <ForensicsReview findings={cleanupFindings} scanned={cleanupScanned}
+            analyzing={analyzing} error={cleanupError} ready={audioReady}
+            busy={exporting||Boolean(correction)||sectionPreviewActive}
+            onAnalyze={()=>{void analyzeMix();}} onSeek={seek}
+            onLoop={(start,end)=>{
+              setLoopIn(Math.min(start,duration));
+              setLoopOut(Math.min(duration,end));
+              setLoopEnabled(true);
+              seek(Math.max(0,Math.min(start,duration)));
+              if(!playRef.current)void togglePlayback();
             }}/>
         </>}
         {tool==="cleanup"&&<>

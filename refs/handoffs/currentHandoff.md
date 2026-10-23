@@ -1,3 +1,46 @@
+## 2026-10-23: First menacing Spatial Evolution Macro + natural-end transport reset
+
+**Implemented on main; backend automated tests green, Windows listening QA pending.**
+
+- `Other.evolve:menacing@20s:smooth` is now executable in exactly one normal
+  `{...}` production line below a timed section. Parser validates alias,
+  bounded duration .05–30s, only `menacing` v1, no duplicate macro.
+  Saved `section_production` contains versioned `evolve` intent, not a
+  destructive rewrite of the authored lyrics/production script.
+- `section_production.expand_evolution` deterministically resolves that
+  intent at import into existing typed materializations. Preset v1 targets
+  parent pan +.18 right, width 125%, space 18%, reverb 16%, EQ1 380Hz/Q.9
+  +1.1dB, EQ2 3200Hz/Q.8 -1.7dB. Where child channels are attached,
+  left reverb 11%/EQ2 3500Hz -.8dB, right reverb 23%/EQ2 2600Hz -2.1dB.
+  Explicit manual same-section parameter/band overrides generated target.
+  Falls back to parent-only if no L/R split. No vocals/other stems changed.
+- Resolved effects go through normal automation arrays for playback and
+  WAV export. No new DSP processor/model/GPU service required; this is a
+  *fixed deterministic preset*, not adaptive safe-space DSP. No per-macro
+  bypass, curve inspection UI, true-peak/correlation guard or independently
+  variable reflection predelay yet. Follow-on only after listening proves
+  usefulness; see `docs/spatial-evolution-macros.md`.
+- Regression `app/backend/tests/test_spatial_evolution.py` integrated
+  in projects workflow, tests parse/serialize/import, parent and L/R
+  target materialization, conflict priority and rejection.
+- User QA bug: on natural song completion `StemMixer.tsx` now calls
+  `engine.stop()` rather than `stop()`+display duration; updates
+  transport generation, playing state and position to 0. Manual Pause
+  still retains position; next Play begins at 0.
+- **Windows manual QA:** enable split Other, apply macro in one section,
+  audition (with level matched A/B and mono check), verify child asymmetry,
+  script persistence across reopen and export parity. Test unsplit parent
+  fallback, explicit override `Other.reverb:10`, next-section inheritance,
+  click seek/play near ending, ordinary Pause stays at pause location and
+  natural completion resets both engine/visual playhead to zero. Avoid
+  replacing the ongoing other-machine production sheet merely for QA.
+
+CI at implementation time: backend new macro suite passing in
+`Song projects and Waveform exchange`; frontend build passed after
+transport end reset. *Do not claim local Windows audio testing done.*
+
+---
+
 ## 2026-10-23: Deferred JS bundle cleanup + Spatial Evolution Macros review
 
 - Vite warning `Some chunks are larger than 500 kB after minification` is informational, not updater failure. Deferred P2 task `docs/frontend-bundle-cleanup.md`, roadmap SH-RM-245: capture real assets and minified sizes, lazy-load session boundary and useful optional inspectors without splitting playback clock ownership, regression-test update/open song/transport/export; estimate 1-3h, avoid threshold-only suppression.

@@ -1,3 +1,32 @@
+## 2026-10-23: Whole-song production blocks now accept LF and CRLF directive separators
+
+- User requested production scripting readable one directive per line, in
+  addition to legacy space-delimited syntax. Implemented in
+  `app/backend/section_import.py`: a single `{ ... }` block per section
+  may span multiple physical lines, mix spaces/LF/CRLF and contain blank
+  lines. Tokens still feed the same `section_production.parse_block`
+  validation/typed effects; project mutation remains atomic on rejection.
+  Unterminated/nested/duplicate braces and misplaced closing braces now
+  produce line-aware validation messages. Lyrics still live OUTSIDE braces.
+- `section_production.render_block` formats multi-directive blocks into
+  canonical one-directive-per-line text after applying/reopening, without
+  changing effect semantics, section times or lyrics; a single directive
+  continues to render compact on one line.
+- `StemMixer.acceptCorrection` now reads/replaces an entire brace span
+  rather than assuming braces/directives reside on one text line, so
+  accepted cleanup actions retain all other multiline directions.
+- Editor helper guidance and `docs/user-guide.md` updated. Test suite
+  `app/backend/tests/test_multiline_section_production.py` added and
+  wired into backend CI. Backend suite passed at `e25c38d1`; frontend
+  build passed for help text at `d34553f5`. Later correction-path frontend
+  build is separately pending; local Windows UI QA not yet claimed.
+- Test on Windows: paste a long timed sheet with CRLF and one directive
+  per line, Apply, reopen, verify one-brace-block formatting and original
+  lyrics, effects inherited correctly, Go to line on malformed directive
+  and correction A/B -> Accept without losing production instructions.
+
+---
+
 ## 2026-10-23: First menacing Spatial Evolution Macro + natural-end transport reset
 
 **Implemented on main; backend automated tests green, Windows listening QA pending.**

@@ -26,10 +26,10 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_16_custom_tracks_reverb_and_broadcast(self):
         files=[f"song (Synth_{i:02d}).wav" for i in range(1,17)]
-        sheet=("[Verse 0:00-0:10]\\n"
+        sheet=("[Verse 0:00-0:10]\n"
                "{all.reverb:12 Synth_16.reverb:35 Synth_01.pan:right.20 "
-               "Synth_15.gain:+1@2s:smooth}\\n"
-               "[Outro 0:10-0:20]\\n{all.reset@2s:smooth}\\n")
+               "Synth_15.gain:+1@2s:smooth}\n"
+               "[Outro 0:10-0:20]\n{all.reset@2s:smooth}\n")
         project={"sections":[],"files":files}
         changed=section_import.apply(project,sheet,"replace",20)
         sends=[x for x in changed["section_reverb_automation"]

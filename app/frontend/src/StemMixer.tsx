@@ -53,7 +53,7 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved, onTrackRenamed }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
@@ -62,6 +62,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
+  onTrackRenamed?: (project:unknown)=>void;
 }) {
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
     const saved = savedStems?.find(stem => stem.filename === filename);
@@ -72,6 +73,40 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     };
   }).sort((a, b) => {const x=names.indexOf(a.name),y=names.indexOf(b.name);return x<0||y<0?0:x-y;}));
   const [title, setTitle] = useState(initialTitle || "Untitled song");
+  const [trackIdentities,setTrackIdentities]=useState<{track_id:string;working_filename:string;stem_alias:string;display_name:string}[]>([]);
+  const [renamingTrack,setRenamingTrack]=useState<string|null>(null);
+  useEffect(()=>{
+    let cancelled=false;
+    void fetch("/api/projects/"+jobId+"/tracks",{cache:"no-store"})
+      .then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.detail||"Track identities unavailable");return data;})
+      .then(data=>{if(!cancelled)setTrackIdentities(data.tracks||[]);})
+      .catch(()=>{if(!cancelled)setTrackIdentities([]);});
+    return ()=>{cancelled=true;};
+  },[jobId]);
+  async function renameTrack(filename:string){
+    const track=trackIdentities.find(t=>t.working_filename===filename);
+    if(!track){setError("This track has no saved identity yet. Reopen the song and retry.");return;}
+    if(openTools.includes("songText")){
+      setError("Close Whole Song Section Text before renaming. Apply any unsaved script changes first.");
+      return;
+    }
+    const display=window.prompt("Display name for this track:",track.display_name);
+    if(display===null)return;
+    const alias=window.prompt("Script alias (letters/numbers/_/- only):",track.stem_alias);
+    if(alias===null)return;
+    setRenamingTrack(filename);setError("");
+    try{
+      const response=await fetch("/api/projects/"+jobId+"/tracks/rename",{
+        method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({track_id:track.track_id,display_name:display,stem_alias:alias})
+      });
+      const data=await response.json();
+      if(!response.ok)throw Error(data.detail||"Could not rename track");
+      setNotice("Track renamed. Saved section scripts were migrated and verified.");
+      onTrackRenamed?.(data.project);
+    }catch(err){setError(err instanceof Error?err.message:String(err));}
+    finally{setRenamingTrack(null);}
+  }
   const [saving, setSaving] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [dawOpen, setDawOpen] = useState(false);
@@ -877,6 +912,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small></span>:<span className="sr-only">{s.name}</span>}
         </strong>
         <div className="track-actions">
+          <button type="button" className="track-toggle" disabled={renamingTrack!==null}
+            onClick={()=>void renameTrack(s.filename)}
+            title={"Rename "+s.name+" and update its scripted production guidance"}
+            aria-label={"Rename "+s.name}>✎</button>
           <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
             aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>
           <button type="button" className={"track-toggle" + (s.solo ? " is-solo" : "")}

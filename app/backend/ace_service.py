@@ -110,8 +110,8 @@ class AceServiceManager:
                 if not any(row.get("name") == name for row in inventory.get("models", [])
                            if isinstance(row, dict)):
                     raise AceServiceError("ACE inventory does not contain the local checkpoint")
-                self.client.request("/v1/init", {"model": name, "slot": 1,
-                                                  "init_llm": False, "lm_model_path": None})
+                unwrap(self.client.request("/v1/init", {"model": name, "slot": 1,
+                                                  "init_llm": False, "lm_model_path": None}, timeout=180))
                 result = self.client.discover()
                 if not result.get("ready") or result.get("loaded_model") != name:
                     raise AceServiceError("ACE initialized but model readiness was not confirmed")

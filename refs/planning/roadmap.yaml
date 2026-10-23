@@ -91,8 +91,8 @@ roadmap:
     status: approved
     summary: Prove 16+ independently named stems: import, saved controls, script automation, playback/export, reopening, and DAW exchange; correct hardcoded six-role handlers and decoded-audio capacity limits.
   - id: SH-RM-200
-    horizon: next
-    status: approved
+    horizon: now
+    status: implemented-awaiting-windows-qa
     summary: Add a track to an EXISTING project, assign/change its editable human name and script alias, migrate all saved and draft guidance safely, preserve immutable track_id and source references, provide atomic rollback, and test name collisions.
   - id: SH-RM-210
     horizon: next

@@ -4,7 +4,7 @@
 
 **Required for the next user QA:** On Import > Multiple tracks, select all 12 mono channel WAVs **and** the exact `manifest.json` emitted by Song Harbor’s `Split stereo channels` export. The application groups the manifest-defined six Left/Right pairs into six stereo working parents and restores active L/R child routing, instead of interpreting them as 12 unrelated instruments. Verify `GET /api/projects/<id>/channels` returns six active entries; toggle one source to Stereo and back to L/R, play and WAV-export in both modes, then reopen from Library and recheck routing. Incorrect or missing paired channels must fail with clear errors; never guess a pair and never silently discard a channel. The parent/child files stay local and the originals remain intact.
 
-**Scalability and script aliases:** Import accepts 2–64 standalone files or 2–128 mono files plus a supported manifest (up to 64 parent stems). Test 16 and 33 uniquely named tracks in the project and use the displayed sanitized alias, e.g. `Synth_32.pan:right.60@2s:smooth`, and EQ in a section sheet. Test multiple arbitrary aliases in the same section, round-trip export/re-import, and DAW handoff. Preserve `track_id` and working filename independent of display name. A later rename UI must atomically migrate stored production directives/references, not merely repaint the label. Current shared-clock browser audition is capped at 768 MiB decoded audio; record memory-limit errors for long projects rather than pretending full dozens-of-tracks playback is validated.
+**Scalability and script aliases:** Import accepts 2–64 standalone files or 2–128 mono files plus a supported manifest (up to 64 parent stems). Test 16 and 33 uniquely named tracks in the project and use the displayed sanitized alias, e.g. `Synth_32.pan:right.60@2s:smooth`, and EQ in a section sheet. Test multiple arbitrary aliases in the same section, round-trip export/re-import, and DAW handoff. Preserve `track_id` and working filename independent of display name. The new rename UI must atomically migrate stored production directives/references, not merely repaint the label; Windows QA is pending. Current shared-clock browser audition is capped at 768 MiB decoded audio; record memory-limit errors for long projects rather than pretending full dozens-of-tracks playback is validated.
 
 
 
@@ -128,6 +128,24 @@ are requirements, not features claimed working today.
 new track, rename it, see the edited names in ALL script guidance, and export
 and reopen without manual token repair.
 
+## Approved future short-clip alignment (not in current import)
+
+Current in-project Add stem aligns audio to song start and physically pads its
+48-kHz working WAV. This is transitional and **not** the accepted long-term UX.
+
+When testing the first ACE-Step accompaniment stem, introduce a clip instance
+independent of the track, with an immutable imported source and original
+duration, a mutable song-relative start offset, and virtual silence around
+the actual waveform. Offer Align to selected section as **initial placement**
+only; allow continuous free dragging without enforcing section snapping.
+Show section boundary snap *suggestions* visually, with exact position and
+fine adjustment controls. Retain stable track_id, script alias, and absolute
+song-time directives when moving clips. Editing must be reversible; audition,
+WAV export, reload and DAW exchange must honor the same offsets. No standalone
+alignment acceptance QA until ACE accompaniment provides a useful short stem.
+
+See `docs/second-take-additive-generation.md` for the approved UI behavior.
+
 ## New user-facing flow
 
 Import song > **Multiple tracks · already separated**.
@@ -149,7 +167,7 @@ One recording > **Single recording · separate stems** is unchanged.
 ## Current limits
 
 - Per-track start offsets, manual stem role assignment, true multichannel import, sample-rate-preserving audio, and time alignment/sync of unsynchronized takes are **not** implemented.
-- Section production grammar now accepts arbitrary project aliases for imported names, based on the stable working file mapping. Full rename/migration UI remains unimplemented.
+- Section production grammar now accepts arbitrary project aliases for imported names, based on the stable working file mapping. A provisional pencil-triggered rename/migration UI is implemented; local Windows acceptance remains outstanding.
 - Testing on an actual Windows installation with real converted audio is outstanding. CI validates route/model helper behavior and the current frontend build, not audio listening QA.
 
 ## Code

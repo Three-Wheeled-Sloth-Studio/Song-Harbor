@@ -1,3 +1,11 @@
+## 2026-10-23: Deferred JS bundle cleanup + Spatial Evolution Macros review
+
+- Vite warning `Some chunks are larger than 500 kB after minification` is informational, not updater failure. Deferred P2 task `docs/frontend-bundle-cleanup.md`, roadmap SH-RM-245: capture real assets and minified sizes, lazy-load session boundary and useful optional inspectors without splitting playback clock ownership, regression-test update/open song/transport/export; estimate 1-3h, avoid threshold-only suppression.
+- Reviewed `docs/spatial-evolution-macros.md` against current parent/child audio graph; appended nonbinding engineering review and staged LOE. Roadmap SH-RM-250 is **proposal-reviewed-not-approved**. Recommendation: 0.5-1 day audition of an explicit manually scripted `Other` progression first; then a deterministic, versioned `menacing` intent -> inspectable envelopes compiler (~2-4 days), with further adaptive safeguards/new asymmetric reflection parameters (~3-7 days) only if justified.
+- Current `space` is fixed symmetric 13/19ms cross-channel reflection send, and `width` cannot expand exactly mono input. The proposed `Other.auto.space:menacing` token is NOT recognized syntax. Exact namespace, precedence, active split-state fallback and long (>section) macro time anchoring are unresolved design choices. Preserve center/lead, consistent offline/live sound, manual override/undo, mono safety, and immutable track identities. No implementation of macros in this pass.
+
+---
+
 ## 2026-10-23: Independent split L/R production scripting implemented (Windows audio QA pending)
 
 User approved independently targeting `Drums-left` and `Drums-right` without replacing immutable track identity or losing the shared parent bus. Implemented on main:

@@ -122,6 +122,10 @@ roadmap:
     horizon: later
     status: approved-housekeeping-deferred
     summary: Remove Vite >500 kB minified-chunk warning by measuring production bundle composition and lazily loading Song Harbor session/large optional tools; verify updater, Library, playback, script editor and export. Target 1-3 hours; do not hide the warning by threshold-only change. See docs/frontend-bundle-cleanup.md.
+  - id: SH-RM-250
+    horizon: next
+    status: proposal-reviewed-not-approved
+    summary: Spatial Evolution Macros 'menacing' pilot. First audition a manually expanded 20s Other-stem progression at matched loudness (0.5-1 dev-day), then consider versioned intent-to-inspectable automation resolver (2-4 dev-days). Adaptive asymmetrical reflections, mono/true-peak safeguards, precedence and split-state QA add 3-7 dev-days; see docs/spatial-evolution-macros.md.
   - id: SH-RM-240
     horizon: later
     status: deferred-pending-evidence

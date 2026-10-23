@@ -360,7 +360,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const trialDynamics=proposed?.kind==="deess"?proposed.targets:dynamicsTargets;
     const byFile:Record<string,{gain?:ReturnType<typeof compileSectionAutomation>;pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>;dynamics?:{compressor?:{threshold:ReturnType<typeof compileSectionAutomation>;ratio:ReturnType<typeof compileSectionAutomation>};duck?:{depthDb:ReturnType<typeof compileSectionAutomation>;keyFilename:string};deess?:{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;threshold:ReturnType<typeof compileSectionAutomation>;maxReduction:ReturnType<typeof compileSectionAutomation>}}}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
-    for(const filename of files){
+    // Virtual source keys address the left/right channels of an active split.
+    // The parent key remains separate; all.gain and other parent directions
+    // continue to affect the reconstructed stem bus.
+    const effectKeys=[...files,...files.flatMap(filename=>channels[filename]?.active?
+      [filename+":left",filename+":right"]:[])];
+    for(const filename of effectKeys){
       const desired=gainTargets.filter(item=>item.source_key===filename).flatMap(item=>{
         const section=sectionById.get(item.section_id);
         return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
@@ -371,7 +376,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={gain:compileSectionAutomation(desired,1,{min:Math.pow(10,-24/20),max:Math.pow(10,12/20)})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid stem gain automation");return;}
     }
-    for(const filename of files){
+    for(const filename of effectKeys){
       const saved=trialPan.filter(item=>item.source_key===filename);
       if(!saved.length)continue;
       const desired=saved.flatMap(item=>{
@@ -388,7 +393,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         return;
       }
     }
-    for(const filename of files){
+    for(const filename of effectKeys){
       const desired=trialReverb.filter(item=>item.source_key===filename).flatMap(item=>{
         const section=sectionById.get(item.section_id);
         return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
@@ -399,7 +404,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),reverb:compileSectionAutomation(desired,0,{min:0,max:1})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid reverb automation");return;}
     }
-    for(const filename of files){
+    for(const filename of effectKeys){
       const desired=trialWidth.filter(item=>item.source_key===filename).flatMap(item=>{
         const section=sectionById.get(item.section_id);
         return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
@@ -410,7 +415,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),width:compileSectionAutomation(desired,1,{min:0,max:1.5})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid width automation");return;}
     }
-    for(const filename of files){
+    for(const filename of effectKeys){
       const desired=trialSpace.filter(item=>item.source_key===filename).flatMap(item=>{
         const section=sectionById.get(item.section_id);
         return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
@@ -421,7 +426,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         byFile[filename]={...(byFile[filename]||{}),space:compileSectionAutomation(desired,0,{min:0,max:.4})};
       }catch(e){setError(e instanceof Error?e.message:"Invalid spatial reflections");return;}
     }
-    for(const filename of files){
+    for(const filename of effectKeys){
       for(const band of [1,2,3] as const){
         const desired=trialEq.filter(item=>item.source_key===filename&&item.band===band)
           .flatMap(item=>{
@@ -455,7 +460,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         max_reduction_db:Math.min(12,correction.maxReduction*correction.auditionBoost),
         transition_seconds:correction.transition,curve:"smooth" as const
       }]:trialDynamics;
-    for(const filename of files){
+    for(const filename of effectKeys){
       const settings=staged.filter(item=>item.source_key===filename);
       if(!settings.length)continue;
       const compile=(kind:"comp"|"duck"|"deess",field:"threshold_db"|"ratio"|"depth_db"|"frequency"|"q"|"max_reduction_db",initial:number,min:number,max:number)=>{
@@ -544,7 +549,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,stems,correction,sectionPreviewActive,sectionPreview]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,correction,sectionPreviewActive,sectionPreview]);
 
   // Findings describe a specific processed mix; edits invalidate those results.
   useEffect(()=>{

@@ -292,3 +292,31 @@ components appear only when a valid split is attached.
 **Transport QA note:** natural song completion now resets the waveform
 playhead and underlying shared-clock transport to 0:00. Ordinary Pause
 continues to retain the pause position.
+
+### Multiline production directives (LF and Windows CRLF supported)
+
+For legibility, production directives may be separated by spaces, Unix LF or Windows
+CRLF **inside the same curly-brace block**. One directive per line is recommended:
+
+```text
+[Chorus 1:42-2:05]
+{
+  Drums.pan:center@2s:smooth
+  Drums-right.reverb:18@2s:smooth
+  Other.evolve:menacing@20s:smooth
+}
+These are the original lyrics.
+```
+
+Single-line `{Drums.pan:center Drums.reverb:18}` remains valid. Braces
+must enclose one complete production block per section; a second block,
+nested blocks or an unterminated block are rejected without saving.
+Production directives **outside** braces are not interpreted as effects;
+keep ordinary lyric lines outside braces. Song Harbor renders saved
+multi-directive blocks one directive per line when reloading the whole-song
+editor; your lyrics and original effect semantics are unchanged.
+
+Validation errors still report `Line N` based on the actual imported
+text lines, compatible with **Go to line N** in the editor. The parser
+accepts mixed spaces and line endings; it does not require you to convert
+Windows text files before importing.

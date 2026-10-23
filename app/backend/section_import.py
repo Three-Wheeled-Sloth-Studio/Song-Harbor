@@ -143,7 +143,7 @@ def parse(content: str, aliases:tuple[str,...]=section_production.ALIASES) -> li
         except ValueError as exc:
             raise ValueError(f"Line {index}: {exc}") from exc
     if block_start:
-        raise ValueError(f"Line {block_start}: Unclosed production block (missing })")
+        raise ValueError(f"Line {block_start}: Unclosed production block (missing closing brace)")
     for item in result:
         if "lyrics" in item:
             item["lyrics"] = "\n".join(item["lyrics"]).strip()

@@ -2048,6 +2048,19 @@ def ace_service_start(request: Request) -> dict[str, Any]:
         raise HTTPException(409, str(exc)) from exc
 
 
+class AceModelRequest(BaseModel):
+    model: str = Field(default="acestep-v15-turbo", min_length=1, max_length=100)
+
+
+@app.post("/api/ace/service/initialize")
+def ace_service_initialize(body: AceModelRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return ace_manager.initialize_model(body.model)
+    except ace_service.AceServiceError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @app.post("/api/ace/service/stop")
 def ace_service_stop(request: Request) -> dict[str, Any]:
     require_local_origin(request)

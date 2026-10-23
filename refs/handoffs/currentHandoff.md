@@ -1,3 +1,11 @@
+## 2026-10-23: Click-to-error section text import QA fix
+
+User QA: a rejected section script with an unsupported section header should offer a clickable navigation target instead of merely showing an error. Updated `app/frontend/src/SectionsTool.tsx` to parse existing backend `Line N:` validation errors and render accessible `Go to line N ↗` beside the message. Clicking focuses the textarea, selects the offending line and scrolls it into view; user draft is preserved. Added compact styling in `song-harbor.css`. Does not auto-correct or discard edits. Applies to both unsupported bracket section tags and line-specific production syntax failures. For errors without a line number, plain error text remains; future richer diagnostics can add structured spans.
+
+Local QA: paste multiple sections with an invalid header in the middle (e.g. `[Interlude]` when unsupported), click Apply, click `Go to line N`, verify selected text/scroll and editing; repeat with an invalid `{...}` production directive. Correct and re-Apply. On failure the original saved sections must remain unchanged. Frontend CI check independently.
+
+---
+
 ## 2026-10-23: USER QA PASS — YouTube lyric SRT import
 
 User reported: **"Lyric upload to youtube passed QA - nearly perfect alignment, clean import."**

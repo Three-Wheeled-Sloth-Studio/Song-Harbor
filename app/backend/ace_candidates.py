@@ -13,6 +13,7 @@ import re
 import subprocess
 import tempfile
 import uuid
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -173,7 +174,18 @@ def crop_generated_candidate(project_folder: Path, candidate_id: str,
     from_start = samples["crop_start"]
     to_end = samples["crop_end"]
     destination = directory / "target.wav"
+    with wave.open(str(generated_file), "rb") as source:
+        rate = source.getframerate()
+        frames = source.getnframes()
+    if rate != record["sample_rate_hz"]:
+        raise AceError("Generated WAV sample rate differs from the candidate contract")
+    if frames < to_end:
+        raise AceError("Generated context audio is shorter than the requested target crop")
     ffmpeg_extract(ffmpeg, generated_file, destination, from_start, to_end)
+    with wave.open(str(destination), "rb") as result:
+        if result.getframerate() != rate or abs(result.getnframes() - (to_end - from_start)) > 2:
+            destination.unlink(missing_ok=True)
+            raise AceError("Target crop length does not match the selected section interval")
     record["variants"].append({"kind": "raw-cover-crop" if record["task_type"] == "cover"
                                else "native-generated", "file": destination.name,
                                "isolation": record["isolation"]})

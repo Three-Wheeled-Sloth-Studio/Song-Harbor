@@ -1,3 +1,40 @@
+## 2026-10-23: Premium cross-device cloud sync plan — documented, not implemented
+
+User wants eventual cross-device Song Harbor cloud synchronization, ideally a
+paid premium feature, without sacrificing local-first production. Created full
+architecture, UX, pricing-cost controls and milestone plan in
+`docs/premium-cloud-sync-plan.md`; roadmap entries SH-RM-260, SH-RM-265,
+SH-RM-270. No app/service code was changed in this planning pass.
+
+**LOE:** approximately 3–5 weeks for manifest/revision metadata foundation
+and offline metadata proof; ~8–13 weeks total to a usable two-device
+media-sync MVP; ~12–21 weeks total to a production-ready premium
+commercial service, for one experienced full-stack engineer with managed
+cloud infrastructure; ranges subject to real asset sizes, security and
+sync conflict QA. A one-way backup prototype is smaller but not equivalent
+to multi-device sync.
+
+**Design choices:** sync semantic portable versioned manifests and
+immutable hash-addressed source/stem/assets, never live
+`library.sqlite` or device absolute paths; durable local outbox and
+offline editing; compare-and-swap song revision commits; concurrent edits
+preserved as named conflict versions; verified, resumable transfer;
+per-device availability; full local editing stays functional after
+downgrade or cloud outage. Cloud account, quota and billing entitlement
+authorize the optional remote service, not base music playback/editing.
+Evaluate R2/B2 object storage plus managed identity and Stripe when
+prototype usage data is available; no vendor is selected.
+
+**Important existing state:** projects currently write atomic v1 JSON
+under user-selected data directory; SQLite Library v1 indexes absolute
+paths and source SHA-256. Existing Settings suggest Google Drive folder
+mirroring but correctly warn against two Song Harbor sessions writing the
+same database concurrently. This shortcut is NOT a safe premium sync
+design. First useful slice is portable dependency-complete snapshot/
+restore on two PCs, not a hosted service or client-side cloud secrets.
+
+---
+
 ## 2026-10-23: Whole-song production blocks now accept LF and CRLF directive separators
 
 - User requested production scripting readable one directive per line, in

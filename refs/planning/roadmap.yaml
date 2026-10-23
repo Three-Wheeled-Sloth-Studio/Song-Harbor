@@ -114,6 +114,10 @@ roadmap:
     horizon: next
     status: discovery-complete-pending-evaluation
     summary: Audio Forensics QA: use spectral/temporal/spatial/production diagnostics to compare generated source, stem recombination and final export; localize audible artifacts and offer reversible, level-matched cleanup previews. Optionally benchmark MIT ONNX spectral fakeprint model independently; AI-likelihood scores are NOT quality targets and no watermark removal. Discovery in docs/ai-audio-forensics-discovery.md.
+  - id: SH-RM-238
+    horizon: now
+    status: implemented-awaiting-windows-audio-qa
+    summary: Independent left/right split child scripting for gain, pan, three-band EQ and reverb, with parent-bus inheritance and child reverb overrides (not additive), stable parent IDs and aliases, and mirrored audition/offline WAV effects. Parent-only width/space/dynamics. Real stereo routing and listening validation pending.
   - id: SH-RM-240
     horizon: later
     status: deferred-pending-evidence

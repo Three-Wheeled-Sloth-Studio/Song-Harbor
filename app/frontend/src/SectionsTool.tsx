@@ -2,6 +2,24 @@ import {useCallback,useEffect,useRef,useState} from "react";
 import type {SongSection} from "./SectionEditor";
 
 type Mode="replace"|"append";
+/** Convert a server "Line N: ..." validation error to a specific editor span.
+ * Preserve line numbers in the message; selection never alters the draft.
+ */
+export function errorLocation(content:string,message:string):{start:number;end:number;line:number}|null{
+  const result=/\\bline\\s+(\\d+)\\b/i.exec(message);
+  if(!result)return null;
+  const line=Number(result[1]);
+  if(!Number.isSafeInteger(line)||line<1)return null;
+  const lines=content.split("\\n");
+  if(line>lines.length)return null;
+  let start=0;
+  for(let i=0;i<line-1;i++)start+=lines[i].length+1;
+  const raw=lines[line-1].replace(/\\r$/,"");
+  const offset=raw.length-raw.trimStart().length;
+  start+=offset;
+  return {start,end:start+Math.max(1,raw.trim().length),line};
+}
+
 // Retain unapplied editor drafts while a user switches between floating tools.
 // Deliberately in-memory: edits are not silently written to a project or disk.
 const temporarySectionDrafts=new Map<string,string>();
@@ -35,6 +53,23 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
   const [captionWarnings,setCaptionWarnings]=useState<string[]>([]);
   const [captionBusy,setCaptionBusy]=useState(false);
   const editor=useRef<HTMLTextAreaElement|null>(null);
+  const errorTarget=errorLocation(content,error);
+  function jumpToError(){
+    if(!errorTarget)return;
+    const node=editor.current;
+    if(!node)return;
+    node.focus();
+    node.setSelectionRange(errorTarget.start,errorTarget.end);
+    // setSelectionRange normally scrolls to the caret in modern browsers;
+    // position the editor explicitly for multiline documents as a fallback.
+    const style=window.getComputedStyle(node);
+    const lineHeight=parseFloat(style.lineHeight)||parseFloat(style.fontSize)*1.4||18;
+    const targetTop=(errorTarget.line-1)*lineHeight;
+    if(targetTop<node.scrollTop||targetTop>node.scrollTop+node.clientHeight-lineHeight*2){
+      node.scrollTop=Math.max(0,targetTop-lineHeight*3);
+    }
+  }
+
   const loadedRevision=useRef(-1);
   const focusSection=useRef<SongSection|null>(null);
   focusSection.current=focused;
@@ -193,7 +228,13 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
     </div>}
     {stale&&<small role="status">Timeline changed; reload to see new timestamps (unsaved text preserved).</small>}
     {message&&<small role="status">{message}</small>}
-    {error&&<small role="alert">{error}</small>}
+    {error&&<div role="alert" className="song-section-validation-error">
+      <small>{error}</small>
+      {errorTarget&&<button type="button" className="song-section-error-jump"
+        onClick={jumpToError} title={"Jump to offending text on line "+errorTarget.line}>
+        Go to line {errorTarget.line} ↗
+      </button>}
+    </div>}
     <details className="production-tool-help">
       <summary>Section notation</summary>
       <small>One [Intro], [Verse 1], [Chorus], etc. per section; lyrics can appear beneath their header. Untimed sections are evenly distributed on import. Visual edits update the saved timestamps. Production blocks like <code>{"{Other.pan:right.60@2s:smooth}"}</code> support pan, and <code>{"{all.reset@2s:smooth}"}</code> restores defaults. Reverb sends use syntax such as <code>{"{Vocals.reverb:30@2s:smooth}"}</code>. Ending instructions belong to the last section: <code>{"{Master.fade:6s:smooth Master.tail:3s}"}</code>. Width uses <code>{"{Vocals.width:125@2s:smooth}"}</code> (0-150%, 100% unchanged). Early reflections use <code>{"{Vocals.space:20@2s:smooth}"}</code> (0-40%). Three EQ bands per stem use <code>{"{Vocals.eq1:320,1.2,-2@2s:smooth}"}</code> (30-16000 Hz, Q .3-12, gain -12 to +12 dB). Compression and vocal-keyed ducking are available via section script (Other.comp:-18,2 and Guitar.duck:3). De-essing is available as Vocals.deess:6500,2,-40,4@2s:smooth. Stem gain uses Drums.gain:+0.75@2s:smooth, relative to the saved mixer fader. Broadcast defaults such as all.gain:-1, all.pan:center, all.width:110, all.reverb:15, all.space:10, and all.eq1:1000,1,+1 apply to eligible stems unless explicitly overridden in that section. Auto.pan:center@8s:smooth performs bounded per-section balancing using eligible stems; explicit and inherited stem pans are protected. Auto.gain is not yet available. Live gain-reduction meters appear in the A/B tool. This editor contains the complete song script (all sections and lyrics), not just the currently selected section. Apply validates and persists the entire song. Width cues in legacy headers remain proposals.</small>

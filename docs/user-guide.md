@@ -253,3 +253,42 @@ existing CPU/audio graph, with extra lightweight nodes per active split child.
 
 **Acceptance:** verify center/left/right pan, gain, EQ, send inheritance,
 script rename/reopen and parity between live audition and 24-bit WAV export.
+
+### Spatial evolution macro (experimental)
+
+The first deterministic spatial macro is available in whole-song section text:
+
+```text
+[Bridge 2:53-3:56]
+{Other.evolve:menacing@20s:smooth}
+```
+
+This asks Song Harbor to evolve the named **parent stem** over 20 seconds
+using existing parent pan, width, early reflections, EQ and reverb sends.
+If its split L/R channels are attached, it also applies restrained
+left/right EQ coloration and asymmetric reverb. The original source remains
+unchanged, with effects rendered both during synchronized playback and WAV
+export. The source script retains the readable `.evolve:menacing` intent;
+internal generation uses versioned `menacing` v1 typed curves.
+
+You can place explicit effects on the same production line to override
+individual macro settings for that section, for example:
+
+```text
+{Other.evolve:menacing@20s:smooth Other.reverb:10@2s:smooth}
+```
+
+The explicit reverb value wins, while the other macro parameters still apply.
+Use only one production block on a single line beneath the section header;
+do not replace your whole lyric sheet with these illustrative fragments.
+
+The macro is a *preset*, not yet an adaptive spatial safety system. It
+does not automatically check true peak, adjust stereo correlation or protect
+mono fold-down, and it has no dedicated per-macro A/B control. Start with
+an audition of the original and processed mix at similar perceived volume.
+Existing `A/B comparison` lets you bypass effect families. Child L/R
+components appear only when a valid split is attached.
+
+**Transport QA note:** natural song completion now resets the waveform
+playhead and underlying shared-clock transport to 0:00. Ordinary Pause
+continues to retain the pause position.

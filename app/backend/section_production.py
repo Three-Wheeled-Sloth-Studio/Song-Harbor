@@ -13,17 +13,30 @@ TOKEN = re.compile(
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
-def source_aliases(files:list[str])->tuple[str,...]:
-    """Use persisted working track aliases, not a fixed count of six.
-
-    Track identity is the immutable working filename; display names can change.
-    """
-    aliases=[]
+def source_map(files:list[str], tracks:list[dict[str, Any]]|None=None)->dict[str,str]:
+    """Resolve editable aliases to immutable working files, including legacy stems."""
+    mapping={}
+    for row in tracks or []:
+        filename=row.get("working_filename")
+        alias=row.get("stem_alias")
+        if filename in files and isinstance(alias,str):
+            if alias.casefold() in {key.casefold() for key in mapping}:
+                raise ValueError("Duplicate project stem alias")
+            mapping[alias]=filename
+    assigned=set(mapping.values())
     for filename in files:
-        match=re.search(r"\(([A-Za-z][A-Za-z0-9_-]*)\)",filename)
-        if match and match.group(1) not in aliases:
-            aliases.append(match.group(1))
-    return tuple(aliases)
+        if filename in assigned: continue
+        match=re.search(r"\\(([A-Za-z][A-Za-z0-9_-]*)\\)",filename)
+        if match:
+            alias=match.group(1)
+            if alias.casefold() in {key.casefold() for key in mapping}:
+                raise ValueError("Duplicate project stem alias")
+            mapping[alias]=filename
+    return mapping
+
+
+def source_aliases(files:list[str], tracks:list[dict[str, Any]]|None=None)->tuple[str,...]:
+    return tuple(source_map(files,tracks))
 
 
 EQ_TOKEN = re.compile(
@@ -307,15 +320,14 @@ def expand_broadcast(blocks: dict[str, list[dict[str, Any]]],
 
 def materialize_auto_pan(sections: list[dict[str, Any]],
                          blocks: dict[str, list[dict[str, Any]]],
-                         files: list[str]) -> list[dict[str, Any]]:
+                         files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
     """Emit per-section intent and protected inherited pan positions.
 
     Auto pan is not implicitly sticky; each requesting section is independent.
     Explicit and broadcast pan settings persist as protection until reset.
     """
-    aliases=source_aliases(files)
-    stems={alias:filename for filename in files for alias in aliases
-           if "(" + alias + ")" in filename}
+    aliases=source_aliases(files,tracks)
+    stems=source_map(files,tracks)
     protected=set()
     protected_gain=set()
     output=[]
@@ -346,18 +358,14 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
 
 def materialize_pan(sections: list[dict[str, Any]],
                     blocks: dict[str, list[dict[str, Any]]],
-                    files: list[str]) -> list[dict[str, Any]]:
+                    files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
     """Compile inheritance and resets into explicit per-section pan targets.
 
     This representation is compatible with the existing shared-clock preview.
     Missing directives hold the previous target. A reset restores track default
     (currently center), but does not alter manual mixer settings.
     """
-    stems = {}
-    for filename in files:
-        for alias in source_aliases(files):
-            if "(" + alias + ")" in filename:
-                stems[alias] = filename
+    stems = source_map(files,tracks)
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
@@ -378,12 +386,8 @@ def materialize_pan(sections: list[dict[str, Any]],
 
 def materialize_reverb(sections: list[dict[str, Any]],
                        blocks: dict[str, list[dict[str, Any]]],
-                       files: list[str]) -> list[dict[str, Any]]:
-    stems = {}
-    for filename in files:
-        for alias in source_aliases(files):
-            if "(" + alias + ")" in filename:
-                stems[alias] = filename
+                       files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
+    stems = source_map(files,tracks)
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
@@ -405,10 +409,9 @@ def materialize_reverb(sections: list[dict[str, Any]],
 
 def materialize_width(sections: list[dict[str, Any]],
                       blocks: dict[str, list[dict[str, Any]]],
-                      files: list[str]) -> list[dict[str, Any]]:
+                      files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
     """Compile explicit width changes; omitted sections inherit previous value."""
-    stems = {alias: filename for filename in files for alias in source_aliases(files)
-             if "(" + alias + ")" in filename}
+    stems=source_map(files,tracks)
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
@@ -430,9 +433,8 @@ def materialize_width(sections: list[dict[str, Any]],
 
 def materialize_space(sections: list[dict[str, Any]],
                       blocks: dict[str, list[dict[str, Any]]],
-                      files: list[str]) -> list[dict[str, Any]]:
-    stems={alias:filename for filename in files for alias in source_aliases(files)
-           if "(" + alias + ")" in filename}
+                      files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
+    stems=source_map(files,tracks)
     output=[]
     for section in sorted(sections,key=lambda s:s["start_seconds"]):
         for d in blocks.get(section["id"], []):
@@ -450,9 +452,8 @@ def materialize_space(sections: list[dict[str, Any]],
 
 def materialize_eq(sections: list[dict[str, Any]],
                    blocks: dict[str, list[dict[str, Any]]],
-                   files: list[str]) -> list[dict[str, Any]]:
-    stems={alias:filename for filename in files for alias in source_aliases(files)
-           if "(" + alias + ")" in filename}
+                   files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
+    stems=source_map(files,tracks)
     out=[]
     for section in sorted(sections,key=lambda s:s["start_seconds"]):
         for d in blocks.get(section["id"],[]):
@@ -502,9 +503,9 @@ def materialize_ending(sections: list[dict[str, Any]],
 
 def materialize_dynamics(sections: list[dict[str, Any]],
                          blocks: dict[str, list[dict[str, Any]]],
-                         files: list[str]) -> list[dict[str, Any]]:
+                         files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
     """Only explicit dynamics or resets appear; older projects stay neutral."""
-    stems={alias:filename for filename in files for alias in source_aliases(files) if "(" + alias + ")" in filename}
+    stems=source_map(files,tracks)
     out=[]
     for section in sorted(sections,key=lambda item:item["start_seconds"]):
         for directive in blocks.get(section["id"],[]):
@@ -531,10 +532,9 @@ def materialize_dynamics(sections: list[dict[str, Any]],
 
 def materialize_gain(sections: list[dict[str, Any]],
                      blocks: dict[str, list[dict[str, Any]]],
-                     files: list[str]) -> list[dict[str, Any]]:
+                     files: list[str], tracks: list[dict[str, Any]]|None=None) -> list[dict[str, Any]]:
     """Section gain in dB relative to saved mixer level; resets are neutral."""
-    stems={alias:filename for filename in files for alias in source_aliases(files)
-           if "(" + alias + ")" in filename}
+    stems=source_map(files,tracks)
     output=[]
     for section in sorted(sections,key=lambda item:item["start_seconds"]):
         for directive in blocks.get(section["id"],[]):

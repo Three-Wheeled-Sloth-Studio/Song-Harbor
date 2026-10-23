@@ -19,11 +19,11 @@ On **Import song**, select **Multiple tracks · already separated**. Choose **2�
 
 **Arbitrary numbered/named tracks:** Unknown stems become unique, script-safe names based on the original filenames, with stable internal `track_id` values. On the mixer, the readable source filename appears with its exact section-script alias below (for example, `Synth_01`). Section pan, width, space, reverb, EQ, compression, ducking, and reset directives accept any current source alias rather than only Vocals/Drums/Bass/Guitar/Piano/Other. When an alias is unknown, Apply rejects the production script rather than silently dropping automation.
 
-**Alignment and originals:** Working copies are 48-kHz PCM WAVs aligned at **0:00**. Shorter source audio is padded with silence without time stretching, BPM sync or automatic source offset detection. Unmodified original uploads remain in the local song directory. Manifest imports preserve original mono channels as active L/R child tracks and rebuild their stereo parent working copy.
+**Current alignment and originals:** Working copies are 48-kHz PCM WAVs aligned at **0:00**. Shorter source audio is padded with silence without time stretching, BPM sync or automatic source offset detection. Unmodified original uploads remain in the local song directory. Manifest imports preserve original mono channels as active L/R child tracks and rebuild their stereo parent working copy. **Future short accompaniment clips (not yet implemented):** an imported/generated passage will keep its original duration, have virtual silence outside the waveform, and be freely draggable along the song timeline. Align-to-section will be an initial position suggestion, with visible but never enforced snap cues. Planned alongside the first ACE-Step accompaniment test.
 
 **Current playback limits:** The project model and import accept up to 64 parent stems (or up to 128 channel files with a complete split manifest). The shared-clock browser audition engine still has a **768 MiB decoded-audio budget** and the offline WAV renderer retains its existing 15-minute limit. Dozens of long/high-resolution tracks may exceed those memory limits even though the project and DAW exports support the track count. Chunked streaming is not implemented yet; don't treat the 64-track model limit as a guarantee that all 64 can be previewed simultaneously.
 
-**Future naming behavior:** Each imported track has a stable ID and immutable working filename, separate from its display name and script alias. The planned track-rename UI must migrate all section-script tokens and stored target references atomically when a name is changed; merely changing the visible label without updating references is not acceptable. The rename UI/migration is not implemented yet.
+**Add and rename existing tracks (pending local QA):** In the mixer, use **+ Add stem** to import an additional prepared audio file or the pencil icon to edit a track's display name and script alias. Each track has a stable ID and immutable working filename. Rename updates saved structured production guidance and keeps audio source identity unchanged. Apply and close Whole Song Section Text before adding or renaming; new capabilities await Windows audio acceptance.
 
 After import, tracks appear in the standard mixer, timeline and Library. For multi-track audition, verify that related recordings originated at the same start position.
 
@@ -87,7 +87,7 @@ The compressor has conservative fixed attack/release and no automatic makeup gai
 
 A/B bypass is **audition-only**, not saved in WAV. **Bypass compression** and **Bypass ducking** are independent checkboxes so each new dynamics effect can be heard separately. **B · Original** bypasses both; **A · Processed** restores both. Changing stem levels no longer intentionally restarts playback just to rebuild ducking.
 
-**Export to DAW** prepares six original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
+**Export to DAW** prepares original aligned stem WAVs for use in an external editor. This is not a processed stereo mix, and the DAW import experience depends on the installed editor. Audacity and Waveform are supported as handoff targets, with varying automatic-import capability.
 
 ## Fullscreen Song Harbor and floating tool windows
 

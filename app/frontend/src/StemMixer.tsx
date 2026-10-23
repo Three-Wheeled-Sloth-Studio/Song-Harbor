@@ -96,6 +96,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(alias===null)return;
     setRenamingTrack(filename);setError("");
     try{
+      // The mixer remounts after a rename: persist faders first rather than
+      // accidentally reverting unsaved gain/mute/solo settings.
+      if(!await saveProject())return;
       const response=await fetch("/api/projects/"+jobId+"/tracks/rename",{
         method:"PUT",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({track_id:track.track_id,display_name:display,stem_alias:alias})

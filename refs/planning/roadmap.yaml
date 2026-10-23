@@ -126,6 +126,18 @@ roadmap:
     horizon: next
     status: first-deterministic-slice-implemented-awaiting-windows-audio-qa
     summary: Spatial Evolution Macros menacing v1 implemented: Other.evolve:menacing@20s:smooth compiles to parent width/pan/space/EQ/reverb and optional L/R asymmetric EQ/reverb, persists versioned intent; same-section manual effect wins. Outstanding: independent macro bypass/curve visualization, adaptive mono/true-peak protection, Windows listening/export parity and split/unsplit QA. See docs/spatial-evolution-macros.md.
+  - id: SH-RM-260
+    horizon: next
+    status: planning-complete-deferred-foundation
+    summary: Define versioned portable song-sync manifest and complete content-hashed media dependency graph, reconstruct Library from manifests on a second PC, and prepare immutable song revision ancestry without any cloud requirement. Foundation 1-2 engineering weeks after 3-5 day discovery; see docs/premium-cloud-sync-plan.md.
+  - id: SH-RM-265
+    horizon: later
+    status: premium-mvp-planned-not-implemented
+    summary: Optional local-first premium two-device song synchronization: conflict-safe revision heads, offline outbox, authenticated metadata service, resumable content-addressed media storage, selective downloads, statuses and device revocation. Estimated total usable noncommercial MVP ~8-13 weeks; no direct SQLite cloud sync or silent last-writer-wins.
+  - id: SH-RM-270
+    horizon: later
+    status: commercial-premium-planned-not-implemented
+    summary: Productionize paid cloud sync with server-verified entitlement, storage quota and retention, billing, security/privacy controls, recovery, failure injection, operational support and measured unit economics. Full paid offering ~12-21 total weeks from discovery subject to validation.
   - id: SH-RM-240
     horizon: later
     status: deferred-pending-evidence

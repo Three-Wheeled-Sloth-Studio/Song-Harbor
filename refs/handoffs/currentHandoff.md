@@ -1,3 +1,22 @@
+## 2026-10-23: Temporary Audio Forensics sidebar tool for discovery QA
+
+- Right palette contains new `forensics` tool icon `⌁` in
+  `WorkbenchTools.tsx`; view `ForensicsReview.tsx` styled through
+  `song-harbor.css`.
+- Reuses existing `SharedClockAudition.analyzeMix()` CPU/offline rendered-mix
+  scan and Sound Cleanup state. Categories: spectral texture, attacks and
+  dynamics, stereo compatibility, peaks. Supports seek and timed looping.
+  No new AI detector, model download, GPU dependency, external service or
+  audio mutation. Scan is on demand, not triggered by opening the panel.
+- This experimental inspection view is intentionally not a new analysis
+  pipeline. Source-vs-output artifact regression and separately validated
+  fingerprint model are pending. Do not advertise watermark verification,
+  detector evasion or a universal human-sounding score.
+- User wants the tool icon available for testing, with integration into the
+  main analyzer only after evidence of value. Windows QA is pending; check
+  frontend CI and launcher smoke after commits before acceptance.
+
+---
 ## 2026-10-23 DISCOVERY: Audio forensics, AI fingerprints, human-sounding production
 
 User requested inspection of KillrBee/ai-music-detector, lofcz/ai-music-detector, and lcrosvila/ai-music-detection for Song Harbor sound-quality cleanup and avoiding introduced artifacts. Reviewed actual repo READMEs and implementation. Full findings: `docs/ai-audio-forensics-discovery.md`; roadmap SH-RM-235.

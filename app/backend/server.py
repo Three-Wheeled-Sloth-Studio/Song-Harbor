@@ -2028,8 +2028,9 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
 
 # Managed local ACE runtime: start without model initialization, stop only owned PID.
 import ace_service
+import ace_locations
 
-ACE_HOME = Path(os.environ.get("SONG_HARBOR_ACE_HOME", "D:/Apps/Tools/ACE-Step-1.5"))
+ACE_HOME = ace_locations.discover_installation(APP_ROOT) or (APP_ROOT / "ace-not-configured")
 ace_manager = ace_service.AceServiceManager(
     ACE_HOME, log_directory=DATA_ROOT / "logs")
 

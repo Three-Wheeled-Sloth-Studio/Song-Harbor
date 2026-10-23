@@ -162,7 +162,11 @@ def apply(project: dict[str, Any], content: str, mode: str,
           duration: float | None) -> dict[str, Any]:
     if mode not in ("replace", "append"):
         raise ValueError("Mode must be replace or append")
-    aliases=section_production.source_aliases(project.get("files",[]),project.get("source_tracks",[])) or section_production.ALIASES
+    files=project.get("files",[])
+    tracks=project.get("source_tracks",[])
+    children=project.get("channel_children",{})
+    parents=section_production.source_aliases(files,tracks) or section_production.ALIASES
+    aliases=section_production.source_aliases(files,tracks,children) or parents
     imported = parse(content,aliases)
     old = project.get("sections", [])
     imported, distributed, end_terminator = assign_initial_times(imported, mode, old, duration)
@@ -208,15 +212,22 @@ def apply(project: dict[str, Any], content: str, mode: str,
             if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
                 raise ValueError("Lyrics text must be at most 20000 characters per section")
             lyrics[match["id"]] = item["lyrics"]
-    auto_pan_targets = section_production.materialize_auto_pan(validated, production, project.get("files", []), project.get("source_tracks", []))
-    effective = section_production.expand_broadcast(production, aliases)
-    pan_targets = section_production.materialize_pan(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    reverb_targets = section_production.materialize_reverb(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    width_targets = section_production.materialize_width(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    space_targets = section_production.materialize_space(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    eq_targets = section_production.materialize_eq(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    dynamics_targets = section_production.materialize_dynamics(validated, effective, project.get("files", []), project.get("source_tracks", []))
-    gain_targets = section_production.materialize_gain(validated, effective, project.get("files", []), project.get("source_tracks", []))
+    # Child processing is presently supported for individual gain, pan,
+    # reverb sends and EQ. Never silently claim child width/spatial/dynamics.
+    child_aliases={alias.casefold() for alias in aliases if alias not in parents}
+    for directives in production.values():
+        for directive in directives:
+            if directive.get("track","").casefold() in child_aliases and directive["kind"] not in ("gain","pan","reverb","eq","reset"):
+                raise ValueError("Child split channels currently support gain, pan, EQ and reverb only")
+    auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
+    effective = section_production.expand_broadcast(production, parents)
+    pan_targets = section_production.materialize_pan(validated, effective, files, tracks, children)
+    reverb_targets = section_production.materialize_reverb(validated, effective, files, tracks, children)
+    width_targets = section_production.materialize_width(validated, effective, files, tracks, children)
+    space_targets = section_production.materialize_space(validated, effective, files, tracks, children)
+    eq_targets = section_production.materialize_eq(validated, effective, files, tracks, children)
+    dynamics_targets = section_production.materialize_dynamics(validated, effective, files, tracks, children)
+    gain_targets = section_production.materialize_gain(validated, effective, files, tracks, children)
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,

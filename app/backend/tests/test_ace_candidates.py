@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -90,21 +90,36 @@ class CandidateTests(unittest.TestCase):
             def crop(ffmpeg, source, destination, start, end, rate=48000):
                 calls.append((start, end))
                 destination.write_bytes(b"cropped")
-            def wave_info(path, mode):
-                reader = MagicMock()
-                reader.getframerate.return_value = 48000
-                reader.getnframes.return_value = (
-                    result["samples"]["crop_end"] + 1 if str(path).endswith("generated.wav")
-                    else result["samples"]["crop_end"] - result["samples"]["crop_start"]
-                )
-                reader.__enter__.return_value = reader
-                return reader
-            with patch("ace_candidates.ffmpeg_extract", side_effect=crop), patch("ace_candidates.wave.open", side_effect=wave_info):
+            target_length = (result["samples"]["crop_end"] - result["samples"]["crop_start"]) / 48000
+            def duration_probe(ffmpeg, path):
+                if str(path).endswith("generated.wav"):
+                    return result["samples"]["crop_end"] / 48000 + 1
+                return target_length
+            with patch("ace_candidates.ffmpeg_extract", side_effect=crop), patch(
+                "ace_candidates.probe_audio_duration", side_effect=duration_probe
+            ):
                 ready = crop_generated_candidate(folder, result["candidate_id"], generated, "ffmpeg")
             self.assertEqual(ready["state"], "ready")
             self.assertEqual(calls[0], (result["samples"]["crop_start"],
                                         result["samples"]["crop_end"]))
             self.assertEqual(ready["variants"][0]["file"], "target.wav")
+
+    def test_reject_short_generated_float_wav_before_crop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            original = folder / "source.wav"
+            original.write_bytes(b"source")
+            with patch("ace_candidates.ffmpeg_extract", side_effect=lambda f,s,d,a,b,rate=48000: d.write_bytes(b"context")):
+                record = create_candidate(self.project, folder, original, self.b, self.b,
+                                          32.02, 0, "acestep-v15-turbo", "Violin",
+                                          "cover", self.models, "ffmpeg")
+            generated = candidate_directory(folder, record["candidate_id"]) / "generated.wav"
+            generated.write_bytes(b"fake float wav")
+            with patch("ace_candidates.probe_audio_duration", return_value=1.0), patch(
+                "ace_candidates.ffmpeg_extract") as crop:
+                with self.assertRaises(AceError):
+                    crop_generated_candidate(folder, record["candidate_id"], generated, "ffmpeg")
+                crop.assert_not_called()
 
     def test_reject_path_escape(self):
         with tempfile.TemporaryDirectory() as tmp:

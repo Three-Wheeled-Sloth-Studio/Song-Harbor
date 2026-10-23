@@ -1,3 +1,15 @@
+## 2026-10-23: Accepted clip alignment design (discovery checkpoint)
+
+**User decision, binding for Second Take and imported short stems:** A section boundary is a visual alignment suggestion, NEVER a required snap point. Align-to-section supplies an initial offset only. Imported/generated short audio is represented as a draggable, non-destructive clip with its original waveform and duration intact, virtual silence outside its bounds, song-relative start time, independent fades, and precise unsnapped fine movement. The original WAV, immutable track_id, and script alias must not change when a clip is moved. Section scripting remains anchored to absolute song time.
+
+**Implementation status:** design approved and documented, NOT implemented. Today's `POST /tracks/add` still physically pads a working WAV to full song duration starting at 0:00. This remains a temporary compatibility behavior, not the intended clip model. Do not claim the clip can already be dragged or aligned to a section.
+
+**Timing:** Defer standalone clip editor build and acceptance tests until the initial ACE-Step context-conditioned accompaniment generation experiment produces a real short stem. At that point implement and test the offset/clip transport across audition, WAV export, reload, and DAW exchange. No enforced snapping even with a visible snap preview.
+
+**Next step:** User requested a brief discovery detour after updating documentation. Ask what discovery topic to pursue; do not assume it is ACE, Ardour or a new product.
+
+---
+
 ## 2026-10-22 LATE: Persistent stem identity, rename and in-project add implemented (Windows QA pending)
 
 Following user approval to separate immutable track identity from names, second P1 lifecycle slice committed to main.

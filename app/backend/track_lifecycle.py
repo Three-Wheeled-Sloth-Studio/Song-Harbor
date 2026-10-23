@@ -56,6 +56,8 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
             for instruction in directives:
                 if instruction.get("track","").casefold()==old.casefold():
                     instruction["track"]=alias
+                elif instruction.get("track","").casefold() in (old.casefold()+"-left",old.casefold()+"-right"):
+                    instruction["track"]=alias+instruction["track"][len(old):]
         for proposals in updated.get("section_spatial_proposals",{}).values():
             for instruction in proposals:
                 if instruction.get("track_alias","").casefold()==old.casefold():

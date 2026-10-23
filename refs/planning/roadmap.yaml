@@ -118,6 +118,10 @@ roadmap:
     horizon: now
     status: implemented-awaiting-windows-audio-qa
     summary: Independent left/right split child scripting for gain, pan, three-band EQ and reverb, with parent-bus inheritance and child reverb overrides (not additive), stable parent IDs and aliases, and mirrored audition/offline WAV effects. Parent-only width/space/dynamics. Real stereo routing and listening validation pending.
+  - id: SH-RM-245
+    horizon: later
+    status: approved-housekeeping-deferred
+    summary: Remove Vite >500 kB minified-chunk warning by measuring production bundle composition and lazily loading Song Harbor session/large optional tools; verify updater, Library, playback, script editor and export. Target 1-3 hours; do not hide the warning by threshold-only change. See docs/frontend-bundle-cleanup.md.
   - id: SH-RM-240
     horizon: later
     status: deferred-pending-evidence

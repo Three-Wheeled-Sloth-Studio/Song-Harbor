@@ -219,3 +219,5 @@ No new model download is required. This experimental panel does **not**
 determine whether a recording is human-made or detect all fingerprints or
 watermarks; a flagged tone may be intentional music. Source-versus-output
 comparison is future work.
+
+**Navigating import errors:** If applying whole-song section text reports `Line N:` (for example, an unsupported section name or invalid production directive), select **Go to line N ↗** next to the error. Song Harbor selects the offending line in the text editor so you can correct it without losing your unsaved draft. The button appears only when the validator identifies a line number.

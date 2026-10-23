@@ -110,6 +110,10 @@ roadmap:
     horizon: next
     status: approved-deferred-until-ace-accompaniment-proof
     summary: Model short imported/generated stems as original-duration clips on stable tracks, with virtual silence before/after, persistent song-relative offset, independent fades and free dragging. Align-to-section suggests initial placement; section boundaries show optional snap previews but NEVER constrain movement. Validate live/offline/export when ACE-Step accompaniment produces real test material.
+  - id: SH-RM-235
+    horizon: next
+    status: discovery-complete-pending-evaluation
+    summary: Audio Forensics QA: use spectral/temporal/spatial/production diagnostics to compare generated source, stem recombination and final export; localize audible artifacts and offer reversible, level-matched cleanup previews. Optionally benchmark MIT ONNX spectral fakeprint model independently; AI-likelihood scores are NOT quality targets and no watermark removal. Discovery in docs/ai-audio-forensics-discovery.md.
   - id: SH-RM-240
     horizon: later
     status: deferred-pending-evidence

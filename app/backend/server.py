@@ -866,7 +866,7 @@ def save_section_pan(ident: str, request: Request, body: SectionPanRequest) -> d
         for item in targets:
             if item["section_id"] != sid:
                 continue
-            alias = next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]), None)
+            alias = next((a for a in section_production.source_aliases(record["files"]) if "(" + a + ")" in item["source_key"]), None)
             if alias and not any(d["track"] in ("all", alias) for d in base):
                 base.append({"kind": "pan", "track": alias, "pan": item["pan"],
                              "transition_seconds": item["transition_seconds"], "curve": item["curve"]})
@@ -926,7 +926,7 @@ def save_section_reverb(ident: str, request: Request, body: SectionReverbRequest
         for item in targets:
             if item["section_id"] != sid:
                 continue
-            alias = next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]), None)
+            alias = next((a for a in section_production.source_aliases(record["files"]) if "(" + a + ")" in item["source_key"]), None)
             if alias and not any(d["kind"] == "reset" and d["track"] in ("all", alias) for d in base):
                 base.append({"kind": "reverb", "track": alias, "wet": item["wet"],
                              "transition_seconds": item["transition_seconds"], "curve": item["curve"]})
@@ -1028,7 +1028,7 @@ def save_section_width(ident: str, request: Request, body: SectionWidthRequest) 
         for item in targets:
             if item["section_id"] != sid:
                 continue
-            alias = next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]), None)
+            alias = next((a for a in section_production.source_aliases(record["files"]) if "(" + a + ")" in item["source_key"]), None)
             if not alias:
                 raise HTTPException(400, "Unrecognized width stem")
             if any(d["kind"] == "reset" and d["track"] in ("all", alias) for d in base):
@@ -1092,7 +1092,7 @@ def save_section_space(ident: str, request: Request, body: SectionSpaceRequest) 
         for item in targets:
             if item["section_id"] != sid:
                 continue
-            alias=next((a for a in section_production.ALIASES if "(" + a + ")" in item["source_key"]),None)
+            alias=next((a for a in section_production.source_aliases(record["files"]) if "(" + a + ")" in item["source_key"]), None)
             if not alias:
                 raise HTTPException(400, "Unrecognized spatial reflection source")
             if any(d["kind"]=="reset" and d["track"] in ("all",alias) for d in base):
@@ -1151,8 +1151,7 @@ def save_section_eq(ident:str, request:Request, body:SectionEqRequest)->dict[str
         for item in targets:
             if item["section_id"]!=sid:
                 continue
-            alias=next((a for a in section_production.ALIASES
-                        if "(" + a + ")" in item["source_key"]),None)
+            alias=next((a for a in section_production.source_aliases(record["files"]) if "(" + a + ")" in item["source_key"]), None)
             if not alias:
                 raise HTTPException(400,"Unrecognized stem")
             if any(d["kind"]=="reset" and d["track"] in ("all",alias) for d in base):

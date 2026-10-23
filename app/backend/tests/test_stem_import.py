@@ -155,7 +155,7 @@ class ImportTracksTests(unittest.TestCase):
                   patch.object(server,"dependency_tool",return_value="ffmpeg"),
                   patch.object(server.subprocess,"run",side_effect=convert)):
                 result=asyncio.run(server.add_project_track(
-                    request,upload,stem_alias="Cello_Accent",display_name="Cello Accent"))
+                    ident,request,upload,stem_alias="Cello_Accent",display_name="Cello Accent"))
             saved=projects.read_project(root,ident)
             self.assertEqual(len(saved["files"]),3)
             self.assertEqual(saved["files"][:2],files)
@@ -189,7 +189,7 @@ class ImportTracksTests(unittest.TestCase):
                   patch.object(server,"dependency_tool",return_value="ffmpeg"),
                   patch.object(server.subprocess,"run",return_value=SimpleNamespace(returncode=1,stderr="bad audio"))):
                 with self.assertRaises(Exception):
-                    asyncio.run(server.add_project_track(request,upload,
+                    asyncio.run(server.add_project_track(ident,request,upload,
                         stem_alias="Cello",display_name="Cello"))
             self.assertEqual(projects.read_project(root,ident),project)
             self.assertEqual(job["status"],"complete")

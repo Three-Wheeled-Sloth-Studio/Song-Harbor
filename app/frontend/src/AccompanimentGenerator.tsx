@@ -36,6 +36,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
   const [compare,setCompare]=useState<"A"|"B">("A");
+  const [loadedId,setLoadedId]=useState<string|null>(null);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const candidateRef=useRef<string|null>(null);
@@ -68,6 +69,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     candidateRef.current=candidate?.candidate_id||null;
     engine?.clearCandidatePreview();
     setCompare("A");
+    setLoadedId(null);
     setPreviewBusy(false);
   },[candidate?.candidate_id,engine]);
   const fromIndex=sections.findIndex(s=>s.id===fromId);
@@ -99,6 +101,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
       engine.setCandidatePreviewEnabled(true);
+      setLoadedId(candidate.candidate_id);
       setCompare("B");
       onSeek(Math.max(0,candidate.target_start_seconds-preRoll));
       if(!playing)await onPlay();
@@ -169,7 +172,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
         </div>
         <div role="group" aria-label="Accompaniment comparison" style={{display:"flex",gap:"0.4rem"}}>
           <button type="button" aria-pressed={compare==="A"} onClick={()=>{engine?.setCandidatePreviewEnabled(false);setCompare("A");}}>A: Original</button>
-          <button type="button" aria-pressed={compare==="B"} disabled={!engine?.ready||previewBusy} onClick={()=>{if(compare==="A"&&candidateRef.current===selectedId&&audioUrl){if(!engine?.ready)return;void audition();}}}>B: With accompaniment</button>
+          <button type="button" aria-pressed={compare==="B"} disabled={!engine?.ready||previewBusy} onClick={()=>{if(loadedId===selectedId){engine?.setCandidatePreviewEnabled(true);setCompare("B");}else void audition();}}>B: With accompaniment</button>
         </div>
         <small>A/B uses one playback clock. Switching back to A preserves your position.</small>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>

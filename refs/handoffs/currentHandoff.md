@@ -1,3 +1,17 @@
+## 2026-10-22 LATE: Persistent stem identity, rename and in-project add implemented (Windows QA pending)
+
+Following user approval to separate immutable track identity from names, second P1 lifecycle slice committed to main.
+
+- `section_production.source_map(files,source_tracks)` resolves mutable script aliases to immutable working WAV filenames; all saved section materializers use it. `section_import` validates imported scripts against project metadata, not filenames. Direct effect routes likewise resolve actual aliases.
+- `track_lifecycle.py`: metadata backfill for old six-stem projects generates persistent IDs without renaming original WAVs; validated atomic rename checks collisions, reserved names, previously loaded alias (stale window), updates production/spatial track fields and rematerializes all audio automations while preserving lyrics/source keys. Filesystem transaction is one atomic manifest replacement. `GET /api/projects/{id}/tracks` backfills and persists metadata, `PUT /api/projects/{id}/tracks/rename` performs rename.
+- Mixer has pencil rename action with two simple name/alias prompts. Rejects rename while Whole Song Section Text is open; applies pending fader changes before rename, then refreshes project/engine to prevent stale UI metadata. Existing song script is reloaded with new alias.
+- `POST /api/projects/{id}/tracks/add` takes one supplied local audio file, display name and unique alias, preserves source in originals, uses FFmpeg to align/pad to existing duration, rejects longer sources instead of silently truncating, creates new working WAV and immutable ID, appends neutral mixer track, and atomically saves the project. Failed conversion removes staging files. UI provides + Add stem.
+- DAW exchange now labels exported tracks by current alias and records permanent track ID rather than reintroducing an old embedded filename alias.
+- `test_track_lifecycle.py` verifies renamed production effects and preserved WAV references, duplicate/reserved alias rejection and stable legacy ID generation. GitHub backend projects CI success as of `65e5085e`; latest frontend CI passed `4f2512c7`; newer add-stem UI/API commits require their own finished build and real Windows test.
+
+**Risk and QA notes**: No actual 7/16/33-track Windows listening/export/close-reopen test yet. The upload route converts synchronously via FFmpeg inside request; it is a limited MVP and may feel unresponsive with large sources. Browser 768 MiB decoded-audio limit still applies. The UI prompts are provisional until compact inspector controls. Do not claim batch append or generated accompaniment; Second Take remains future. Full acceptance checklist is in `docs/multitrack-import-qa.md`. YouTube SRT QA remains user-deferred.
+
+---
 ## 2026-10-22 NIGHT: P1 arbitrary-stem effects hardening first slice
 
 The product increment roadmap was approved earlier today. User now requested implementation of the next slice. Code committed to main:

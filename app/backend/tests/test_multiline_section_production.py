@@ -66,7 +66,7 @@ class MultilineSectionTests(unittest.TestCase):
             ("[Intro 0:00-0:20]\n{\n Other.pan:left.20",2),
             ("[Intro 0:00-0:20]\n{\n{Other.pan:left.20}\n}",3),
             ("[Intro 0:00-0:20]\n{Other.pan:left.20}\n}",3),
-            ("[Intro 0:00-0:20]\n{Other.pan:left.20}\n{Other.reverb:20}",4),
+            ("[Intro 0:00-0:20]\n{Other.pan:left.20}\n{Other.reverb:20}",3),
         ):
             with self.subTest(sheet=sheet):
                 with self.assertRaisesRegex(ValueError,rf"Line {line}:"):

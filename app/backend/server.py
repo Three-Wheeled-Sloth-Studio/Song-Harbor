@@ -688,8 +688,8 @@ def load_project(ident: str) -> dict[str, Any]:
 @app.get("/api/projects/{ident}/tracks")
 def list_project_tracks(ident: str) -> dict[str, Any]:
     """Upgrade legacy stem metadata without modifying the saved WAVs."""
+    job=get_job(ident)
     with lock:
-        job=get_job(ident)
         record=projects.read_project(DATA_ROOT,ident) if job else None
         if not job or job.get("status")!="complete" or not record:
             raise HTTPException(404,"Completed song not found")
@@ -707,8 +707,8 @@ def list_project_tracks(ident: str) -> dict[str, Any]:
 def rename_project_track(ident: str, request: Request, body: RenameTrackAlias) -> dict[str, Any]:
     """One atomic manifest replacement; no WAV file or other project mutation."""
     require_local_origin(request)
+    job = get_job(ident)
     with lock:
-        job = get_job(ident)
         record = projects.read_project(DATA_ROOT, ident) if job else None
         if not job or job.get("status")!="complete" or not record:
             raise HTTPException(404,"Completed song not found")

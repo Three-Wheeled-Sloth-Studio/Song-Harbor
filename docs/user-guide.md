@@ -206,3 +206,16 @@ For bugs, use the [Song Harbor issue tracker](https://github.com/Three-Wheeled-S
 ## Project boundaries
 
 Song Harbor is local-first and uses non-destructive processing scripts. The master output trim is still session-only, and testing preview/export audio parity with real material remains important. Full effects/plugin support, de-essing, audio cleanup suggestions and compact Tools inspector improvements are on the roadmap.
+
+### Experimental Audio Forensics inspector
+
+Open the **⌁ Audio forensics (experimental)** icon on the right-hand tools
+palette. Choose **Scan current mix** to inspect the current effects-processed
+audio for spectral texture, transient/dynamics anomalies, stereo phase and
+peak integrity. Click a category to filter the results; each finding can
+seek to its timestamp or loop the surrounding passage. Scanning is local,
+on-demand, non-destructive and shares the existing Sound Cleanup analysis.
+No new model download is required. This experimental panel does **not**
+determine whether a recording is human-made or detect all fingerprints or
+watermarks; a flagged tone may be intentional music. Source-versus-output
+comparison is future work.

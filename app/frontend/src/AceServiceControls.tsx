@@ -43,28 +43,23 @@ export function AceServiceControls({open}:{open:boolean}){
     finally{setBusy(false);}
   }
   const state=status?.state||"unknown";
-  return <div className="setting-tool-row" style={{alignItems:"flex-start",gap:"0.75rem"}}>
-    <div style={{flex:"1 1 260px",minWidth:0}}>
-      <strong>ACE-Step</strong>{" "}
-      <Status tone={state==="running_ready"?"success":state==="not_installed"?"warning":"neutral"}>{label(state)}</Status>
-      <p className="setting-description" style={{margin:"0.35rem 0"}}>
-        {state==="running_uninitialized"?"API connected. Model loads on first generation or explicit initialization.":
-         state==="starting"?"Local API starting. Model initialization may take longer.":
-         state==="installed_stopped"?"Ready to start the local ACE API without a separate console.":
-         state==="not_installed"?"No supported ACE installation was detected at the configured location.":
-         state==="running_ready"?"Generation model initialized and available.":
-         "Local ACE generator connection."}
-      </p>
-      <small style={{overflowWrap:"anywhere"}}>Installation: {status?.installation||"Checking..."}</small>
-      {status?.runtime?.models?.length? <div><small>Models: {status.runtime.models.map(m=>m.name+(m.loaded?" (loaded)":"")).join(", ")}</small></div>:null}
-      {status?.runtime?.status==="connected"&&!status.owned?<div><small>External ACE instance. Song Harbor will not stop it.</small></div>:null}
-      {status?.runtime?.error&&state==="running_uninitialized"?<div><small>{status.runtime.error}</small></div>:null}
-    </div>
-    <div className="setting-controls">
-      {status?.can_start&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("start")}>Enable ACE</Button>}
-      {state==="running_uninitialized"&&status?.runtime?.models?.some(m=>m.name==="acestep-v15-turbo")&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("initialize")}>Load turbo model</Button>}
-      {status?.can_stop&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("stop")}>Stop ACE</Button>}
-      <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void refresh()}>Refresh</Button>
+  return <div className="setting-tool-row" style={{alignItems:"center",gap:"0.65rem",flexWrap:"wrap"}}>
+    <strong>ACE-Step</strong>
+    <Status tone={state==="running_ready"?"success":state==="not_installed"?"warning":"neutral"}>{label(state)}</Status>
+    <div className="setting-controls" style={{marginLeft:"auto"}}>
+      {status?.can_start&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("start")}>Enable</Button>}
+      {state==="running_uninitialized"&&status?.runtime?.models?.some(m=>m.name==="acestep-v15-turbo")&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("initialize")}>Load model</Button>}
+      {status?.can_stop&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("stop")}>Stop</Button>}
+      <details>
+        <summary style={{cursor:"pointer",fontSize:"0.82rem"}}>Details</summary>
+        <div style={{padding:"0.4rem 0",maxWidth:"26rem"}}>
+          <small style={{display:"block",overflowWrap:"anywhere"}}>Installation: {status?.installed?status.installation:"Not found"}</small>
+          <small style={{display:"block"}}>Service: {status?.owned?"Managed by Song Harbor":status?.runtime?.status==="connected"?"External connection":"Not running"}{status?.pid?" (PID "+status.pid+")":""}</small>
+          <small style={{display:"block"}}>Models: {status?.runtime?.models?.map(m=>m.name+(m.loaded?" (loaded)":"")).join(", ")||"None reported"}</small>
+          {status?.runtime?.error&&<small style={{display:"block",overflowWrap:"anywhere"}}>{status.runtime.error}</small>}
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void refresh()}>Refresh</Button>
+        </div>
+      </details>
     </div>
     {error&&<small role="alert" className="error-message">{error}</small>}
   </div>;

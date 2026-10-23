@@ -34,6 +34,7 @@ import track_routing
 import app_update
 import library
 import stem_import
+import track_lifecycle
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -576,6 +577,12 @@ class SaveProject(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     stems: list[StemState] = Field(min_length=2, max_length=64)
 
+class RenameTrackAlias(BaseModel):
+    track_id: str = Field(min_length=1,max_length=80)
+    stem_alias: str = Field(min_length=1,max_length=32)
+    display_name: str = Field(min_length=1,max_length=100)
+
+
 
 class RenameLibrarySong(BaseModel):
     title: str = Field(min_length=1, max_length=120)
@@ -676,6 +683,25 @@ def load_project(ident: str) -> dict[str, Any]:
     if not record or not job:
         raise HTTPException(404, "Saved song unavailable; verify its track files")
     return {"project": record, "job": snapshot(job)}
+
+
+@app.put("/api/projects/{ident}/tracks/rename")
+def rename_project_track(ident: str, request: Request, body: RenameTrackAlias) -> dict[str, Any]:
+    """One atomic manifest replacement; no WAV file or other project mutation."""
+    require_local_origin(request)
+    with lock:
+        job = get_job(ident)
+        record = projects.read_project(DATA_ROOT, ident) if job else None
+        if not job or job.get("status")!="complete" or not record:
+            raise HTTPException(404,"Completed song not found")
+        try:
+            updated=track_lifecycle.rename(record,body.track_id,
+                                           body.stem_alias,body.display_name)
+        except (ValueError,TypeError,KeyError) as exc:
+            raise HTTPException(400,f"Rename rejected: {exc}") from exc
+        updated["updated_at"]=time.time()
+        projects.write_project(DATA_ROOT,updated)
+    return {"project":updated}
 
 
 @app.put("/api/projects/{ident}")

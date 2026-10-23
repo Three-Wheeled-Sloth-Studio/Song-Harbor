@@ -41,6 +41,8 @@
 
 ### Local acceptance script
 
+Full 13-section fixture for the *Logo and the Maw* add/rename trial: `docs/qa-the-logo-and-the-maw-stem-lifecycle.txt`. It adds bridge-local `Cello_Accent.pan`, `Cello_Accent.gain`, and `Cello_Accent.reverb` to the accepted audio treatment. **Only apply this on a test copy with a stem imported under alias `Cello_Accent`**; the source song has no such stem until the user adds one. The renaming action should update every corresponding token to `CounterCello` automatically.
+
 1. Open an existing six-stem project. Rename `Guitar` to
    `Guitar_Lead` (display name `Lead Guitar`). Verify every scripted
    `Guitar.<effect>` becomes `Guitar_Lead.<effect>` and exports still play.

@@ -1,6 +1,7 @@
 import {useEffect,useState} from "react";
 import {Button,Dialog,Status} from "@tws-ui/core/react";
 import {FfmpegSetup} from "./FfmpegSetup";
+import {AceServiceControls} from "./AceServiceControls";
 
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
@@ -59,10 +60,10 @@ export function AppSettings({open,onOpenChange,health,onReady}:{
         <p className="setting-warning">Changing locations does not migrate existing songs. To share between computers, use a Google Drive mirrored folder and allow synchronization to finish before opening Song Harbor on another PC. Do not run two copies against the same synced Library database simultaneously.</p>
         <div className="setting-tools">
           <button type="button" className="setting-tools-toggle" aria-expanded={showTools} onClick={()=>setShowTools(v=>!v)}>Components <span>{showTools?"▴":"▾"}</span></button>
-          {showTools&&<div className="setting-tool-row">
+          {showTools&&<><div className="setting-tool-row">
             <span>FFmpeg <Status tone={health?.ffmpeg?"success":"warning"}>{health?.ffmpeg?"Ready":"Setup needed"}</Status></span>
             <Button size="compact" variant="secondary" onClick={()=>setFfmpegOpen(true)}>Configure</Button>
-          </div>}
+          </div><AceServiceControls open={open&&showTools}/></>}
         </div>
         {notice&&<p role="status" className="song-save-notice">{notice}</p>}
         {error&&<p role="alert" className="error-message">{error}</p>}

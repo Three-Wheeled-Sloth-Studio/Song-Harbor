@@ -16,7 +16,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
  */
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1};
 export type AuditionLevel = {gain:number};
-type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;panner?:StereoPannerNode};
+type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
 export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
@@ -148,9 +148,22 @@ export class SharedClockAudition {
         panner.pan.value=src.pan;
         const sectionGain=this.context.createGain();
         sectionGain.gain.value=1;
-        gain.connect(sectionGain).connect(panner).connect(this.eqStages.get(src.filename)![0]);
+        const childGain=this.context.createGain();
+        childGain.gain.value=1;
+        const childEq=src.key!==src.filename?createEqStage(this.context):undefined;
+        gain.connect(sectionGain).connect(childGain).connect(panner);
+        if(childEq){
+          panner.connect(childEq[0]);
+          childEq[2].connect(this.eqStages.get(src.filename)![0]);
+          // A child's send *replaces* the parent's reverb level for that
+          // channel, rather than stacking the two sends.
+          const childSend=this.context.createGain();
+          childSend.gain.value=0;
+          childEq[2].connect(childSend).connect(this.reverbDrive);
+          this.reverbSends.set(src.key,childSend);
+        }else panner.connect(this.eqStages.get(src.filename)![0]);
         gain.gain.value=0;
-        this.tracks.push({source:src,buffer,gain,sectionGain,panner});
+        this.tracks.push({source:src,buffer,gain,sectionGain,childGain,childEq,panner});
         onProgress?.(i+1,sources.length);
       }
       this.sourceDurationSeconds=maxDuration;
@@ -234,8 +247,24 @@ export class SharedClockAudition {
   get comparingOriginal(){return Object.values(this.bypassEffects).every(Boolean);}
   private configurePreviewNodes(at:number,offset:number){
     for(const track of this.tracks){
+      const src=track.source;
       scheduleAutomation(track.sectionGain.gain,
-        this.automation[track.source.filename]?.gain||[{time:0,value:1}],offset,at);
+        this.automation[src.filename]?.gain||[{time:0,value:1}],offset,at);
+      scheduleAutomation(track.childGain.gain,
+        this.automation[src.key]?.gain&&src.key!==src.filename
+          ?this.automation[src.key].gain!:[{time:0,value:1}],offset,at);
+      scheduleAutomation(track.panner.pan,
+        !this.bypassEffects.pan&&src.key!==src.filename&&this.automation[src.key]?.pan
+          ?this.automation[src.key].pan!:[{time:0,value:src.pan}],offset,at);
+      if(track.childEq)scheduleEq(track.childEq,this.automation[src.key]?.eq||{},
+        offset,at,this.bypassEffects.eq);
+      if(src.key!==src.filename){
+        const send=this.reverbSends.get(src.key);
+        if(send)scheduleAutomation(send.gain,
+          !this.bypassEffects.reverb&&
+          (this.automation[src.key]?.reverb||this.automation[src.filename]?.reverb)
+            ||[{time:0,value:0}],offset,at);
+      }
     }
     const bypass=this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
@@ -257,7 +286,8 @@ export class SharedClockAudition {
         !bypass.space&&this.automation[filename]?.space||[{time:0,value:0}],offset,at);
       const send=this.reverbSends.get(filename);
       if(send)scheduleAutomation(send.gain,
-        !bypass.reverb&&this.automation[filename]?.reverb||[{time:0,value:0}],offset,at);
+        !bypass.reverb&&!this.tracks.some(t=>t.source.filename===filename&&t.source.key!==filename)
+          &&this.automation[filename]?.reverb||[{time:0,value:0}],offset,at);
     }
     scheduleAutomation(this.dryMaster.gain,
       bypass.ending?[{time:0,value:1}]:this.fadePoints(),offset,at);
@@ -554,7 +584,10 @@ export class SharedClockAudition {
   private clearTracks(){
     this.prepared=false;
     this.stopSources();
-    for(const track of this.tracks){track.gain.disconnect();track.panner?.disconnect();}
+    for(const track of this.tracks){
+      track.gain.disconnect();track.sectionGain.disconnect();track.childGain.disconnect();
+      track.panner.disconnect();track.childEq?.forEach(eq=>eq.disconnect());
+    }
     for(const bus of this.groupPanners.values())bus.disconnect();
     for(const send of this.reverbSends.values())send.disconnect();
     for(const stage of this.widthStages.values()){

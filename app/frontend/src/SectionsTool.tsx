@@ -6,15 +6,15 @@ type Mode="replace"|"append";
  * Preserve line numbers in the message; selection never alters the draft.
  */
 export function errorLocation(content:string,message:string):{start:number;end:number;line:number}|null{
-  const result=/\\bline\\s+(\\d+)\\b/i.exec(message);
+  const result=/\bline\s+(\d+)\b/i.exec(message);
   if(!result)return null;
   const line=Number(result[1]);
   if(!Number.isSafeInteger(line)||line<1)return null;
-  const lines=content.split("\\n");
+  const lines=content.split("\n");
   if(line>lines.length)return null;
   let start=0;
   for(let i=0;i<line-1;i++)start+=lines[i].length+1;
-  const raw=lines[line-1].replace(/\\r$/,"");
+  const raw=lines[line-1].replace(/\r$/,"");
   const offset=raw.length-raw.trimStart().length;
   start+=offset;
   return {start,end:start+Math.max(1,raw.trim().length),line};

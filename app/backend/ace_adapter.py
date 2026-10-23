@@ -134,7 +134,7 @@ class AceClient:
         self.api_key = api_key
         self.timeout = timeout
 
-    def request(self, path: str, body: dict[str, Any] | None = None) -> Any:
+    def request(self, path: str, body: dict[str, Any] | None = None, timeout: float | None = None) -> Any:
         if not path.startswith("/") or path.startswith("//"):
             raise ValueError("Invalid ACE endpoint")
         data = json.dumps(body).encode("utf-8") if body is not None else None
@@ -146,7 +146,7 @@ class AceClient:
         req = urllib.request.Request(self.base + path, data=data, headers=headers,
                                      method="POST" if data is not None else "GET")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout if timeout is None else timeout) as resp:
                 return json.loads(resp.read(2_000_000).decode("utf-8"))
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
             raise AceError(f"ACE request failed at {path}: {exc}") from exc

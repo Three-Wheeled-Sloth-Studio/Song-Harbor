@@ -1,3 +1,19 @@
+## 2026-10-23: Independent split L/R production scripting implemented (Windows audio QA pending)
+
+User approved independently targeting `Drums-left` and `Drums-right` without replacing immutable track identity or losing the shared parent bus. Implemented on main:
+
+- `section_production.source_map(files,tracks,channel_children)` adds virtual channel aliases mapped to `<working_filename>:left/right` when a split export is attached; collisions reject. `section_import` resolves these aliases and compiles channel-specific gain/pan/eq/reverb source keys. `all.*` production broadcasts only to true **parent** stem aliases.
+- Section script examples (one production block LINE after the heading): `{Drums.reverb:10@2s:smooth Drums-right.reverb:18@2s:smooth Drums-left.gain:-0.75@2s:smooth Drums-right.eq1:1000,1,-2@2s:smooth}`. Parent send supplies the default for both channels; explicit right send **overrides** right's value, not adds. Parent EQ/width/pan/etc remain on parent bus. Child effect stages precede parent effects, and parent/child gains multiply.
+- `SharedClockAudition.ts` has new per-child gains/pan/EQ/sends for live audition AND `renderMixBuffer` 24-bit export. When split, parent reverb signal is routed through per-child sends, each falling back to parent automation; the original shared post-parent-bus send is disabled for split sources to avoid double reverberation. This changes the reverb send's tap location for split streams (pre-parent FX); requires listening parity QA, especially when parent EQ/compression is active.
+- Child pan defaults remain hard-left/hard-right unless the script explicitly overrides. When switching back to unsplit stereo, child curves are dormant. Existing source WAVs and physical L/R routing remain unchanged.
+- Child width, spatial reflection, compression, ducking and de-essing are currently rejected; don't claim support. Parent versions of these effects still work.
+- Rename of a parent alias migrates `-left/-right` script directions. New regression suite `test_child_channel_scripting.py`, wired into backend CI, covers distinct source targets, no accidental broadcast, unsupported directives and rename/identity preservation.
+- Full syntax and expected behavior documented in `docs/user-guide.md`.
+
+**Windows acceptance, still pending:** split an actual Drums source; enable L/R. Apply one-line sample; check each channel independently by muting/soloing via listening, compare per-child reverb 0/18 vs parent baseline 10, pan and EQ. Verify inheritance across sections, A/B processing bypass, rendered WAV audible parity, reopen, rename Drums to Percussion while preserving script, switch Stereo and back. Check memory performance at 16+ tracks. Do not declare production-grade until listening verifies both playback and offline bounce.
+
+---
+
 ## 2026-10-23: Click-to-error section text import QA fix
 
 User QA: a rejected section script with an unsupported section header should offer a clickable navigation target instead of merely showing an error. Updated `app/frontend/src/SectionsTool.tsx` to parse existing backend `Line N:` validation errors and render accessible `Go to line N ↗` beside the message. Clicking focuses the textarea, selects the offending line and scrolls it into view; user draft is preserved. Added compact styling in `song-harbor.css`. Does not auto-correct or discard edits. Applies to both unsupported bracket section tags and line-specific production syntax failures. For errors without a line number, plain error text remains; future richer diagnostics can add structured spans.

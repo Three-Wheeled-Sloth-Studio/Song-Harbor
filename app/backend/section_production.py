@@ -381,7 +381,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
                        files: list[str]) -> list[dict[str, Any]]:
     stems = {}
     for filename in files:
-        for alias in ALIASES:
+        for alias in source_aliases(files):
             if "(" + alias + ")" in filename:
                 stems[alias] = filename
     output = []

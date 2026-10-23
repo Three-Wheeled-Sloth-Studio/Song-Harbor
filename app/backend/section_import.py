@@ -72,20 +72,64 @@ def parse(content: str, aliases:tuple[str,...]=section_production.ALIASES) -> li
         return result
 
     result = []
+    block_lines: list[str] = []
+    block_start = 0
+
+    def finish_block() -> None:
+        """Validate the completed block and attach it to its preceding section."""
+        nonlocal block_lines, block_start
+        block = "\n".join(block_lines)
+        try:
+            result[-1]["production"] = section_production.parse_block(block, aliases)
+        except ValueError as exc:
+            # Point token-specific failures at the relevant directive line
+            # so the editor's 'Go to line N' button remains useful.
+            message = str(exc)
+            issue_line = block_start
+            if "Unsupported production directive: " in message:
+                token = message.split("Unsupported production directive: ", 1)[1].split(".", 1)[0]
+                # Use the first word of the offending directive only for
+                # locating candidate lines; retain full validator message.
+                for offset, source in enumerate(block_lines):
+                    if token and token in source:
+                        issue_line = block_start + offset
+                        break
+            raise ValueError(f"Line {issue_line}: {message}") from exc
+        block_lines = []
+        block_start = 0
+
     for index, line in enumerate(content.splitlines(), 1):
         stripped_line = line.strip()
+        if block_start:
+            if not stripped_line:
+                block_lines.append(line)
+                continue
+            if "{" in stripped_line or stripped_line.startswith("["):
+                raise ValueError(f"Line {index}: Finish the current production block before starting another section or block")
+            block_lines.append(line)
+            if "}" in stripped_line:
+                if stripped_line.count("}") != 1 or not stripped_line.endswith("}"):
+                    raise ValueError(f"Line {index}: Production closing brace must end the block")
+                finish_block()
+            continue
         if not stripped_line or stripped_line.startswith("#"):
             continue
-        if stripped_line.startswith("{") and stripped_line.endswith("}") and result:
+        if stripped_line.startswith("{"):
+            if not result:
+                raise ValueError(f"Line {index}: Production block needs a preceding section")
             if "production" in result[-1]:
                 raise ValueError(f"Line {index}: Only one production block per section")
-            try:
-                result[-1]["production"] = section_production.parse_block(stripped_line,aliases)
-            except ValueError as exc:
-                raise ValueError(f"Line {index}: {exc}") from exc
+            if stripped_line.count("{") != 1:
+                raise ValueError(f"Line {index}: Nested production blocks are unsupported")
+            block_start = index
+            block_lines = [stripped_line]
+            if "}" in stripped_line:
+                if stripped_line.count("}") != 1 or not stripped_line.endswith("}"):
+                    raise ValueError(f"Line {index}: Production closing brace must end the block")
+                finish_block()
             continue
-        if stripped_line.startswith("{") and not result:
-            raise ValueError(f"Line {index}: Production block needs a preceding section")
+        if stripped_line.startswith("}") or "}" in stripped_line:
+            raise ValueError(f"Line {index}: Unmatched production closing brace")
         if not stripped_line.startswith("["):
             if result:
                 result[-1].setdefault("lyrics", []).append(line.rstrip())
@@ -98,6 +142,8 @@ def parse(content: str, aliases:tuple[str,...]=section_production.ALIASES) -> li
                 result.append(parse_untimed(stripped_line))
         except ValueError as exc:
             raise ValueError(f"Line {index}: {exc}") from exc
+    if block_start:
+        raise ValueError(f"Line {block_start}: Unclosed production block (missing })")
     for item in result:
         if "lyrics" in item:
             item["lyrics"] = "\n".join(item["lyrics"]).strip()

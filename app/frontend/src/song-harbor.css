@@ -631,3 +631,10 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-forensics-list article p{margin:0;line-height:1.45}
 .song-forensics-list article small{color:var(--tws-color-text-muted);line-height:1.45}
 .song-floating-tool[aria-label="Audio forensics (experimental)"]{width:min(430px,calc(100vw - 60px))}
+
+
+/* Import validation errors link directly to the offending script line. */
+.song-section-validation-error{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;border-radius:5px;border:1px solid var(--tws-color-border-strong);background:var(--tws-color-surface-inset)}
+.song-section-validation-error small{min-width:0;overflow-wrap:anywhere;flex:1}
+.song-section-error-jump{color:var(--tws-color-text-primary);background:var(--tws-color-surface-raised);border:1px solid var(--tws-color-border-strong);border-radius:5px;padding:6px 9px;white-space:nowrap;cursor:pointer;font-weight:600}
+.song-section-error-jump:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}

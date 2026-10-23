@@ -19,9 +19,10 @@ interactive batch launchers or kill processes by a shared port number.
 The native API is usable for the installed turbo model, but it is not yet a
 stable integration contract. The most important blockers are:
 
-1. The requested source contract,
-   `docs/ace-accompaniment-integration-contract.md`, is absent from this
-   checkout and all local Git history searched during this discovery.
+1. The reviewed integration contract requires capability validation through
+   `/v1/models`, but that path is shadowed and does not expose native ACE
+   checkpoints. The adapter must use `/v1/model_inventory` or ACE must fix the
+   route collision.
 2. Cancellation is supplied by uncommitted, installation-local ACE changes;
    it is not present at the recorded ACE commit and has no focused HTTP tests.
 3. `GET /v1/models` is shadowed by the OpenRouter-compatible route and does
@@ -36,6 +37,38 @@ stable integration contract. The most important blockers are:
    both use `status=2`.
 
 No model was downloaded and no Song Harbor UI was built.
+
+## Integration contract reconciliation
+
+`docs/ace-accompaniment-integration-contract.md` was reviewed after it arrived
+on `origin/main` during the final rebase. This discovery satisfies its local
+validation gate for CLI invocation, API schemas, discovery, shutdown/unload,
+cancellation provenance, and a live turbo failure/recovery workflow.
+
+The runtime findings reinforce these contract requirements:
+
+- Song Harbor must remain the owner of candidate/job state and map ACE's
+  coarse statuses into `starting`, `generating`, `processing`, `ready`,
+  `failed`, and `cancelled` without mutating the project before acceptance.
+- Browser code must not call ACE. The backend must upload context audio rather
+  than pass arbitrary Song Harbor filesystem paths.
+- Capability gating must keep installed turbo cover/repaint experimental and
+  must not expose Lego/Extract until a compatible checkpoint is independently
+  discovered and verified.
+- Automatic downloads remain prohibited. `/v1/init` and on-demand selection
+  need local-inventory guards because ACE can otherwise fetch weights.
+- `release_idle_resources()` can fully release GPU memory only by stopping an
+  ACE process owned by Song Harbor. For a trusted API discovered already
+  running, Song Harbor may connect but must not terminate it; idle release is
+  unavailable unless ACE gains a whole-model unload endpoint.
+- Native cancellation must remain best-effort until the local patch is pinned,
+  tested, and its lazy-initialization race is fixed. Exact-PID process restart
+  is the hard recovery boundary only for a Song Harbor-owned process.
+
+One contract statement needs implementation-time correction: validating
+`/v1/models` is insufficient in this installation because that path is the
+OpenRouter model list. Native checkpoint/capability discovery is available at
+`/v1/model_inventory`.
 
 ## Evidence and installation state
 
@@ -503,7 +536,6 @@ file is not part of Song Harbor and is not committed.
 
 | Priority | Blocker | Required resolution |
 | --- | --- | --- |
-| P0 | Integration contract source file is missing | Restore/provide `docs/ace-accompaniment-integration-contract.md` and reconcile this discovery against it before implementation. |
 | P0 | Required isolated-additive task is unavailable | Install/approve a base or XL-base model later, or explicitly accept turbo cover/repaint plus separation as a lower-fidelity fallback. Do not download during implementation without approval. |
 | P0 | Cancel API is an uncommitted local patch | Pin a commit/fork or vendor a reviewed patch; add queued, running, init-race, and terminal cancellation tests. |
 | P0 | No safe in-process whole-model unload | Make the ACE subprocess the GPU ownership boundary; implement exact-PID terminate/wait/kill and restart recovery. |

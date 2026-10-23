@@ -1,3 +1,61 @@
+## 2026-10-23 first executable implementation (supersedes proposal-only status above)
+
+The deterministic `menacing` preset is now recognized by Song Harbor production
+script imports; use `Other.evolve:menacing@20s:smooth`. This is the
+**first constrained macro slice**, not the complete adaptive evolution system.
+Older proposal statements saying the macro is unimplemented are historical.
+
+### Usage
+
+```text
+[Bridge 2:53-3:56]
+{Other.evolve:menacing@20s:smooth}
+```
+
+Keep the whole original lyric sheet and existing directives intact. Place a
+single macro in the existing one-line curly-brace production block for the
+target section. The example section header is illustrative, not a request
+to replace the song's saved section sheet. A 20-second smooth evolution
+starts at the section's start and remains part of the inherited automation;
+subsequent explicit directives can redirect it. The engine's existing
+section-clock transition compiler remains the timing authority.
+
+### Preset v1 (deterministic existing DSP, song-relative timing)
+
+For the named parent stem ONLY, the resolver emits:
+- `pan:right.18`, `width:125`, `space:18`, `reverb:16`;
+- EQ1 380 Hz / Q .9 / +1.1 dB; EQ2 3200 Hz / Q .8 / -1.7 dB.
+- If split L/R children are available, left gets a reverb send 11%
+  and EQ2 3500 Hz / Q .9 / -0.8 dB; right gets reverb 23% and
+  EQ2 2600 Hz / Q .9 / -2.1 dB. If not split, a parent-only fallback
+  applies. No other parent stems or vocals are changed.
+- All generated controls inherit the requested `@Ns:smooth|linear`
+  timing. Source WAVs are not rewritten.
+
+Explicit authored effects for the same target, type and EQ band *within the
+same section* win regardless of token order. Parent effects remain independent
+of child effects; child reverb overrides are not additive. The authored
+macro remains in saved section text and is expanded to ordinary typed
+automation targets during materialization; manual macro resolution is
+deterministic and versioned `v1`. The same automation arrays are used
+in in-app audition and offline WAV export.
+
+### Limitations and QA remaining
+
+- No adaptive correlation/mono/true-peak safety controller yet, no dynamic
+  reflection predelay, no generative layers, and no independent macro-only
+  bypass or visible expansion editor. Compare processed/original with the
+  existing effect-bypass view and check stereo *and mono* on an actual mix.
+- All generated effects are real existing controls; no model downloads or
+  GPU requirement. Local Windows listening/export and transport QA pending.
+- Macro override precedence currently addresses **the same section**.
+  Cross-section hand-authored automation follows normal inherited section
+  rules. Future macro/UI iteration should surface the generated curves and
+  add single-macro bypass, per-effect intensity, and overlapping macro
+  conflict visualization.
+- Do not silently claim automatic center/mono protection until measured
+  and calibrated.
+
 # Spatial Evolution Macros: Menacing
 
 Status: Proposal only. Not implemented. 

@@ -1,3 +1,13 @@
+## 2026-10-23 DISCOVERY: Audio forensics, AI fingerprints, human-sounding production
+
+User requested inspection of KillrBee/ai-music-detector, lofcz/ai-music-detector, and lcrosvila/ai-music-detection for Song Harbor sound-quality cleanup and avoiding introduced artifacts. Reviewed actual repo READMEs and implementation. Full findings: `docs/ai-audio-forensics-discovery.md`; roadmap SH-RM-235.
+
+Key: KillrBee offers interpretable signal-domain QC ideas but lightly calibrated heuristic AI scores and no visible LICENSE. lofcz has MIT-licensed spectral fakeprint extraction and pretrained ONNX, reports high in-distribution classification performance, but no proven applicability to ACE/YuE or quality. lcrosvila researches CLAP+Essentia classifiers and demonstrates classification fragility under audio transforms; no visible LICENSE. Additional primary paper/code: Deezer ISMIR 2025 Fourier explanation.
+
+Product direction: analyze *generated input vs edited output* and localize actual clipping, HF harshness, transient damage, phase/mono problems, tail continuity, unexpected rolloff and dynamics. Prefer source/stem/time-region diagnostics plus non-destructive level-matched repair audition. AI detector outputs are not quality targets; fingerprints can be inaudible, and watermark checks are incomplete. Do NOT auto-notch all generative spectral signatures or build watermark suppression. Optional isolated offline benchmark with documented model versions, controls and false positives. No application code changed by this discovery; not an accepted feature sprint.
+
+---
+
 ## 2026-10-23: Accepted clip alignment design (discovery checkpoint)
 
 **User decision, binding for Second Take and imported short stems:** A section boundary is a visual alignment suggestion, NEVER a required snap point. Align-to-section supplies an initial offset only. Imported/generated short audio is represented as a draggable, non-destructive clip with its original waveform and duration intact, virtual silence outside its bounds, song-relative start time, independent fades, and precise unsnapped fine movement. The original WAV, immutable track_id, and script alias must not change when a clip is moved. Section scripting remains anchored to absolute song time.

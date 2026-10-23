@@ -53,7 +53,7 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved, onTrackRenamed }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
@@ -63,6 +63,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   initialTitle?: string;
   onSaved?: () => void;
   onTrackRenamed?: (project:unknown)=>void;
+  onTrackAdded?: (project:unknown,job:unknown)=>void;
 }) {
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
     const saved = savedStems?.find(stem => stem.filename === filename);
@@ -75,6 +76,32 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [title, setTitle] = useState(initialTitle || "Untitled song");
   const [trackIdentities,setTrackIdentities]=useState<{track_id:string;working_filename:string;stem_alias:string;display_name:string}[]>([]);
   const [renamingTrack,setRenamingTrack]=useState<string|null>(null);
+  const [addingTrack,setAddingTrack]=useState(false);
+  async function addTrack(file:File|undefined){
+    if(!file||addingTrack)return;
+    if(openTools.includes("songText")){
+      setError("Apply and close Whole Song Section Text before adding a stem.");
+      return;
+    }
+    const suggested=file.name.replace(/\\.[^.]+$/,"").replace(/[^a-zA-Z0-9_-]/g,"_").replace(/^[^a-zA-Z]+/,"").slice(0,32)||"NewStem";
+    const display=window.prompt("Display name for new stem:",file.name.replace(/\\.[^.]+$/,""));
+    if(display===null)return;
+    const alias=window.prompt("Script alias:",suggested);
+    if(alias===null)return;
+    setAddingTrack(true);setError("");
+    try{
+      if(!await saveProject())return;
+      stop();
+      const form=new FormData();
+      form.append("file",file);form.append("stem_alias",alias);form.append("display_name",display);
+      const response=await fetch("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.detail||"New stem import failed");
+      setNotice("New stem added and aligned to the song start.");
+      onTrackAdded?.(data.project,data.job);
+    }catch(e){setError(e instanceof Error?e.message:"Could not add stem");}
+    finally{setAddingTrack(false);}
+  }
   useEffect(()=>{
     let cancelled=false;
     void fetch("/api/projects/"+jobId+"/tracks",{cache:"no-store"})
@@ -907,6 +934,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
         </div>
         <div className="mixer-tracks">
+          <label className="track-add-button" title="Add an already-prepared audio stem to this song">
+            {addingTrack?"Converting stem...":"+ Add stem"}
+            <input type="file" accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
+              aria-label="Choose audio file to add as a new stem" disabled={addingTrack||renamingTrack!==null}
+              onChange={e=>{void addTrack(e.target.files?.[0]);e.target.value="";}}
+              style={{position:"absolute",width:1,height:1,opacity:0}}/>
+          </label>
       {stems.map(s => <div className={"mixer-track"+(trackLabels?.[s.filename]?" mixer-track--named":"")} key={s.filename}>
         <strong className={"stem-icon-name"+(trackLabels?.[s.filename]?" stem-icon-name--named":"")}
           title={s.name+" · script: "+(trackAliases?.[s.filename]||labelOf(s.filename))}

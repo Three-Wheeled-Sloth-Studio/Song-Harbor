@@ -146,7 +146,8 @@ def export_daw(data_root: Path, project: dict[str, Any], target_id: str) -> Path
             name=identity.get("stem_alias") or stem_name(p.name)
             destination = f"{index:02d} - {name}.wav"
             shutil.copy2(p, staging / destination)
-            tracks.append({"name": name, "track_id": identity.get("track_id"), "file": destination, "start_seconds": 0.0,
+            tracks.append({"name": name, "track_id": identity.get("track_id"), "file": destination,
+                           "start_seconds": float(identity.get("start_seconds",0)),
                            "gain": next((s["gain"] for s in project["stems"]
                                          if s["filename"] == p.name), 1.0)})
         manifest = {"format": "song-harbor-daw-exchange", "target": target_id, "version": 1,

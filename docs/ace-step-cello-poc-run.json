@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-23",
+  "project": {
+    "id": "586a03b40c9c",
+    "title": "Call of the Electric Siren",
+    "duration_seconds": 341.36,
+    "target": {
+      "name": "Pre-Chorus 1",
+      "start_seconds": 71.719,
+      "end_seconds": 82.402,
+      "duration_seconds": 10.683
+    },
+    "context": {
+      "start_seconds": 39.699,
+      "end_seconds": 82.402,
+      "duration_seconds": 42.703,
+      "description": "Verse 1 plus Pre-Chorus 1"
+    }
+  },
+  "ace": {
+    "installation": "D:\\Apps\\Tools\\ACE-Step-1.5",
+    "checkout_commit": "ca1e85fe9430179831e6bc6be790c332190a3866",
+    "model": "acestep-v15-turbo",
+    "task_id": "7388d862-c22b-4139-86fc-c94a777363a4",
+    "task_type": "cover",
+    "lm_enabled": false,
+    "prompt": "Solo low cello only. Dark sinister cello counterpoint beneath a female lead: sparse sustained bowed notes, slow dissonant semitone movement, restrained threatening swells, intimate low register, 84 BPM, 4/4, gothic industrial trip-hop atmosphere. No vocals, no percussion, no drums, no bass guitar, no piano, no guitar, no synth, no sound effects, no other instruments. Preserve the source timing, phrasing, and harmonic contour.",
+    "lyrics": "[Instrumental]",
+    "seed": 150719,
+    "inference_steps": 8,
+    "guidance_scale": 7.0,
+    "audio_cover_strength": 0.8,
+    "cover_noise_strength": 0.2,
+    "bpm": 84,
+    "key_scale": "",
+    "time_signature": "4",
+    "audio_format": "wav",
+    "sample_rate_hz": 48000,
+    "generation_seconds_reported": 1.58,
+    "wall_seconds_approx": 5,
+    "cold_start_seconds_approx": 27,
+    "max_sampled_gpu_memory_mib": 10739,
+    "min_sampled_gpu_free_mib": 1272,
+    "gpu_memory_after_shutdown_mib": 2253
+  },
+  "analysis": {
+    "tempo_estimates_bpm": {
+      "full_mix_double_time": 172.266,
+      "drums": 89.103,
+      "piano": 89.103
+    },
+    "context_key_candidate": "F minor",
+    "key_candidate_correlation": 0.597,
+    "raw_validation_energy_percent": {
+      "drums": 43.70,
+      "bass": 29.55,
+      "vocals": 22.93,
+      "guitar": 3.81,
+      "other": 0.01,
+      "piano": 0.01
+    },
+    "cleaned_validation_energy_percent": {
+      "bass": 89.70,
+      "guitar": 10.30,
+      "drums": 0.0,
+      "vocals": 0.0,
+      "other": 0.0,
+      "piano": 0.0
+    }
+  },
+  "deliverables": {
+    "directory": "D:\\Apps\\SongHarbor\\data\\jobs\\586a03b40c9c\\generated\\ace-step-cello-poc-20261023",
+    "isolated_file": "cello-prechorus1-cleaned.wav",
+    "isolated_sha256": "3A9F3459505601BDF44D5FADEB9B660F9BDB4055BD3C1A039803D4A3F03E0496",
+    "aligned_full_song_file": "cello-prechorus1-cleaned-aligned-full-song.wav",
+    "aligned_full_song_sha256": "2D38D9E9F4F6513383838410427F2A336E04368D7F9D3E833291DD79F96D5231",
+    "integrated_lufs": -17.9,
+    "true_peak_dbfs": -5.3
+  },
+  "song_harbor_import": {
+    "track_id": "trk_5831b4da25d54b70",
+    "stem_alias": "CelloPOC",
+    "display_name": "ACE Cello POC (cleaned)",
+    "working_filename": "trk_5831b4da25d54b70 (CelloPOC).wav"
+  },
+  "qualification": "The cleaned result is a separation-assisted cover derivative, not native Lego output. Human musical audition is still required."
+}

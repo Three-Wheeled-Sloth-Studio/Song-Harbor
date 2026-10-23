@@ -14,7 +14,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
  * This intentionally limits the in-memory MVP rather than silently returning
  * to the phase-unsafe multi-stream player.
  */
-export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1};
+export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1;startSeconds:number;timelinePositioned:boolean};
 export type AuditionLevel = {gain:number};
 type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
@@ -90,7 +90,7 @@ export class SharedClockAudition {
     if(!this.running)return this.offset;
     return Math.min(this.durationSeconds,Math.max(0,this.offset+Math.max(0,this.context.currentTime-this.startAt)));
   }
-  async prepare(sources:AuditionSource[],onProgress?:(ready:number,total:number)=>void){
+  async prepare(sources:AuditionSource[],onProgress?:(ready:number,total:number)=>void,timelineDuration?:number){
     if(this.disposed)throw Error("Audio engine closed");
     if(this.loadController)throw Error("Audio is already loading");
     if(this.tracks.length)throw Error("Audio already prepared");
@@ -98,7 +98,7 @@ export class SharedClockAudition {
     this.loadController=new AbortController();
     const signal=this.loadController.signal;
     let bytes=0;
-    let maxDuration=0;
+    let maxDuration=0,alignedDuration=0;
     try{
       // Sequential decode bounds temporary compressed/decoded peak allocations.
       for(let i=0;i<sources.length;i++){
@@ -114,10 +114,11 @@ export class SharedClockAudition {
         if(bytes>MAX_DECODED_AUDIO_BYTES){
           throw Error("This song exceeds the 768 MiB decoded-audio audition limit. Use a DAW export until chunked shared-clock streaming is available.");
         }
-        if(maxDuration>0&&Math.abs(buffer.duration-maxDuration)>0.15){
+        if(!src.timelinePositioned&&alignedDuration>0&&Math.abs(buffer.duration-alignedDuration)>0.15){
           throw Error(`Stem lengths differ by more than 150ms (${src.filename}). Re-run separation or repair the source before aligned audition.`);
         }
-        maxDuration=Math.max(maxDuration,buffer.duration);
+        if(!src.timelinePositioned)alignedDuration=Math.max(alignedDuration,buffer.duration);
+        maxDuration=Math.max(maxDuration,src.startSeconds+buffer.duration);
         const gain=this.context.createGain();
         let bus=this.groupPanners.get(src.filename);
         if(!bus){
@@ -166,8 +167,10 @@ export class SharedClockAudition {
         this.tracks.push({source:src,buffer,gain,sectionGain,childGain,childEq,panner});
         onProgress?.(i+1,sources.length);
       }
-      this.sourceDurationSeconds=maxDuration;
-      this.durationSeconds=maxDuration+this.ending.tail_seconds;
+      const duration=timelineDuration&&timelineDuration>0?timelineDuration:maxDuration;
+      if(maxDuration>duration+.25)throw Error("A positioned clip extends beyond the song duration.");
+      this.sourceDurationSeconds=duration;
+      this.durationSeconds=duration+this.ending.tail_seconds;
       this.prepared=true;
     }catch(err){
       this.clearTracks();
@@ -306,8 +309,10 @@ export class SharedClockAudition {
       const filename=track.source.filename;
       const level=this.renderedLevels[filename]??0;
       if(level<=0)continue;
-      const buf=track.buffer,from=Math.max(0,Math.floor(start*buf.sampleRate));
-      const to=Math.min(buf.length,Math.ceil(end*buf.sampleRate));
+      const buf=track.buffer,clipStart=track.source.startSeconds;
+      const from=Math.max(0,Math.floor((start-clipStart)*buf.sampleRate));
+      const to=Math.min(buf.length,Math.ceil((end-clipStart)*buf.sampleRate));
+      if(to<=from)continue;
       const step=Math.max(1,Math.floor((to-from)/32000));
       let row=stats.get(filename);
       if(!row){row={l:0,r:0,cross:0,n:0};stats.set(filename,row);}
@@ -356,8 +361,10 @@ export class SharedClockAudition {
       if(!curve)continue;
       const tracks=this.tracks.filter(track=>track.source.filename===filename);
       if(!tracks.length)continue;
+      const start=tracks[0].source.startSeconds;
       this.deessEnvelopes.set(filename,makeDeEssEnvelope(
-        tracks.map(track=>track.buffer),curve,this.renderedLevels[filename]??0));
+        tracks.map(track=>track.buffer),curve,this.renderedLevels[filename]??0)
+        .map(point=>({...point,time:point.time+start})));
     }
   }
   private refreshDuckingEnvelopes(changedKeys?:Set<string>){
@@ -369,7 +376,9 @@ export class SharedClockAudition {
       const keys=this.tracks.filter(track=>track.source.filename===duck.keyFilename);
       if(!keys.length)continue;
       const gain=this.renderedLevels[duck.keyFilename]??0;
-      const envelope=makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain);
+      const start=keys[0].source.startSeconds;
+      const envelope=makeDuckingEnvelope(keys.map(track=>track.buffer),duck.depthDb,gain)
+        .map(point=>({...point,time:point.time+start}));
       this.duckEnvelopes.set(filename,envelope);
       // Re-schedule only a gain node, never the source/transport graph.
       if(changedKeys&&!this.bypassEffects.ducking){
@@ -395,7 +404,7 @@ export class SharedClockAudition {
         const level=this.renderedLevels[filename]??0;
         if(level<=0)continue;
         const sampleRate=track.buffer.sampleRate;
-        const center=Math.round(finding.timeSeconds*sampleRate);
+        const center=Math.round((finding.timeSeconds-track.source.startSeconds)*sampleRate);
         const from=Math.max(1,center-Math.round(sampleRate*.08));
         const to=Math.min(track.buffer.length,center+Math.round(sampleRate*.12));
         if(to<=from)continue;
@@ -509,7 +518,7 @@ export class SharedClockAudition {
         else childSend.gain.value=0;
         childEq[2].connect(childSend).connect(reverbDrive);
       }else childPan.connect(eqs.get(track.source.filename)![0]);
-      source.start(0);
+      source.start(track.source.startSeconds);
     }
     for(const [filename,bus] of group){
       const curve=this.automation[filename]?.pan;
@@ -556,22 +565,27 @@ export class SharedClockAudition {
     this.stopSources();
     // Every node is scheduled with the exact same context timestamp and offset.
     const startAt=this.context.currentTime+0.025;
-    const made:ActiveNode[]=[];
+    const made:{node:ActiveNode;track:Track}[]=[];
     try{
       for(const track of this.tracks){
         const node=this.context.createBufferSource();
         node.buffer=track.buffer;
         node.connect(track.gain);
-        made.push(node);
+        made.push({node,track});
       }
       this.configurePreviewNodes(startAt,offset);
-      for(const node of made)node.start(startAt,offset);
-      this.nodes=made;
+      for(const {node,track} of made){
+        const clipStart=track.source.startSeconds,clipEnd=clipStart+track.buffer.duration;
+        if(offset>=clipEnd){node.disconnect();continue;}
+        if(offset<=clipStart)node.start(startAt+clipStart-offset,0);
+        else node.start(startAt,offset-clipStart);
+      }
+      this.nodes=made.map(item=>item.node).filter(node=>node.numberOfOutputs>0);
       this.offset=offset;
       this.startAt=startAt;
       this.running=true;
     }catch(err){
-      for(const node of made){try{node.stop();}catch{/* not started */}node.disconnect();}
+      for(const {node} of made){try{node.stop();}catch{/* not started */}node.disconnect();}
       this.nodes=[];this.running=false;
       throw err;
     }

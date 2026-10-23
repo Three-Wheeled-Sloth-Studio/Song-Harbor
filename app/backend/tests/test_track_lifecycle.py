@@ -8,7 +8,7 @@ import section_import,track_lifecycle
 FILES=["01 (Vocals).wav","02 (Cello_Accent).wav","03 (Drums).wav"]
 class TrackLifecycleTests(unittest.TestCase):
     def sample(self):
-        project={"files":FILES,"source_duration_seconds":20,"source_tracks":[
+        project={"files":list(FILES),"source_duration_seconds":20,"source_tracks":[
             {"track_id":"trk0001","stem_alias":"Vocals","display_name":"Vocals","working_filename":FILES[0]},
             {"track_id":"trk0002","stem_alias":"Cello_Accent","display_name":"Cello","working_filename":FILES[1]},
             {"track_id":"trk0003","stem_alias":"Drums","display_name":"Drums","working_filename":FILES[2]}]}
@@ -58,6 +58,24 @@ class TrackLifecycleTests(unittest.TestCase):
         self.assertEqual(len(first),3)
         self.assertEqual({x["stem_alias"] for x in first},{"Vocals","Drums","Cello_Accent"})
         self.assertEqual(len({x["track_id"] for x in first}),3)
+
+    def test_position_and_remove_apply_only_to_imported_clips(self):
+        project=self.sample()
+        clip="trk_clip (CelloTake).wav"
+        project["files"].append(clip)
+        project.setdefault("stems",[]).append({"filename":clip,"gain":1,"mute":False,"solo":False})
+        project["source_tracks"].append({"track_id":"trk_clip","stem_alias":"CelloTake",
+            "display_name":"Cello take","working_filename":clip,"original_filename":"trk_clip_take.wav",
+            "imported":True,"start_seconds":0,"duration_seconds":4.25})
+        moved=track_lifecycle.position(project,"trk_clip",11.719,20)
+        self.assertEqual(11.719,next(x for x in moved["source_tracks"] if x["track_id"]=="trk_clip")["start_seconds"])
+        with self.assertRaises(ValueError):track_lifecycle.position(project,"trk_clip",18,20)
+        with self.assertRaises(ValueError):track_lifecycle.position(project,"trk0001",1,20)
+        removed,identity=track_lifecycle.remove(moved,"trk_clip")
+        self.assertEqual("CelloTake",identity["stem_alias"])
+        self.assertNotIn(clip,removed["files"])
+        self.assertFalse(any(x.get("track_id")=="trk_clip" for x in removed["source_tracks"]))
+        with self.assertRaises(ValueError):track_lifecycle.remove(project,"trk0001")
 
 if __name__=="__main__":
     unittest.main()

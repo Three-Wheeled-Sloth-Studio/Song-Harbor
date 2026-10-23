@@ -51,9 +51,9 @@ class TrackRoutingTests(unittest.TestCase):
         settings=[Setting(x) for x in self.files]
         mixed=track_routing.audio_inputs(self.root,self.song,settings)
         self.assertEqual(7,len(mixed))
-        self.assertNotIn(self.folder/"stems"/self.track,[path for path,_,_ in mixed])
-        self.assertEqual(["left","right"],[channel for _,_,channel in mixed[:2]])
-        self.assertEqual([1.0,1.0],[gain for _,gain,_ in mixed[:2]])
+        self.assertNotIn(self.folder/"stems"/self.track,[path for path,_,_,_ in mixed])
+        self.assertEqual(["left","right"],[channel for _,_,channel,_ in mixed[:2]])
+        self.assertEqual([1.0,1.0],[gain for _,gain,_,_ in mixed[:2]])
         reopened=projects.read_project(self.root,self.ident)
         self.assertTrue(track_routing.valid_children(self.root,reopened)[self.track]["active"])
         track_routing.switch(self.root,reopened,self.track,False)
@@ -66,7 +66,7 @@ class TrackRoutingTests(unittest.TestCase):
         track_routing.attach(self.root,self.song,self.export,[self.track])
         settings=[Setting(x,mute=(x==self.track)) for x in self.files]
         routed=track_routing.audio_inputs(self.root,self.song,settings)
-        self.assertEqual([0.0,0.0],[gain for _,gain,_ in routed[:2]])
+        self.assertEqual([0.0,0.0],[gain for _,gain,_,_ in routed[:2]])
 
     def test_missing_or_tampered_export_is_not_active(self):
         track_routing.attach(self.root,self.song,self.export,[self.track])

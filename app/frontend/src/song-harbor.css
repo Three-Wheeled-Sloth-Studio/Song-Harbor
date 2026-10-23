@@ -60,6 +60,8 @@ h1{font-size:clamp(25px,2.5vw,34px);font-weight:650;letter-spacing:-.04em;margin
 .transport input[type=range]{flex:1;min-width:20px}
 .timecode{font:12px/1 Consolas,monospace;color:var(--tws-color-text-muted);font-variant-numeric:tabular-nums}
 .mixer-tracks{display:grid;gap:6px}
+.track-import-editor{display:flex;flex-wrap:wrap;gap:8px;align-items:end;padding:10px;border:1px solid var(--tws-color-border-normal);border-radius:8px;background:var(--tws-color-surface-panel)}
+.track-import-editor>strong{flex-basis:100%;font-size:12px;overflow-wrap:anywhere}.track-import-editor label{display:grid;gap:3px;font-size:11px;color:var(--tws-color-text-muted)}.track-import-editor input,.track-import-editor select{min-height:32px}.track-remove{color:var(--tws-color-text-danger,#b42318)}
 .mixer-track{display:grid;grid-template-columns:minmax(60px,1fr) auto minmax(75px,1.5fr) 42px;gap:10px;align-items:center;border:1px solid var(--tws-color-border-normal);border-radius:8px;padding:9px;background:var(--tws-color-surface-panel)}
 .mixer-track strong{font-size:12px}
 .mixer-track input[type=range]{width:100%;accent-color:var(--tws-color-action-primary)}

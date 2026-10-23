@@ -2,7 +2,7 @@ import {useEffect,useMemo,useState} from "react";
 import type {MouseEvent} from "react";
 import type {SongSection} from "./SectionEditor";
 
-type Peaks={bins:number;duration_seconds:number;min:number[];max:number[]};
+type Peaks={bins:number;duration_seconds:number;clip_duration_seconds?:number;start_seconds?:number;min:number[];max:number[]};
 export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[]};
 function pathFor(peaks:Peaks):string {
   const count=Math.min(peaks.bins,peaks.min.length,peaks.max.length);
@@ -40,7 +40,8 @@ function WaveRow({jobId,row,duration,position,onSeek,viewStart,viewEnd,sections}
     <button type="button" className="waveform-seek" onClick={seekAt}
       aria-label={`Seek within ${row.label} waveform`} title={`Seek within ${row.label}`}>
       {peaks?<svg viewBox={`${duration>0?1000*viewStart/duration:0} 0 ${duration>0?Math.max(0.01,1000*(viewEnd-viewStart)/duration):1000} 40`} preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
-        <path d={d} stroke="currentColor" strokeWidth="0.7" strokeOpacity=".8" fill="none"/>
+        <path d={d} stroke="currentColor" strokeWidth="0.7" strokeOpacity=".8" fill="none"
+          transform={`translate(${duration>0?1000*(peaks.start_seconds||0)/duration:0} 0) scale(${duration>0?(peaks.clip_duration_seconds||peaks.duration_seconds)/duration:1} 1)`}/>
       </svg>:<span className="waveform-loading">{failed?"Waveform preview unavailable":"Loading waveform…"}</span>}
       {viewEnd>viewStart&&sections.filter(section=>section.start_seconds>=viewStart&&section.start_seconds<=viewEnd)
         .map(section=><span key={section.id} className="waveform-section-boundary"

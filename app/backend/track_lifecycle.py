@@ -16,6 +16,10 @@ def ensure_identities(project:dict[str,Any])->list[dict[str,Any]]:
     """Preserve existing source IDs; introduce stable IDs for older separated songs."""
     files=project.get("files",[])
     records=copy.deepcopy(project.get("source_tracks",[]))
+    for record in records:
+        record.setdefault("imported",bool(record.get("original_filename") and
+                          record.get("original_filename")!=record.get("working_filename")))
+        record.setdefault("start_seconds",0.0)
     seen_files={r.get("working_filename") for r in records}
     seen_ids={r.get("track_id") for r in records}
     for filename in files:
@@ -26,11 +30,56 @@ def ensure_identities(project:dict[str,Any])->list[dict[str,Any]]:
         while track_id in seen_ids:track_id="trk_"+uuid.uuid4().hex[:16]
         records.append({"track_id":track_id,"working_filename":filename,
                         "original_filename":filename,"stem_alias":alias[0],
-                        "display_name":alias[0]})
+                        "display_name":alias[0],"imported":False,
+                        "start_seconds":0.0})
         seen_ids.add(track_id)
     if {r.get("working_filename") for r in records}!=set(files):
         raise ValueError("Source-track mapping inconsistent with saved audio files")
     return records
+
+def position(project:dict[str,Any],track_id:str,start_seconds:float,
+             song_duration:float)->dict[str,Any]:
+    """Move an imported clip on the timeline without rewriting its audio."""
+    if not isinstance(start_seconds,(int,float)) or not 0<=start_seconds<float("inf"):
+        raise ValueError("Clip position must be a non-negative timestamp")
+    updated=copy.deepcopy(project)
+    rows=ensure_identities(updated)
+    match=next((row for row in rows if row["track_id"]==track_id),None)
+    if match is None:raise ValueError("Unknown permanent track ID")
+    if not match.get("imported"):raise ValueError("Original separated stems cannot be repositioned")
+    duration=float(match.get("duration_seconds") or 0)
+    if duration<=0:raise ValueError("Imported clip duration is unavailable")
+    if start_seconds+duration>song_duration+.001:
+        raise ValueError("Clip would extend beyond the end of the song")
+    match["start_seconds"]=round(float(start_seconds),3)
+    updated["source_tracks"]=rows
+    return updated
+
+def remove(project:dict[str,Any],track_id:str)->tuple[dict[str,Any],dict[str,Any]]:
+    """Remove only an imported clip and every manifest reference to it."""
+    updated=copy.deepcopy(project)
+    rows=ensure_identities(updated)
+    match=next((row for row in rows if row["track_id"]==track_id),None)
+    if match is None:raise ValueError("Unknown permanent track ID")
+    if not match.get("imported"):raise ValueError("Original separated stems cannot be removed")
+    filename=match["working_filename"]
+    alias=match["stem_alias"].casefold()
+    updated["source_tracks"]=[row for row in rows if row["track_id"]!=track_id]
+    updated["files"]=[item for item in updated.get("files",[]) if item!=filename]
+    updated["stems"]=[item for item in updated.get("stems",[]) if item.get("filename")!=filename]
+    updated.get("channel_children",{}).pop(filename,None)
+    for key,value in list(updated.items()):
+        if not key.startswith("section_") or not isinstance(value,(list,dict)):continue
+        groups=value.values() if isinstance(value,dict) else [value]
+        for group in groups:
+            if not isinstance(group,list):continue
+            group[:]=[item for item in group if not (
+                isinstance(item,dict) and (
+                    str(item.get("source_key","")).split(":",1)[0]==filename or
+                    str(item.get("track_alias","")).casefold()==alias or
+                    str(item.get("track","")).casefold() in (alias,alias+"-left",alias+"-right")))]
+    updated["imported_tracks"]=any(row.get("imported") for row in updated["source_tracks"])
+    return updated,match
 
 def rename(project:dict[str,Any],track_id:str,alias:str,
            display_name:str, expected_alias:str|None=None)->dict[str,Any]:

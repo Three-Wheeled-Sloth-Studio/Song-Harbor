@@ -39,6 +39,7 @@ type EffectKey="pan"|"width"|"space"|"reverb"|"ending"|"eq"|"compression"|"ducki
 const EFFECT_KEYS:EffectKey[]=["pan","width","space","reverb","eq","compression","ducking","deess","ending"];
 const DEFAULT_BYPASS:Record<EffectKey,boolean>={pan:false,width:false,space:false,reverb:false,eq:false,compression:false,ducking:false,deess:false,ending:false};
 export type SavedStem = {filename: string; gain: number; mute: boolean; solo: boolean};
+export type TrackIdentity = {track_id:string;working_filename:string;stem_alias:string;display_name:string;imported?:boolean;start_seconds?:number;duration_seconds?:number};
 const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 
 
@@ -54,12 +55,13 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
   trackLabels?: Record<string,string>;
   trackAliases?: Record<string,string>;
+  trackDetails?: TrackIdentity[];
   initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
@@ -75,30 +77,41 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     };
   }).sort((a, b) => {const x=names.indexOf(a.name),y=names.indexOf(b.name);return x<0||y<0?0:x-y;}));
   const [title, setTitle] = useState(initialTitle || "Untitled song");
-  const [trackIdentities,setTrackIdentities]=useState<{track_id:string;working_filename:string;stem_alias:string;display_name:string}[]>([]);
+  const [trackIdentities,setTrackIdentities]=useState<TrackIdentity[]>(trackDetails||[]);
   const [renamingTrack,setRenamingTrack]=useState<string|null>(null);
   const [addingTrack,setAddingTrack]=useState(false);
-  async function addTrack(file:File|undefined){
+  const [pendingFile,setPendingFile]=useState<File|null>(null);
+  const [newDisplay,setNewDisplay]=useState("");
+  const [newAlias,setNewAlias]=useState("");
+  const [placement,setPlacement]=useState("start");
+  const [customStart,setCustomStart]=useState("0");
+  function chooseTrack(file:File|undefined){
+    if(!file)return;
+    const base=file.name.replace(/\.[^.]+$/,"");
+    setPendingFile(file);setNewDisplay(base);
+    setNewAlias(base.replace(/[^a-zA-Z0-9_-]/g,"_").replace(/^[^a-zA-Z]+/,"").slice(0,32)||"NewStem");
+    setPlacement("start");setCustomStart("0");
+  }
+  async function addTrack(){
+    const file=pendingFile;
     if(!file||addingTrack)return;
     if(openTools.includes("songText")){
       setError("Apply and close Whole Song Section Text before adding a stem.");
       return;
     }
-    const suggested=file.name.replace(/\\.[^.]+$/,"").replace(/[^a-zA-Z0-9_-]/g,"_").replace(/^[^a-zA-Z]+/,"").slice(0,32)||"NewStem";
-    const display=window.prompt("Display name for new stem:",file.name.replace(/\\.[^.]+$/,""));
-    if(display===null)return;
-    const alias=window.prompt("Script alias:",suggested);
-    if(alias===null)return;
     setAddingTrack(true);setError("");
     try{
       if(!await saveProject())return;
       stop();
       const form=new FormData();
-      form.append("file",file);form.append("stem_alias",alias);form.append("display_name",display);
+      form.append("file",file);form.append("stem_alias",newAlias);form.append("display_name",newDisplay);
+      if(placement.startsWith("section:"))form.append("section_id",placement.slice(8));
+      else form.append("start_seconds",placement==="custom"?customStart:"0");
       const response=await fetch("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       const data=await response.json();
       if(!response.ok)throw Error(data.detail||"New stem import failed");
-      setNotice("New stem added and aligned to the song start.");
+      setPendingFile(null);
+      setNotice("New stem added at its selected timeline position.");
       onTrackAdded?.(data.project,data.job);
     }catch(e){setError(e instanceof Error?e.message:"Could not add stem");}
     finally{setAddingTrack(false);}
@@ -137,6 +150,31 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       onTrackRenamed?.(data.project);
     }catch(err){setError(err instanceof Error?err.message:String(err));}
     finally{setRenamingTrack(null);}
+  }
+  async function repositionTrack(track:TrackIdentity){
+    const choices=timelineSections.map((s,i)=>`${i+1}. ${s.kind}${s.number===null?"":" "+s.number} — ${s.start_seconds.toFixed(3)}s`).join("\n");
+    const answer=window.prompt("New start time in seconds, or enter a section number:\n"+choices,String(track.start_seconds||0));
+    if(answer===null)return;
+    const index=/^\d+$/.test(answer.trim())?Number(answer.trim())-1:-1;
+    const start=index>=0&&timelineSections[index]?timelineSections[index].start_seconds:Number(answer);
+    if(!Number.isFinite(start)||start<0){setError("Enter a non-negative timestamp or a listed section number.");return;}
+    stop();setRenamingTrack(track.working_filename);setError("");
+    try{
+      if(!await saveProject())return;
+      const response=await fetch("/api/projects/"+jobId+"/tracks/position",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({track_id:track.track_id,start_seconds:start})});
+      const data=await response.json();if(!response.ok)throw Error(data.detail||"Could not reposition clip");
+      setNotice("Clip moved to "+Number(start).toFixed(3)+" seconds.");onTrackAdded?.(data.project,data.job);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setRenamingTrack(null);}
+  }
+  async function removeTrack(track:TrackIdentity){
+    if(!window.confirm(`Remove ${track.display_name} from this song? The imported files will be archived for recovery.`))return;
+    stop();setRenamingTrack(track.working_filename);setError("");
+    try{
+      if(!await saveProject())return;
+      const response=await fetch("/api/projects/"+jobId+"/tracks/"+encodeURIComponent(track.track_id),{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_alias:track.stem_alias})});
+      const data=await response.json();if(!response.ok)throw Error(data.detail||"Could not remove clip");
+      setNotice(data.archive_warning||"Imported clip removed; its project files were archived for recovery.");onTrackAdded?.(data.project,data.job);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setRenamingTrack(null);}
   }
   const [saving, setSaving] = useState(false);
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -303,19 +341,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setDuration(expectedDuration||0);
     const sources:AuditionSource[]=[];
     for(const filename of files){
+      const identity=trackIdentities.find(track=>track.working_filename===filename);
+      const sourceMeta={startSeconds:identity?.start_seconds||0,timelinePositioned:Boolean(identity?.imported)};
       const split=channels[filename];
       if(split?.active){
-        sources.push({key:filename+":left",filename,url:split.tracks.left.url,pan:-1});
-        sources.push({key:filename+":right",filename,url:split.tracks.right.url,pan:1});
+        sources.push({key:filename+":left",filename,url:split.tracks.left.url,pan:-1,...sourceMeta});
+        sources.push({key:filename+":right",filename,url:split.tracks.right.url,pan:1,...sourceMeta});
       }else{
         sources.push({key:filename,filename,
-          url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0});
+          url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0,...sourceMeta});
       }
     }
     setAudioLoad({ready:0,total:sources.length});
     void engine.prepare(sources,(ready,total)=>{
       if(!cancelled)setAudioLoad({ready,total});
-    }).then(()=>{
+    },expectedDuration).then(()=>{
       if(cancelled||generation!==transportGeneration.current)return;
       const levels:Record<string,{gain:number}>={};
       const settings=stemsRef.current;
@@ -340,7 +380,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if(audio.current===engine)audio.current=null;
       void engine.dispose();
     };
-  },[files,jobId,expectedDuration,routingVersion]);
+  },[files,jobId,expectedDuration,routingVersion,trackIdentities]);
 
   useEffect(()=>{
     const levels:Record<string,{gain:number}>={};
@@ -962,9 +1002,22 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             {addingTrack?"Converting stem...":"+ Add stem"}
             <input type="file" accept=".wav,.flac,.mp3,.m4a,.aiff,.aif,.ogg,audio/*"
               aria-label="Choose audio file to add as a new stem" disabled={addingTrack||renamingTrack!==null}
-              onChange={e=>{void addTrack(e.target.files?.[0]);e.target.value="";}}
+              onChange={e=>{chooseTrack(e.target.files?.[0]);e.target.value="";}}
               style={{position:"absolute",width:1,height:1,opacity:0}}/>
           </label>
+          {pendingFile&&<div className="track-import-editor">
+            <strong>{pendingFile.name}</strong>
+            <label>Display <input value={newDisplay} maxLength={100} onChange={e=>setNewDisplay(e.target.value)}/></label>
+            <label>Script alias <input value={newAlias} maxLength={32} onChange={e=>setNewAlias(e.target.value)}/></label>
+            <label>Place at <select value={placement} onChange={e=>setPlacement(e.target.value)}>
+              <option value="start">Song start · 0.000s</option>
+              <option value="custom">Timestamp…</option>
+              {timelineSections.map(section=><option key={section.id} value={"section:"+section.id}>{section.kind}{section.number===null?"":" "+section.number} · {section.start_seconds.toFixed(3)}s</option>)}
+            </select></label>
+            {placement==="custom"&&<label>Seconds <input type="number" min="0" step="0.001" value={customStart} onChange={e=>setCustomStart(e.target.value)}/></label>}
+            <Button onClick={()=>void addTrack()} disabled={addingTrack||!newDisplay.trim()||!newAlias.trim()}>{addingTrack?"Importing…":"Import clip"}</Button>
+            <Button variant="subtle" onClick={()=>setPendingFile(null)} disabled={addingTrack}>Cancel</Button>
+          </div>}
       {stems.map(s => <div className={"mixer-track"+(trackLabels?.[s.filename]?" mixer-track--named":"")} key={s.filename}>
         <strong className={"stem-icon-name"+(trackLabels?.[s.filename]?" stem-icon-name--named":"")}
           title={s.name+" · script: "+(trackAliases?.[s.filename]||labelOf(s.filename))}
@@ -977,6 +1030,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             onClick={()=>void renameTrack(s.filename)}
             title={"Rename "+s.name+" and update its scripted production guidance"}
             aria-label={"Rename "+s.name}>✎</button>
+          {trackIdentities.find(t=>t.working_filename===s.filename)?.imported&&<>
+            <button type="button" className="track-toggle" disabled={renamingTrack!==null}
+              onClick={()=>void repositionTrack(trackIdentities.find(t=>t.working_filename===s.filename)!)}
+              title={"Reposition "+s.name} aria-label={"Reposition "+s.name}>↔</button>
+            <button type="button" className="track-toggle track-remove" disabled={renamingTrack!==null}
+              onClick={()=>void removeTrack(trackIdentities.find(t=>t.working_filename===s.filename)!)}
+              title={"Remove "+s.name} aria-label={"Remove "+s.name}>×</button>
+          </>}
           <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
             aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>
           <button type="button" className={"track-toggle" + (s.solo ? " is-solo" : "")}

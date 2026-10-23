@@ -6,6 +6,7 @@ No external network binding, no destructive source operations.
 from __future__ import annotations
 
 import os
+import hashlib
 import json
 import re
 import shutil
@@ -78,6 +79,13 @@ def probe_duration(path: Path) -> float:
     if not 0 < value < float("inf"):
         raise ValueError(f"Invalid audio duration: {path.name}")
     return value
+
+
+def sha256_file(path: Path) -> str:
+    digest=hashlib.sha256()
+    with path.open("rb") as source:
+        while block:=source.read(1024*1024):digest.update(block)
+    return digest.hexdigest()
 
 
 def validate_stem_lengths(source_duration: float, durations: dict[str, float],
@@ -583,6 +591,13 @@ class RenameTrackAlias(BaseModel):
     stem_alias: str = Field(min_length=1,max_length=32)
     display_name: str = Field(min_length=1,max_length=100)
 
+class PositionTrack(BaseModel):
+    track_id: str = Field(min_length=1,max_length=80)
+    start_seconds: float = Field(ge=0)
+
+class RemoveTrack(BaseModel):
+    expected_alias: str = Field(min_length=1,max_length=32)
+
 
 
 class RenameLibrarySong(BaseModel):
@@ -690,13 +705,19 @@ def load_project(ident: str) -> dict[str, Any]:
 async def add_project_track(ident: str, request: Request,
                             file: UploadFile = File(...),
                             stem_alias: str = Form(...),
-                            display_name: str = Form(...)) -> dict[str, Any]:
-    """Add a 0-aligned new source without touching existing stems or scripts."""
+                            display_name: str = Form(...),
+                            start_seconds: float = Form(0.0),
+                            section_id: str | None = Form(None)) -> dict[str, Any]:
+    """Add a short, timeline-positioned clip without padding or touching sources."""
     require_local_origin(request)
     if not track_lifecycle.ALIAS.fullmatch(stem_alias) or stem_alias.casefold() in track_lifecycle.RESERVED:
         raise HTTPException(400,"Invalid or reserved script alias")
     if not 1<=len(display_name.strip())<=100:
         raise HTTPException(400,"Display name must have 1-100 characters")
+    # FastAPI's Form defaults are marker objects when route functions are called
+    # directly by unit tests rather than through request binding.
+    if not isinstance(section_id,str):section_id=None
+    if not isinstance(start_seconds,(int,float)):start_seconds=0.0
     source_name=safe_name(file.filename or "")
     if Path(source_name).suffix not in ALLOWED:
         raise HTTPException(400,"Unsupported audio format")
@@ -713,6 +734,12 @@ async def add_project_track(ident: str, request: Request,
             raise HTTPException(400,"Maximum 64 source tracks")
         if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
             raise HTTPException(409,"Script alias already belongs to a track")
+        if section_id:
+            section=next((item for item in record.get("sections",[]) if item.get("id")==section_id),None)
+            if not section:raise HTTPException(400,"Selected section no longer exists")
+            start_seconds=float(section["start_seconds"])
+        if not 0<=start_seconds<float("inf"):
+            raise HTTPException(400,"Timeline position must be a non-negative timestamp")
         # Block mixing/export and conflicting operations until media validation
         # and one manifest replacement succeed or roll back.
         job["status"]="running"
@@ -734,14 +761,18 @@ async def add_project_track(ident: str, request: Request,
                     raise ValueError("Stem exceeds 1 GiB import limit")
                 target.write(chunk)
         if length==0:raise ValueError("Stem audio is empty")
+        digest=sha256_file(original)
         original_duration=probe_duration(original)
         song_duration=resolved_song_duration(record,job)
-        if original_duration>song_duration+DURATION_TOLERANCE_SECONDS:
-            raise ValueError("New stem is longer than the song; trim it deliberately before importing")
+        if start_seconds+original_duration>song_duration+DURATION_TOLERANCE_SECONDS:
+            raise ValueError("Placed stem extends beyond the song; choose an earlier timestamp or trim it")
+        for row in rows:
+            if row.get("content_sha256")==digest and abs(float(row.get("start_seconds",0))-start_seconds)<.001:
+                raise ValueError("This audio is already imported at the same timeline position")
         ffmpeg=dependency_tool("ffmpeg")
         command=[ffmpeg,"-hide_banner","-loglevel","error","-nostdin","-y",
                  "-i",str(original),"-map","0:a:0","-vn",
-                 "-af",f"apad,atrim=duration={song_duration:.6f},asetpts=PTS-STARTPTS",
+                 "-af","asetpts=PTS-STARTPTS",
                  "-ac","2","-ar","48000","-c:a","pcm_s24le","-f","wav",str(staging)]
         result=subprocess.run(command,capture_output=True,text=True,timeout=360,
                               creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
@@ -752,7 +783,10 @@ async def add_project_track(ident: str, request: Request,
         if len(updated)>=stem_import.MAX_TRACKS:raise ValueError("Maximum 64 source tracks")
         updated.append({"track_id":track_id,"original_filename":original.name,
                         "working_filename":final_name,"stem_alias":stem_alias,
-                        "display_name":display_name.strip()})
+                        "display_name":display_name.strip(),"imported":True,
+                        "start_seconds":round(float(start_seconds),3),
+                        "duration_seconds":round(probe_duration(final),3),
+                        "content_sha256":digest})
         record["source_tracks"]=updated
         record["files"]=list(record["files"])+[final_name]
         record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]
@@ -768,7 +802,8 @@ async def add_project_track(ident: str, request: Request,
     except (ValueError,OSError,subprocess.SubprocessError) as exc:
         final.unlink(missing_ok=True)
         original.unlink(missing_ok=True)
-        raise HTTPException(400,str(exc)) from exc
+        status=409 if "already imported at the same timeline position" in str(exc) else 400
+        raise HTTPException(status,str(exc)) from exc
     finally:
         staging.unlink(missing_ok=True)
         await file.close()
@@ -794,6 +829,62 @@ def list_project_tracks(ident: str) -> dict[str, Any]:
             record["source_tracks"]=tracks
             projects.write_project(DATA_ROOT,record)
     return {"tracks":tracks}
+
+
+@app.put("/api/projects/{ident}/tracks/position")
+def position_project_track(ident: str, request: Request, body: PositionTrack) -> dict[str, Any]:
+    require_local_origin(request)
+    job=get_job(ident)
+    with lock:
+        record=projects.read_project(DATA_ROOT,ident) if job else None
+        if not job or job.get("status")!="complete" or not record:
+            raise HTTPException(404,"Completed song not found")
+        try:
+            updated=track_lifecycle.position(record,body.track_id,body.start_seconds,
+                                             resolved_song_duration(record,job))
+        except (ValueError,TypeError,KeyError) as exc:
+            raise HTTPException(400,f"Position rejected: {exc}") from exc
+        updated["updated_at"]=time.time()
+        projects.write_project(DATA_ROOT,updated)
+    return {"project":updated,"job":snapshot(job)}
+
+
+@app.delete("/api/projects/{ident}/tracks/{track_id}")
+def remove_project_track(ident: str, track_id: str, request: Request,
+                         body: RemoveTrack) -> dict[str, Any]:
+    """Detach an imported clip and archive its project copies for recovery."""
+    require_local_origin(request)
+    job=get_job(ident)
+    with lock:
+        record=projects.read_project(DATA_ROOT,ident) if job else None
+        if not job or job.get("status")!="complete" or not record:
+            raise HTTPException(404,"Completed song not found")
+        try:
+            updated,removed=track_lifecycle.remove(record,track_id)
+            if removed["stem_alias"]!=body.expected_alias:
+                raise ValueError("Track changed since this window loaded; refresh before removing")
+        except (ValueError,TypeError,KeyError) as exc:
+            raise HTTPException(400,f"Removal rejected: {exc}") from exc
+        updated["updated_at"]=time.time()
+        projects.write_project(DATA_ROOT,updated)
+        job["files"]=updated["files"]
+    folder=DATA_ROOT/"jobs"/ident
+    archive=folder/"trash"/f"{int(time.time())}-{track_id}"
+    archive_warning=None
+    try:
+        archive.mkdir(parents=True,exist_ok=True)
+        for parent,name in (("stems",removed.get("working_filename")),
+                            ("originals",removed.get("original_filename"))):
+            if isinstance(name,str) and Path(name).name==name:
+                source=folder/parent/name
+                if source.is_file():shutil.move(str(source),archive/name)
+    except OSError as exc:
+        # The manifest removal already restored playback. Leave any project
+        # copy in place rather than turning a successful detach into a false
+        # failure or deleting data during archive recovery.
+        archive_warning=f"Track was removed, but a project copy could not be archived: {exc}"
+    return {"project":updated,"job":snapshot(job),"archived_to":str(archive),
+            "archive_warning":archive_warning}
 
 
 @app.put("/api/projects/{ident}/tracks/rename")
@@ -1789,15 +1880,15 @@ class StemMixSetting(BaseModel):
 
 
 class MixRequest(BaseModel):
-    stems: list[StemMixSetting] = Field(min_length=6, max_length=6)
+    stems: list[StemMixSetting] = Field(min_length=1, max_length=64)
 
 
 def validate_mix(job: dict[str, Any], settings: list[StemMixSetting]) -> list[tuple[str, float]]:
-    """Produce the safe, ordered effective gains for exactly six known stems."""
+    """Produce safe effective gains for every known source track."""
     known = set(job["files"])
     received = [setting.filename for setting in settings]
-    if len(known) != 6 or len(received) != 6 or set(received) != known or len(set(received)) != 6:
-        raise ValueError("Mix must contain each of the six existing stems exactly once")
+    if not known or len(received)!=len(known) or set(received)!=known or len(set(received))!=len(received):
+        raise ValueError("Mix must contain each existing track exactly once")
     any_solo = any(setting.solo for setting in settings)
     return [
         (setting.filename, 0.0 if setting.mute or (any_solo and not setting.solo) else setting.gain)
@@ -1841,18 +1932,20 @@ def render_mix(ident: str, request: Request, body: MixRequest) -> dict[str, str]
     except (ValueError, OSError, KeyError) as exc:
         job["rendering"] = False
         raise HTTPException(409, f"Cannot prepare mix: {exc}") from exc
-    for path, _, _ in inputs:
+    for path, _, _, _ in inputs:
         command.extend(["-i", str(path)])
     filters = []
-    for index, (_, gain, channel) in enumerate(inputs):
+    for index, (_, gain, channel, start) in enumerate(inputs):
+        delay=f",adelay={round(start*1000)}|{round(start*1000)}" if start>0 else ""
         if channel == "left":
-            filters.append(f"[{index}:a]pan=stereo|c0=c0|c1=0,volume={gain:.6f}[s{index}]")
+            filters.append(f"[{index}:a]pan=stereo|c0=c0|c1=0*c0,volume={gain:.6f}{delay}[s{index}]")
         elif channel == "right":
-            filters.append(f"[{index}:a]pan=stereo|c0=0|c1=c0,volume={gain:.6f}[s{index}]")
+            filters.append(f"[{index}:a]pan=stereo|c0=0*c0|c1=c0,volume={gain:.6f}{delay}[s{index}]")
         else:
-            filters.append(f"[{index}:a]volume={gain:.6f}[s{index}]")
+            filters.append(f"[{index}:a]volume={gain:.6f}{delay}[s{index}]")
     audio_links = "".join(f"[s{index}]" for index in range(len(inputs)))
-    filters.append(f"{audio_links}amix=inputs={len(inputs)}:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.98:level=0[mix]")
+    source_duration=resolved_song_duration(record,job)
+    filters.append(f"{audio_links}amix=inputs={len(inputs)}:duration=longest:dropout_transition=0:normalize=0,atrim=duration={source_duration:.6f},alimiter=limit=0.98:level=0[mix]")
     command.extend([
         "-filter_complex", ";".join(filters),
         "-map", "[mix]", "-ac", "2", "-ar", "48000", "-c:a", "pcm_s24le", str(temporary),
@@ -1897,12 +1990,15 @@ def stem_waveform(ident: str, filename: str) -> dict[str, Any]:
     folder = DATA_ROOT / "jobs" / ident
     path = folder / "stems" / filename
     try:
-        length = job.get("source_duration_seconds")
-        if not length:
-            length = probe_duration(path)
-        return waveform_peaks.get_or_create(
+        record=projects.read_project(DATA_ROOT,ident) or {}
+        identity=next((row for row in record.get("source_tracks",[])
+                       if row.get("working_filename")==filename),{})
+        length = probe_duration(path) if identity.get("imported") else job.get("source_duration_seconds") or probe_duration(path)
+        data=waveform_peaks.get_or_create(
             path, folder / "waveforms" / (filename + ".json"), float(length),
             dependency_tool("ffmpeg"))
+        return {**data,"start_seconds":float(identity.get("start_seconds",0)),
+                "clip_duration_seconds":float(length)}
     except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(400, f"Waveform unavailable: {exc}") from exc
 

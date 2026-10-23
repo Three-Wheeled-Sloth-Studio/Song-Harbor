@@ -37,7 +37,7 @@ def source_map(files:list[str], tracks:list[dict[str, Any]]|None=None, children:
     parents=list(mapping.items())
     for alias,filename in parents:
         entry=(children or {}).get(filename)
-        if isinstance(entry,dict) and entry.get("export") and entry.get("tracks"):
+        if isinstance(entry,dict) and entry.get("export"):
             for side in ("left","right"):
                 mapping[alias+"-"+side]=filename+":"+side
     return mapping
@@ -334,8 +334,8 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
     Auto pan is not implicitly sticky; each requesting section is independent.
     Explicit and broadcast pan settings persist as protection until reset.
     """
-    aliases=source_aliases(files,tracks,children)
-    stems=source_map(files,tracks,children)
+    aliases=source_aliases(files,tracks)
+    stems=source_map(files,tracks)
     protected=set()
     protected_gain=set()
     output=[]

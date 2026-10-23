@@ -1,3 +1,14 @@
+## 2026-10-23: USER QA PASS — YouTube lyric SRT import
+
+User reported: **"Lyric upload to youtube passed QA - nearly perfect alignment, clean import."**
+
+- Mark Song Harbor generated timed-lyrics SRT -> YouTube upload/import as **user-accepted for the tested song**. Formatting/import is clean; observed lyric alignment was nearly perfect, not claimed sample-accurate or universally guaranteed.
+- This closes the previously deferred user-side YouTube lyric-export QA gate in older sections below. Those older "pending tomorrow" statements are historical and superseded by this note.
+- Do NOT declare all of v0.2.1 released solely from this acceptance; independent CI, other release criteria and remaining Windows QA still apply.
+- Future enhancement only if useful: optional per-line/per-word manual adjustment, not required to accept the existing SRT workflow.
+
+---
+
 ## 2026-10-23: Temporary Audio Forensics sidebar tool for discovery QA
 
 - Right palette contains new `forensics` tool icon `⌁` in

@@ -75,8 +75,8 @@ AUTO_PAN_TOKEN = re.compile(
     r"(?::(?P<curve>smooth|linear))?)?$"
 )
 EVOLUTION_TOKEN = re.compile(
-    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.evolve:menacing"
-    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.evolve:menacing"
+    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 EVOLUTION_VERSION = 1
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")

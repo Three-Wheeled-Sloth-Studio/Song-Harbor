@@ -33,7 +33,7 @@ def ensure_identities(project:dict[str,Any])->list[dict[str,Any]]:
     return records
 
 def rename(project:dict[str,Any],track_id:str,alias:str,
-           display_name:str)->dict[str,Any]:
+           display_name:str, expected_alias:str|None=None)->dict[str,Any]:
     if not ALIAS.fullmatch(alias) or alias.casefold() in RESERVED:
         raise ValueError("Use a script alias of 1-32 letters, numbers, underscores or hyphens, starting with a letter; reserved names are disallowed")
     if not display_name.strip() or len(display_name.strip())>100:
@@ -45,6 +45,8 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
     if any(r["track_id"]!=track_id and r["stem_alias"].casefold()==alias.casefold()
            for r in rows):
         raise ValueError("Alias already belongs to another track")
+    if expected_alias is not None and match["stem_alias"]!=expected_alias:
+        raise ValueError("Track alias changed since this window loaded; refresh before renaming")
     old=match["stem_alias"]
     match["stem_alias"]=alias
     match["display_name"]=display_name.strip()

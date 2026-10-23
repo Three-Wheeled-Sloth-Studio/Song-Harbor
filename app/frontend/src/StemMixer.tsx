@@ -574,8 +574,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         return;
       }
       if(now>=engine.duration-0.025){
-        stop();
-        setPosition(engine.duration);
+        // Completion differs from Pause: reset both underlying shared-clock
+        // state and visible playhead, so the next Play starts at zero.
+        transportGeneration.current+=1;
+        playRef.current=false;
+        engine.stop();
+        setPlaying(false);
+        setPosition(0);
       }
     },33);
     return ()=>window.clearInterval(timer);

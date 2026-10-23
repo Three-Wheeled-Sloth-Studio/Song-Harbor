@@ -126,3 +126,26 @@ References:
 - https://arxiv.org/abs/2506.19108
 - https://doi.org/10.5334/tismir.254
 - Additional primary research implementation: https://github.com/deezer/ismir25-ai-music-detector
+
+## Experimental in-app tool (2026-10-23)
+
+A separate **⌁ Audio forensics (experimental)** icon is now available in the
+right-hand tool palette. It opens a compact inspector, sharing the already
+implemented on-demand `SharedClockAudition.analyzeMix()` scan. Results are
+organized into spectral texture (sibilance/harshness/fizz/noise/persistent
+signal), transient/dynamics, stereo/mono, and peak integrity. Each finding
+supports seek and audible region looping. Scanning processes the actual
+rendered current mix and does not create/edit WAV files.
+
+**Resource footprint:** No new model runtime, GPU, web service or Python
+dependency. It invokes the same offline render and CPU FFT analysis that
+Sound Cleanup already provides; opening the panel alone does not run the scan.
+The full offline render may temporarily require substantial memory on longer
+songs, so this first experiment still inherits the normal mixer limits.
+
+**Boundary:** This is an *experimental diagnostic view*, not yet an
+independent fingerprint model, source/output comparison, or cleaner. It
+intentionally shares findings with Sound Cleanup until signal relevance,
+performance and presentation have been assessed. Fold proven measures into
+the general analyzer and retire the separate panel once mature. No
+fingerprint avoidance optimization or watermark-removal feature.

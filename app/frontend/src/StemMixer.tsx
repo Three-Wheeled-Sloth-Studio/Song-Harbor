@@ -785,13 +785,26 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       const header=sectionHeaders[index];
       if(header===undefined)throw Error("Saved section sequence differs from the timeline. Reload the song and retry.");
       const nextHeader=sectionHeaders[index+1]??lines.length;
-      let blockIndex=-1;
-      for(let i=header+1;i<nextHeader;i++)if(/^\{.*\}$/.test(lines[i].trim())){blockIndex=i;break;}
-      if(blockIndex<0){lines.splice(header+1,0,"{"+directive+"}");}
-      else{
-        const existing=lines[blockIndex].trim().slice(1,-1).trim().split(/\s+/).filter(Boolean);
+      let blockStart=-1,blockEnd=-1;
+      for(let i=header+1;i<nextHeader;i++){
+        if(!lines[i].trim().startsWith("{"))continue;
+        blockStart=i;
+        for(let j=i;j<nextHeader;j++){
+          if(lines[j].trim().endsWith("}")){blockEnd=j;break;}
+        }
+        break;
+      }
+      if(blockStart<0){
+        lines.splice(header+1,0,"{"+directive+"}");
+      }else{
+        if(blockEnd<blockStart)throw Error("Saved section contains an unfinished production block.");
+        const text=lines.slice(blockStart,blockEnd+1).join("\n");
+        const existing=text.trim().slice(1,-1).trim().split(/\s+/).filter(Boolean);
         const without=existing.filter(token=>!token.startsWith(alias+"."+trial.kind+":"));
-        lines[blockIndex]="{"+[...without,directive].join(" ")+"}";
+        const edited=[...without,directive];
+        const updated=edited.length===1?["{"+edited[0]+"}"]:
+          ["{",...edited.map(token=>"  "+token),"}"];
+        lines.splice(blockStart,blockEnd-blockStart+1,...updated);
       }
       const result=await fetch("/api/projects/"+jobId+"/sections/import",{
         method:"POST",headers:{"Content-Type":"application/json"},

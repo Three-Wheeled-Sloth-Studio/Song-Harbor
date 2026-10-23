@@ -1,3 +1,15 @@
+## 2026-10-22 NIGHT: P1 arbitrary-stem effects hardening first slice
+
+The product increment roadmap was approved earlier today. User now requested implementation of the next slice. Code committed to main:
+- Direct individual section effects routes in `app/backend/server.py` (pan, reverb, width, space, EQ) no longer infer aliases only from the six default Demucs names. They derive aliases from the actual project file list, allowing existing custom named imported stems to participate in section editing.
+- `app/backend/section_production.py::materialize_reverb` now expands explicit and broadcast reverb/reset to imported custom stem aliases instead of hardcoding the six default labels.
+- New `test_16_custom_tracks_reverb_and_broadcast` uses 16 synthetic `Synth_NN` stems and tests `all.reverb`, a custom override, independent gain/pan, reset, and script round trip. Backend project CI passed after fixing test fixture newline escaping, SHA `fa101be7`.
+- Updated `docs/multitrack-import-qa.md` with this slice's exact boundaries.
+
+This is **backend architecture hardening, not the full accepted 16+ stems QA**. No real 16-track import/export audio test has been performed; do not claim high-track memory viability. Add new stem to an existing song, atomic custom stem rename propagating every section directive, script draft safety, and frontend dynamic display/selection remain open. These should be the next P1 implementation increments; never rename source filenames or track_id to implement a display-name change. User's YouTube SRT QA was deferred until tomorrow and remains open. Ardour POC and Second Take additive cello generation remain subsequent roadmap work.
+
+---
+
 ## 2026-10-22 PI REVIEW - ACTIVE DECISIONS / START HERE
 
 **User-approved priorities and QA state**

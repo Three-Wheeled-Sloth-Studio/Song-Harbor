@@ -26,8 +26,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [before,setBefore]=useState(15);
   const [after,setAfter]=useState(0);
   const [preRoll,setPreRoll]=useState(5);
-  const [prompt,setPrompt]=useState("Sparse, dark bowed cello counterpoint beneath the lead; no vocals or drums.");
-  const [alias,setAlias]=useState("ACECello");
+  const [prompt,setPrompt]=useState("");
+  const [alias,setAlias]=useState("Accompaniment");
   const [bpm,setBpm]=useState("");
   const [key,setKey]=useState("");
   const [seed,setSeed]=useState("150719");
@@ -44,7 +44,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   useEffect(()=>{
     if(!sections.length)return;
     setFromId(v=>sections.some(s=>s.id===v)?v:sections[0].id);
-    setToId(v=>sections.some(s=>s.id===v)?v:sections[0].id);
+    setToId(v=>sections.some((s,i)=>s.id===v&&i>=sections.findIndex(item=>item.id===fromId))?v:sections[0].id);
   },[sections]);
   useEffect(()=>{
     let mounted=true;
@@ -135,7 +135,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     <small>ACE: {ready?"Turbo ready":runtime?.status==="connected"?"Model not loaded; use Settings > Components":"Not connected; enable ACE in Settings"}</small>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
       <label>From section
-        <select value={fromId} onChange={e=>{setFromId(e.target.value);if(sections.findIndex(s=>s.id===e.target.value)>toIndex)setToId(e.target.value);}}>
+        <select style={{width:"100%",minWidth:0,boxSizing:"border-box"}} value={fromId} onChange={e=>{setFromId(e.target.value);if(sections.findIndex(s=>s.id===e.target.value)>toIndex)setToId(e.target.value);}}>
           {sections.map(s=><option value={s.id} key={s.id}>{sectionLabel(s)}</option>)}
         </select>
       </label>
@@ -163,7 +163,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":"Generate accompaniment"}</button>
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
-      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not isolated cello. Audition before accepting.":"Generated audio candidate."}</small>
+      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Generated audio candidate."}</small>
       {candidate.error&&<small role="alert">{candidate.error}</small>}
       {candidate.state==="ready"&&<>
         <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}>

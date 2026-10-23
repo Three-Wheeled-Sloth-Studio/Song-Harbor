@@ -220,7 +220,10 @@ def apply(project: dict[str, Any], content: str, mode: str,
             if directive.get("track","").casefold() in child_aliases and directive["kind"] not in ("gain","pan","reverb","eq","reset"):
                 raise ValueError("Child split channels currently support gain, pan, EQ and reverb only")
     auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
-    effective = section_production.expand_broadcast(production, parents)
+    # Keep authored macro intents in section_production for roundtrip.
+    # Resolve deterministic effect targets only while materializing automation.
+    effective = section_production.expand_evolution(
+        section_production.expand_broadcast(production, parents), parents, aliases)
     pan_targets = section_production.materialize_pan(validated, effective, files, tracks, children)
     reverb_targets = section_production.materialize_reverb(validated, effective, files, tracks, children)
     width_targets = section_production.materialize_width(validated, effective, files, tracks, children)

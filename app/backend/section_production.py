@@ -26,7 +26,7 @@ def source_map(files:list[str], tracks:list[dict[str, Any]]|None=None)->dict[str
     assigned=set(mapping.values())
     for filename in files:
         if filename in assigned: continue
-        match=re.search(r"\\(([A-Za-z][A-Za-z0-9_-]*)\\)",filename)
+        match=re.search(r"\(([A-Za-z][A-Za-z0-9_-]*)\)",filename)
         if match:
             alias=match.group(1)
             if alias.casefold() in {key.casefold() for key in mapping}:

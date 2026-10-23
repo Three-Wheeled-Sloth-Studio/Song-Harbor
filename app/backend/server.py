@@ -579,6 +579,7 @@ class SaveProject(BaseModel):
 
 class RenameTrackAlias(BaseModel):
     track_id: str = Field(min_length=1,max_length=80)
+    expected_alias: str = Field(min_length=1,max_length=32)
     stem_alias: str = Field(min_length=1,max_length=32)
     display_name: str = Field(min_length=1,max_length=100)
 
@@ -806,7 +807,7 @@ def rename_project_track(ident: str, request: Request, body: RenameTrackAlias) -
             raise HTTPException(404,"Completed song not found")
         try:
             updated=track_lifecycle.rename(record,body.track_id,
-                                           body.stem_alias,body.display_name)
+                                           body.stem_alias,body.display_name,body.expected_alias)
         except (ValueError,TypeError,KeyError) as exc:
             raise HTTPException(400,f"Rename rejected: {exc}") from exc
         updated["updated_at"]=time.time()

@@ -221,3 +221,35 @@ watermarks; a flagged tone may be intentional music. Source-versus-output
 comparison is future work.
 
 **Navigating import errors:** If applying whole-song section text reports `Line N:` (for example, an unsupported section name or invalid production directive), select **Go to line N ↗** next to the error. Song Harbor selects the offending line in the text editor so you can correct it without losing your unsaved draft. The button appears only when the validator identifies a line number.
+
+### Independent left/right child-channel automation (experimental; Windows QA pending)
+
+After using **Split channels** and activating the L/R child routing, the whole-song
+section script can target each child independently. The parent alias is still
+the shared reconstructed stereo stem. For example, on a **single** production
+instruction line after a section heading:
+
+```text
+[Chorus 1:42-2:05]
+{Drums.reverb:10@2s:smooth Drums-right.reverb:18@2s:smooth Drums-left.gain:-0.75@2s:smooth Drums-right.eq1:1000,1,-2@2s:smooth}
+```
+
+The parent reverb value is the effective baseline for the two channels.
+`Drums-right.reverb:18` overrides the **right** channel to 18%, rather than
+adding 18% to 10%. The left channel retains the parent 10% value. Parent
+EQ, pan and processing remain on the combined bus; supported child effects
+are gain, pan, three-band EQ and reverb send, applied before the shared bus.
+Parent and child gains multiply. Child pan defaults to original hard-left/
+hard-right placement; a child `.pan:` instruction explicitly repositions it.
+
+Split-channel source identities are virtual targets based on the existing
+parent track and do not add independent mixer rows or rewrite source WAVs.
+When the parent is switched back to original stereo routing, child effects
+are dormant, not applied to the unsplit stereo source. Parent alias renaming
+migrates its existing `-left` and `-right` directives. Child-target width,
+space, compression, ducking, and de-essing are **not supported in this slice**:
+the importer rejects them rather than ignoring them. This uses Song Harbor's
+existing CPU/audio graph, with extra lightweight nodes per active split child.
+
+**Acceptance:** verify center/left/right pan, gain, EQ, send inheritance,
+script rename/reopen and parity between live audition and 24-bit WAV export.

@@ -39,7 +39,10 @@ def source_map(files:list[str], tracks:list[dict[str, Any]]|None=None, children:
         entry=(children or {}).get(filename)
         if isinstance(entry,dict) and entry.get("export"):
             for side in ("left","right"):
-                mapping[alias+"-"+side]=filename+":"+side
+                child_alias=alias+"-"+side
+                if child_alias.casefold() in {key.casefold() for key in mapping}:
+                    raise ValueError("Channel alias collides with an existing stem alias")
+                mapping[child_alias]=filename+":"+side
     return mapping
 
 

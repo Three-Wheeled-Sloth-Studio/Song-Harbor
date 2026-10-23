@@ -74,6 +74,11 @@ AUTO_PAN_TOKEN = re.compile(
     r"(?i)^auto\.pan:center(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s"
     r"(?::(?P<curve>smooth|linear))?)?$"
 )
+EVOLUTION_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.evolve:menacing"
+    r"(?:@(?P<seconds>\\d+(?:\\.\\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+)
+EVOLUTION_VERSION = 1
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
 
 
@@ -86,6 +91,22 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        evolution=EVOLUTION_TOKEN.fullmatch(token)
+        if evolution:
+            canonical=next((a for a in aliases if a.casefold()==evolution.group("track").casefold()),None)
+            if not canonical or canonical.lower().endswith(("-left","-right")):
+                raise ValueError("Evolution macro must target an existing parent stem")
+            duration=float(evolution.group("seconds") or 20)
+            if not .05<=duration<=30:
+                raise ValueError("Evolution duration must be 0.05-30 seconds")
+            key=canonical.lower()+".evolve"
+            if key in touched or "all" in touched:
+                raise ValueError("Duplicate or conflicting evolution macro")
+            touched.add(key)
+            directives.append({"kind":"evolve","track":canonical,"preset":"menacing",
+                               "version":EVOLUTION_VERSION,"transition_seconds":duration,
+                               "curve":(evolution.group("curve") or "smooth").lower()})
+            continue
         auto_pan=AUTO_PAN_TOKEN.fullmatch(token)
         if auto_pan:
             if "auto.pan" in touched or "all" in touched:
@@ -264,6 +285,11 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "evolve":
+            if d.get("preset")!="menacing" or d.get("version")!=EVOLUTION_VERSION:
+                raise ValueError("Unknown evolution macro version")
+            rendered.append(f"{d['track']}.evolve:menacing@{d['transition_seconds']:g}s:{d['curve']}")
+            continue
         if d["kind"] == "auto_pan":
             rendered.append(f"auto.pan:center@{d['transition_seconds']:g}s:{d['curve']}")
             continue
@@ -303,6 +329,58 @@ def render_block(directives: list[dict[str, Any]]) -> str:
     return "{" + " ".join(rendered) + "}"
 
 
+
+
+def expand_evolution(blocks:dict[str,list[dict[str,Any]]],
+                     parents:tuple[str,...],
+                     aliases:tuple[str,...]) -> dict[str,list[dict[str,Any]]]:
+    """Compile versioned menacing intent to inspectable, existing DSP targets.
+
+    All effects retain normal song-time section inheritance. Explicit
+    directives always override macro-generated targets for the same stem,
+    parameter and EQ band. No source audio or authored intent is overwritten.
+    """
+    available={alias.casefold():alias for alias in aliases}
+    output={}
+    for section_id,directives in blocks.items():
+        explicit={(d["track"].casefold(),d["kind"],d.get("band"))
+                  for d in directives if d["kind"]!="evolve"}
+        expansions=[]
+        for directive in directives:
+            if directive["kind"]!="evolve":
+                continue
+            alias=directive["track"]
+            if alias not in parents or directive.get("preset")!="menacing" or directive.get("version")!=EVOLUTION_VERSION:
+                raise ValueError("Unsupported spatial evolution macro")
+            base=[
+                ("pan",{"pan":.18}),("width",{"width":125}),
+                ("space",{"amount":18}),("reverb",{"wet":.16}),
+                ("eq",{"band":1,"frequency":380,"q":.9,"gain_db":1.1}),
+                ("eq",{"band":2,"frequency":3200,"q":.8,"gain_db":-1.7})
+            ]
+            # When split channels exist, asymmetry is created before the
+            # parent bus, without moving bass or other unrelated stems.
+            for side,wet,freq,cut in (("left",.11,3500,-.8),
+                                       ("right",.23,2600,-2.1)):
+                key=available.get((alias+"-"+side).casefold())
+                if key:
+                    base.extend([
+                        ("reverb",{"track":key,"wet":wet}),
+                        ("eq",{"track":key,"band":2,"frequency":freq,
+                               "q":.9,"gain_db":cut})
+                    ])
+            for kind,params in base:
+                target=params.get("track",alias)
+                key=(target.casefold(),kind,params.get("band"))
+                if key in explicit:
+                    continue
+                expansions.append({"kind":kind,"track":target,
+                                   "transition_seconds":directive["transition_seconds"],
+                                   "curve":directive["curve"],
+                                   **{k:v for k,v in params.items() if k!="track"}})
+                explicit.add(key)
+        output[section_id]=[d for d in directives if d["kind"]!="evolve"]+expansions
+    return output
 
 def expand_broadcast(blocks: dict[str, list[dict[str, Any]]],
                      aliases: tuple[str,...]) -> dict[str, list[dict[str, Any]]]:

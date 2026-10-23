@@ -84,8 +84,8 @@ roadmap:
   # historical foundation plan above; they are the active delivery order.
   - id: SH-RM-180
     horizon: now
-    status: in-progress
-    summary: Stabilize v0.2.1. Verify SRT lyric export on Windows, section hover metrics, latest CI, and consistent docs; no gratuitous remixing of accepted track.
+    status: user-srt-qa-passed-other-release-gates-open
+    summary: Stabilize v0.2.1. YouTube SRT import user acceptance passed 2026-10-23 with clean import and nearly perfect lyric alignment; retain remaining section hover, CI and release checks and do not imply mathematically exact per-word sync or release sign-off.
   - id: SH-RM-190
     horizon: next
     status: approved

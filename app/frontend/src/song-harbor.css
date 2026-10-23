@@ -608,3 +608,26 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-floating-tool[aria-label="Whole-song section text"]{width:min(850px,calc(100vw - 55px));height:min(78vh,850px)}
 .song-floating-tool[aria-label="Whole-song section text"] .production-section-tool textarea{min-height:calc(45vh);height:calc(55vh);resize:vertical;white-space:pre;overflow:auto}
 .song-floating-tool[aria-label="Whole-song section text"] .production-tool-heading strong::after{content:" · entire song";font-size:11px;font-weight:400;opacity:.8}
+
+
+/* Provisional Audio Forensics inspector: compact, independently scrollable,
+   no modification to the wide mixer/section timeline. */
+.song-forensics{display:grid;gap:11px;font-size:12px;min-width:0;max-width:100%}
+.song-forensics-intro,.song-forensics-caveat{line-height:1.5;margin:0;color:var(--tws-color-text-muted)}
+.song-forensics-caveat{border-top:1px solid var(--tws-color-border-normal);padding-top:10px;font-size:11px}
+.song-forensics-controls,.song-forensics-result-heading,.song-forensics-actions{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.song-forensics button{color:inherit;cursor:pointer;border:1px solid var(--tws-color-border-normal);border-radius:5px;padding:6px 8px;background:var(--tws-color-surface-inset)}
+.song-forensics button:hover:not(:disabled){border-color:var(--tws-color-border-strong)}
+.song-forensics button:disabled{opacity:.55;cursor:not-allowed}
+.song-forensics-controls span,.song-forensics-result-heading small{font-size:11px;color:var(--tws-color-text-muted)}
+.song-forensics-status{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.song-forensics-status button{display:flex;align-items:center;justify-content:space-between;gap:7px;min-width:0;text-align:left}
+.song-forensics-status button strong{font-size:11px;font-weight:600}
+.song-forensics-status button span{font-variant-numeric:tabular-nums}
+.song-forensics-status button.is-selected{border-color:var(--tws-color-action-primary);background:var(--tws-color-surface-raised)}
+.song-forensics-results{display:grid;gap:7px}
+.song-forensics-list{display:grid;gap:8px;max-height:300px;overflow-y:auto}
+.song-forensics-list article{border:1px solid var(--tws-color-border-normal);border-radius:6px;padding:9px;display:grid;gap:5px}
+.song-forensics-list article p{margin:0;line-height:1.45}
+.song-forensics-list article small{color:var(--tws-color-text-muted);line-height:1.45}
+.song-floating-tool[aria-label="Audio forensics (experimental)"]{width:min(430px,calc(100vw - 60px))}

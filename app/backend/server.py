@@ -2190,6 +2190,35 @@ def ace_candidate_status(ident: str, candidate_id: str) -> dict[str, Any]:
         raise HTTPException(404, "ACE candidate not found") from exc
 
 
+@app.post("/api/projects/{ident}/ace/candidates/{candidate_id}/recover")
+def recover_ace_candidate(ident: str, candidate_id: str, request: Request) -> dict[str, Any]:
+    """Reprocess the preserved ACE WAV without rerunning costly generation."""
+    require_local_origin(request)
+    _, folder, _ = _ace_project(ident)
+    try:
+        directory = ace_candidates.candidate_directory(folder, candidate_id)
+        with lock:
+            record = ace_candidates.load_record(folder, candidate_id)
+            if record.get("state") != "failed":
+                raise HTTPException(409, "Only failed candidates can be recovered")
+            source = directory / "generated.wav"
+            if not source.is_file():
+                raise HTTPException(409, "No generated audio was preserved for recovery")
+            record["state"] = "processing"
+            ace_candidates.save_record(directory, record)
+        try:
+            return ace_candidates.crop_generated_candidate(
+                folder, candidate_id, source, dependency_tool("ffmpeg"))
+        except Exception as exc:
+            record = ace_candidates.load_record(folder, candidate_id)
+            record["state"] = "failed"
+            record["error"] = str(exc)[:500]
+            ace_candidates.save_record(directory, record)
+            raise HTTPException(400, str(exc)) from exc
+    except (ValueError, OSError) as exc:
+        raise HTTPException(404, "ACE candidate unavailable") from exc
+
+
 @app.get("/api/projects/{ident}/ace/candidates/{candidate_id}/audio")
 def ace_candidate_audio(ident: str, candidate_id: str):
     _, folder, _ = _ace_project(ident)

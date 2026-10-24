@@ -104,7 +104,7 @@ class CandidateTests(unittest.TestCase):
                                         result["samples"]["crop_end"]))
             self.assertEqual(ready["variants"][0]["file"], "target.wav")
 
-    def test_19ms_generation_shortfall_is_silence_padded(self):
+    def test_26ms_generation_shortfall_is_silence_padded(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
             original = folder / "source.wav"
@@ -121,7 +121,7 @@ class CandidateTests(unittest.TestCase):
                 calls.append(pad_tail)
                 destination.write_bytes(b"cropped")
             def probe(ffmpeg, path):
-                return required - 0.019 if path == generated else (
+                return required - 0.026 if path == generated else (
                     record["samples"]["crop_end"] - record["samples"]["crop_start"]) / 48000
             with patch("ace_candidates.probe_audio_duration", side_effect=probe), patch(
                 "ace_candidates.ffmpeg_extract", side_effect=crop
@@ -129,7 +129,7 @@ class CandidateTests(unittest.TestCase):
                 ready = crop_generated_candidate(folder, record["candidate_id"], generated, "ffmpeg")
             self.assertEqual(ready["state"], "ready")
             self.assertTrue(calls[0])
-            self.assertAlmostEqual(ready["generated_tail_padding_seconds"], 0.019, places=5)
+            self.assertAlmostEqual(ready["generated_tail_padding_seconds"], 0.026, places=5)
 
     def test_reject_short_generated_float_wav_before_crop(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -196,10 +196,13 @@ def crop_generated_candidate(project_folder: Path, candidate_id: str,
     # ffmpeg_extract resamples before applying sample-accurate 48 kHz bounds.
     duration = probe_audio_duration(ffmpeg, generated_file)
     required_seconds = to_end / record["sample_rate_hz"]
-    if duration + 0.002 < required_seconds:
+    missing = max(0.0, required_seconds - duration)
+    if missing > MAX_GENERATED_TAIL_PAD_SECONDS:
         raise AceError(
-            f"Generated context is too short ({duration:.3f}s; needs {required_seconds:.3f}s)")
-    ffmpeg_extract(ffmpeg, generated_file, destination, from_start, to_end)
+            f"Generated context is too short ({duration:.3f}s; needs {required_seconds:.3f}s; "
+            f"maximum automatic tail padding is {MAX_GENERATED_TAIL_PAD_SECONDS:.3f}s)")
+    ffmpeg_extract(ffmpeg, generated_file, destination, from_start, to_end,
+                   pad_tail=missing > 0)
     actual = probe_audio_duration(ffmpeg, destination)
     expected = (to_end - from_start) / record["sample_rate_hz"]
     if abs(actual - expected) > 0.003:

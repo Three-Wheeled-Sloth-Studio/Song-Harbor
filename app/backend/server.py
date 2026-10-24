@@ -2181,6 +2181,21 @@ def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
     return record
 
 
+@app.get("/api/projects/{ident}/ace/candidates")
+def list_ace_candidates(ident: str) -> dict[str, Any]:
+    """List durable candidates so a failed generation survives app relaunch."""
+    _, folder, _ = _ace_project(ident)
+    root = folder / "generated" / ace_candidates.CANDIDATE_FOLDER
+    found = []
+    for item in sorted(root.glob("*/candidate.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:30]:
+        try:
+            record = ace_candidates.load_record(folder, item.parent.name)
+            found.append(record)
+        except (ValueError, OSError, KeyError):
+            continue
+    return {"candidates": found}
+
+
 @app.get("/api/projects/{ident}/ace/candidates/{candidate_id}")
 def ace_candidate_status(ident: str, candidate_id: str) -> dict[str, Any]:
     _, folder, _ = _ace_project(ident)

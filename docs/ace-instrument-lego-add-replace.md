@@ -1,0 +1,52 @@
+# Native Lego instrument workflows: Add and Replace
+
+Status: design and validation contract; Base-model Lego NOT yet installed or tested.
+Date: 2026-10-24
+
+## First-class instrumental operations
+
+**Add layer**: Generate one isolated instrumental part using the arrangement as backing context. A/B is original versus original plus candidate. Accept inserts one positioned track only after explicit confirmation.
+
+**Replace part**: Select an existing identified instrument track and a From/To section range. Generate a replacement part using backing that excludes that instrument in the selected target region. A/B is original versus other tracks plus generated instrument IN PLACE OF the original within the range. Other tracks and the original instrument outside the range remain unchanged. Accept writes a reversible regional-replacement edit, never overwrites source WAV.
+
+Both workflows use the existing context-before/context-after range, immutable candidate metadata, source revision, sample-aligned crop, candidate history, no mutations before acceptance, and shared-clock A/B without seek on switching.
+
+## ACE capabilities
+
+Installed Turbo only supports Cover/Repaint and is not an isolated Lego generator. Base and XL-Base support native lego and extract; user approval is required before model download. Never silently fall back from Lego to Cover. Validate checkpoint config, native /v1/model_inventory, exact loaded model, and real Lego output on the local installation before enabling Generate.
+
+Native instrument taxonomy: woodwinds, brass, fx, synth, strings, percussion, keyboard, guitar, bass, drums. Vocal and backing_vocal classes are excluded from these instrumental workflows. Violin and cello use instrument class strings, with timbre and phrasing details in Direction. Bass uses bass.
+
+Payload hypothesis for local validation: /release_task multipart ctx_audio with task_type=lego, track_name canonical instrument class, prompt musical direction, lyrics=[Instrumental], installed Base model, seed, duration and optional musical metadata. Test actual local API behavior before shipping; track_name handling and repainting_start/end semantics must be verified, not assumed.
+
+## Source construction
+
+Add: Render selected project backing over full context, preserving existing source gains, timeline positions, and applicable automation. Lego output should be a separate instrument track aligned to context_start and cropped to target.
+
+Replace: Identify target track by stable track ID, not display name. Build backing from all participating layers except that target over the selected region. Preserve original target as optional conditioning outside the region where supported. If the source is only a full mixed file, do not imply that the original part can be replaced without extraction; require a verified Extract-then-Replace preparation step.
+
+All source inputs need a versioned manifest identifying included/excluded tracks, their positions and gains, selected range, and source fingerprints.
+
+## Audition and acceptance
+
+A: original mix. B Add: original plus candidate. B Replace: original target region gain ramps down as candidate ramps up; only selected range is affected. Both use same shared playback clock; initial pre-roll defaults to five seconds but later A/B toggles do not seek. At region boundaries support short configurable crossfades and avoid doubled bass or silence holes.
+
+Accept Add: positioned track import with duplicate guard. Accept Replace: non-destructive replacement edit referencing target track ID, candidate asset, boundaries and fade settings; supports disabling/undo. Preview, saved playback and export must agree. Do not permanently rewrite or delete original instrument files.
+
+## UI
+
+Compact mode selector: Add instrument / Replace instrument. Instrument family selector from ACE taxonomy. Replace mode adds target track picker with notice that original remains intact. Keep From/To, context offsets and full-width Direction. Hide technical engine details under expandable controls. Show Base checkpoint required when Lego unavailable.
+
+## Implementation sequence
+
+1. Local checkpoint installation and Lego proof of concept, only after explicit download authorization. Start with standard 2B Base on RTX 4070 12GB, measure real VRAM and runtime; avoid XL until feasible.
+2. Implement model-neutral add/replace request schema, track taxonomy and capability gating. No silent Turbo fallback.
+3. Implement project backing render, target instrument exclusion for replace, and immutable provenance.
+4. Implement native Lego submit/poll/download and output-isolation validation.
+5. Implement region-aware shared-clock A/B attenuation and candidate playback, then reversible replacement edit and export parity.
+
+## QA
+
+Check unavailable checkpoint; model and track-class validation; violin uses strings; Add creates isolated candidate; Replace Bass affects only target region with no doubling; L/R stems and imported position; overlapping regions; original outside region preserved; undo; source revision conflicts; preview and export parity; GPU release; cold/warm VRAM and elapsed times.
+
+Sources: https://ace-step.github.io/ACE-Step-1.5/en/INFERENCE ; https://github.com/ace-step/ACE-Step-1.5/blob/main/acestep/constants.py

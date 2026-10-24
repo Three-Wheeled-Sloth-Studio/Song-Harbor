@@ -133,26 +133,33 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   }
   return <div className="song-accompaniment-tool" style={{display:"grid",gap:"0.7rem",minWidth:"min(400px,76vw)",maxWidth:"480px"}}>
     <small>ACE: {ready?"Turbo ready":runtime?.status==="connected"?"Model not loaded; use Settings > Components":"Not connected; enable ACE in Settings"}</small>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
-      <label>From section
-        <select style={{width:"100%",minWidth:0,boxSizing:"border-box"}} value={fromId} onChange={e=>{setFromId(e.target.value);if(sections.findIndex(s=>s.id===e.target.value)>toIndex)setToId(e.target.value);}}>
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",columnGap:"0.65rem",alignItems:"start",width:"100%",minWidth:0}}>
+      <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+        <span>From section</span>
+        <select aria-label="From section" style={{display:"block",width:"100%",minWidth:0,boxSizing:"border-box",height:"2rem"}}
+          value={fromId} onChange={e=>{const next=e.target.value;setFromId(next);if(sections.findIndex(s=>s.id===next)>toIndex)setToId(next);}}>
           {sections.map(s=><option value={s.id} key={s.id}>{sectionLabel(s)}</option>)}
         </select>
-      </label>
-      <label>To section
-        <select value={toId} onChange={e=>setToId(e.target.value)}>
-          {sections.map(s=><option value={s.id} key={s.id}>{sectionLabel(s)}</option>)}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+        <span>To section</span>
+        <select aria-label="To section" style={{display:"block",width:"100%",minWidth:0,boxSizing:"border-box",height:"2rem"}}
+          value={toId} onChange={e=>setToId(e.target.value)}>
+          {sections.map((s,i)=><option value={s.id} key={s.id} disabled={i<fromIndex}>{sectionLabel(s)}</option>)}
         </select>
-      </label>
+      </div>
     </div>
     {validRange?<small>Target: {start.toFixed(3)}s to {end.toFixed(3)}s ({(end-start).toFixed(1)}s)</small>:<small role="alert">To section must follow From section.</small>}
     <div style={{display:"flex",gap:"0.5rem",flexWrap:"wrap"}}>
       <label>Context before (s) <input type="number" min="0" max="240" step="1" value={before} onChange={e=>setBefore(Number(e.target.value))}/></label>
       <label>After (s) <input type="number" min="0" max="240" step="1" value={after} onChange={e=>setAfter(Number(e.target.value))}/></label>
     </div>
-    <label>Accompaniment direction
-      <textarea rows={3} value={prompt} onChange={e=>setPrompt(e.target.value)}/>
-    </label>
+    <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",width:"100%",minWidth:0}}>
+      <label htmlFor="ace-accompaniment-direction">Direction</label>
+      <textarea id="ace-accompaniment-direction" rows={4} style={{display:"block",width:"100%",minWidth:0,boxSizing:"border-box",resize:"vertical"}}
+        value={prompt} placeholder="Instrument, musical role, mood, and constraints"
+        onChange={e=>setPrompt(e.target.value)}/>
+    </div>
     <details><summary>Generation parameters</summary>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0.5rem"}}>
         <label>Seed<input type="number" min="0" max="4294967295" value={seed} onChange={e=>setSeed(e.target.value)}/></label>

@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from ace_adapter import AceClient, AceError, unwrap
+from ace_install import checkpoint_root, model_complete
 
 class AceServiceError(RuntimeError):
     pass
@@ -94,17 +95,19 @@ class AceServiceManager:
         with self._lock:
             if self.client.discover().get("status") != "connected":
                 raise AceServiceError("Start or connect ACE before loading a model")
-            if name != "acestep-v15-turbo":
-                raise AceServiceError("Only the verified installed turbo checkpoint is enabled for this release")
-            directory = self.installation / "checkpoints" / name
+            if name not in ("acestep-v15-turbo", "acestep-v15-base"):
+                raise AceServiceError("Model is not allowed for this release")
+            directory = checkpoint_root(self.installation) / name
             config = directory / "config.json"
             if not directory.is_dir() or not config.is_file():
                 raise AceServiceError("The selected ACE checkpoint is not verified on disk")
             try:
                 import json
                 settings = json.loads(config.read_text(encoding="utf-8"))
-                if settings.get("is_turbo") is not True:
-                    raise AceServiceError("Local checkpoint config is not confirmed turbo")
+                if settings.get("is_turbo") is not (name == "acestep-v15-turbo"):
+                    raise AceServiceError("Checkpoint config does not match selected model")
+                if name == "acestep-v15-base" and not model_complete(directory):
+                    raise AceServiceError("Base checkpoint is incomplete; model load was blocked")
                 # Confirm ACE independently sees the exact same installed checkpoint.
                 inventory = unwrap(self.client.request("/v1/model_inventory"))
                 if not any(row.get("name") == name for row in inventory.get("models", [])

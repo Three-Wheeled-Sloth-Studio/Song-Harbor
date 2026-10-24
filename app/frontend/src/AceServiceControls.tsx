@@ -59,20 +59,22 @@ export function AceServiceControls({open}:{open:boolean}){
     finally{setBusy(false);}
   }
   const state=status?.state||"unknown";
+  const activeModel=status?.runtime?.ready?status.runtime.loaded_model:null;
+  const activeLabel=activeModel==="acestep-v15-base"?"Base":activeModel==="acestep-v15-turbo"?"Turbo":activeModel||null;
   return <div className="setting-tool-row" style={{alignItems:"center",gap:"0.65rem",flexWrap:"wrap"}}>
     <strong>ACE-Step</strong>
-    <Status tone={state==="running_ready"?"success":state==="not_installed"?"warning":"neutral"}>{label(state)}</Status>
+    <Status tone={state==="running_ready"?"success":state==="not_installed"?"warning":"neutral"}>{activeLabel?activeLabel+" active":label(state)}</Status>
     <div className="setting-controls" style={{marginLeft:"auto"}}>
       {status?.can_start&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("start")}>Enable</Button>}
-      {state==="running_uninitialized"&&status?.runtime?.models?.some(m=>m.name==="acestep-v15-turbo")&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("initialize")}>Load model</Button>}
-      {install?.installed&&status?.runtime?.status==="connected"&&status.runtime.loaded_model!=="acestep-v15-base"&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("initialize","acestep-v15-base")}>Load Base</Button>}
+      {state==="running_uninitialized"&&status?.runtime?.models?.some(m=>m.name==="acestep-v15-turbo")&&<Button size="compact" variant="primary" disabled={busy} onClick={()=>void change("initialize")}>Load Turbo</Button>}
+      {install?.installed&&status?.runtime?.status==="connected"&&status.runtime.loaded_model!=="acestep-v15-base"&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("initialize","acestep-v15-base")}>Switch to Base</Button>}
       {status?.can_stop&&<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void change("stop")}>Stop</Button>}
       <details>
         <summary style={{cursor:"pointer",fontSize:"0.82rem"}}>Details</summary>
         <div style={{padding:"0.4rem 0",maxWidth:"26rem"}}>
           <small style={{display:"block",overflowWrap:"anywhere"}}>Installation: {status?.installed?status.installation:"Not found"}</small>
           <small style={{display:"block"}}>Service: {status?.owned?"Managed by Song Harbor":status?.runtime?.status==="connected"?"External connection":"Not running"}{status?.pid?" (PID "+status.pid+")":""}</small>
-          <small style={{display:"block"}}>Models: {status?.runtime?.models?.map(m=>m.name+(m.loaded?" (loaded)":"")).join(", ")||"None reported"}</small>
+          <small style={{display:"block"}}>Models: {status?.runtime?.models?.map(m=>m.name+(m.name===activeModel?" (active)":"")).join(", ")||"None reported"}</small>
           {status?.runtime?.error&&<small style={{display:"block",overflowWrap:"anywhere"}}>{status.runtime.error}</small>}
           <small style={{display:"block",overflowWrap:"anywhere"}}>ACE checkpoints: {install?.checkpoint_root||"Checking..."}</small>
           {install?.installed?<small style={{display:"block"}}>Base checkpoint installed</small>

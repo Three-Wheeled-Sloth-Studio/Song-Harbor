@@ -28,7 +28,7 @@ def checkpoint_root(installation: Path, environment: dict[str,str] | None = None
                 row = line.strip()
                 if row.startswith("export "): row = row[7:].strip()
                 if row.startswith("ACESTEP_CHECKPOINTS_DIR="):
-                    value = row.split("=", 1)[1].strip().strip("\\\"").strip("\'")
+                    value = row.split("=", 1)[1].strip().strip(chr(34)).strip(chr(39))
                     break
     if not value:
         return (installation / "checkpoints").resolve()

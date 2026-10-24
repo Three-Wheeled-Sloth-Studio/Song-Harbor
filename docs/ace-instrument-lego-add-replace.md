@@ -39,7 +39,7 @@ Compact mode selector: Add instrument / Replace instrument. Instrument family se
 
 ## Implementation sequence
 
-1. Local checkpoint installation and Lego proof of concept, only after explicit download authorization. Start with standard 2B Base on RTX 4070 12GB, measure real VRAM and runtime; avoid XL until feasible.
+1. Use Settings > Components > ACE-Step > Details > Install Base model with explicit confirmation. Resolve the checkpoint directory from ACESTEP_CHECKPOINTS_DIR (environment or ACE .env), otherwise under the detected ACE checkout checkpoints directory. Never use Song Harbor's models directory. Load Base, validate a native Lego output, and measure VRAM/runtime before exposing Lego generation. Avoid XL until feasible.
 2. Implement model-neutral add/replace request schema, track taxonomy and capability gating. No silent Turbo fallback.
 3. Implement project backing render, target instrument exclusion for replace, and immutable provenance.
 4. Implement native Lego submit/poll/download and output-isolation validation.

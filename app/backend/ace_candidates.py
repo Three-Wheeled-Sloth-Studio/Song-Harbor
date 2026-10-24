@@ -22,6 +22,7 @@ CANDIDATE_FOLDER = "ace-candidates"
 ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 MAX_CONTEXT_SECONDS = 240.0
 MAX_CANDIDATES = 4
+MAX_GENERATED_TAIL_PAD_SECONDS = 0.100
 
 
 def sample_bounds(selection: Selection, rate: int = 48000) -> dict[str, int]:
@@ -104,12 +105,12 @@ def load_record(project_folder: Path, candidate_id: str) -> dict[str, Any]:
 
 
 def ffmpeg_extract(ffmpeg: str, source: Path, destination: Path,
-                   start_sample: int, end_sample: int, rate: int = 48000) -> None:
+                   start_sample: int, end_sample: int, rate: int = 48000,\n                   pad_tail: bool = False) -> None:
     """Sample-bounded trim; outputs WAV suitable for ACE upload and audition."""
     if end_sample <= start_sample or start_sample < 0:
         raise ValueError("Invalid audio interval")
     destination.parent.mkdir(parents=True, exist_ok=True)
-    filters = (f"aresample={rate},atrim=start_sample={start_sample}:"
+    filters = (f"aresample={rate}," + ("apad," if pad_tail else "") + f"atrim=start_sample={start_sample}:"
                f"end_sample={end_sample},asetpts=PTS-STARTPTS")
     try:
         subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
@@ -203,7 +204,7 @@ def crop_generated_candidate(project_folder: Path, candidate_id: str,
     if abs(actual - expected) > 0.003:
         destination.unlink(missing_ok=True)
         raise AceError(f"Candidate crop length mismatch ({actual:.3f}s vs {expected:.3f}s)")
-    record["variants"].append({"kind": "raw-cover-crop" if record["task_type"] == "cover"
+    record["generated_tail_padding_seconds"] = round(missing, 6)\n    record["variants"].append({"kind": "raw-cover-crop" if record["task_type"] == "cover"
                                else "native-generated", "file": destination.name,
                                "isolation": record["isolation"]})
     record["state"] = "ready"

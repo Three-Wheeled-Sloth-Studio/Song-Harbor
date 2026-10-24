@@ -87,7 +87,7 @@ class CandidateTests(unittest.TestCase):
             generated = directory / "generated.wav"
             generated.write_bytes(b"fake")
             calls = []
-            def crop(ffmpeg, source, destination, start, end, rate=48000):
+            def crop(ffmpeg, source, destination, start, end, rate=48000, pad_tail=False):
                 calls.append((start, end))
                 destination.write_bytes(b"cropped")
             target_length = (result["samples"]["crop_end"] - result["samples"]["crop_start"]) / 48000
@@ -103,6 +103,33 @@ class CandidateTests(unittest.TestCase):
             self.assertEqual(calls[0], (result["samples"]["crop_start"],
                                         result["samples"]["crop_end"]))
             self.assertEqual(ready["variants"][0]["file"], "target.wav")
+
+    def test_19ms_generation_shortfall_is_silence_padded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            original = folder / "source.wav"
+            original.write_bytes(b"source")
+            with patch("ace_candidates.ffmpeg_extract", side_effect=lambda f,s,d,a,b,rate=48000: d.write_bytes(b"context")):
+                record = create_candidate(self.project, folder, original, self.b, self.b,
+                                          15, 0, "acestep-v15-turbo", "Violin",
+                                          "cover", self.models, "ffmpeg")
+            generated = candidate_directory(folder, record["candidate_id"]) / "generated.wav"
+            generated.write_bytes(b"generated")
+            required = record["samples"]["crop_end"] / 48000
+            calls = []
+            def crop(ffmpeg, source, destination, start, end, rate=48000, pad_tail=False):
+                calls.append(pad_tail)
+                destination.write_bytes(b"cropped")
+            def probe(ffmpeg, path):
+                return required - 0.019 if path == generated else (
+                    record["samples"]["crop_end"] - record["samples"]["crop_start"]) / 48000
+            with patch("ace_candidates.probe_audio_duration", side_effect=probe), patch(
+                "ace_candidates.ffmpeg_extract", side_effect=crop
+            ):
+                ready = crop_generated_candidate(folder, record["candidate_id"], generated, "ffmpeg")
+            self.assertEqual(ready["state"], "ready")
+            self.assertTrue(calls[0])
+            self.assertAlmostEqual(ready["generated_tail_padding_seconds"], 0.019, places=5)
 
     def test_reject_short_generated_float_wav_before_crop(self):
         with tempfile.TemporaryDirectory() as tmp:

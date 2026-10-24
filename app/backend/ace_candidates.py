@@ -183,7 +183,7 @@ def crop_generated_candidate(project_folder: Path, candidate_id: str,
                              generated_file: Path, ffmpeg: str) -> dict[str, Any]:
     """Materialize the requested target from a context-aligned ACE output."""
     record = load_record(project_folder, candidate_id)
-    if record["state"] not in ("prepared", "generating", "processing"):
+    if record["state"] not in ("prepared", "generating", "processing", "failed"):
         raise ValueError("Candidate state is not suitable for processing")
     directory = candidate_directory(project_folder, candidate_id)
     if generated_file.resolve().parent != directory.resolve() or not generated_file.is_file():

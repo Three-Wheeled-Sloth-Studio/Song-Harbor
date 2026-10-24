@@ -33,6 +33,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [seed,setSeed]=useState("150719");
   const [runtime,setRuntime]=useState<Runtime|null>(null);
   const [candidate,setCandidate]=useState<Candidate|null>(null);
+  const [history,setHistory]=useState<Candidate[]>([]);
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
   const [compare,setCompare]=useState<"A"|"B">("A");
@@ -41,6 +42,15 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [notice,setNotice]=useState("");
   const candidateRef=useRef<string|null>(null);
   const base="/api/projects/"+jobId+"/ace/candidates";
+  useEffect(()=>{
+    let alive=true;
+    void jsonResponse<{candidates:Candidate[]}>(base).then(data=>{
+      if(!alive)return;
+      setHistory(data.candidates||[]);
+      setCandidate(existing=>existing||(data.candidates||[])[0]||null);
+    }).catch(()=>{});
+    return()=>{alive=false;};
+  },[base]);
   useEffect(()=>{
     if(!sections.length)return;
     setFromId(v=>sections.some(s=>s.id===v)?v:sections[0].id);
@@ -92,6 +102,18 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       const result=await jsonResponse<Candidate>(base,{method:"POST",headers:{"Content-Type":"application/json"},
                                                        body:JSON.stringify(body)});
       setCandidate(result);
+      setHistory(current=>[result,...current.filter(item=>item.candidate_id!==result.candidate_id)].slice(0,30));
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
+  async function recover(){
+    if(!candidate||candidate.state!=="failed"||busy)return;
+    setBusy(true);setError("");
+    try{
+      const restored=await jsonResponse<Candidate>(base+"/"+candidate.candidate_id+"/recover",{method:"POST"});
+      setCandidate(restored);
+      setHistory(current=>current.map(item=>item.candidate_id===restored.candidate_id?restored:item));
+      setNotice("Preserved audio recovered. No new generation was needed.");
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
@@ -168,10 +190,20 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       </div>
     </details>
     <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":"Generate accompaniment"}</button>
+    {history.length>0&&<div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+      <label htmlFor="ace-candidate-history">Saved candidates</label>
+      <select id="ace-candidate-history" style={{width:"100%",minWidth:0}} value={candidate?.candidate_id||""}
+        onChange={e=>setCandidate(history.find(item=>item.candidate_id===e.target.value)||null)}>
+        {history.map(item=><option value={item.candidate_id} key={item.candidate_id}>
+          {item.prompt.slice(0,48)} · {item.state} · {item.candidate_id.slice(0,8)}
+        </option>)}
+      </select>
+    </div>}
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
       <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Generated audio candidate."}</small>
       {candidate.error&&<small role="alert">{candidate.error}</small>}
+      {candidate.state==="failed"&&<button type="button" disabled={busy} onClick={()=>void recover()}>Recover preserved audio</button>}
       {candidate.state==="ready"&&<>
         <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}>
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Audition with pre-roll"}</button>

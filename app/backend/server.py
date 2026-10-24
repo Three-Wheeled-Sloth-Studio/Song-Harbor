@@ -2030,9 +2030,27 @@ def open_folder(ident: str, request: Request) -> dict[str, bool]:
 import ace_service
 import ace_locations
 
+import ace_install
+
 ACE_HOME = ace_locations.discover_installation(APP_ROOT) or (APP_ROOT / "ace-not-configured")
 ace_manager = ace_service.AceServiceManager(
     ACE_HOME, log_directory=DATA_ROOT / "logs")
+ace_installer = ace_install.Installer(ACE_HOME)
+
+
+@app.get("/api/ace/models/install")
+def ace_model_install_status() -> dict[str, Any]:
+    return ace_installer.inspect()
+
+
+@app.post("/api/ace/models/install/base")
+def ace_model_install_base(request: Request) -> dict[str, Any]:
+    """Explicit opt-in. Download only official Base into ACE's own checkpoint root."""
+    require_local_origin(request)
+    try:
+        return ace_installer.install()
+    except (ValueError, OSError) as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.get("/api/ace/service")

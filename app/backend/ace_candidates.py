@@ -57,8 +57,15 @@ def validate_generation(project: dict[str, Any], from_section_id: str,
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 2000:
         raise ValueError("An accompaniment prompt of 1-2000 characters is required")
     available = next((m for m in capabilities.get("models", []) if m["name"] == model), None)
-    if available is None or task_type not in available.get("validated_tasks", []):
-        raise ValueError("Model or generation mode is not verified and available")
+    if available is None:
+        raise ValueError("Selected model is unavailable")
+    if task_type == "lego":
+        if model != "acestep-v15-base" or not available.get("loaded"):
+            raise ValueError("Native Lego requires the loaded ACE Base checkpoint")
+        if "lego" not in available.get("reported_tasks", []):
+            raise ValueError("ACE model inventory does not report native Lego support")
+    elif task_type not in available.get("validated_tasks", []):
+        raise ValueError("Selected model does not support the requested task")
     if task_type not in ("cover", "lego"):
         raise ValueError("Only cover and verified Lego modes may create accompaniment candidates")
     return selection, sample_bounds(selection)

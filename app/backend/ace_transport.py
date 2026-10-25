@@ -29,9 +29,10 @@ def _headers(client: AceClient) -> dict[str, str]:
     return headers
 
 
-def submit_cover(client: AceClient, context_file: Path, model: str, prompt: str,
+def submit_instrument(client: AceClient, context_file: Path, model: str, prompt: str,
                  seed: int, bpm: int | None = None, key: str = "",
-                 meter: str = "4/4", duration: float | None = None) -> str:
+                 meter: str = "4/4", duration: float | None = None, *, task_type: str = "cover",
+                 track_name: str = "") -> str:
     """Multipart ctx_audio submission: ACE owns its temporary upload copy."""
     if not context_file.is_file() or not 44 <= context_file.stat().st_size <= MAX_CONTEXT_BYTES:
         raise ValueError("Context must be a valid-size WAV file")
@@ -41,14 +42,23 @@ def submit_cover(client: AceClient, context_file: Path, model: str, prompt: str,
         raise ValueError("Model and prompt required")
     if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:
         raise ValueError("Invalid seed")
+    if task_type not in ("cover", "lego"):
+        raise ValueError("Unsupported ACE instrumental task type")
+    if task_type == "lego":
+        from instrument_generation import normalize_instrument
+        if model != "acestep-v15-base":
+            raise ValueError("Native Lego requires the loaded ACE Base model")
+        track_name = normalize_instrument(track_name)
     fields: dict[str, Any] = {
-        "task_type": "cover", "model": model, "prompt": prompt, "lyrics": "[Instrumental]",
+        "task_type": task_type, "model": model, "prompt": prompt, "lyrics": "[Instrumental]",
         "thinking": False, "use_random_seed": False, "seed": seed,
-        "inference_steps": 8, "guidance_scale": 7.0, "batch_size": 1,
+        "inference_steps": 50 if task_type == "lego" else 8, "guidance_scale": 7.0, "batch_size": 1,
         "audio_cover_strength": 0.8, "cover_noise_strength": 0.2,
         "audio_format": "wav", "use_tiled_decode": True,
         "time_signature": meter, "key_scale": key,
     }
+    if task_type == "lego":
+        fields["track_name"] = track_name
     if bpm is not None:
         if not isinstance(bpm, int) or not 30 <= bpm <= 300:
             raise ValueError("BPM must be an integer from 30-300")
@@ -80,6 +90,12 @@ def submit_cover(client: AceClient, context_file: Path, model: str, prompt: str,
         raise AceError("ACE did not return a valid task ID")
     return submitted["task_id"]
 
+
+def submit_cover(client: AceClient, context_file: Path, model: str, prompt: str,
+                 seed: int, bpm: int | None = None, key: str = "",
+                 meter: str = "4/4", duration: float | None = None) -> str:
+    return submit_instrument(client, context_file, model, prompt, seed,
+                             bpm=bpm, key=key, meter=meter, duration=duration)
 
 def poll_cover(client: AceClient, task_id: str) -> dict[str, Any]:
     if not TASK_ID.fullmatch(task_id):

@@ -59,6 +59,10 @@ def submit_instrument(client: AceClient, context_file: Path, model: str, prompt:
     }
     if task_type == "lego":
         fields["track_name"] = track_name
+        fields["instruction"] = "Generate the " + track_name.upper() + " track based on the audio context:"
+        fields["global_caption"] = prompt
+        fields["repainting_start"] = 0.0
+        fields["repainting_end"] = -1
     if bpm is not None:
         if not isinstance(bpm, int) or not 30 <= bpm <= 300:
             raise ValueError("BPM must be an integer from 30-300")

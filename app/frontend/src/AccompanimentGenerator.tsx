@@ -60,9 +60,12 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   },[sections]);
   useEffect(()=>{
     let mounted=true;
-    void jsonResponse<Runtime>("/api/ace/discovery").then(value=>{if(mounted)setRuntime(value);})
-      .catch(e=>{if(mounted)setError(String(e));});
-    return()=>{mounted=false;engine?.clearCandidatePreview();};
+    const refresh=()=>{void jsonResponse<Runtime>("/api/ace/discovery")
+      .then(value=>{if(mounted)setRuntime(value);})
+      .catch(e=>{if(mounted)setError(String(e));});};
+    refresh();
+    const timer=window.setInterval(refresh,5000);
+    return()=>{mounted=false;window.clearInterval(timer);engine?.clearCandidatePreview();};
   },[jobId]);
   useEffect(()=>{
     if(!candidate||candidate.state==="ready"||candidate.state==="failed")return;

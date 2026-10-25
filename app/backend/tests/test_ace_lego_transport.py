@@ -39,7 +39,8 @@ class LegoTransportTests(unittest.TestCase):
                          b'name="track_name"\r\n\r\nstrings',
                          b'name="model"\r\n\r\nacestep-v15-base',
                          b'name="inference_steps"\r\n\r\n50',
-                         b'name="lyrics"\r\n\r\n[Instrumental]'):
+                         b'name="lyrics"\r\n\r\n[Instrumental]',
+                         b'name="instruction"\r\n\r\nGenerate the STRINGS track based on the audio context:'):
                 self.assertIn(part,body)
             return Response()
         with patch("ace_transport.urllib.request.urlopen",side_effect=capture):

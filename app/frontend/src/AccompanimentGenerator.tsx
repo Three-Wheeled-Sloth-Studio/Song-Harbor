@@ -2,8 +2,8 @@ import {useEffect,useRef,useState} from "react";
 import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
-type Runtime={status:string;ready?:boolean;loaded_model?:string|null;models?:{name:string;validated_tasks?:string[]}[]};
-type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number};
+type Runtime={status:string;ready?:boolean;loaded_model?:string|null;models?:{name:string;validated_tasks?:string[];reported_tasks?:string[];loaded?:boolean}[]};
+type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number;task_type?:string;instrument?:string;operation?:string};
 type ImportResult={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
   playing:boolean;position:number;onSeek:(time:number)=>void;onPlay:()=>Promise<void>;
@@ -27,6 +27,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [after,setAfter]=useState(0);
   const [preRoll,setPreRoll]=useState(5);
   const [prompt,setPrompt]=useState("");
+  const [mode,setMode]=useState<"lego"|"cover">("lego");
+  const [instrument,setInstrument]=useState("strings");
   const [alias,setAlias]=useState("Accompaniment");
   const [bpm,setBpm]=useState("");
   const [key,setKey]=useState("");
@@ -87,7 +89,10 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const start=fromIndex>=0?sections[fromIndex].start_seconds:0;
   const end=toIndex>=0?sections[toIndex].end_seconds:0;
   const validRange=fromIndex>=0&&toIndex>=fromIndex;
-  const ready=runtime?.ready&&runtime.loaded_model==="acestep-v15-turbo";
+  const currentModel=mode==="lego"?"acestep-v15-base":"acestep-v15-turbo";
+  const modelReady=!!runtime?.ready&&runtime.loaded_model===currentModel;
+  const legoSupported=runtime?.models?.some(m=>m.name==="acestep-v15-base"&&m.reported_tasks?.includes("lego"));
+  const ready=modelReady&&(mode==="cover"||!!legoSupported);
   const audioUrl=candidate?base+"/"+candidate.candidate_id+"/audio":null;
   const selectedId=candidate?.candidate_id;
   async function generate(){
@@ -97,7 +102,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       engine?.clearCandidatePreview();
       setCompare("A");
       const body={from_section_id:fromId,to_section_id:toId,context_before:before,context_after:after,
-                  prompt,model:"acestep-v15-turbo",seed:Number(seed),
+                  prompt,model:currentModel,task_type:mode,operation:"add",instrument:mode==="lego"?instrument:"",seed:Number(seed),
                   bpm:bpm.trim()?Number(bpm):null,key};
       const result=await jsonResponse<Candidate>(base,{method:"POST",headers:{"Content-Type":"application/json"},
                                                        body:JSON.stringify(body)});
@@ -154,7 +159,30 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     finally{setBusy(false);}
   }
   return <div className="song-accompaniment-tool" style={{display:"grid",gap:"0.7rem",minWidth:"min(400px,76vw)",maxWidth:"480px"}}>
-    <small>ACE: {ready?"Turbo ready":runtime?.status==="connected"?"Model not loaded; use Settings > Components":"Not connected; enable ACE in Settings"}</small>
+    <small>ACE: {ready?(mode==="lego"?"Base ready for Lego (experimental)":"Turbo ready for Cover"):runtime?.status==="connected"?(mode==="lego"&&!legoSupported?"Base Lego not reported by ACE inventory":"Switch to "+(mode==="lego"?"Base":"Turbo")+" in Settings > Components"):"Not connected; enable ACE in Settings"}</small>
+    <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",gap:"0.6rem",minWidth:0}}>
+      <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+        <label htmlFor="ace-generation-mode">Method</label>
+        <select id="ace-generation-mode" style={{width:"100%",minWidth:0}} value={mode} onChange={e=>setMode(e.target.value as "lego"|"cover")}>
+          <option value="lego">Lego · isolated instrument (Base)</option>
+          <option value="cover">Experimental Cover · full mix (Turbo)</option>
+        </select>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+        <label htmlFor="ace-operation">Operation</label>
+        <select id="ace-operation" style={{width:"100%",minWidth:0}} value="add" onChange={()=>{}}>
+          <option value="add">Add instrument</option>
+          <option value="replace" disabled>Replace instrument (next stage)</option>
+        </select>
+      </div>
+    </div>
+    {mode==="lego"&&<div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+      <label htmlFor="ace-instrument-family">Instrument family</label>
+      <select id="ace-instrument-family" value={instrument} style={{width:"100%",minWidth:0}} onChange={e=>setInstrument(e.target.value)}>
+        {["strings","bass","guitar","drums","percussion","keyboard","synth","woodwinds","brass","fx"].map(name=><option key={name} value={name}>{name.charAt(0).toUpperCase()+name.slice(1)}</option>)}
+      </select>
+      <small>For violin or cello, choose Strings and describe the part in Direction.</small>
+    </div>}
     <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",columnGap:"0.65rem",alignItems:"start",width:"100%",minWidth:0}}>
       <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
         <span>From section</span>
@@ -189,7 +217,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
         <label>Key (optional)<input value={key} onChange={e=>setKey(e.target.value)}/></label>
       </div>
     </details>
-    <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":"Generate accompaniment"}</button>
+    <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":mode==="lego"?"Generate Lego instrument":"Generate experimental Cover"}</button>
     {history.length>0&&<div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
       <label htmlFor="ace-candidate-history">Saved candidates</label>
       <select id="ace-candidate-history" style={{width:"100%",minWidth:0}} value={candidate?.candidate_id||""}
@@ -201,7 +229,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     </div>}
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
-      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Generated audio candidate."}</small>
+      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Native Lego candidate (isolation not yet verified on this machine). Audition before accepting."}</small>
       {candidate.error&&<small role="alert">{candidate.error}</small>}
       {candidate.state==="failed"&&<button type="button" disabled={busy} onClick={()=>void recover()}>Recover preserved audio</button>}
       {candidate.state==="ready"&&<>

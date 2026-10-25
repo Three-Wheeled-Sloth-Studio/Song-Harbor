@@ -37,6 +37,15 @@ Accept Add: positioned track import with duplicate guard. Accept Replace: non-de
 
 Compact mode selector: Add instrument / Replace instrument. Instrument family selector from ACE taxonomy. Replace mode adds target track picker with notice that original remains intact. Keep From/To, context offsets and full-width Direction. Hide technical engine details under expandable controls. Show Base checkpoint required when Lego unavailable.
 
+## Wired implementation status (2026-10-25)
+
+- **Add / Lego:** Frontend mode selector now selects native Lego with an instrumental family, keeps experimental Turbo Cover distinct, and sends an explicit `task_type=lego` request when the matching Base checkpoint is loaded.
+- Backend checks local ACE inventory for Lego support and current Base readiness. ACE multipart includes `track_name`, explicit `instruction` identifying that family, musical Direction, `[Instrumental]` lyrics, and 50 diffusion steps. Existing candidate history, source-context extraction, crop, A/B preview, and position-aware Add acceptance are reused.
+- **Replace:** Reserved in UI but disabled. No destructive substitution or misleading A/B exists. Requires project stem-excluded backing construction, interval-specific muting, and undo/export parity before enablement.
+- **Not runtime verified:** No ACE inference occurred on the Laptop-Pred. The pinned ACE checkout has not yet been GPU-tested with this exact payload. Native Lego isolation and temporal alignment must be confirmed on the main desktop.
+- **Offline QA:** `python -m unittest discover -s app/backend/tests -p "test_ace*.py"` and `npm run build` from `app/frontend`, then live Base Strings generation using 20-30s context. Capture ACE errors, actual model loaded, wall time, peak VRAM, returned WAV channels/duration, and audible isolated part.
+- On acceptance test verify no original track is changed before explicit Add, A/B switching stays on the shared clock, and Turbo Cover still behaves as before.
+
 ## Implementation sequence
 
 1. Use Settings > Components > ACE-Step > Details > Install Base model with explicit confirmation. Resolve the checkpoint directory from ACESTEP_CHECKPOINTS_DIR (environment or ACE .env), otherwise under the detected ACE checkout checkpoints directory. Never use Song Harbor's models directory. Load Base, validate a native Lego output, and measure VRAM/runtime before exposing Lego generation. Avoid XL until feasible.

@@ -2114,6 +2114,9 @@ class AceCandidateRequest(BaseModel):
     seed: int = Field(default=150719, ge=0, le=4294967295)
     bpm: int | None = Field(default=None, ge=30, le=300)
     key: str = Field(default="", max_length=80)
+    task_type: str = Field(default="cover", pattern="^(cover|lego)$")
+    instrument: str = Field(default="", max_length=32)
+    operation: str = Field(default="add", pattern="^(add|replace)$")
 
 
 @app.get("/api/ace/discovery")
@@ -2141,10 +2144,11 @@ def _run_ace_candidate(folder: Path, candidate_id: str, bpm: int | None, key: st
         record["state"] = "generating"
         ace_candidates.save_record(directory, record)
         context = directory / record["context_file"]
-        task_id = ace_transport.submit_cover(
+        task_id = ace_transport.submit_instrument(
             client, context, record["model"], record["prompt"], record["seed"],
-            bpm=bpm, key=key, duration=record["samples"]["context_end"] / 48000 -
-            record["samples"]["context_start"] / 48000)
+            bpm=bpm, key=key, duration=(record["samples"]["context_end"] -
+            record["samples"]["context_start"]) / 48000,
+            task_type=record["task_type"], track_name=record.get("instrument", ""))
         record["ace_task_id"] = task_id
         ace_candidates.save_record(directory, record)
         # Poll for a bounded time; unknown ACE IDs are never considered success.
@@ -2187,10 +2191,22 @@ def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
     if not capabilities.get("ready") or capabilities.get("loaded_model") != body.model:
         raise HTTPException(409, "Selected ACE model must be loaded before generation")
     try:
+        if body.operation != "add":
+            raise ValueError("Instrument replacement is not enabled until regional A/B and undo are implemented")
+        if body.task_type == "lego":
+            import instrument_generation
+            instrument_generation.validate_intent("add", body.instrument, body.prompt, None, [])
+            if body.model != "acestep-v15-base":
+                raise ValueError("Native Lego requires ACE Base")
+        elif body.model != "acestep-v15-turbo":
+            raise ValueError("Experimental Cover requires ACE Turbo")
         record = ace_candidates.create_candidate(
             project, folder, original, body.from_section_id, body.to_section_id,
             body.context_before, body.context_after, body.model, body.prompt,
-            "cover", capabilities, dependency_tool("ffmpeg"), body.seed)
+            body.task_type, capabilities, dependency_tool("ffmpeg"), body.seed)
+        record["instrument"] = body.instrument if body.task_type == "lego" else ""
+        record["operation"] = "add"
+        ace_candidates.save_record(ace_candidates.candidate_directory(folder, record["candidate_id"]), record)
     except (ValueError, OSError, ace_adapter.AceError) as exc:
         raise HTTPException(400, str(exc)) from exc
     threading.Thread(target=_run_ace_candidate,

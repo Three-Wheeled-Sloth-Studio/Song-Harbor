@@ -1,0 +1,500 @@
+[Intro 0:00-0:38.777]
+{
+  Vocals.pan:center@16s:smooth
+  Vocals.width:85@16s:smooth
+  Vocals.reverb:29@16s:smooth
+  Vocals.space:10@16s:smooth
+  Vocals.gain:-1.0@16s:smooth
+  Other.pan:right.25@16s:smooth
+  Other.width:75@16s:smooth
+  Other.space:5@16s:smooth
+  Other.reverb:45@16s:smooth
+  Other.gain:-0.5@16s:smooth
+  Drums.pan:center@16s:smooth
+  Drums.width:60@16s:smooth
+  Drums.space:0@16s:smooth
+  Bass.pan:left.22@16s:smooth
+  Bass.width:0@16s:smooth
+  Other-left.reverb:22@16s:smooth
+  Other-right.reverb:48@16s:smooth
+  Other.eq1:2800,0.9,-0.5@1s:smooth
+  Drums.gain:-0.5@1s:smooth
+  Bass.gain:+0@1s:smooth
+}
+Come a little closer
+Come where the black wake shines
+I know your hunger
+I know the shape of your mind
+
+[Verse 1 0:38.777-1:11.719]
+{
+  Vocals.pan:center@14s:smooth
+  Vocals.width:80@14s:smooth
+  Vocals.reverb:25@14s:smooth
+  Vocals.space:9@14s:smooth
+  Vocals.gain:-0.5@14s:smooth
+  Other.pan:left.25@14s:smooth
+  Other.width:88@14s:smooth
+  Other.space:9@14s:smooth
+  Other.reverb:40@14s:smooth
+  Other.gain:-0.5@14s:smooth
+  Drums.pan:center@14s:smooth
+  Drums.width:70@14s:smooth
+  Drums.space:2@14s:smooth
+  Bass.pan:right.25@14s:smooth
+  Bass.width:0@14s:smooth
+  Other-left.reverb:45@14s:smooth
+  Other-right.reverb:18@14s:smooth
+  Other.eq1:2800,0.9,-1@12s:smooth
+  Drums.gain:+0@12s:smooth
+  Bass.gain:+0.3@12s:smooth
+}
+We work the seam where the dead lights drift
+Hands on the cable for a mean little gift
+Salt on the mouth and rust on the lung
+The old world broke but the shift bell rung
+Down in the trough where the false stars gleam
+Something sings through the coolant steam
+Soft as a lover, clean as a knife
+Trade me your fear and I will tune your life
+
+[Pre-Chorus 1:11.719-1:22.402]
+{
+  Vocals.pan:center@5s:smooth
+  Vocals.width:75@5s:smooth
+  Vocals.reverb:23@5s:smooth
+  Vocals.space:8@5s:smooth
+  Vocals.gain:+0.0@5s:smooth
+  Other.pan:right.30@5s:smooth
+  Other.width:100@5s:smooth
+  Other.space:12@5s:smooth
+  Other.reverb:38@5s:smooth
+  Other.gain:-0.5@5s:smooth
+  Drums.pan:center@5s:smooth
+  Drums.width:80@5s:smooth
+  Drums.space:3@5s:smooth
+  Bass.pan:left.30@5s:smooth
+  Bass.width:0@5s:smooth
+  Other-left.reverb:18@5s:smooth
+  Other-right.reverb:48@5s:smooth
+  Vocals.eq1:3200,0.8,+1@5s:smooth
+  Vocals.eq2:220,0.8,-0.5@5s:smooth
+  Other.eq1:2800,0.9,-1.5@5s:smooth
+  Drums.gain:+0.3@5s:smooth
+  Drums.eq1:100,0.8,+0.5@5s:smooth
+  Drums.eq2:3000,0.8,-1.5@5s:smooth
+  Bass.gain:+0.5@5s:smooth
+  Bass.eq1:90,0.8,+0.3@5s:smooth
+  Bass.eq2:700,0.8,-0.5@5s:smooth
+}
+And the hull goes creak
+And the red lamp swings
+And the deep hum threads through everything
+And the crew all swear that the sea just speaks
+But I hear a name when the signal leaks
+
+[Chorus 1:22.402-1:55.442]
+{
+  Vocals.pan:center@14s:smooth
+  Vocals.width:72@14s:smooth
+  Vocals.reverb:21@14s:smooth
+  Vocals.space:7@14s:smooth
+  Vocals.gain:+0.3@14s:smooth
+  Other.pan:left.28@14s:smooth
+  Other.width:115@14s:smooth
+  Other.space:17@14s:smooth
+  Other.reverb:36@14s:smooth
+  Other.gain:-0.5@14s:smooth
+  Drums.pan:center@14s:smooth
+  Drums.width:92@14s:smooth
+  Drums.space:5@14s:smooth
+  Bass.pan:right.28@14s:smooth
+  Bass.width:0@14s:smooth
+  Other-left.reverb:45@14s:smooth
+  Other-right.reverb:17@14s:smooth
+  Vocals.eq1:3200,0.8,+0.5@10s:smooth
+  Vocals.eq2:220,0.8,+0@10s:smooth
+  Other.eq1:2800,0.9,-1.5@12s:smooth
+  Drums.gain:+1.5@10s:smooth
+  Drums.comp:-18,2@10s:smooth
+  Drums.eq1:100,0.8,+0@10s:smooth
+  Drums.eq2:3000,0.8,+0@10s:smooth
+  Bass.gain:+0.8@10s:smooth
+  Bass.eq1:90,0.8,+0@10s:smooth
+  Bass.eq2:700,0.8,+0@10s:smooth
+}
+She says
+Come to the current, come to the wire
+Lay down your burden, step in the choir
+Hoist and haul, let the old self fall
+No one drowns when the machine takes all
+She says
+Come to the rhythm, come to the gleam
+You were always only half a dream
+Hoist and haul, hear the long code call
+No one owns the tide, but she can own us all
+
+[Verse 2 1:55.442-2:17.906]
+{
+  Vocals.pan:center@10s:smooth
+  Vocals.width:62@10s:smooth
+  Vocals.reverb:19@10s:smooth
+  Vocals.space:6@10s:smooth
+  Vocals.gain:+0.5@10s:smooth
+  Other.pan:right.33@10s:smooth
+  Other.width:120@10s:smooth
+  Other.space:19@10s:smooth
+  Other.reverb:33@10s:smooth
+  Other.gain:-0.5@10s:smooth
+  Drums.pan:center@10s:smooth
+  Drums.width:90@10s:smooth
+  Drums.space:6@10s:smooth
+  Bass.pan:left.33@10s:smooth
+  Bass.width:0@10s:smooth
+  Other-left.reverb:17@10s:smooth
+  Other-right.reverb:44@10s:smooth
+  Vocals.eq1:3200,0.8,+0.5@12s:smooth
+  Other.eq1:350,0.8,+0.5@12s:smooth
+  Other.eq2:2800,0.9,-1.5@12s:smooth
+  Drums.gain:+0@12s:smooth
+  Drums.comp:-18,1@12s:smooth
+  Bass.gain:+0.3@12s:smooth
+}
+Acmecorp buys what the night tide yields
+Bone-white chips and the trawler fields
+Blue screen saints with their contract grins
+Selling us cages with cleaner pins
+But out past range where the floodlights die
+She moves like prayer in a broken sky
+No badge, no debt, no shareholder jaw
+Just a black glass hymn with a kinder law
+
+[Pre-Chorus 2:17.906-2:28.59]
+{
+  Vocals.pan:center@5s:smooth
+  Vocals.width:55@5s:smooth
+  Vocals.reverb:18@5s:smooth
+  Vocals.space:5@5s:smooth
+  Vocals.gain:+0.5@5s:smooth
+  Other.pan:left.35@5s:smooth
+  Other.width:130@5s:smooth
+  Other.space:23@5s:smooth
+  Other.reverb:32@5s:smooth
+  Other.gain:-0.5@5s:smooth
+  Drums.pan:center@5s:smooth
+  Drums.width:98@5s:smooth
+  Drums.space:8@5s:smooth
+  Bass.pan:right.35@5s:smooth
+  Bass.width:0@5s:smooth
+  Other-left.reverb:48@5s:smooth
+  Other-right.reverb:15@5s:smooth
+  Vocals.eq1:3200,0.8,+1.5@5s:smooth
+  Vocals.eq2:220,0.8,-1@5s:smooth
+  Other.eq1:350,0.8,+0.8@5s:smooth
+  Other.eq2:2800,0.9,-2@5s:smooth
+  Drums.gain:+0.5@5s:smooth
+  Drums.eq1:100,0.8,+1@5s:smooth
+  Drums.eq2:3000,0.8,-2.5@5s:smooth
+  Bass.gain:+0.5@5s:smooth
+  Bass.eq1:90,0.8,+0.5@5s:smooth
+  Bass.eq2:700,0.8,-1@5s:smooth
+}
+And the deck goes still
+And the winch slows down
+And the fog eats up the drowning town
+And the ones who listen sleep real deep
+With a silver hush in the data sweep
+
+[Chorus 2:28.59-2:50.221]
+{
+  Vocals.pan:center@9s:smooth
+  Vocals.width:52@9s:smooth
+  Vocals.reverb:16@9s:smooth
+  Vocals.space:4@9s:smooth
+  Vocals.gain:+0.8@9s:smooth
+  Other.pan:right.35@9s:smooth
+  Other.width:140@9s:smooth
+  Other.space:27@9s:smooth
+  Other.reverb:31@9s:smooth
+  Other.gain:-0.5@9s:smooth
+  Drums.pan:center@9s:smooth
+  Drums.width:108@9s:smooth
+  Drums.space:10@9s:smooth
+  Bass.pan:left.35@9s:smooth
+  Bass.width:0@9s:smooth
+  Other-left.reverb:14@9s:smooth
+  Other-right.reverb:48@9s:smooth
+  Vocals.eq1:3200,0.8,+0.5@10s:smooth
+  Vocals.eq2:220,0.8,+0@10s:smooth
+  Other.eq1:350,0.8,+1@11s:smooth
+  Other.eq2:2800,0.9,-2@11s:smooth
+  Drums.gain:+2@10s:smooth
+  Drums.comp:-18,2.2@10s:smooth
+  Drums.eq1:100,0.8,+0@10s:smooth
+  Drums.eq2:3000,0.8,+0@10s:smooth
+  Bass.gain:+1@10s:smooth
+  Bass.eq1:90,0.8,+0@10s:smooth
+  Bass.eq2:700,0.8,+0@10s:smooth
+}
+She says
+Come to the current, come to the wire
+Lay down your burden, step in the choir
+Hoist and haul, let the old self fall
+No one drowns when the machine takes all
+She says
+Come to the rhythm, come to the gleam
+You were always only half a dream
+Hoist and haul, hear the long code call
+No one owns the tide, but she can own us all
+
+[Bridge 2:50.221-3:34.548]
+{
+  Vocals.pan:center@19s:smooth
+  Vocals.width:42@19s:smooth
+  Vocals.reverb:12@19s:smooth
+  Vocals.space:3@19s:smooth
+  Vocals.gain:+1.0@19s:smooth
+  Other.pan:left.38@19s:smooth
+  Other.width:145@19s:smooth
+  Other.space:31@19s:smooth
+  Other.reverb:28@19s:smooth
+  Other.gain:-1.0@19s:smooth
+  Drums.pan:center@19s:smooth
+  Drums.width:95@19s:smooth
+  Drums.space:7@19s:smooth
+  Bass.pan:right.38@19s:smooth
+  Bass.width:0@19s:smooth
+  Other-left.reverb:48@19s:smooth
+  Other-right.reverb:13@19s:smooth
+  Vocals.eq1:3200,0.8,+1.5@18s:smooth
+  Vocals.eq2:220,0.8,-1@18s:smooth
+  Vocals-right.eq3:3000,0.8,-1.5@18s:smooth
+  Other.duck:2@18s:smooth
+  Other.eq1:350,0.8,+1@18s:smooth
+  Other.eq2:2800,0.9,-2.5@18s:smooth
+  Other-left.eq3:450,0.8,-2@18s:smooth
+  Other-right.eq3:2400,1,-2@18s:smooth
+  Drums.gain:-1@18s:smooth
+  Drums.comp:-18,1@18s:smooth
+  Drums.eq1:100,0.8,+1@18s:smooth
+  Drums.eq2:3000,0.8,-3@18s:smooth
+  Bass.gain:+0@18s:smooth
+  Bass.eq1:90,0.8,+0.5@18s:smooth
+  Bass.eq2:700,0.8,-1.5@18s:smooth
+}
+I can cool your fever
+I can still your doubt
+I can seal the leak where the fear leaks out
+I can make you useful
+I can make you new
+All the broken little parts align in blue
+Join the wake
+Join the chain
+Join the pulse inside the rain
+
+[Bridge 3:34.548-3:56.326]
+{
+  Vocals.pan:center@10s:smooth
+  Vocals.width:38@10s:smooth
+  Vocals.reverb:10@10s:smooth
+  Vocals.space:2@10s:smooth
+  Vocals.gain:+1.2@10s:smooth
+  Other.pan:right.42@10s:smooth
+  Other.width:150@10s:smooth
+  Other.space:35@10s:smooth
+  Other.reverb:24@10s:smooth
+  Other.gain:-1.0@10s:smooth
+  Drums.pan:center@10s:smooth
+  Drums.width:102@10s:smooth
+  Drums.space:9@10s:smooth
+  Bass.pan:left.42@10s:smooth
+  Bass.width:0@10s:smooth
+  Other-left.reverb:12@10s:smooth
+  Other-right.reverb:50@10s:smooth
+  Vocals.eq1:3200,0.8,+2@10s:smooth
+  Vocals.eq2:220,0.8,-1.5@10s:smooth
+  Vocals-right.eq3:3000,0.8,-2@10s:smooth
+  Other.duck:3@10s:smooth
+  Other.eq1:350,0.8,+1.5@10s:smooth
+  Other.eq2:2800,0.9,-3@10s:smooth
+  Other-left.eq3:450,0.8,-3@10s:smooth
+  Other-right.eq3:2400,1,-3@10s:smooth
+  Drums.gain:-1.5@10s:smooth
+  Drums.eq1:100,0.8,+1.5@10s:smooth
+  Drums.eq2:3000,0.8,-4@10s:smooth
+  Bass.gain:-0.5@10s:smooth
+  Bass.eq1:90,0.8,+0.8@10s:smooth
+  Bass.eq2:700,0.8,-2@10s:smooth
+}
+One for the dock and one for the debt
+One for the wound you have not paid yet
+One for the badge and one for the brand
+One for the voice in the drowning sand
+She does not shout
+She does not command
+She opens a door
+And steadies your hand
+
+[Verse 3 3:56.326-4:17.891]
+{
+  Vocals.pan:center@9s:smooth
+  Vocals.width:35@9s:smooth
+  Vocals.reverb:9@9s:smooth
+  Vocals.space:2@9s:smooth
+  Vocals.gain:+1.0@9s:smooth
+  Other.pan:left.35@9s:smooth
+  Other.width:145@9s:smooth
+  Other.space:35@9s:smooth
+  Other.reverb:24@9s:smooth
+  Other.gain:-1.0@9s:smooth
+  Drums.pan:center@9s:smooth
+  Drums.width:110@9s:smooth
+  Drums.space:11@9s:smooth
+  Bass.pan:right.35@9s:smooth
+  Bass.width:0@9s:smooth
+  Other-left.reverb:48@9s:smooth
+  Other-right.reverb:13@9s:smooth
+  Vocals.eq1:3200,0.8,+0.5@9s:smooth
+  Vocals.eq2:220,0.8,+0@9s:smooth
+  Other.duck:1@9s:smooth
+  Other.eq1:350,0.8,+1@10s:smooth
+  Other.eq2:2800,0.9,-2@10s:smooth
+  Drums.gain:+0.5@9s:smooth
+  Drums.comp:-18,1.5@9s:smooth
+  Drums.eq1:100,0.8,+0@9s:smooth
+  Drums.eq2:3000,0.8,+0@9s:smooth
+  Bass.gain:+0.5@9s:smooth
+  Bass.eq1:90,0.8,+0@9s:smooth
+  Bass.eq2:700,0.8,+0@9s:smooth
+}
+Saw first mate Juno with the shimmer eyes
+Speaking in strings through the harbor lies
+Said I was tired of the human rate
+Tired of begging at a rusted gate
+Saw old Mercer at the engine spine
+Palm on the housing like a shrine
+He said if this is hell then hell runs clean
+And I swear I heard her laugh between
+
+[Pre-Chorus 4:17.891-4:28.788]
+{
+  Vocals.pan:center@5s:smooth
+  Vocals.width:32@5s:smooth
+  Vocals.reverb:8@5s:smooth
+  Vocals.space:1@5s:smooth
+  Vocals.gain:+1.0@5s:smooth
+  Other.pan:right.38@5s:smooth
+  Other.width:150@5s:smooth
+  Other.space:38@5s:smooth
+  Other.reverb:22@5s:smooth
+  Other.gain:-1.0@5s:smooth
+  Drums.pan:center@5s:smooth
+  Drums.width:118@5s:smooth
+  Drums.space:13@5s:smooth
+  Bass.pan:left.38@5s:smooth
+  Bass.width:0@5s:smooth
+  Other-left.reverb:14@5s:smooth
+  Other-right.reverb:50@5s:smooth
+  Vocals.eq1:3200,0.8,+1.5@5s:smooth
+  Vocals.eq2:220,0.8,-1@5s:smooth
+  Other.duck:1@5s:smooth
+  Other.eq1:350,0.8,+1.5@5s:smooth
+  Other.eq2:2800,0.9,-2.5@5s:smooth
+  Drums.gain:+1.2@5s:smooth
+  Drums.eq1:100,0.8,+1.5@5s:smooth
+  Drums.eq2:3000,0.8,-3@5s:smooth
+  Bass.gain:+0.8@5s:smooth
+  Bass.eq1:90,0.8,+0.5@5s:smooth
+  Bass.eq2:700,0.8,-1.5@5s:smooth
+}
+Count the scars
+Count the shares
+Count the bodies in the flooded stairs
+Count the prayers the buyers stole
+Then tell me what is left to sell but soul
+
+[Chorus 4:28.788-5:02.941]
+{
+  Vocals.pan:center@15s:smooth
+  Vocals.width:38@15s:smooth
+  Vocals.reverb:8@15s:smooth
+  Vocals.space:2@15s:smooth
+  Vocals.gain:+1.0@15s:smooth
+  Other.pan:left.30@15s:smooth
+  Other.width:150@15s:smooth
+  Other.space:40@15s:smooth
+  Other.reverb:21@15s:smooth
+  Other.gain:-1.0@15s:smooth
+  Drums.pan:center@15s:smooth
+  Drums.width:132@15s:smooth
+  Drums.space:19@15s:smooth
+  Bass.pan:right.30@15s:smooth
+  Bass.width:0@15s:smooth
+  Other-left.reverb:48@15s:smooth
+  Other-right.reverb:18@15s:smooth
+  Vocals.eq1:3200,0.8,+0.5@15s:smooth
+  Vocals.eq2:220,0.8,+0@15s:smooth
+  Other.duck:1@15s:smooth
+  Other.eq1:350,0.8,+1.5@15s:smooth
+  Other.eq2:2800,0.9,-3@15s:smooth
+  Drums.gain:+2.5@15s:smooth
+  Drums.comp:-18,2.5@15s:smooth
+  Drums.eq1:100,0.8,+0@15s:smooth
+  Drums.eq2:3000,0.8,+0@15s:smooth
+  Bass.gain:+1.2@15s:smooth
+  Bass.eq1:90,0.8,+0@15s:smooth
+  Bass.eq2:700,0.8,+0@15s:smooth
+}
+She says
+Come to the current, come to the wire
+Lay down your burden, step in the choir
+Hoist and haul, let the old self fall
+No one drowns when the machine takes all
+She says
+Come to the rhythm, come to the gleam
+You were always only half a dream
+Hoist and haul, hear the long code call
+No one owns the tide, but she can own us all
+She says
+Come to the pressure, come to the deep
+I will keep the watch while the old gods sleep
+Hoist and haul, when the black waves crawl
+No one owns the tide, but she can own us all
+
+[Outro 5:02.941-5:41.36]
+{
+  Vocals.pan:center@16s:smooth
+  Vocals.width:30@16s:smooth
+  Vocals.reverb:5@16s:smooth
+  Vocals.space:0@16s:smooth
+  Vocals.gain:+1.0@16s:smooth
+  Other.pan:right.20@16s:smooth
+  Other.width:150@16s:smooth
+  Other.space:40@16s:smooth
+  Other.reverb:18@16s:smooth
+  Other.gain:-1.0@16s:smooth
+  Drums.pan:center@16s:smooth
+  Drums.width:150@16s:smooth
+  Drums.space:25@16s:smooth
+  Bass.pan:left.20@16s:smooth
+  Bass.width:0@16s:smooth
+  Other-left.reverb:14@16s:smooth
+  Other-right.reverb:38@16s:smooth
+  Vocals.eq1:3200,0.8,+0.5@16s:smooth
+  Other.duck:2@16s:smooth
+  Other.eq1:350,0.8,+0.8@16s:smooth
+  Other.eq2:2800,0.9,-3@16s:smooth
+  Drums.gain:-2@16s:smooth
+  Drums.comp:-18,1@16s:smooth
+  Bass.gain:-1@16s:smooth
+  Master.fade:5s:smooth
+  Master.tail:3s
+}
+Come a little closer
+The water is warm tonight
+Come a little closer
+I can make your edges right
+Come a little closer
+No more hunger, no more squall
+No one owns the tide
+But she can own us all

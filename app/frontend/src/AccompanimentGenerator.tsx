@@ -96,8 +96,6 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   },[candidate?.candidate_id,engine]);
   const fromIndex=sections.findIndex(s=>s.id===fromId);
   const toIndex=sections.findIndex(s=>s.id===toId);
-  const start=fromIndex>=0?sections[fromIndex].start_seconds:0;
-  const end=toIndex>=0?sections[toIndex].end_seconds:0;
   const previewProgress=candidate?Math.max(0,Math.min(100,100*(position-candidate.target_start_seconds)/Math.max(.001,candidate.target_end_seconds-candidate.target_start_seconds))):0;
   const validRange=fromIndex>=0&&toIndex>=fromIndex;
   const currentModel=mode==="lego"?"acestep-v15-base":"acestep-v15-turbo";
@@ -132,12 +130,13 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
-  async function audition(){
+  async function audition(solo=false){
     if(!candidate||!audioUrl||!engine?.ready)return;
     setPreviewBusy(true);setError("");
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
-      engine.setCandidatePreviewBlend(soloPreview?100:blend);
+      engine.setCandidatePreviewBlend(solo?100:soloPreview?100:blend);
+      if(solo)setSoloPreview(true);
       engine.setCandidatePreviewTrimDb(previewTrimDb);
       setPreviewPeaks(engine.candidateWaveform());
       setLoadedId(candidate.candidate_id);
@@ -222,7 +221,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       {candidate.state==="ready"&&<>
         <div className="song-ace-preview-line">
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Preview"}</button>
-          <button type="button" aria-pressed={soloPreview} disabled={loadedId!==candidate.candidate_id} title="Listen to generated audio only" onClick={()=>{
+          <button type="button" aria-pressed={soloPreview} title="Listen to generated audio only" onClick={()=>{
+            if(loadedId!==candidate.candidate_id){setPriorBlend(blend);void audition(true);return;}
             if(!soloPreview){setPriorBlend(blend);setSoloPreview(true);engine?.setCandidatePreviewBlend(100);}
             else{setSoloPreview(false);setBlend(priorBlend);engine?.setCandidatePreviewBlend(priorBlend);}
           }}>♫ Solo</button>

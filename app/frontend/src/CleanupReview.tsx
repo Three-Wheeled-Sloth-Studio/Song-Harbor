@@ -67,7 +67,20 @@ export function CleanupReview({
                     <small>{FINDING_GROUPS[item.kind as AudioFindingKind]} · {item.severity==="warning"?"Warning":"Review"}</small>
                   </div>
                 </div>
-                <details className="song-finding-detail"><summary>Details</summary><p>{item.detail}</p>{item.suggestion&&<p>{item.suggestion}</p>}</details>
+                <details className="song-finding-detail"><summary>Details</summary>
+                  {item.spectrum&&<svg role="img" aria-label="Three-second time-frequency energy view, bass at bottom and treble at top"
+                    viewBox="0 0 240 96" preserveAspectRatio="none" style={{width:"100%",height:"84px",background:"#101a25",borderRadius:"5px"}}>
+                    {item.spectrum.levels.map((intensity,index)=>{
+                      const x=Math.floor(index/item.spectrum!.rows),y=index%item.spectrum!.rows;
+                      return <rect key={index} x={x*10} y={(item.spectrum!.rows-y-1)*8} width="10" height="8"
+                        fill="#74c7cc" opacity={Math.max(.05,intensity)}/>;
+                    })}
+                    <line x1={Math.max(0,Math.min(240,240*(item.timeSeconds-item.spectrum.startSeconds)/item.spectrum.seconds))}
+                      x2={Math.max(0,Math.min(240,240*(item.timeSeconds-item.spectrum.startSeconds)/item.spectrum.seconds))}
+                      y1="0" y2="96" stroke="#ffb967" strokeWidth="1.5"/>
+                  </svg>}
+                  <p>{item.detail}</p>{item.suggestion&&<p>{item.suggestion}</p>}
+                </details>
                 {!!item.sources?.length&&<p className="song-cleanup-sources">Active raw stems: {item.sources.join(", ")} <span>(hint, not confirmed cause)</span></p>}
                 <div className="song-cleanup-actions">
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>

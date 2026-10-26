@@ -745,3 +745,28 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   width:100%;
   max-width:100%;
 }
+
+
+/* Dense corrective mastering controls: primary decisions remain in view. */
+.song-correction-workbench{display:grid;gap:8px;min-width:0}
+.song-correction-heading{display:flex;align-items:center;gap:8px}
+.song-correction-heading strong{flex:1;min-width:0}
+.song-correction-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;position:sticky;top:0;z-index:12;padding:5px 0;background:#12202a}
+.song-correction-toolbar .song-correction-switch{display:flex;gap:4px;align-items:center;flex:0 1 auto}
+.song-correction-primary-actions{display:flex;gap:4px;align-items:center;margin-left:auto}
+.song-correction-primary-actions button{white-space:nowrap;padding:6px 10px}
+.song-correction-primary-actions button:first-child:not(:disabled){border-color:#74c7cc}
+.song-correction-selects{display:grid;grid-template-columns:minmax(90px,.55fr) minmax(120px,1fr) minmax(115px,1fr);gap:8px;min-width:0}
+.song-correction-selects label{display:flex;align-items:center;gap:5px;min-width:0;font-size:12px}
+.song-correction-selects select{width:100%;min-width:0;height:31px}
+.song-correction-knobs{display:flex;flex-wrap:wrap;align-items:start;gap:7px 16px;padding:7px 0}
+.song-correction-knob{display:grid;justify-items:center;gap:3px;min-width:68px;width:72px;font-size:11px}
+.song-correction-knob-face{position:relative;display:block;width:48px;height:48px;border-radius:50%;border:2px solid #314d55;box-shadow:inset 0 0 0 5px #172a33}
+.song-correction-knob-indicator{position:absolute;left:21px;top:7px;width:3px;height:14px;background:#f2ddac;border-radius:2px;transform-origin:2px 17px;pointer-events:none}
+.song-correction-knob-face input[type="range"]{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+.song-correction-knob-face:focus-within{outline:2px solid #83d8df;outline-offset:3px}
+.song-correction-knob output{font-variant-numeric:tabular-nums}
+.song-correction-meter-detail{font-size:11px}
+.song-correction-meter-detail .song-dynamics-meter{padding-top:7px}
+.song-correction-actions{display:none}
+@media(max-width:650px){.song-correction-selects{grid-template-columns:repeat(2,minmax(0,1fr))}.song-correction-selects label:last-child{grid-column:1/-1}}

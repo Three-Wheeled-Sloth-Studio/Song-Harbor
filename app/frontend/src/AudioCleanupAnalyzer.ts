@@ -1,4 +1,5 @@
 import {screenAcousticSignals} from "./SignalAudit.ts";
+import type {SpectralPreview} from "./RegionSpectrogram.ts";
 /** Non-destructive, mix-level QC. These are listening candidates, never a diagnosis.
  * Runs on the exact rendered float mix used for WAV packing, before output trim.
  * Analysis uses bounded windows: O(frames + (frames/4096)*2048*log(2048)).
@@ -17,6 +18,7 @@ export type AudioFinding={
   detail:string;
   /** A listening starting point, not proof of any particular audio artifact. */
   suggestion?:string;
+  spectrum?:SpectralPreview;
 };
 export const FINDING_GROUPS:Record<AudioFindingKind,string>={
   headroom:"Levels",clip_shape:"Levels",transient:"Transitions",

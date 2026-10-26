@@ -836,6 +836,17 @@ def _declick_folder(ident: str) -> tuple[Path, set[str]]:
     return DATA_ROOT / "jobs" / ident, filenames
 
 
+def _declick_source_path(ident: str, filename: str, source_key: str) -> Path:
+    project=projects.read_project(DATA_ROOT, ident)
+    if not project:
+        raise ValueError("Project missing")
+    if source_key == filename:
+        return DATA_ROOT/"jobs"/ident/"stems"/filename
+    if source_key in (filename+":left",filename+":right"):
+        return track_routing.child_path(DATA_ROOT,project,filename,source_key.rsplit(":",1)[1])
+    raise ValueError("Unrecognized de-click source lane")
+
+
 @app.get("/api/projects/{ident}/cleanup/declick")
 def list_declick_repairs(ident: str) -> dict[str, Any]:
     folder,_=_declick_folder(ident)
@@ -844,12 +855,13 @@ def list_declick_repairs(ident: str) -> dict[str, Any]:
         digests={}
         for item in repairs:
             file=item.get("filename")
-            source=folder/"stems"/str(file)
+            source=_declick_source_path(ident,str(file),str(item.get("source_key") or ""))
             if not source.is_file():
                 raise ValueError(f"Saved repair source missing: {file}")
-            if file not in digests:
-                digests[file]=sha256_file(source)
-            if item.get("source_sha256")!=digests[file]:
+            source_key=item.get("source_key")
+            if source_key not in digests:
+                digests[source_key]=sha256_file(source)
+            if item.get("source_sha256")!=digests[source_key]:
                 raise ValueError(f"Saved repair source was replaced or changed: {file}")
         return {"repairs":repairs}
     except (ValueError,OSError) as exc:
@@ -866,7 +878,10 @@ def accept_declick_repair(ident: str, body: DeclickRepairBody, request: Request)
     identities=project.get("source_tracks") or []
     source_start=next((float(row.get("start_seconds") or 0)
                        for row in identities if row.get("working_filename")==body.filename),0.0)
-    wav=folder/"stems"/body.filename
+    try:
+        wav=_declick_source_path(ident,body.filename,body.source_key)
+    except ValueError as exc:
+        raise HTTPException(409,str(exc)) from exc
     if not wav.is_file():
         raise HTTPException(409,"Repair source is missing")
     duration=probe_duration(wav)

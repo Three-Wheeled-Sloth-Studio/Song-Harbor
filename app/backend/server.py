@@ -840,7 +840,18 @@ def _declick_folder(ident: str) -> tuple[Path, set[str]]:
 def list_declick_repairs(ident: str) -> dict[str, Any]:
     folder,_=_declick_folder(ident)
     try:
-        return {"repairs": declick_recipes.read(folder)}
+        repairs=declick_recipes.read(folder)
+        digests={}
+        for item in repairs:
+            file=item.get("filename")
+            source=folder/"stems"/str(file)
+            if not source.is_file():
+                raise ValueError(f"Saved repair source missing: {file}")
+            if file not in digests:
+                digests[file]=sha256_file(source)
+            if item.get("source_sha256")!=digests[file]:
+                raise ValueError(f"Saved repair source was replaced or changed: {file}")
+        return {"repairs":repairs}
     except (ValueError,OSError) as exc:
         raise HTTPException(409,str(exc)) from exc
 
@@ -863,7 +874,7 @@ def accept_declick_repair(ident: str, body: DeclickRepairBody, request: Request)
         raise HTTPException(409,"De-click must be inside the source clip, away from its edges")
     try:
         with lock:
-            return {"repairs": declick_recipes.append(folder,body.model_dump(),filenames)}
+            return {"repairs": declick_recipes.append(folder,{**body.model_dump(),"source_sha256":sha256_file(wav)},filenames)}
     except (ValueError,OSError) as exc:
         raise HTTPException(409,str(exc)) from exc
 

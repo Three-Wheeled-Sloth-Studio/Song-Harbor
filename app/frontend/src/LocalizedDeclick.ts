@@ -16,7 +16,7 @@ export type DeclickSource=Pick<AudioBuffer,"length"|"sampleRate"|"numberOfChanne
  * without a musical audition.
  */
 export function makeDeclickCandidate(audio:DeclickSource,timeSeconds:number,
-  halfWindowMs=1):DeclickCandidate{
+  halfWindowMs=1,copyFullChannels=true):DeclickCandidate{
   if(!Number.isFinite(timeSeconds)||timeSeconds<0||timeSeconds>=audio.length/audio.sampleRate)
     throw Error("Select a click within the recording");
   if(halfWindowMs<.15||halfWindowMs>3)
@@ -31,7 +31,7 @@ export function makeDeclickCandidate(audio:DeclickSource,timeSeconds:number,
   const channels:Array<Float32Array>=[];
   for(let channel=0;channel<audio.numberOfChannels;channel++){
     const source=audio.getChannelData(channel);
-    const output=source.slice();
+    const output=copyFullChannels?source.slice():null;
     const values=new Float32Array(endFrame-startFrame);
     const left=source[startFrame-1],right=source[endFrame];
     // Cubic Hermite with slope estimates on both sides provides a smoother
@@ -49,11 +49,11 @@ export function makeDeclickCandidate(audio:DeclickSource,timeSeconds:number,
       const taper=Math.sin(Math.PI*t)**2;
       const sample=original*(1-taper)+interpolated*taper;
       values[i-startFrame]=sample;
-      output[i]=sample;
+      if(output)output[i]=sample;
       beforePeak=Math.max(beforePeak,Math.abs(original));
       afterPeak=Math.max(afterPeak,Math.abs(sample));
     }
-    channels.push(output);
+    if(output)channels.push(output);
     replacements.push({channel,startFrame,values});
   }
   return {startFrame,endFrame,sampleRate:audio.sampleRate,beforePeak,afterPeak,channels,replacements};

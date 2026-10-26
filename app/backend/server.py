@@ -36,6 +36,7 @@ import app_update
 import library
 import stem_import
 import track_lifecycle
+import declick_recipes
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -811,6 +812,60 @@ async def add_project_track(ident: str, request: Request,
             if job.get("status")=="running":
                 job["status"]="complete"
                 job["message"]="Add stem failed; original mix preserved"
+
+
+class DeclickRepairBody(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    filename: str
+    source_key: str
+    time_seconds: float
+    half_window_ms: float = Field(default=1, ge=.15, le=3)
+
+
+def _declick_folder(ident: str) -> tuple[Path, set[str]]:
+    if not re.fullmatch(r"[a-f0-9]{12}", ident):
+        raise HTTPException(404, "Project not found")
+    project=projects.read_project(DATA_ROOT, ident)
+    job=get_job(ident)
+    if not project or not job or job.get("status") != "complete":
+        raise HTTPException(404, "Completed song not found")
+    tracks=project.get("source_tracks") or []
+    filenames={row.get("working_filename") for row in tracks if isinstance(row, dict)}
+    filenames={name for name in filenames if isinstance(name,str)}
+    return DATA_ROOT / "jobs" / ident, filenames
+
+
+@app.get("/api/projects/{ident}/cleanup/declick")
+def list_declick_repairs(ident: str) -> dict[str, Any]:
+    folder,_=_declick_folder(ident)
+    try:
+        return {"repairs": declick_recipes.read(folder)}
+    except (ValueError,OSError) as exc:
+        raise HTTPException(409,str(exc)) from exc
+
+
+@app.post("/api/projects/{ident}/cleanup/declick")
+def accept_declick_repair(ident: str, body: DeclickRepairBody, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    folder,filenames=_declick_folder(ident)
+    if body.source_key not in (body.filename,body.filename+":left",body.filename+":right"):
+        raise HTTPException(400,"Invalid source key")
+    try:
+        with lock:
+            return {"repairs": declick_recipes.append(folder,body.model_dump(),filenames)}
+    except (ValueError,OSError) as exc:
+        raise HTTPException(409,str(exc)) from exc
+
+
+@app.delete("/api/projects/{ident}/cleanup/declick/{repair_id}")
+def undo_declick_repair(ident: str, repair_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    folder,_=_declick_folder(ident)
+    try:
+        with lock:
+            return {"repairs":declick_recipes.remove(folder,repair_id)}
+    except (ValueError,OSError) as exc:
+        raise HTTPException(409,str(exc)) from exc
 
 
 @app.get("/api/projects/{ident}/tracks")

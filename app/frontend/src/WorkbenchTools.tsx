@@ -14,6 +14,7 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
 ];
 export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void}){
   const [pos,setPos]=useState<{x:number;y:number}|null>(null);
+  const [aceStatus,setAceStatus]=useState<"ready"|"unavailable"|"unknown">("unknown");
   const initialPlacement=useRef({right:75+order*24,top:90+order*26});
   const drag=useRef<{x:number;y:number;startX:number;startY:number}|null>(null);
   const previousFocus=useRef<HTMLElement|null>(null);
@@ -23,6 +24,17 @@ export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;
     // Never steal keyboard transport focus when opening supplementary tools.
     return()=>previousFocus.current?.focus();
   },[]);
+  useEffect(()=>{
+    if(name!=="Generate accompaniment")return;
+    let alive=true;
+    const refresh=()=>{void fetch("/api/ace/discovery",{cache:"no-store"})
+      .then(response=>response.ok?response.json():Promise.reject(Error("ACE unavailable")))
+      .then((data:{status:string;ready?:boolean})=>{if(alive)setAceStatus(data.ready?"ready":"unavailable");})
+      .catch(()=>{if(alive)setAceStatus("unavailable");});};
+    refresh();
+    const id=window.setInterval(refresh,5000);
+    return()=>{alive=false;window.clearInterval(id);};
+  },[name]);
   function begin(e:PointerEvent<HTMLElement>){
     if(e.button!==0)return;
     const parent=e.currentTarget.parentElement;
@@ -44,6 +56,7 @@ export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;
     <div className="song-floating-tool-header" onPointerDown={begin} onPointerMove={move}
       onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
       <strong>{name}</strong>
+      {name==="Generate accompaniment"&&<span className={"song-ace-header-status is-"+aceStatus} title={"ACE service: "+aceStatus} aria-label={"ACE service "+aceStatus}/>}
       <button ref={first} type="button" aria-label={"Close "+name} title="Dismiss tool" onPointerDown={e=>e.stopPropagation()} onClick={onClose}>×</button>
     </div>
     <div className="song-floating-tool-content" onWheel={event=>{event.stopPropagation();}}>{children}</div>

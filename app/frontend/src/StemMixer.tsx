@@ -423,7 +423,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const trialReverb=proposed?.kind==="reverb"?proposed.targets:reverbTargets;
     const trialWidth=proposed?.kind==="width"?proposed.targets:widthTargets;
     const trialSpace=proposed?.kind==="space"?proposed.targets:spaceTargets;
-    const trialEq=proposed?.kind==="eq"?proposed.targets:eqTargets;
+    const baseEq=proposed?.kind==="eq"?proposed.targets:eqTargets;
+    const spectral=correction?.kind==="spectral"&&correction.proposed?correction:null;
+    const trialEq=spectral&&spectral.eqBand?[
+      ...baseEq.filter(item=>!(item.source_key===spectral.file&&item.section_id===spectral.sectionId&&item.band===spectral.eqBand)),
+      {section_id:spectral.sectionId,source_key:spectral.file,band:spectral.eqBand,
+       frequency:spectral.frequency,q:spectral.q,gain_db:-Math.min(9,spectral.depth*spectral.auditionBoost),
+       transition_seconds:spectral.transition,curve:"smooth" as const}
+    ]:baseEq;
     const trialDynamics=proposed?.kind==="deess"?proposed.targets:dynamicsTargets;
     const byFile:Record<string,{gain?:ReturnType<typeof compileSectionAutomation>;pan?:ReturnType<typeof compileSectionAutomation>;reverb?:ReturnType<typeof compileSectionAutomation>;width?:ReturnType<typeof compileSectionAutomation>;space?:ReturnType<typeof compileSectionAutomation>;eq?:Partial<Record<1|2|3,{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;gain:ReturnType<typeof compileSectionAutomation>}>>;dynamics?:{compressor?:{threshold:ReturnType<typeof compileSectionAutomation>;ratio:ReturnType<typeof compileSectionAutomation>};duck?:{depthDb:ReturnType<typeof compileSectionAutomation>;keyFilename:string};deess?:{frequency:ReturnType<typeof compileSectionAutomation>;q:ReturnType<typeof compileSectionAutomation>;threshold:ReturnType<typeof compileSectionAutomation>;maxReduction:ReturnType<typeof compileSectionAutomation>}}}>={};
     const sectionById=new Map(timelineSections.map(section=>[section.id,section]));
@@ -516,7 +523,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       }
     }
     const vocal=files.find(name=>name.includes("(Vocals)"));
-    const staged=correction&&correction.proposed&&correction.kind!=="trim"?
+    const staged=correction&&correction.proposed&&correction.kind!=="trim"&&correction.kind!=="spectral"?
       [...trialDynamics.filter(item=>!(item.section_id===correction.sectionId&&
         item.source_key===correction.file&&item.kind===correction.kind)),{
         section_id:correction.sectionId,source_key:correction.file,kind:correction.kind,
@@ -858,18 +865,28 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const suggestedStem=preferred?.source_key||
       files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
       files.find(f=>f.includes("(Drums)"))||files[0];
-    const kind=finding.kind==="headroom"?"trim":finding.kind==="sibilance"?"deess":(preferred?.kind==="deess"?"duck":preferred?.kind||"duck");
+    const kind=finding.kind==="headroom"?"trim":
+      (["harshness","fizz","noise","signal_audit"].includes(finding.kind)?"spectral":
+      finding.kind==="sibilance"?"deess":(preferred?.kind==="deess"?"duck":preferred?.kind||"duck"));
     const deessStem=kind==="deess"?files.find(f=>f.includes("(Vocals)")):undefined;
     const file=(kind==="duck"&&suggestedStem?.includes("(Vocals)"))?
       files.find(f=>!f.includes("(Vocals)"))||suggestedStem:(deessStem||suggestedStem);
+    const eqUsed=eqTargets.filter(item=>item.section_id===section?.id&&item.source_key===file).map(item=>item.band);
+    const eqBand=([3,2,1] as const).find(band=>!eqUsed.includes(band));
+    if(kind==="spectral"&&(!section||!eqBand)){
+      setCorrectionError("No free EQ band in this section for the selected source. Use Section EQ to adjust an existing band.");
+      return;
+    }
+    const spectralFrequency=finding.kind==="harshness"?3500:finding.kind==="fizz"?10000:
+      finding.kind==="noise"?8500:6000;
     const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
     const peak=peakMatch?Number(peakMatch[1]):0;
     setCorrectionError("");
     setDeclickDraft(null);
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
-      threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1.6,depth:2,transition:1.5,
-      frequency:6500,q:2,maxReduction:4,auditionBoost:1,
+      threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1.6,depth:kind==="spectral"?3:2,transition:1.5,
+      frequency:kind==="spectral"?spectralFrequency:6500,q:2,maxReduction:4,auditionBoost:1,eqBand,
       trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false,compare:"current"
     });
     loopAround(finding.timeSeconds-1,finding.timeSeconds+2);
@@ -888,7 +905,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(index<0){setCorrectionError("Align a saved section before accepting a dynamics correction.");return;}
     const alias=trial.file.match(/\(([^)]+)\)/)?.[1];
     if(!alias){setCorrectionError("Track has no script-safe stem alias.");return;}
-    const directive=trial.kind==="comp"?
+    if(trial.kind==="spectral"&&!trial.eqBand){setCorrectionError("Choose a free EQ band.");return;}
+    const directive=trial.kind==="spectral"?
+      `${alias}.eq${trial.eqBand}:${trial.frequency},${trial.q.toFixed(1)},-${Math.min(9,trial.depth).toFixed(1)}@${trial.transition}s:smooth`:
+      trial.kind==="comp"?
       `${alias}.comp:${trial.threshold},${trial.ratio}@${trial.transition}s:smooth`:
       trial.kind==="deess"?
       `${alias}.deess:${trial.frequency},${trial.q},${trial.threshold},${trial.maxReduction}@${trial.transition}s:smooth`:
@@ -918,7 +938,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         if(blockEnd<blockStart)throw Error("Saved section contains an unfinished production block.");
         const text=lines.slice(blockStart,blockEnd+1).join("\n");
         const existing=text.trim().slice(1,-1).trim().split(/\s+/).filter(Boolean);
-        const without=existing.filter(token=>!token.startsWith(alias+"."+trial.kind+":"));
+        const key=trial.kind==="spectral"?alias+".eq"+trial.eqBand+":":alias+"."+trial.kind+":";
+        const without=existing.filter(token=>!token.startsWith(key));
         const edited=[...without,directive];
         const updated=edited.length===1?["{"+edited[0]+"}"]:
           ["{",...edited.map(token=>"  "+token),"}"];

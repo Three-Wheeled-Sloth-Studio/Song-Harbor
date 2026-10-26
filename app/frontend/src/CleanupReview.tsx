@@ -78,7 +78,13 @@ export function CleanupReview({
                   </svg>}
                   <p>{item.detail}</p>{item.suggestion&&<p>{item.suggestion}</p>}
                 </details>
-                {!!item.sources?.length&&<p className="song-cleanup-sources">Likely: {item.sources.join(", ")}</p>}
+                {!!item.attribution?.length&&<details className="song-cleanup-attribution">
+                  <summary>{item.attribution[0].name} · spectral evidence{item.attributionUncertain?" (uncertain)":""}</summary>
+                  <div>{item.attribution.map(e=><div key={e.name}>
+                    {e.name} · {(e.relativeShare*100).toFixed(0)}% of sampled source-band energy ({e.band})
+                  </div>)}</div>
+                </details>}
+                {!item.attribution?.length&&!!item.sources?.length&&<p className="song-cleanup-sources">Likely: {item.sources.join(", ")}</p>}
                 <div className="song-cleanup-actions">
                   {item.kind==="harshness"&&<small title="Targeted band-specific EQ repair is not implemented yet. Inspect the suspect stem and listen before changing the mix.">Diagnostic only</small>}
 

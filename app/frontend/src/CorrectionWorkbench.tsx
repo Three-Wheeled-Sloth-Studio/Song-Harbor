@@ -26,7 +26,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
   onAccept:()=>void;
   onCancel:()=>void;
 }){
-  const edit=(patch:Partial<CorrectionDraft>)=>onChange({...draft,...patch});
+  const edit=(patch:Partial<CorrectionDraft>)=>onChange({...draft,...patch,...(patch.proposed===true?{compare:"fix" as const}:{})});
   const reductionItems=[["Compression",reduction?.compressionDb||0],["Ducking",reduction?.duckDb||0],["De-esser",reduction?.deessDb||0]] as const;
   return <section className="song-correction-workbench" aria-label="Correction trial">
     <div className="song-correction-heading">

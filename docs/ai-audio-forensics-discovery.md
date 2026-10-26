@@ -149,3 +149,8 @@ intentionally shares findings with Sound Cleanup until signal relevance,
 performance and presentation have been assessed. Fold proven measures into
 the general analyzer and retire the separate panel once mature. No
 fingerprint avoidance optimization or watermark-removal feature.
+
+
+## 2026-10-26 development course correction
+
+The subsequent cleanup implementation (`AudioCleanupAnalyzer`, `SignalAudit`, per-stem evidence, de-click, EQ/de-ess and three-way audition) **has not implemented the distinctive research algorithms summarized in this discovery**. This difference was explicitly raised by the user and acknowledged. The next research/development pass should directly inspect KillrBee, lofcz, and lcrosvila, capture exact model and licensing constraints, design controlled validation, and implement audibly actionable feature detectors first. See `refs/handoffs/currentHandoff.md` and the last section of `docs/artifact-fingerprint-cleanup-roadmap-2026-10-26.md`. Keep fingerprints and generator provenance separate from audible quality and optional repair.

@@ -2221,7 +2221,7 @@ def list_ace_candidates(ident: str) -> dict[str, Any]:
     _, folder, _ = _ace_project(ident)
     root = folder / "generated" / ace_candidates.CANDIDATE_FOLDER
     found = []
-    for item in sorted(root.glob("*/candidate.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:30]:
+    for item in sorted(root.glob("*/candidate.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:12]:
         try:
             record = ace_candidates.load_record(folder, item.parent.name)
             found.append(record)

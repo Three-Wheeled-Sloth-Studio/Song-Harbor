@@ -434,7 +434,7 @@ export class SharedClockAudition {
   setReferenceOriginal(enabled:boolean){
     if(this.referenceOriginal===enabled)return;
     this.referenceOriginal=enabled;
-    if(this.running&&this.acceptedDeclick.length>0)this.seek(this.position);
+    if(this.running&&(this.acceptedDeclick.length>0||this.previewDeclick!==null))this.seek(this.position);
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
   }
   private configurePreviewNodes(at:number,offset:number){

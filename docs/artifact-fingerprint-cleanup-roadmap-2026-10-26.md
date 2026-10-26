@@ -212,3 +212,14 @@ Implemented on main, pending desktop QA:
 8. Run `python -m unittest app.backend.tests.test_declick_recipes` from repository root and `npm run build` plus `node --test tests/localized-declick.test.mjs tests/stem-artifact-attribution.test.mjs` from `app/frontend`.
 
 **Remaining risk:** the recipe currently identifies project filename and source lane, not a cryptographic version of that PCM file. Replacing a WAV in place while preserving its filename could reapply an old repair at the wrong position. Add source content identity and reject stale recipes before calling this production-complete. Audio audition/export parity also requires in-app Windows listening verification, as source-convolver graphs and per-stem processing can alter perceived repair effectiveness.
+
+### Follow-up safeguards in the same slice
+
+- Every accepted de-click manifest entry now has a SHA-256 of the **exact audio file feeding that lane** (parent source or derived left/right mono WAV). Manifest reload verifies fingerprints before returning repairs; if any file changed in place, restore the matching WAV or explicitly discard stale repairs. Export is blocked until the manifest was fetched and successfully applied to the audio engine. The old unversioned filename-only risk above is therefore addressed for current version-1 saved entries.
+- Clip duration is verified on the actual repair source file on acceptance. Legacy projects without `source_tracks` fall back to `project.files`.
+- The three-way comparison forces a buffer reschedule at the same transport timestamp when toggling Original/Current after accepted or preview edits; source PCM remains immutable.
+- Memory optimization: the replay path constructs short sample replacement arrays instead of also cloning full buffers for every tiny repair. The accepted target still requires one decoded repaired AudioBuffer per active source lane.
+
+**Note**: SHA validation is at project open and edit submission, not on every export byte read. After physically altering a source file outside Song Harbor while it remains open, restart/reopen so source identity can be checked before export. A future project file watcher could provide immediate invalidation.
+
+This change is code-complete for desktop QA, **not empirically verified** for live audition/export identity. Unit tests exercise edit manifest logic and interpolation, but on-device playback, persisted reopen and WAV parity checks remain necessary.

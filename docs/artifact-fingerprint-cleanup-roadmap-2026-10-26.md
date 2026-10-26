@@ -116,3 +116,29 @@ Code committed directly to main:
 6. Next implementation milestone: short-region spectrogram, source-vs-output time-frequency evidence, source-stem likelihood ranking, and deliberate one-click A/B on selected region. Then a conservative de-click candidate, reversible acceptance, and export parity.
 
 Release safety: this work is observational and only executes on explicit Analyze. Continue current track mastering on the existing stable mix; do not auto-apply a correction from any stage-comparison finding.
+
+## P1 preview and focused evidence slice (2026-10-26) — code committed, QA pending
+
+User feedback: eliminate verbose Sound Cleanup copy, put an accessible **Original / Current / Fix** comparison at the top of a selected correction, and progress into local evidence.
+
+Implemented:
+- `CorrectionWorkbench.tsx`: compact three-way selector, Original (unprocessed aligned stems), Current (saved full mix), Fix (unsaved correction). Moving a correction slider selects Fix; acceptance still requires explicit user action.
+- `SharedClockAudition.ts`: new playback-only `setReferenceOriginal()` path. It suppresses section gain, EQ, dynamics, authored pan/width/space and reverb/fade for a static aligned-stem reference. It modifies neither source buffers nor export path. Original is **not the original mastered source WAV**; it is the currently loaded stem reconstruction with static mixer levels and routing. Keep wording precise.
+- `StemMixer.tsx`: correction selector now appears before scrollable scan findings. Conservative non-zero defaults enable audible comparisons for a new duck/compression trial, but actual musical benefit must be judged by listener.
+- `CleanupReview.tsx`: condensed scan summary, shortened finding rows, detailed explanation under disclosure. Only headroom, pumping and sibilance expose Try Fix, consistent with the effects currently implemented. Avoid offering a faux repair for arbitrary spectral abnormalities.
+- `RegionSpectrogram.ts`: small 24-column × 12-band, three-second Goertzel time-frequency tile. Appends bounded evidence to the first 20 findings based on the **already-rendered** mix, no extra model or file decode. Visual is a diagnostic approximation and not a precision, high-resolution spectrogram. `region-spectrogram.test.mjs` verifies timing, bounds and immutable PCM.
+- `AudioCleanupAnalyzer.ts`: findings can carry optional spectral preview.
+- Existing stage comparison and source-activity hints remain; no claim of rigorous per-stem causal attribution.
+
+Remaining next steps:
+1. **QA this three-way playback behavior** on an active, playing song including corrected-to-original-to-current without timeline jumps, reset when correction closes, and matching volume (static gains retained; intentional effects will alter actual perceived loudness). Ensure external A/B bypass and candidate audition do not collide.
+2. Improve stem evidence using band-specific short-region signal measurements, rather than raw high-pass energy or static top-two RMS. Add confidence rubric and verification against actual solo.
+3. Implement **real regional de-click** as a reversible edit candidate (non-mutating source, independent audition buffer/recipe, exact export replay), but do not expose a clickable fix before preview, persistence, undo and export parity exist.
+4. Local loudness matching and more granular time-frequency source/output comparison. Persistent review decisions should be keyed to source/project revision; current intentional-review action is session only.
+5. Merge proven diagnostics with the primary Sound Cleanup; retire duplicated verbose Audio Forensics prose.
+
+QA command from `app/frontend`:
+`npm run build`
+`node --test tests/audio-stage-comparison.test.mjs tests/audio-cleanup.test.mjs tests/region-spectrogram.test.mjs`
+
+**Runtime limitation:** GitHub file edits were not exercised on the user's Windows browser/audio device here. Build and audio QA required before release use.

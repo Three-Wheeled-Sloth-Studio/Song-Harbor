@@ -49,7 +49,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     let alive=true;
     void jsonResponse<{candidates:Candidate[]}>(base).then(data=>{
       if(!alive)return;
-      setHistory(data.candidates||[]);
+      setHistory((data.candidates||[]).slice(0,12));
       setCandidate(existing=>existing||(data.candidates||[])[0]||null);
     }).catch(()=>{});
     return()=>{alive=false;};
@@ -74,7 +74,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     const check=async()=>{
       try{
         const result=await jsonResponse<Candidate>(base+"/"+candidate.candidate_id);
-        if(active)setCandidate(result);
+        if(active){setCandidate(result);setHistory(current=>current.map(item=>item.candidate_id===result.candidate_id?result:item));}
       }catch(e){if(active)setError(String(e));}
     };
     const timer=window.setInterval(()=>{void check();},1200);
@@ -99,7 +99,6 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const legoSupported=runtime?.models?.some(m=>m.name==="acestep-v15-base"&&m.reported_tasks?.includes("lego"));
   const ready=modelReady&&(mode==="cover"||!!legoSupported);
   const audioUrl=candidate?base+"/"+candidate.candidate_id+"/audio":null;
-  const selectedId=candidate?.candidate_id;
   async function generate(){
     if(!validRange||!ready)return;
     setBusy(true);setError("");setNotice("");
@@ -112,7 +111,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       const result=await jsonResponse<Candidate>(base,{method:"POST",headers:{"Content-Type":"application/json"},
                                                        body:JSON.stringify(body)});
       setCandidate(result);
-      setHistory(current=>[result,...current.filter(item=>item.candidate_id!==result.candidate_id)].slice(0,30));
+      setHistory(current=>[result,...current.filter(item=>item.candidate_id!==result.candidate_id)].slice(0,12));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
@@ -237,7 +236,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     </details>}
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
-      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Native Lego candidate (isolation not yet verified on this machine). Audition before accepting."}</small>
+      <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental full-mix Cover; not an isolated instrument.":"Lego instrument candidate · isolation awaits listening QA."}</small>
       {candidate.error&&<small role="alert">{candidate.error}</small>}
       {candidate.state==="failed"&&<button type="button" disabled={busy} onClick={()=>void recover()}>Recover preserved audio</button>}
       {candidate.state==="ready"&&<>
@@ -251,9 +250,9 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
         <label style={{display:"grid",gap:"0.3rem"}}>
           <span>Audition blend · {blend}% generated</span>
           <input type="range" min="0" max="100" step="1" aria-label="Original to generated audition blend"
-            value={blend} onChange={e=>{const value=Number(e.target.value);setBlend(value);engine?.setCandidatePreviewBlend(value);}}/>
+            disabled={loadedId!==candidate.candidate_id} value={blend} onChange={e=>{const value=Number(e.target.value);setBlend(value);engine?.setCandidatePreviewBlend(value);}}/>
         </label>
-        <small>0 = original; 100 = generated alone in this interval. Equal-power crossfade; actual loudness may differ.</small>
+        <small>0 original · 100 generated only · equal-power preview. Audition first to enable blend.</small>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <button type="button" disabled={busy} onClick={()=>void accept()}>Accept and insert</button>
       </>}

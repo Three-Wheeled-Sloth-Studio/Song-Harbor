@@ -200,7 +200,7 @@ export class SharedClockAudition {
    * only, while Fix playback can also include an unsaved preview candidate.
    */
   private repairBuffer(track:Track,includeDraft:boolean):AudioBuffer{
-    const recipes=[...this.acceptedDeclick,...includeDraft&&this.previewDeclickEnabled&&this.previewDeclick?[this.previewDeclick]:[]]
+    const recipes=[...this.acceptedDeclick,...(includeDraft&&this.previewDeclickEnabled&&this.previewDeclick?[this.previewDeclick]:[])]
       .filter(recipe=>recipe.source_key===track.source.key);
     if(!recipes.length)return track.rawBuffer;
     const source=track.rawBuffer;
@@ -222,9 +222,12 @@ export class SharedClockAudition {
     this.acceptedDeclick=[...recipes];
     this.repairBuffers.clear();
     for(const track of this.tracks)track.buffer=this.repairBuffer(track,false);
+    this.refreshDuckingEnvelopes();
+    this.refreshDeEssEnvelopes();
     if(this.running)this.seek(this.position);
   }
   setPreviewDeclick(recipe:DeclickRecipe|null,enabled:boolean){
+    if(JSON.stringify(this.previewDeclick)===JSON.stringify(recipe)&&this.previewDeclickEnabled===enabled)return;
     this.previewDeclick=recipe;
     this.previewDeclickEnabled=enabled;
     this.repairBuffers.clear();
@@ -431,7 +434,8 @@ export class SharedClockAudition {
   setReferenceOriginal(enabled:boolean){
     if(this.referenceOriginal===enabled)return;
     this.referenceOriginal=enabled;
-    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
+    if(this.running&&this.acceptedDeclick.length>0)this.seek(this.position);
+    else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
   }
   private configurePreviewNodes(at:number,offset:number){
     for(const track of this.tracks){

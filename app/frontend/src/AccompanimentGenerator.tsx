@@ -38,7 +38,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [history,setHistory]=useState<Candidate[]>([]);
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
-  const [compare,setCompare]=useState<"A"|"B">("A");
+  const [blend,setBlend]=useState(35);
+  const [previewPeaks,setPreviewPeaks]=useState<number[]>([]);
   const [loadedId,setLoadedId]=useState<string|null>(null);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
@@ -83,7 +84,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     if(candidateRef.current===candidate?.candidate_id)return;
     candidateRef.current=candidate?.candidate_id||null;
     engine?.clearCandidatePreview();
-    setCompare("A");
+    setBlend(35);
+    setPreviewPeaks([]);
     setLoadedId(null);
     setPreviewBusy(false);
   },[candidate?.candidate_id,engine]);
@@ -103,7 +105,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     setBusy(true);setError("");setNotice("");
     try{
       engine?.clearCandidatePreview();
-      setCompare("A");
+      setBlend(35);
       const body={from_section_id:fromId,to_section_id:toId,context_before:before,context_after:after,
                   prompt,model:currentModel,task_type:mode,operation:"add",instrument:mode==="lego"?instrument:"",seed:Number(seed),
                   bpm:bpm.trim()?Number(bpm):null,key};
@@ -130,9 +132,9 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     setPreviewBusy(true);setError("");
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
-      engine.setCandidatePreviewEnabled(true);
+      engine.setCandidatePreviewBlend(blend);
+      setPreviewPeaks(engine.candidateWaveform());
       setLoadedId(candidate.candidate_id);
-      setCompare("B");
       onSeek(Math.max(0,candidate.target_start_seconds-preRoll));
       if(!playing)await onPlay();
     }catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -155,7 +157,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       form.append("start_seconds",String(candidate.target_start_seconds));
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
-      setCompare("A");
+      setBlend(35);
       setNotice("Candidate accepted and inserted at "+candidate.target_start_seconds.toFixed(3)+"s.");
       onInserted(result);
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
@@ -221,15 +223,18 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
       </div>
     </details>
     <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":mode==="lego"?"Generate Lego instrument":"Generate experimental Cover"}</button>
-    {history.length>0&&<div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
-      <label htmlFor="ace-candidate-history">Saved candidates</label>
+    {history.length>0&&<details>
+      <summary>Saved candidates ({history.length})</summary>
+      <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
+      <label htmlFor="ace-candidate-history">Candidate</label>
       <select id="ace-candidate-history" style={{width:"100%",minWidth:0}} value={candidate?.candidate_id||""}
         onChange={e=>setCandidate(history.find(item=>item.candidate_id===e.target.value)||null)}>
         {history.map(item=><option value={item.candidate_id} key={item.candidate_id}>
           {item.prompt.slice(0,48)} · {item.state} · {item.candidate_id.slice(0,8)}
         </option>)}
       </select>
-    </div>}
+      </div>
+    </details>}
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
       <small>{candidate.isolation==="cover-mix-not-isolated"?"Experimental cover mix, not an isolated instrument stem. Audition before accepting.":"Native Lego candidate (isolation not yet verified on this machine). Audition before accepting."}</small>
@@ -240,15 +245,24 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Audition with pre-roll"}</button>
           <label>Pre-roll (s) <input type="number" min="0" max="30" step="1" value={preRoll} onChange={e=>setPreRoll(Math.max(0,Math.min(30,Number(e.target.value))))}/></label>
         </div>
-        <div role="group" aria-label="Accompaniment comparison" style={{display:"flex",gap:"0.4rem"}}>
-          <button type="button" aria-pressed={compare==="A"} onClick={()=>{engine?.setCandidatePreviewEnabled(false);setCompare("A");}}>A: Original</button>
-          <button type="button" aria-pressed={compare==="B"} disabled={!engine?.ready||previewBusy} onClick={()=>{if(loadedId===selectedId){engine?.setCandidatePreviewEnabled(true);setCompare("B");}else void audition();}}>B: With accompaniment</button>
-        </div>
-        <small>A/B uses one playback clock. Switching back to A preserves your position.</small>
+        {previewPeaks.length>0&&<svg role="img" aria-label="Generated candidate waveform" viewBox="0 0 320 66" preserveAspectRatio="none" style={{display:"block",width:"100%",height:"66px",background:"#121f28",borderRadius:"5px"}}>
+          {previewPeaks.map((height,i)=><line key={i} x1={i*2+1} x2={i*2+1} y1={33-height*29} y2={33+height*29} stroke="#73c4cb" strokeWidth="1.6"/>)}
+        </svg>}
+        <label style={{display:"grid",gap:"0.3rem"}}>
+          <span>Audition blend · {blend}% generated</span>
+          <input type="range" min="0" max="100" step="1" aria-label="Original to generated audition blend"
+            value={blend} onChange={e=>{const value=Number(e.target.value);setBlend(value);engine?.setCandidatePreviewBlend(value);}}/>
+        </label>
+        <small>0 = original; 100 = generated alone in this interval. Equal-power crossfade; actual loudness may differ.</small>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <button type="button" disabled={busy} onClick={()=>void accept()}>Accept and insert</button>
       </>}
     </section>}
+    {(busy||candidate&&["prepared","generating","processing"].includes(candidate.state))&&<div role="status" aria-live="polite" className="song-ace-generation-overlay">
+      <div className="song-ace-generation-message"><span className="song-ace-spinner" aria-hidden="true"/> <strong>{busy?"Preparing generation":candidate?.state==="prepared"?"Queued":candidate?.state==="generating"?"Generating instrument":"Processing audio"}</strong>
+        <small>ACE is working. The song and original stems remain unchanged.</small>
+      </div>
+    </div>}
     {notice&&<small role="status">{notice}</small>}
     {error&&<small role="alert">{error}</small>}
   </div>;

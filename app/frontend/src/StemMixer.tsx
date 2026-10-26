@@ -14,7 +14,8 @@ import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation, valueAt } from "./SectionAutomation";
-import { SharedClockAudition, MixHeadroomError, type AuditionSource } from "./SharedClockAudition";
+import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe } from "./SharedClockAudition";
+import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
@@ -239,6 +240,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [sectionPreviewActive,setSectionPreviewActive]=useState(false);
   const [sectionPreview,setSectionPreview]=useState<SectionPreview|null>(null);
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
+  const [declickDraft,setDeclickDraft]=useState<DeclickDraft|null>(null);
+  const [declickRepairs,setDeclickRepairs]=useState<DeclickRecipe[]>([]);
+  const [declickBusy,setDeclickBusy]=useState(false);
+  const [declickError,setDeclickError]=useState("");
   const [correctionSaving,setCorrectionSaving]=useState(false);
   const [meters,setMeters]=useState<{filename:string;compressionDb:number;duckDb:number;deessDb:number}[]>([]);
   const [correctionError,setCorrectionError]=useState("");
@@ -268,7 +273,24 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
   useEffect(()=>{audio.current?.setEffectBypass(correction?{...bypassed,compression:false,ducking:false,deess:false}:bypassed);},[bypassed,audioReady,correction]);
-  useEffect(()=>{audio.current?.setReferenceOriginal(correction?.compare==="original");},[correction?.compare,audioReady]);
+  useEffect(()=>{audio.current?.setReferenceOriginal(correction?.compare==="original"||declickDraft?.compare==="original");},
+    [correction?.compare,declickDraft?.compare,audioReady]);
+  useEffect(()=>{
+    audio.current?.setPreviewDeclick(declickDraft?.recipe||null,declickDraft?.compare==="fix");
+  },[declickDraft,audioReady]);
+  useEffect(()=>{
+    if(!audioReady)return;
+    const engine=audio.current;
+    if(!engine)return;
+    let cancelled=false;
+    void fetch("/api/projects/"+jobId+"/cleanup/declick",{cache:"no-store"})
+      .then(async response=>{
+        const body=await response.json() as {repairs?:DeclickRecipe[];detail?:string};
+        if(!response.ok)throw Error(body.detail||"Cannot read saved repairs");
+        if(!cancelled){const repairs=body.repairs||[];setDeclickRepairs(repairs);engine.setAcceptedDeclick(repairs);}
+      }).catch(error=>{if(!cancelled)setDeclickError(error instanceof Error?error.message:String(error));});
+    return()=>{cancelled=true;};
+  },[audioReady,jobId]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb+(correction?.kind==="trim"&&correction.proposed?correction.trimDelta:0));},[masterTrimDb,correction,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
@@ -768,6 +790,55 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(!playRef.current)void togglePlayback();
   }
 
+  function tryDeclick(finding:AudioFinding){
+    const engine=audio.current;
+    if(!engine?.ready)return;
+    const sources=engine.declickSourceKeys;
+    const preferred=sources.find(source=>finding.sources?.some(name=>
+      source.filename.includes("("+name+")")) )||sources[0];
+    if(!preferred){setDeclickError("No editable audio source");return;}
+    setCorrection(null);
+    setDeclickError("");
+    setDeclickDraft({compare:"fix",recipe:{
+      id:crypto.randomUUID(),filename:preferred.filename,source_key:preferred.key,
+      time_seconds:finding.timeSeconds,half_window_ms:1
+    }});
+    loopAround(finding.timeSeconds-.8,finding.timeSeconds+1.2);
+  }
+  async function acceptDeclick(){
+    const draft=declickDraft;
+    if(!draft||draft.compare!=="fix"||declickBusy)return;
+    setDeclickBusy(true);setDeclickError("");
+    try{
+      const response=await fetch("/api/projects/"+jobId+"/cleanup/declick",{
+        method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(draft.recipe)
+      });
+      const body=await response.json() as {repairs?:DeclickRecipe[];detail?:string};
+      if(!response.ok||!body.repairs)throw Error(body.detail||"Could not save de-click");
+      setDeclickDraft(null);
+      setDeclickRepairs(body.repairs);
+      const engine=audio.current;
+      engine?.setPreviewDeclick(null,false);
+      engine?.setAcceptedDeclick(body.repairs);
+      setCleanupStale(true);setMixUrl(null);
+      setNotice("De-click accepted non-destructively; export uses saved repair.");
+    }catch(error){setDeclickError(error instanceof Error?error.message:String(error));}
+    finally{setDeclickBusy(false);}
+  }
+  async function undoDeclick(id:string){
+    setDeclickBusy(true);setDeclickError("");
+    try{
+      const response=await fetch("/api/projects/"+jobId+"/cleanup/declick/"+encodeURIComponent(id),{method:"DELETE"});
+      const body=await response.json() as {repairs?:DeclickRecipe[];detail?:string};
+      if(!response.ok||!body.repairs)throw Error(body.detail||"Could not undo de-click");
+      setDeclickRepairs(body.repairs);
+      audio.current?.setAcceptedDeclick(body.repairs);
+      setCleanupStale(true);setMixUrl(null);
+    }catch(error){setDeclickError(error instanceof Error?error.message:String(error));}
+    finally{setDeclickBusy(false);}
+  }
+
   function tryCorrection(finding:AudioFinding){
     const section=timelineSections.find(item=>finding.timeSeconds>=item.start_seconds&&finding.timeSeconds<item.end_seconds);
     const currentIndex=timelineSections.findIndex(item=>item.id===section?.id);
@@ -792,6 +863,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const peakMatch=finding.detail.match(/(-?[0-9]+(?:\.[0-9]+)?) dBFS/);
     const peak=peakMatch?Number(peakMatch[1]):0;
     setCorrectionError("");
+    setDeclickDraft(null);
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
       threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1.6,depth:2,transition:1.5,
@@ -1072,7 +1144,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-pressed={openTools.includes(item.id)}
           onClick={()=>{
             if(item.id==="sectionEdit")setSectionEditId(current=>current||timelineSections[0]?.id||"");
-            if(item.id==="cleanup"&&openTools.includes("cleanup"))setCorrection(null);
+            if(item.id==="cleanup"&&openTools.includes("cleanup")){setCorrection(null);setDeclickDraft(null);}
             if(item.id==="sectionEdit"&&openTools.includes("sectionEdit")){setSectionPreviewActive(false);setSectionPreview(null);}
             setOpenTools(existing=>existing.includes(item.id)?
               existing.filter(x=>x!==item.id):[...existing,item.id]);
@@ -1087,7 +1159,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         onClose={()=>{
           setOpenTools(items=>items.filter(item=>item!==tool));
           if(tool==="sectionEdit"){setSectionPreviewActive(false);setSectionPreview(null);}
-          if(tool==="cleanup")setCorrection(null);
+          if(tool==="cleanup"){setCorrection(null);setDeclickDraft(null);}
         }}>
         {tool==="sectionEdit"&&<>
           <div className="song-section-edit-context">
@@ -1203,6 +1275,20 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               setEnding(data.ending);setMixUrl(null);setScriptRevision(v=>v+1);
             }}/>
         </>}
+        {tool==="cleanup"&&declickDraft&&<>
+          <DeclickWorkbench draft={declickDraft} sources={audio.current?.declickSourceKeys||[]}
+            locked={declickBusy} onChange={setDeclickDraft}
+            onAccept={()=>{void acceptDeclick();}}
+            onCancel={()=>{setDeclickDraft(null);setDeclickError("");}}/>
+        </>}
+        {tool==="cleanup"&&declickError&&<p role="alert" className="song-cleanup-error">{declickError}</p>}
+        {tool==="cleanup"&&declickRepairs.length>0&&<details className="song-cleanup-repairs">
+          <summary>Accepted de-clicks ({declickRepairs.length})</summary>
+          {declickRepairs.map(item=><div key={item.id} className="song-cleanup-actions">
+            <span>{item.time_seconds.toFixed(2)}s · {item.source_key.match(/\\(([^)]+)\\)/)?.[1]||item.filename}</span>
+            <button type="button" disabled={declickBusy} onClick={()=>void undoDeclick(item.id)}>Undo</button>
+          </div>)}
+        </details>}
         {tool==="cleanup"&&correction&&<>
           <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
             reduction={meters.find(item=>item.filename===correction.file)}
@@ -1213,7 +1299,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {tool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
-          onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
+          onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection} onTryDeclick={tryDeclick}
           onLoop={(start,end)=>{
             setLoopIn(Math.min(start,duration));
             setLoopOut(Math.min(duration,end));

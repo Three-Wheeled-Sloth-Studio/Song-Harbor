@@ -1,3 +1,44 @@
+# CURRENT HANDOFF — 2026-10-26 — Return to actual AI-artifact / fingerprint discovery
+
+## Read this first (next thread)
+**User decision:** After several Song Harbor Sound Cleanup implementation slices, the user asked whether those were actually the specialized techniques from the three pinned GitHub discovery projects. The answer was **mostly no**. We built valuable conventional DSP/QA infrastructure but drifted away from the original AI-generated audio artifact and fingerprint research. **Next thread must correct that direction rather than continue building generic mastering controls.**
+
+**Work directly on `main` in `Three-Wheeled-Sloth-Studio/Song-Harbor`.** User prefers in-repo commits and chat answers, not downloadable deliverables. Keep UI sparse, compact, icon-driven and do not reintroduce duplicate panels. Existing **Sound cleanup & forensics** tool is the single entry point, with **Original / Current / Fix**, **Accept / Discard** in a compact sticky toolbar.
+
+### What actually exists in main (code committed; Windows run/QA not uniformly verified)
+- `AudioCleanupAnalyzer.ts`: on-demand offline mix QC including level/peak, suspicious transient and flat-top, loudness dips, stereo cancellation, sibilance/presence/fizz/noise categories. **Heuristics, not general AI artifact detectors**.
+- `SignalAudit.ts`: narrow tonal signal scan. **Not a validated generator fingerprint extractor or watermark detector**.
+- `AudioStageComparison.ts`: aligned dry-stem versus processed-mix RMS and L/R balance flags; intentional automation can trigger them.
+- `StemArtifactAttribution.ts` / `RegionSpectrogram.ts`: bounded per-stem frequency-band energy hints and compact region spectral tiles; not causal or precision time-frequency artifact classification.
+- `LocalizedDeclick.ts`, `DeclickWorkbench.tsx`, `declick_recipes.py` and local API endpoints: non-destructive small impulse replacement, preview, accept/undo persisted recipes, source-file SHA-256 validation and accepted-only export design. Requires on-device audition/export parity QA.
+- `CorrectionWorkbench.tsx`, `CleanupReview.tsx`: compact comparison and findings review. Targeted de-ess, compressor/ducking, trim, and `spectral` section EQ cut. **Spectral cut is ordinary section-scoped peaking EQ, not spectrogram pixel reconstruction or fingerprint cleaning.** It can inherit across later sections.
+- Single entry via `WorkbenchTools.tsx` / `StemMixer.tsx`: **Sound cleanup & forensics**. Prior separate Audio Forensics popover was removed as redundant.
+- Prior release mix should remain unmodified unless a specific fix is heard, manually approved, and verified in the exported WAV.
+
+### Pinned discoveries (specific, not interchangeable)
+1. **https://github.com/KillrBee/ai-music-detector** — seven analysis domains: spectral, spatial, production, temporal, structural, vocal, optional watermark. Explore transient/attack and phase anomalies, sustained harmonic-to-noise and unusual upper-band structure, reverb-tail inconsistency, timing/phrase repetition, vocal breath/formant/phoneme coherence. **High-priority for interpretable, locatable audible-artifact diagnostics**. Its global AI score is heuristic / not calibrated; no top-level LICENSE was found in earlier inspection: confirm permissions before copying code. Implement independent feature algorithms and test fixtures first.
+2. **https://github.com/lofcz/ai-music-detector** — MIT ONNX spectral fakeprint / vocoder architecture residual spectrum and CQT route, scoped by its author to specific Suno/Udio generations. **Run as optional, offline research experiment**, not source quality metric. Validate supported model/preprocessing (16 kHz / 1–8 kHz noted in discovery) and test false positives on ACE 1.5, YuE2, remixed mastered hybrids, industrial synths and real acoustic music. No watermark stripping.
+3. **https://github.com/lcrosvila/ai-music-detection** — Essentia/CLAP features, hierarchical classifiers, and robustness tests under sample-rate changes, filtering, noise and codecs. **Use mainly as evaluation methodology**, not a live default dependency; repo/license/dataset availability to verify before reuse.
+
+Additional canonical source: `docs/ai-audio-forensics-discovery.md`. The roadmap `docs/artifact-fingerprint-cleanup-roadmap-2026-10-26.md` records many commits chronologically but starts with **historical, now-stale** statements. This prominent handoff reflects the current decision.
+
+### Explicit reset of priorities for the next thread
+- **P0: audit and reproduce the source techniques** from all three pinned repositories before writing more code. Inspect actual source algorithms, model assumptions, license/weights, maintenance, hardware needs, inputs/outputs. Produce a capability matrix: detectable acoustic phenomenon, window size, source vs mix, temporal localization, observable evidence, likely false positives, CPU/GPU, and whether a reversible *audible* repair is available.
+- **P1: implement KillrBee-inspired interpretable detectors**, separately calibrated on controlled fixture audio: attack/transient smearing, phase/width incoherence, sustained harmonic/noise anomalies, nonphysical/stalled reverb decays, then vocal formant/breath/phoneme and phrase-temporal irregularities. Labels should describe evidence and location—not a global AI percentage. Negative controls MUST include intentionally distorted electronic/industrial music, cymbals and wide/spatial reverbs.
+- **Parallel limited P1/P2: isolated lofcz spectral fakeprint bench**. Download/adapt only if license and runtime allow; strictly a research report. Preserve fingerprint/provenance information; **do not minimize detection score or remove provenance**. A changing AI score does not mean an audible improvement.
+- **P2: use lcrosvila-style robustness evaluation** to test over Suno -> YuE2 remix -> stem separation -> ACE accompaniment -> Song Harbor mix/export, plus acoustically recorded and deliberately synthetic controls. Report precision/false positives, codec/sampling stability, and category-specific localization.
+- **Only after detectors are validated**, map *audible, localized* defect categories to opt-in Original / Current / Fix candidates (repair should remain reversible with export parity). Do not expand basic EQ, compression, or UI without a concrete artifact diagnostic requirement.
+- **UI requirements:** Single compact existing tool, keep Accept/Discard reachable, preserve previous scan findings after mix edits with a stale marker, no verbose disclaimers or duplicated forensic windows.
+- **Engineering:** Local-first, CPU bounded where possible, 12 GB RTX 4070 available for optional experiments, avoid a permanently resident model. Maintain explicit tests; **do not claim Windows build/audio QA unless actually run**.
+
+### Immediate next-thread kickoff
+Suggested user prompt: **"Continue Song Harbor from `refs/handoffs/currentHandoff.md`, section CURRENT HANDOFF — 2026-10-26. Audit the three pinned AI-music detector repos, build the artifact-method capability matrix, and implement the first specific KillrBee-inspired diagnostic with tests. Work on main."**
+
+### Notable other deferred work
+Release-bound current track needs independent listening/export sign-off. Candidate cleanup/retention (reference-safe), foreground app focus on update/relaunch, pinned global header, vocal profile exploration (Applio/RVC, DiffSinger/OpenUtau), and enhanced ACE isolation QA remain separate backlogs; do not mix them into this artifact-detection workstream.
+
+---
+
 ## 2026-10-23: Premium cross-device cloud sync plan — documented, not implemented
 
 User wants eventual cross-device Song Harbor cloud synchronization, ideally a

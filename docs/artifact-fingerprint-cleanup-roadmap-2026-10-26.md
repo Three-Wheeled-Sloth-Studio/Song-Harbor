@@ -153,3 +153,17 @@ Resolution committed on main:
 - Fixed parameter adjustments in `CorrectionWorkbench.tsx` so edits always select **Fix** audibly, including after switching to Original.
 - Current/Original/Fix comparison is shown **after clicking Try Fix on a supported finding**, not as a global toggle in the scan summary. Stage comparison and regional spectrum live in the same combined tool.
 - No backend models or audio exports were changed in this UI fix. Desktop frontend build and listening QA are still required.
+
+## Compact cleanup desktop QA corrections (2026-10-26)
+
+Desktop screenshots identified overlarge correction forms and disappearing scan findings.
+
+Changes on main:
+- Removed the generic bottom disclaimer and the unclear dry-to-processed summary block. Kept the actual comparison *findings* and their details.
+- Findings now retain the previous scan after an accepted mix change, with a concise `Previous scan · mix changed. Re-analyze to refresh.` indicator. A second scan explicitly replaces them. The previous analysis isn't silently represented as current.
+- The correction toolbar now places **Original | Current | Fix** and **Accept | Discard** in the same sticky toolbar row. Live dynamics meters are collapsed, Strength/Effect/Track occupy a single compact grid row, and numeric parameters use accessible compact rotary-style controls (arrow keys plus horizontal drag). User must confirm real usability on Windows; the dials are range inputs visually styled as controls, not native VST knobs.
+- `Strong presence-band emphasis` is **diagnostic-only**: no validated matching dynamic EQ/notch repair recipe exists for that finding yet, and the old generic ducking fallback would be misleading. No `Try Fix` until an actual frequency-targeted repair exists.
+- Findings are snapshot observations; when the mix changes, only the stale label changes and the previous scan remains for review. Future persistence across app restarts will require revision-keyed storage.
+- Source hints are approximate; they are not proven causality. Better stem-specific spectral attribution remains P1.
+
+QA: test scrolling a small tool window and a full-width one; confirm Accept is reachable without scrolling, dials change values by dragging and arrow keys, switching comparisons doesn't seek, accepting leaves the list and its review state intact with a stale marker, rescan replaces the snapshot, and successful export remains non-destructive. No automated Windows build or browser QA has been executed.

@@ -63,7 +63,6 @@ def submit_instrument(client: AceClient, context_file: Path, model: str, prompt:
         # No cover/noise or cover-mix parameters may leak into this request.
         fields["repainting_start"] = 0.0
         fields["repainting_end"] = -1
-        fields["chunk_mask_mode"] = "explicit"
     else:
         fields["audio_cover_strength"] = 0.8
         fields["cover_noise_strength"] = 0.2

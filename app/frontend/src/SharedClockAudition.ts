@@ -210,7 +210,7 @@ export class SharedClockAudition {
     for(const recipe of recipes){
       const sourceTime=recipe.time_seconds-track.source.startSeconds;
       if(sourceTime<0||sourceTime>=source.duration)continue;
-      const repair=makeDeclickCandidate(out,sourceTime,recipe.half_window_ms);
+      const repair=makeDeclickCandidate(out,sourceTime,recipe.half_window_ms,false);
       for(let channel=0;channel<out.numberOfChannels;channel++){
         const row=repair.replacements[channel];
         out.copyToChannel(row.values,channel,row.startFrame);

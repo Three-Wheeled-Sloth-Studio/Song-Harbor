@@ -728,13 +728,12 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   position:static;
 }
 .song-floating-tool[aria-label="Generate accompaniment"] .song-ace-generation-overlay{
-  position:sticky;
-  inset:auto;
-  bottom:0;
+  position:absolute;
+  inset:0;
   z-index:20;
   width:100%;
-  min-height:100px;
-  margin-top:-100px;
+  min-height:100%;
+  margin:0;
   padding:10px;
   box-sizing:border-box;
   display:grid;

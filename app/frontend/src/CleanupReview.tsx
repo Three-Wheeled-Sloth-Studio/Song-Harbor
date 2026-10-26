@@ -8,11 +8,11 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,comparison,scanned,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
+  findings,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
 }:{
   findings:readonly AudioFinding[];
   comparison?:StageComparison|null;
-  scanned:boolean;analyzing:boolean;error:string;ready:boolean;busy:boolean;
+  scanned:boolean;stale?:boolean;analyzing:boolean;error:string;ready:boolean;busy:boolean;
   onAnalyze:()=>void;
   onSeek:(seconds:number)=>void;
   onLoop:(start:number,end:number)=>void;
@@ -41,10 +41,7 @@ export function CleanupReview({
       </div>
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}
       {scanned&&<>
-        {comparison&&<div className="song-cleanup-stage-comparison" role="status">
-          <strong>Dry stems → processed mix</strong>
-          <small>{comparison.findings.length} mix changes · review, not defects</small>
-        </div>}
+        {stale&&<small role="status" className="song-cleanup-stale">Previous scan · mix changed. Re-analyze to refresh.</small>}
         <label className="song-cleanup-filter">Findings
           <select aria-label="Filter sound cleanup findings" value={filter} onChange={e=>setFilter(e.target.value)}>
             {FILTERS.filter(item=>item==="All"||categories.has(item)).map(item=><option key={item}>{item}</option>)}
@@ -81,8 +78,10 @@ export function CleanupReview({
                   </svg>}
                   <p>{item.detail}</p>{item.suggestion&&<p>{item.suggestion}</p>}
                 </details>
-                {!!item.sources?.length&&<p className="song-cleanup-sources">Active raw stems: {item.sources.join(", ")} <span>(hint, not confirmed cause)</span></p>}
+                {!!item.sources?.length&&<p className="song-cleanup-sources">Likely: {item.sources.join(", ")}</p>}
                 <div className="song-cleanup-actions">
+                  {item.kind==="harshness"&&<small title="Targeted band-specific EQ repair is not implemented yet. Inspect the suspect stem and listen before changing the mix.">Diagnostic only</small>}
+
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
                   {(["headroom","pumping","sibilance"].includes(item.kind))&&
                     <button type="button" onClick={()=>onTryCorrection(item)}>Try Fix</button>}
@@ -102,7 +101,6 @@ export function CleanupReview({
         {nextItem&&<button type="button" className="song-cleanup-next"
           onClick={()=>onSeek(nextItem.timeSeconds)}>Jump to first unreviewed finding</button>}
       </>}
-      <small className="song-cleanup-limits">Listening suggestions only · no automatic edits or watermark removal.</small>
     </div>
   </details>;
 }

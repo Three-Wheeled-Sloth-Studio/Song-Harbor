@@ -1315,6 +1315,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             <button type="button" disabled={declickBusy} onClick={()=>void undoDeclick(item.id)}>Undo</button>
           </div>)}
         </details>}
+        {tool==="cleanup"&&correctionError&&!correction&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         {tool==="cleanup"&&correction&&<>
           <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
             reduction={meters.find(item=>item.filename===correction.file)}

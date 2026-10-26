@@ -36,7 +36,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
     <div className="song-correction-switch" role="group" aria-label="Correction comparison">
       <button type="button" aria-pressed={draft.compare==="original"} onClick={()=>edit({compare:"original",proposed:false})}>Original</button>
       <button type="button" aria-pressed={draft.compare==="current"} onClick={()=>edit({compare:"current",proposed:false})}>Current</button>
-      <button type="button" aria-pressed={draft.compare==="fix"} onClick={()=>edit({compare:"fix",proposed:true,compare:"fix"})}>Fix</button>
+      <button type="button" aria-pressed={draft.compare==="fix"} onClick={()=>edit({compare:"fix",proposed:true})}>Fix</button>
     </div>
     {draft.kind!=="trim"&&<>
       <div className="song-dynamics-meter" aria-label="Live dynamics gain reduction">
@@ -45,7 +45,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
         </div>)}
       </div>
       <label className="song-audition-strength">Audition strength
-        <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true})}>
+        <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true,compare:"fix"})}>
           <option value={1}>Actual setting · 1×</option><option value={3}>Exaggerated audition · 3×</option>
         </select>
       </label>

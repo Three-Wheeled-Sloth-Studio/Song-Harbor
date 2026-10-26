@@ -38,6 +38,17 @@ class DeclickRecipeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"not found"):
                 declick_recipes.remove(folder,"other")
 
+    def test_missing_or_invalid_source_identity_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder=Path(temporary)
+            repair={"id":"n","filename":"A.wav","source_key":"A.wav",
+                    "time_seconds":1.0,"half_window_ms":1.0}
+            with self.assertRaisesRegex(ValueError,"identity"):
+                declick_recipes.append(folder,repair,{"A.wav"})
+            repair["source_sha256"]="not-a-digest"
+            with self.assertRaisesRegex(ValueError,"identity"):
+                declick_recipes.append(folder,repair,{"A.wav"})
+
     def test_nan_and_oversized_repair_windows_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
             folder=Path(temporary)

@@ -91,7 +91,7 @@ export function CleanupReview({
 
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
                   {item.kind==="transient"&&<button type="button" onClick={()=>onTryDeclick(item)}>Try de-click</button>}
-                  {(["headroom","pumping","sibilance"].includes(item.kind))&&
+                  {(["headroom","pumping","sibilance","harshness","fizz","noise","signal_audit"].includes(item.kind))&&
                     <button type="button" onClick={()=>onTryCorrection(item)}>Try Fix</button>}
                   {comparison?.findings.includes(item)&&<button type="button"
                     aria-pressed={markedIntentional.has(id)}

@@ -992,8 +992,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }))} duration={duration} position={position} onSeek={seek}
             viewStart={viewStart} viewEnd={viewEnd} sections={timelineSections}/>
         </section>
+        <details className="song-stem-controls" open>
+        <summary className="song-stem-controls-summary">Stem controls · {stems.length} tracks</summary>
         <div className="mixer-heading">
-          <div><h3>Stems</h3></div>
+          <div><h3>Mix levels</h3></div>
           <IconButton icon="↶" label="Reset mix" onClick={()=>{
             setStems(current=>current.map(s=>({...s,gain:100,mute:false,solo:false})));
           }}/>
@@ -1056,6 +1058,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         ?"Split channels replace their parent originals in playback and mix export."
         :"Original stereo stems active. Expand split channels with their track buttons."}</div>
     </div>
+        </details>
       </main>
       <aside className="song-tool-rail" aria-label="Production tools">
         {TOOL_ITEMS.map(item=><button type="button" key={item.id}

@@ -59,3 +59,22 @@ Compact mode selector: Add instrument / Replace instrument. Instrument family se
 Check unavailable checkpoint; model and track-class validation; violin uses strings; Add creates isolated candidate; Replace Bass affects only target region with no doubling; L/R stems and imported position; overlapping regions; original outside region preserved; undo; source revision conflicts; preview and export parity; GPU release; cold/warm VRAM and elapsed times.
 
 Sources: https://ace-step.github.io/ACE-Step-1.5/en/INFERENCE ; https://github.com/ace-step/ACE-Step-1.5/blob/main/acestep/constants.py
+## Workbench QA and design follow-up (2026-10-26)
+
+Lego generated a ready candidate using Base / Strings with a violin direction; auditory isolation and its relative signal level are not yet independently measured. Existing evidence is a user-report of a quiet violin candidate in the composite audition.
+
+Current implementation now has:
+- Waveform preview taken from decoded candidate audio, rendered after audition.
+- Equal-power audition crossfade: 0 is original mix; 100 is candidate only **within its clip interval**. Original remains audible outside. Smooth transition is preview-only and does not mutate project.
+- Optional preview-only generated-part trim -12 to +9 dB; not committed into the generated asset, track gain or export. Clipping is possible with positive trim. A future loudness-matched reference comparison should measure integrated/perceptual loudness and peak headroom before applying auto normalization.
+- Modal generation status so long-running jobs don't hide progress in the scroll region; expanded default generation window and smaller descriptive text.
+- Stem mute/isolate toggles adjacent to each stem name and collapsible mixer-detail region.
+- Candidate history picker displays only the latest 12 per song; older candidate records remain on disk for safety. **Do not silently delete candidates** until provenance and accepted-reference protection plus an opt-in retention policy are implemented.
+
+Further work:
+1. Replace hardcoded instrument-family UI choices with a versioned engine-neutral instrument registry. ACE currently accepts 10 instrumental classes; map detailed violin, cello, viola, etc. to strings and add instrument-specific prompt templates. A provider/plugin can advertise extra instruments without expanding ACE's native track_names.
+2. Add measured waveform envelope and integrated loudness analysis for original vs candidate, then calibrate preview blending for perceived volume and peak headroom; simple equal-power is a first pass, not an asserted constant-loudness mix.
+3. Validate waveform preview, regional blend and trim on the desktop with a Lego Strings candidate, including within-range and outside-range behavior and audible silence/noise.
+4. Candidate storage limits: decide number/age/quota, preserve references from accepted tracks and edit history, and support explicit cleanup/archival for unreferenced candidates.
+5. Confirm stem-panel collapse and the direct name-adjacent M/S controls in narrow and wide windows.
+

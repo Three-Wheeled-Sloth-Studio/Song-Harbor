@@ -72,7 +72,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
     return()=>{mounted=false;window.clearInterval(timer);engine?.clearCandidatePreview();};
   },[jobId]);
   useEffect(()=>{
-    if(!candidate||candidate.state==="ready"||candidate.state==="failed")return;
+    if(!candidate||candidate.state==="ready"||candidate.state==="failed"||candidate.state==="review_required")return;
     let active=true;
     const check=async()=>{
       try{

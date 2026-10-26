@@ -33,6 +33,7 @@ export class SharedClockAudition {
   readonly context:AudioContext;
   private master:GainNode;
   private dryMaster:GainNode;
+  private originalPreviewBus:GainNode;
   private sourceDurationSeconds=0;
   private ending={fade_seconds:0,tail_seconds:0,curve:"smooth" as "smooth"|"linear"};
   private tracks:Track[]=[];
@@ -49,7 +50,7 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean}|null=null;
+  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
@@ -75,12 +76,14 @@ export class SharedClockAudition {
     this.context=new AudioContext();
     this.master=this.context.createGain();
     this.master.connect(this.context.destination);
+    this.originalPreviewBus=this.context.createGain();
+    this.originalPreviewBus.connect(this.master);
     this.dryMaster=this.context.createGain();
-    this.dryMaster.connect(this.master);
+    this.dryMaster.connect(this.originalPreviewBus);
     this.reverb=this.context.createConvolver();
     this.reverb.normalize=false;
     this.reverb.buffer=createRoomImpulse(this.context,0);
-    this.reverb.connect(this.master);
+    this.reverb.connect(this.originalPreviewBus);
     this.reverbDrive=this.context.createGain();
     this.reverbDrive.connect(this.reverb);
   }
@@ -193,14 +196,37 @@ export class SharedClockAudition {
     this.clearCandidatePreview();
     const gain=this.context.createGain();
     gain.gain.value=0;
-    gain.connect(this.dryMaster);
-    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false};
+    gain.connect(this.master);
+    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0};
     if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
   }
   setCandidatePreviewEnabled(value:boolean){
-    if(!this.candidatePreview)return;
-    this.candidatePreview.enabled=value;
-    this.candidatePreview.gain.gain.setTargetAtTime(value?1:0,this.context.currentTime,.008);
+    this.setCandidatePreviewBlend(value?100:0);
+  }
+  /** Equal-power preview crossfade; source stems and exported tracks remain unchanged. */
+  setCandidatePreviewBlend(percent:number){
+    const candidate=this.candidatePreview;
+    if(!candidate)return;
+    const p=Math.max(0,Math.min(100,percent))/100;
+    candidate.blend=p;
+    candidate.enabled=p>0;
+    const now=this.context.currentTime;
+    this.originalPreviewBus.gain.setTargetAtTime(Math.cos(p*Math.PI/2),now,.012);
+    candidate.gain.gain.setTargetAtTime(Math.sin(p*Math.PI/2),now,.012);
+  }
+  candidateWaveform(size=160):number[]{
+    const buffer=this.candidatePreview?.buffer;
+    if(!buffer)return [];
+    const data=buffer.getChannelData(0);
+    const peaks:number[]=[];
+    for(let i=0;i<size;i++){
+      const begin=Math.floor(i*data.length/size),end=Math.max(begin+1,Math.floor((i+1)*data.length/size));
+      let peak=0;
+      for(let j=begin;j<end;j+=Math.max(1,Math.floor((end-begin)/80)))peak=Math.max(peak,Math.abs(data[j]));
+      peaks.push(peak);
+    }
+    const max=Math.max(.001,...peaks);
+    return peaks.map(value=>value/max);
   }
   clearCandidatePreview(){
     const candidate=this.candidatePreview;
@@ -209,6 +235,7 @@ export class SharedClockAudition {
     candidate.source?.disconnect();
     candidate.gain.disconnect();
     this.candidatePreview=null;
+    this.originalPreviewBus.gain.setTargetAtTime(1,this.context.currentTime,.012);
   }
   private scheduleCandidate(at:number,offset:number){
     const candidate=this.candidatePreview;
@@ -222,7 +249,7 @@ export class SharedClockAudition {
     source.buffer=candidate.buffer;
     source.connect(candidate.gain);
     candidate.source=source;
-    candidate.gain.gain.setValueAtTime(candidate.enabled?1:0,at);
+    candidate.gain.gain.setValueAtTime(Math.sin(candidate.blend*Math.PI/2),at);
     if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
     else source.start(at,offset-candidate.startSeconds);
   }

@@ -3,7 +3,7 @@ import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Runtime={status:string;ready?:boolean;loaded_model?:string|null;models?:{name:string;validated_tasks?:string[];reported_tasks?:string[];loaded?:boolean}[]};
-type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number;task_type?:string;instrument?:string;operation?:string};
+type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number;task_type?:string;instrument?:string;operation?:string;source_similarity?:{status:string;correlations?:number[];reason?:string};};
 type ImportResult={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
   playing:boolean;position:number;onSeek:(time:number)=>void;onPlay:()=>Promise<void>;
@@ -119,6 +119,16 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
+  async function checkIsolation(){
+    if(!candidate||candidate.task_type!=="lego"||busy)return;
+    setBusy(true);setError("");
+    try{
+      const result=await jsonResponse<Candidate>(base+"/"+candidate.candidate_id+"/check-isolation",{method:"POST"});
+      setCandidate(result);
+      setHistory(current=>current.map(item=>item.candidate_id===result.candidate_id?result:item));
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+    finally{setBusy(false);}
+  }
   async function recover(){
     if(!candidate||candidate.state!=="failed"||busy)return;
     setBusy(true);setError("");
@@ -147,7 +157,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
     finally{setPreviewBusy(false);}
   }
   async function accept(){
-    if(!candidate||candidate.state!=="ready"||!audioUrl||busy)return;
+    if(!candidate||candidate.state!=="ready"||!audioUrl||busy||
+       (candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected"))return;
     if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(alias)){setError("Use a script-safe track alias.");return;}
     setBusy(true);setError("");
     try{
@@ -218,8 +229,12 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
       {candidate.error&&<small role="alert">{candidate.error}</small>}
+      {candidate.task_type==="lego"&&["ready","review_required"].includes(candidate.state)&&<small>
+        Isolation: {candidate.source_similarity?.status==="not_detected"?"No direct source duplication detected":candidate.source_similarity?.status==="suspected_source_leakage"?"Source audio detected in generated track":"Not checked"}
+        {" "}<button type="button" disabled={busy} onClick={()=>void checkIsolation()}>Check isolation</button>
+      </small>}
       {candidate.state==="failed"&&<button type="button" disabled={busy} onClick={()=>void recover()}>Recover preserved audio</button>}
-      {candidate.state==="ready"&&<>
+      {["ready","review_required"].includes(candidate.state)&&<>
         <div className="song-ace-preview-line">
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Preview"}</button>
           <button type="button" aria-pressed={soloPreview} title="Listen to generated audio only" onClick={()=>{
@@ -253,7 +268,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
           <small>Preview-only; positive trim may clip. Not applied to accepted track.</small>
         </details>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
-        <button type="button" disabled={busy} onClick={()=>void accept()}>Accept and insert</button>
+        <button type="button" disabled={busy||candidate.state!=="ready"||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>Accept and insert</button>
       </>}
     </section>}
     <details><summary>Generation parameters</summary>

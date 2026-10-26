@@ -20,7 +20,7 @@ async function jsonResponse<T>(url:string,init?:RequestInit):Promise<T>{
   return data;
 }
 
-export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
+export function AccompanimentGenerator({jobId,sections,engine,playing,position,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
   const [fromId,setFromId]=useState("");
   const [toId,setToId]=useState("");
   const [before,setBefore]=useState(15);

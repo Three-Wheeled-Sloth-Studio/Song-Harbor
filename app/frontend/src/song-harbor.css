@@ -671,3 +671,18 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-ace-generation-message small{flex-basis:100%;margin-left:25px}
 .song-ace-spinner{width:16px;height:16px;border:2px solid #42777d;border-top-color:#b9eff1;border-radius:50%;animation:song-ace-spin .8s linear infinite}
 @keyframes song-ace-spin{to{transform:rotate(360deg)}}
+
+/* Collapsible stem detail region remains independent of the timeline. */
+.song-stem-controls{grid-column:1/-1;min-width:0;margin-top:8px}
+.song-stem-controls-summary{cursor:pointer;font-size:13px;font-weight:700;display:list-item;padding:7px 4px;margin-bottom:4px}
+.song-stem-controls:not([open]){border:1px solid var(--tws-color-border-normal);border-radius:7px;padding:5px 10px}
+.song-stem-controls .mixer-heading{margin:3px 0 7px}
+.song-stem-controls .mixer-heading h3{font-size:12px}
+.song-stem-controls .stem-icon-name--named{justify-content:flex-start}
+.song-stem-controls .mixer-stem-names{display:flex;flex-direction:column;gap:2px}
+.song-stem-controls .mixer-stem-name{font-weight:700}
+/* Generation is modal to its own operation: never lose status under scrolling. */
+.song-ace-generation-overlay{position:fixed;inset:0;z-index:1700;display:grid;place-items:center;
+  padding:20px;background:rgba(5,12,17,.75);pointer-events:auto}
+.song-ace-generation-message{width:min(430px,calc(100vw - 48px));min-height:90px;justify-content:center;align-content:center}
+.song-ace-generation-message small{margin:0;text-align:center}

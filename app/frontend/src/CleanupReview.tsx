@@ -71,7 +71,7 @@ export function CleanupReview({
                 {!!item.sources?.length&&<p className="song-cleanup-sources">Active raw stems: {item.sources.join(", ")} <span>(hint, not confirmed cause)</span></p>}
                 <div className="song-cleanup-actions">
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
-                  {(["headroom","pumping","sibilance","harshness","fizz","noise"].includes(item.kind))&&
+                  {(["headroom","pumping","sibilance"].includes(item.kind))&&
                     <button type="button" onClick={()=>onTryCorrection(item)}>Try Fix</button>}
                   {comparison?.findings.includes(item)&&<button type="button"
                     aria-pressed={markedIntentional.has(id)}

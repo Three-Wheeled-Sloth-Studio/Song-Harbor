@@ -42,6 +42,9 @@ class LegoTransportTests(unittest.TestCase):
                          b'name="lyrics"\r\n\r\n[Instrumental]',
                          b'name="instruction"\r\n\r\nGenerate the STRINGS track based on the audio context:'):
                 self.assertIn(part,body)
+            self.assertNotIn(b'name="audio_cover_strength"',body)
+            self.assertNotIn(b'name="cover_noise_strength"',body)
+            self.assertNotIn(b'name="chunk_mask_mode"',body)
             return Response()
         with patch("ace_transport.urllib.request.urlopen",side_effect=capture):
             task=ace_transport.submit_instrument(self.client,self.context,

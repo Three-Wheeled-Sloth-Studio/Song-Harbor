@@ -8,7 +8,7 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
+  findings,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick
 }:{
   findings:readonly AudioFinding[];
   comparison?:StageComparison|null;
@@ -17,6 +17,7 @@ export function CleanupReview({
   onSeek:(seconds:number)=>void;
   onLoop:(start:number,end:number)=>void;
   onTryCorrection:(finding:AudioFinding)=>void;
+  onTryDeclick:(finding:AudioFinding)=>void;
 }){
   const [filter,setFilter]=useState<string>("All");
   const [reviewed,setReviewed]=useState<Set<string>>(()=>new Set());
@@ -89,6 +90,7 @@ export function CleanupReview({
                   {item.kind==="harshness"&&<small title="Targeted band-specific EQ repair is not implemented yet. Inspect the suspect stem and listen before changing the mix.">Diagnostic only</small>}
 
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
+                  {item.kind==="transient"&&<button type="button" onClick={()=>onTryDeclick(item)}>Try de-click</button>}
                   {(["headroom","pumping","sibilance"].includes(item.kind))&&
                     <button type="button" onClick={()=>onTryCorrection(item)}>Try Fix</button>}
                   {comparison?.findings.includes(item)&&<button type="button"

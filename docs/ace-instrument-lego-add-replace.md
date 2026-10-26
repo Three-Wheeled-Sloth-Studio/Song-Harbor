@@ -88,3 +88,20 @@ Further work:
 - **Next-priority retention:** implement reference-aware cleanup (per-project size quota and count/age policy, never delete accepted or referenced assets, show disk use and dry-run preview). The current 12-item dropdown limit is only a display limit.
 - **Layout follow-up:** pin the global Song Harbor application header to viewport top, accounting for scrollbar layering, other sticky rails and floating-tool z-index. Avoid pinned subpanels covering the waveforms.
 - **QA gates:** ensure Solo starts playback even before Preview was previously loaded, Solo toggling restores old blend without seeking, original mix is fully audible outside candidate interval, waveform cursor moves with main playback/seek, and keyboard input doesn't accidentally affect transport.
+
+## Critical QA: source-shadowed Lego output (2026-10-26)
+
+The supplied context.wav, generated.wav and target.wav demonstrate that the generated WAV retained a substantial source mix. In four non-adjacent six-second windows (12, 40, 74, 96s), same-clock channel correlation between input and generated audio was approximately 0.87-0.89. This **rules out the Song Harbor Solo toggle as the source of the original stems**: contamination exists in the generated file before Song Harbor audition.
+
+Actions taken:
+- Removed Cover-only audio_cover_strength and cover_noise_strength from Lego requests; kept those for Turbo Cover. Explicit whole-context mask for Lego. Native Base instruction/track_name unchanged. This is a hypothesis-driven compatibility correction, not proof of causality.
+- Added conservative multi-window direct waveform correlation screening (threshold 0.80 in at least 2 of 3 excerpts). A suspicious Lego candidate becomes review_required, retains audio for inspection, but cannot be accepted as an isolated track. Older candidates can be checked on demand. Passing means no direct source duplication detected, NOT definitive stem isolation.
+- Do not label generated audio "isolated" as an observed property until independently verified. Source contamination is a hard QA blocker for production use.
+
+Next experimental ladder on the desktop:
+1. Generate a **short 15-30s** Lego Strings result with the corrected request; compare raw generated WAV in Solo with input; record similar-ratio, runtime and VRAM.
+2. If the output remains a shadow, try a stem-based **instrumental backing without lead vocals** (and eventually omit target instrument in Replace mode). Song Harbor currently prepares context from the original full mix; this is an important limitation of the initial Add wiring.
+3. Verify whether the installed ACE commit interprets Lego source conditioning/instruction exactly as upstream current documentation, particularly any Base SFT track support/conditioning behavior. Record effective task_type and model from ACE runtime logs.
+4. Keep flagged candidates for comparison, avoid destructive deletion. Do not infer quality from API task success alone.
+
+Additional logged UX issues: Fix audition crossfade boundary scheduling and ensure proper perceived gain; **not a current blocker** compared with generated stem contamination. On update-and-relaunch, bring the relaunched Song Harbor window to the foreground (use safe Windows process/window activation rather than manipulating other apps). Candidate cleanup is a near-term priority and must remain reference-safe.

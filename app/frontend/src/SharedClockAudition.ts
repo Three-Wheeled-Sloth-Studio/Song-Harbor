@@ -7,6 +7,7 @@ import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelo
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
 import {compareAudioStages,type StageComparison} from "./AudioStageComparison";
 import {regionSpectrogram} from "./RegionSpectrogram.ts";
+import {bandEvidence} from "./StemArtifactAttribution.ts";
 import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionInsights.ts";
 /**
  * Song Harbor shared-clock audition engine.
@@ -525,38 +526,16 @@ export class SharedClockAudition {
    */
   private inspectWithSources(rendered:AudioBuffer):AudioFinding[]{
     const findings=inspectRenderedAudio(rendered,this.outputTrimDb);
-    // Source activity hints are computed on original decoded stems. They are
-    // not a source-separation classifier, nor post-effect causal attribution.
+    const inputs=this.tracks.map(track=>({
+      name:track.source.filename.match(/\\(([^)]+)\\)/)?.[1]||track.source.filename.replace(/\\.[^.]+$/,""),
+      startSeconds:track.source.startSeconds,
+      level:this.renderedLevels[track.source.filename]??0,
+      buffer:track.buffer
+    }));
     return findings.map(finding=>{
-      const scores=new Map<string,number>();
-      const highFrequency=["sibilance","harshness","fizz","noise"].includes(finding.kind);
-      for(const track of this.tracks){
-        const filename=track.source.filename;
-        const level=this.renderedLevels[filename]??0;
-        if(level<=0)continue;
-        const sampleRate=track.buffer.sampleRate;
-        const center=Math.round((finding.timeSeconds-track.source.startSeconds)*sampleRate);
-        const from=Math.max(1,center-Math.round(sampleRate*.08));
-        const to=Math.min(track.buffer.length,center+Math.round(sampleRate*.12));
-        if(to<=from)continue;
-        let score=0,count=0;
-        for(let channel=0;channel<track.buffer.numberOfChannels;channel++){
-          const values=track.buffer.getChannelData(channel);
-          for(let i=from;i<to;i+=16){
-            const signal=highFrequency?values[i]-values[i-1]:values[i];
-            score+=signal*signal;
-            count++;
-          }
-        }
-        const value=Math.sqrt(score/Math.max(1,count))*level;
-        scores.set(filename,(scores.get(filename)||0)+value*value);
-      }
-      const ranked=[...scores.entries()].sort((a,b)=>b[1]-a[1]).slice(0,2)
-        .filter(([,power])=>power>.00001).map(([filename])=>{
-          const match=filename.match(/\(([^)]+)\)/);
-          return match?match[1]:filename.replace(/\.[^.]+$/,"");
-        });
-      return {...finding,sources:ranked};
+      const result=bandEvidence(inputs,finding.kind,finding.timeSeconds,finding.durationSeconds);
+      return {...finding,sources:result.ranked.map(item=>item.name),
+        attribution:result.ranked,attributionUncertain:result.uncertain};
     });
   }
 

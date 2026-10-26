@@ -8,6 +8,7 @@ import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
 import {compareAudioStages,type StageComparison} from "./AudioStageComparison";
 import {regionSpectrogram} from "./RegionSpectrogram.ts";
 import {bandEvidence} from "./StemArtifactAttribution.ts";
+import {makeDeclickCandidate} from "./LocalizedDeclick.ts";
 import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionInsights.ts";
 /**
  * Song Harbor shared-clock audition engine.
@@ -19,7 +20,8 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
  */
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1;startSeconds:number;timelinePositioned:boolean};
 export type AuditionLevel = {gain:number};
-type Track = {source:AuditionSource;buffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
+export type DeclickRecipe={id:string;filename:string;source_key:string;time_seconds:number;half_window_ms:number};
+type Track = {source:AuditionSource;buffer:AudioBuffer;rawBuffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
 export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
@@ -40,6 +42,10 @@ export class SharedClockAudition {
   private sourceDurationSeconds=0;
   private ending={fade_seconds:0,tail_seconds:0,curve:"smooth" as "smooth"|"linear"};
   private tracks:Track[]=[];
+  private acceptedDeclick:DeclickRecipe[]=[];
+  private previewDeclick:DeclickRecipe|null=null;
+  private previewDeclickEnabled=false;
+  private repairBuffers=new Map<string,AudioBuffer>();
   private groupPanners=new Map<string,StereoPannerNode>();
   private widthStages=new Map<string,StereoWidthStage>();
   private eqStages=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
@@ -174,7 +180,7 @@ export class SharedClockAudition {
           this.reverbSends.set(src.key,childSend);
         }else panner.connect(this.eqStages.get(src.filename)![0]);
         gain.gain.value=0;
-        this.tracks.push({source:src,buffer,gain,sectionGain,childGain,childEq,panner});
+        this.tracks.push({source:src,buffer,rawBuffer:buffer,gain,sectionGain,childGain,childEq,panner});
         onProgress?.(i+1,sources.length);
       }
       const duration=timelineDuration&&timelineDuration>0?timelineDuration:maxDuration;
@@ -188,6 +194,53 @@ export class SharedClockAudition {
     }finally{
       this.loadController=null;
     }
+  }
+  /** Repair recipes address the source key (including :left/:right split lanes).
+   * The immutable decoded source is never edited. Export uses accepted recipes
+   * only, while Fix playback can also include an unsaved preview candidate.
+   */
+  private repairBuffer(track:Track,includeDraft:boolean):AudioBuffer{
+    const recipes=[...this.acceptedDeclick,...includeDraft&&this.previewDeclickEnabled&&this.previewDeclick?[this.previewDeclick]:[]]
+      .filter(recipe=>recipe.source_key===track.source.key);
+    if(!recipes.length)return track.rawBuffer;
+    const source=track.rawBuffer;
+    const out=this.context.createBuffer(source.numberOfChannels,source.length,source.sampleRate);
+    for(let channel=0;channel<source.numberOfChannels;channel++)
+      out.copyToChannel(source.getChannelData(channel),channel);
+    for(const recipe of recipes){
+      const sourceTime=recipe.time_seconds-track.source.startSeconds;
+      if(sourceTime<0||sourceTime>=source.duration)continue;
+      const repair=makeDeclickCandidate(out,sourceTime,recipe.half_window_ms);
+      for(let channel=0;channel<out.numberOfChannels;channel++){
+        const row=repair.replacements[channel];
+        out.copyToChannel(row.values,channel,row.startFrame);
+      }
+    }
+    return out;
+  }
+  setAcceptedDeclick(recipes:readonly DeclickRecipe[]){
+    this.acceptedDeclick=[...recipes];
+    this.repairBuffers.clear();
+    for(const track of this.tracks)track.buffer=this.repairBuffer(track,false);
+    if(this.running)this.seek(this.position);
+  }
+  setPreviewDeclick(recipe:DeclickRecipe|null,enabled:boolean){
+    this.previewDeclick=recipe;
+    this.previewDeclickEnabled=enabled;
+    this.repairBuffers.clear();
+    if(this.running)this.seek(this.position);
+  }
+  private effectiveBuffer(track:Track):AudioBuffer{
+    if(this.referenceOriginal)return track.rawBuffer;
+    if(!this.previewDeclick||!this.previewDeclickEnabled||this.previewDeclick.source_key!==track.source.key)
+      return track.buffer;
+    let buffer=this.repairBuffers.get(track.source.key);
+    if(!buffer){buffer=this.repairBuffer(track,true);this.repairBuffers.set(track.source.key,buffer);}
+    return buffer;
+  }
+  /** Return the available physical source lanes for an auditable repair target. */
+  get declickSourceKeys():readonly {key:string;filename:string;startSeconds:number}[]{
+    return this.tracks.map(t=>({key:t.source.key,filename:t.source.filename,startSeconds:t.source.startSeconds}));
   }
   /** Temporary accompaniment lives only on the shared playback clock, not in project tracks. */
   async loadCandidatePreview(url:string,startSeconds:number){
@@ -569,7 +622,7 @@ export class SharedClockAudition {
       const level=this.renderedLevels[track.source.filename]??0;
       if(level<=0||track.source.startSeconds>=this.sourceDurationSeconds)continue;
       const source=context.createBufferSource();
-      source.buffer=track.buffer;
+      source.buffer=track.rawBuffer;
       const gain=context.createGain();
       gain.gain.value=level;
       const pan=context.createStereoPanner();
@@ -714,7 +767,7 @@ export class SharedClockAudition {
     try{
       for(const track of this.tracks){
         const node=this.context.createBufferSource();
-        node.buffer=track.buffer;
+        node.buffer=this.effectiveBuffer(track);
         node.connect(track.gain);
         made.push({node,track});
       }
@@ -768,6 +821,7 @@ export class SharedClockAudition {
   }
   private clearTracks(){
     this.clearCandidatePreview();
+    this.repairBuffers.clear();
     this.prepared=false;
     this.stopSources();
     for(const track of this.tracks){

@@ -98,3 +98,21 @@ CPU-first detection, bounded 5–15s windows, incremental STFT, chunked renders,
 The currently finishing Infra Choir track should **not** be blocked on fingerprint classifiers or speculative generative restoration. Run current Sound Cleanup and listen to flagged regions; preserve intentional elements. If there is a clear click/clip or audible distortion, attempt safe narrow correction or external RX/DAW handoff. Do not start model installation or bulk processing mid-mastering.
 
 The first implementation PR/commit sequence after release: P0 stage-diff schema and measurements -> local waveform/spectrogram QA -> one de-click A/B repair -> optional model bench. A separate panel that outputs another origin score is explicitly **not** first priority.
+
+## Implemented first P0 slice (2026-10-26) — pending runtime/build QA
+
+Code committed directly to main:
+- `app/frontend/src/AudioStageComparison.ts`: CPU-only, non-mutating, sample-aligned, one-second window comparison of a dry source-stem mix against the full effects-rendered mix. Current rules flag differences exceeding 9 dB RMS or 9 dB stereo right-left balance. Conditions skip near-silent regions; results are capped. This is **not an unbiased source/output null test** because dry reference intentionally omits per-section automation, effects and ending treatment.
+- `app/frontend/src/SharedClockAudition.ts`: `analyzeMix()` now renders the current processed mix and a second aligned *dry* reference from the existing decoded stem buffers with level and source-position baselines. The new findings are merged into Sound Cleanup. Normal playback and `renderWav24()` are unchanged; no additional reference render occurs during export.
+- `app/frontend/src/CleanupReview.tsx` and `StemMixer.tsx`: Sound Cleanup shows the number of large dry-to-processed changes and allows one-session `Mark intentional` triage. This action is deliberately ephemeral until a revision-keyed persisted review ledger is implemented.
+- `app/frontend/tests/audio-stage-comparison.test.mjs`: synthetic test fixtures for null changes, localized gain reduction, L/R shift, silence/mismatch, and buffer immutability.
+
+**Limits and quality gates:**
+1. This initial analysis renders an additional full-length dry buffer on a user-initiated scan; benchmark 5-minute stereo and 16-stem projects before calling performance acceptable. Avoid duplicate full mix retention/caches.
+2. It does **not** yet compute standards-compliant integrated LUFS, oversampled true-peak, source-region time-frequency attribution, spectral change features, audible masking, exported-WAV readback, or exact per-processing-stage causality. Proposed P0 has therefore **started, not completed**.
+3. The current dry reference uses each decoded track's static mixer gain and source pan (not its animated per-section treatment); intentional deviations can dominate. Review flags mean 'compare here', not 'damage'. A truly isolated detector of newly introduced glitches requires narrower time-frequency and transient comparisons.
+4. Review decisions are currently UI-only and reset after rescan. Persist with project revision and evidence identifiers before making them production decisions.
+5. No TS build, Node tests, browser or audio QA were run from this GitHub-only coding session. On the production machine execute `npm run build` and `node --test tests/audio-stage-comparison.test.mjs tests/audio-cleanup.test.mjs` from `app/frontend`; inspect Sound Cleanup's new comparison group, verify that playback/export audio is bitwise unchanged, check performance and manual false positives.
+6. Next implementation milestone: short-region spectrogram, source-vs-output time-frequency evidence, source-stem likelihood ranking, and deliberate one-click A/B on selected region. Then a conservative de-click candidate, reversible acceptance, and export parity.
+
+Release safety: this work is observational and only executes on explicit Analyze. Continue current track mastering on the existing stable mix; do not auto-apply a correction from any stage-comparison finding.

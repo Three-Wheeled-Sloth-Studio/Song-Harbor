@@ -53,16 +53,20 @@ def submit_instrument(client: AceClient, context_file: Path, model: str, prompt:
         "task_type": task_type, "model": model, "prompt": prompt, "lyrics": "[Instrumental]",
         "thinking": False, "use_random_seed": False, "seed": seed,
         "inference_steps": 50 if task_type == "lego" else 8, "guidance_scale": 7.0, "batch_size": 1,
-        "audio_cover_strength": 0.8, "cover_noise_strength": 0.2,
         "audio_format": "wav", "use_tiled_decode": True,
         "time_signature": meter, "key_scale": key,
     }
     if task_type == "lego":
         fields["track_name"] = track_name
         fields["instruction"] = "Generate the " + track_name.upper() + " track based on the audio context:"
-        fields["global_caption"] = prompt
+        # Base Lego expects the target-instrument direction in prompt/caption.
+        # No cover/noise or cover-mix parameters may leak into this request.
         fields["repainting_start"] = 0.0
         fields["repainting_end"] = -1
+        fields["chunk_mask_mode"] = "explicit"
+    else:
+        fields["audio_cover_strength"] = 0.8
+        fields["cover_noise_strength"] = 0.2
     if bpm is not None:
         if not isinstance(bpm, int) or not 30 <= bpm <= 300:
             raise ValueError("BPM must be an integer from 30-300")

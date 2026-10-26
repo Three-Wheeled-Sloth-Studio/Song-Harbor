@@ -188,3 +188,27 @@ npm run build
 node --test tests/stem-artifact-attribution.test.mjs tests/localized-declick.test.mjs tests/audio-cleanup.test.mjs
 ```
 No Windows TS build or browser listening QA was performed in the GitHub-only implementation environment. This remains a development milestone, not release mastering approval.
+
+## P1 de-click trial, acceptance and export wiring (2026-10-26)
+
+Implemented on main, pending desktop QA:
+
+- `app/backend/declick_recipes.py`: project-scoped `data/jobs/<id>/declick-repairs.json` manifest, version 1, atomic writes, append and undo by unique recipe ID. The source WAV is not rewritten.
+- `app/backend/server.py`: GET/POST/DELETE `/api/projects/{ident}/cleanup/declick`; local-origin validation for edits; target must be an active filename, a valid parent or L/R source key, within measured clip duration, and inside a 0.15–3 ms half-window. Old projects without source_tracks fall back to saved files.
+- `app/frontend/src/SharedClockAudition.ts`: retains immutable decoded `rawBuffer` for each lane. Accepted repairs are replayed into separate buffers and used consistently by processed playback and offline WAV export. The Original audition selects raw source buffers. Unsaved Fix preview is built separately and is NEVER used by export. Playback switching restarts at the existing position when buffer identity needs to change. No normalization or content hallucination occurs.
+- `app/frontend/src/DeclickWorkbench.tsx`: compact Original/Current/Fix + Accept/Discard, selected physical source lane and repair width. Opt-in `Try de-click` appears for transient warnings only; it does not automatically modify drum attacks. Accepted entries list individual Undo actions.
+- `app/frontend/src/StemMixer.tsx`: loads saved edits when a project audio engine becomes ready, updates engine after Accept/Undo, keeps existing QC findings marked stale rather than discarding scan results, and blocks WAV export until the saved manifest has loaded. This prevents a background failure from silently exporting without accepted repairs.
+- `app/frontend/src/LocalizedDeclick.ts`: replacement-only operation avoids expensive full-length temporary clones when applying recipes. Replays deterministically and preserves untouched sample positions.
+- New backend tests `test_declick_recipes.py` cover persistence, validation, undo and source immutability. Existing `localized-declick.test.mjs` covers bounded interpolation and input immutability.
+
+**Critical QA acceptance** (not yet verified on Windows):
+1. Start a new project with no repair manifest: no backend errors; a normal WAV export remains possible.
+2. Scan a transient; click Try de-click. Test Original vs Current vs Fix at identical timestamp and loop. Confirm a genuinely isolated click is audibly suppressed and an intentional drum transient is *not* approved blindly.
+3. Select the correct stem/L/R source; change 0.5/1/2/3 ms. Preview should stay separate from saved current. Discard leaves original and export unchanged.
+4. Accept and verify a project manifest appears; previous findings remain but show a stale indicator. Current now plays accepted repair; Original does not. Fix before acceptance and Current after acceptance should closely match at equal settings.
+5. Export WAV, reimport/inspect the exact repair region (not only full song listening); confirm accepted repair appears, discarded preview never appears, surrounding audio unchanged, and original source WAV byte hash unchanged.
+6. Relaunch/reopen: same edit recovered; export blocked on manifest-load failures. Undo -> current/export return to original at repaired sample region.
+7. Split L/R sources, overlapping edits, back-to-back edits and clips with start offset must remain aligned. Test 16+ stem memory and update after seek/playback at candidate boundary.
+8. Run `python -m unittest app.backend.tests.test_declick_recipes` from repository root and `npm run build` plus `node --test tests/localized-declick.test.mjs tests/stem-artifact-attribution.test.mjs` from `app/frontend`.
+
+**Remaining risk:** the recipe currently identifies project filename and source lane, not a cryptographic version of that PCM file. Replacing a WAV in place while preserving its filename could reapply an old repair at the wrong position. Add source content identity and reject stale recipes before calling this production-complete. Audio audition/export parity also requires in-app Windows listening verification, as source-convolver graphs and per-stem processing can alter perceived repair effectiveness.

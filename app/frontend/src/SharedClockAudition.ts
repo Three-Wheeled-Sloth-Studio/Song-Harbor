@@ -5,6 +5,7 @@ import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflection
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,makeDeEssEnvelope,scheduleDeEss,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
+import {compareAudioStages,type StageComparison} from "./AudioStageComparison";
 import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionInsights.ts";
 /**
  * Song Harbor shared-clock audition engine.
@@ -62,6 +63,8 @@ export class SharedClockAudition {
     }));
   }
   private lastAnalysis:AudioFinding[]=[];
+  private lastStageComparison:StageComparison|null=null;
+  get stageComparison():StageComparison|null{return this.lastStageComparison;}
   private lastSectionInsights:SectionInsight[]=[];
   get sectionInsights():readonly SectionInsight[]{return this.lastSectionInsights;}
   get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
@@ -546,14 +549,44 @@ export class SharedClockAudition {
   }
 
   async analyzeMix(sections:readonly SectionRange[]=[]):Promise<readonly AudioFinding[]>{
+    this.lastStageComparison=null;
     const rendered=await this.renderMixBuffer();
     this.lastSectionInsights=analyzeSections(rendered,sections,this.outputTrimDb);
-    this.lastAnalysis=this.inspectWithSources(rendered);
+    const processedFindings=this.inspectWithSources(rendered);
+    // Independent dry stem reference: no per-section gain/EQ, no pan automation,
+    // compression, spatial effects or reverb. Differences are review candidates,
+    // not identified regressions until a human evaluates the intent.
+    const dry=await this.renderDryReferenceBuffer();
+    this.lastStageComparison=compareAudioStages(dry,rendered,this.sourceDurationSeconds);
+    this.lastAnalysis=[...processedFindings,...this.lastStageComparison.findings]
+      .sort((a,b)=>a.timeSeconds-b.timeSeconds).slice(0,64);
     return this.lastAnalysis;
+  }
+
+  private async renderDryReferenceBuffer():Promise<AudioBuffer>{
+    if(!this.ready)throw Error("Load audio before creating dry reference");
+    const rate=this.context.sampleRate;
+    const frames=Math.ceil(this.sourceDurationSeconds*rate);
+    if(frames<1||frames>rate*60*15)throw Error("Dry reference exceeds supported duration");
+    const context=new OfflineAudioContext(2,frames,rate);
+    for(const track of this.tracks){
+      const level=this.renderedLevels[track.source.filename]??0;
+      if(level<=0||track.source.startSeconds>=this.sourceDurationSeconds)continue;
+      const source=context.createBufferSource();
+      source.buffer=track.buffer;
+      const gain=context.createGain();
+      gain.gain.value=level;
+      const pan=context.createStereoPanner();
+      pan.pan.value=track.source.pan;
+      source.connect(gain).connect(pan).connect(context.destination);
+      source.start(Math.max(0,track.source.startSeconds));
+    }
+    return context.startRendering();
   }
 
   async renderWav24():Promise<Blob>{
     const rendered=await this.renderMixBuffer();
+    this.lastStageComparison=null;
     this.lastAnalysis=this.inspectWithSources(rendered);
     return encodeWav24(rendered,this.outputTrimDb);
   }

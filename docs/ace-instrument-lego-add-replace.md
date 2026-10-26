@@ -78,3 +78,13 @@ Further work:
 4. Candidate storage limits: decide number/age/quota, preserve references from accepted tracks and edit history, and support explicit cleanup/archival for unreferenced candidates.
 5. Confirm stem-panel collapse and the direct name-adjacent M/S controls in narrow and wide windows.
 
+
+## Workbench compact UI QA (2026-10-26)
+
+- Generator main controls are two inline rows: Method / Operation, then Instrument Family. Verbose readiness, range-summary and isolation-description text removed. A small ACE service indicator is placed in the floating-tool title bar.
+- Generated waveform now shows the playback cursor at the project-clock position relative to the candidate's target interval. Outside that interval it clamps to the edges.
+- Preview line: Preview, independently clickable Solo (generated-only, without original mix), inline knob-symbol crossfade, and tucked-away pre-roll control. Solo stores/restores the previous crossfade. The 0–100 blend still performs a crossfade, not a mere candidate gain knob.
+- Advanced generation parameters and saved candidates are below the generate/preview section. Keep candidacy and error states, but only essential inline text. Candidate cleanup remains visible as a collapsed disclosure.
+- **Next-priority retention:** implement reference-aware cleanup (per-project size quota and count/age policy, never delete accepted or referenced assets, show disk use and dry-run preview). The current 12-item dropdown limit is only a display limit.
+- **Layout follow-up:** pin the global Song Harbor application header to viewport top, accounting for scrollbar layering, other sticky rails and floating-tool z-index. Avoid pinned subpanels covering the waveforms.
+- **QA gates:** ensure Solo starts playback even before Preview was previously loaded, Solo toggling restores old blend without seeking, original mix is fully audible outside candidate interval, waveform cursor moves with main playback/seek, and keyboard input doesn't accidentally affect transport.

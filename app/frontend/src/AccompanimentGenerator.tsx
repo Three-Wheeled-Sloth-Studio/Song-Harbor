@@ -135,9 +135,10 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
     setPreviewBusy(true);setError("");
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
-      engine.setCandidatePreviewBlend(solo?100:soloPreview?100:blend);
-      if(solo)setSoloPreview(true);
+      engine.setCandidatePreviewBlend(blend);
       engine.setCandidatePreviewTrimDb(previewTrimDb);
+      engine.setCandidatePreviewSolo(solo||soloPreview);
+      if(solo)setSoloPreview(true);
       setPreviewPeaks(engine.candidateWaveform());
       setLoadedId(candidate.candidate_id);
       onSeek(Math.max(0,candidate.target_start_seconds-preRoll));
@@ -223,14 +224,14 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Preview"}</button>
           <button type="button" aria-pressed={soloPreview} title="Listen to generated audio only" onClick={()=>{
             if(loadedId!==candidate.candidate_id){setPriorBlend(blend);void audition(true);return;}
-            if(!soloPreview){setPriorBlend(blend);setSoloPreview(true);engine?.setCandidatePreviewBlend(100);}
-            else{setSoloPreview(false);setBlend(priorBlend);engine?.setCandidatePreviewBlend(priorBlend);}
+            if(!soloPreview){setPriorBlend(blend);setSoloPreview(true);engine?.setCandidatePreviewSolo(true);}
+            else{setSoloPreview(false);setBlend(priorBlend);engine?.setCandidatePreviewSolo(false);engine?.setCandidatePreviewBlend(priorBlend);}
           }}>♫ Solo</button>
           <label className="song-ace-knob" title={"Original / generated blend: "+(soloPreview?100:blend)+"%"} aria-label="Original to generated blend">
             <span aria-hidden="true">◉</span>
             <input type="range" min="0" max="100" step="1" aria-label="Original to generated audition blend"
               disabled={loadedId!==candidate.candidate_id} value={soloPreview?100:blend}
-              onChange={e=>{const value=Number(e.target.value);setBlend(value);setSoloPreview(false);engine?.setCandidatePreviewBlend(value);}}/>
+              onChange={e=>{const value=Number(e.target.value);setBlend(value);setSoloPreview(false);engine?.setCandidatePreviewSolo(false);engine?.setCandidatePreviewBlend(value);}}/>
             <output>{soloPreview?100:blend}%</output>
           </label>
           <details className="song-ace-preroll">

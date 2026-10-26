@@ -242,6 +242,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [correction,setCorrection]=useState<CorrectionDraft|null>(null);
   const [declickDraft,setDeclickDraft]=useState<DeclickDraft|null>(null);
   const [declickRepairs,setDeclickRepairs]=useState<DeclickRecipe[]>([]);
+  const [declickLoaded,setDeclickLoaded]=useState(false);
   const [declickBusy,setDeclickBusy]=useState(false);
   const [declickError,setDeclickError]=useState("");
   const [correctionSaving,setCorrectionSaving]=useState(false);
@@ -283,11 +284,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const engine=audio.current;
     if(!engine)return;
     let cancelled=false;
+    setDeclickLoaded(false);
     void fetch("/api/projects/"+jobId+"/cleanup/declick",{cache:"no-store"})
       .then(async response=>{
         const body=await response.json() as {repairs?:DeclickRecipe[];detail?:string};
         if(!response.ok)throw Error(body.detail||"Cannot read saved repairs");
-        if(!cancelled){const repairs=body.repairs||[];setDeclickRepairs(repairs);engine.setAcceptedDeclick(repairs);}
+        if(!cancelled){const repairs=body.repairs||[];engine.setAcceptedDeclick(repairs);setDeclickRepairs(repairs);setDeclickLoaded(true);}
       }).catch(error=>{if(!cancelled)setDeclickError(error instanceof Error?error.message:String(error));});
     return()=>{cancelled=true;};
   },[audioReady,jobId]);
@@ -966,6 +968,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const engine=audio.current;
     if(correction||sectionPreviewActive){setError("Return Section Edit to A Saved and accept/discard corrections before exporting the saved mix.");return;}
     if(!engine?.ready){setError("Wait for synchronized audio to load before exporting.");return;}
+    if(!declickLoaded){setError("Saved repair state has not loaded. Export is blocked to prevent missing accepted repairs.");return;}
     stop();
     setExporting(true);
     setMixUrl(null);

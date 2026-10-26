@@ -223,3 +223,19 @@ Implemented on main, pending desktop QA:
 **Note**: SHA validation is at project open and edit submission, not on every export byte read. After physically altering a source file outside Song Harbor while it remains open, restart/reopen so source identity can be checked before export. A future project file watcher could provide immediate invalidation.
 
 This change is code-complete for desktop QA, **not empirically verified** for live audition/export identity. Unit tests exercise edit manifest logic and interpolation, but on-device playback, persisted reopen and WAV parity checks remain necessary.
+
+## Next artifact cleanup capability: section-scoped spectral attenuation (2026-10-26)
+
+Implemented on main:
+- The existing Sound Cleanup findings `harshness`, `fizz`, `noise` and `signal_audit` now offer `Try Fix`; unlike the de-click recipe path, this is a **frequency-targeted section EQ cut**, *not* a generative or spectrogram-pixel reconstruction tool. It does not claim to remove AI provenance or fingerprints.
+- The correction panel gains a `Spectral cut` effect with source, frequency, Q, attenuation (0–9 dB), and section transition. Suggested centers are 3.5 kHz for presence harshness, 10 kHz for fizz, 8.5 kHz for noise and 6 kHz for persistent tonal features; tune against actual listening evidence.
+- The trial compiles through the existing three-band section EQ automation and its live playback graph. `Original` remains the unprocessed stems, `Current` the saved mix, and `Fix` the proposed EQ. Accept appends a normal `<alias>.eq<band>:freq,Q,-gain@transition:smooth` directive to the current section's production block; existing section import persists it and the offline WAV render uses the same processor. Discard leaves the section script unchanged.
+- The proposed EQ uses an available band in preferred order 3, 2, 1; it refuses to silently overwrite an occupied band in that section. Source selection checks the destination band's availability, and blocked trials now surface their error even without an open workbench.
+- `app/backend/tests/test_spectral_cleanup_directives.py` checks parser acceptance, independent frequency bands and duplicate-band rejection.
+
+Important constraints:
+- **Section-wide, not time-frequency localized.** The EQ cut ramps in over the first `transition` seconds of the target section and carries forward according to Song Harbor's inherited automation semantics. It may suppress desirable content later. In a production mix, inspect later sections and restore/reset the EQ when necessary. A truly isolated 200 ms fix requires region-scoped automation or audio replacement with exact rendering parity.
+- `3× preview` exaggerates the audition only; Accept saves the actual 1× dial setting. For preview/export comparison use `1×`.
+- These are sound-shaping options, not evidence that a classified anomaly is genuinely objectionable. Intentional industrial harmonics and synth noise should often be left alone. Never use a falling AI-detection score as evidence that audio sounds cleaner.
+- Windows build and audio QA have not run in this GitHub-only session. Run `npm run build` and `python -m unittest app.backend.tests.test_spectral_cleanup_directives`, then listen across the entire target and following sections; compare Fix with resulting Current after acceptance and the exported WAV.
+- Next material improvement: genuinely **region-scoped** attenuation with attack/release and transient protection, spectral delta measurement pre/post, persist/replay exact slice, targeted de-clip and de-noise candidates. Avoid adding a third duplicate cleanup panel.

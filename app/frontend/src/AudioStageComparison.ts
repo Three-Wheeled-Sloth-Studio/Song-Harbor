@@ -14,7 +14,6 @@ export type StageComparison={
 };
 const EPS=1e-10;
 const dB=(v:number)=>20*Math.log10(Math.max(EPS,v));
-const clamp=(v:number,low:number,high:number)=>Math.max(low,Math.min(high,v));
 
 /** Aligned references must have matching sample rate and time origin.
  * End/tail samples present only in the processed mix are ignored.
@@ -42,7 +41,7 @@ export function compareAudioStages(reference:AudioLike,output:AudioLike,
   };
   for(let start=0;start+step<=frames;start+=step){
     const stop=start+step, t=start/rate;
-    let dry=0,wet=0,dryL=0,dryR=0,wetL=0,wetR=0,cross=0;
+    let dry=0,wet=0,dryL=0,dryR=0,wetL=0,wetR=0;
     for(let j=start;j<stop;j++){
       for(let c=0;c<count;c++){
         const a=refs[c][j],b=outs[c][j];

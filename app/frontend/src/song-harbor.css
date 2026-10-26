@@ -686,3 +686,10 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   padding:20px;background:rgba(5,12,17,.75);pointer-events:auto}
 .song-ace-generation-message{width:min(430px,calc(100vw - 48px));min-height:90px;justify-content:center;align-content:center}
 .song-ace-generation-message small{margin:0;text-align:center}
+
+/* Mute/isolate belong at the named track, not across the console. */
+.song-stem-controls .stem-icon-name{gap:7px}
+.song-stem-controls .stem-label-toggles{display:inline-flex;gap:4px;margin-left:auto;flex-shrink:0}
+.song-stem-controls .stem-label-toggles .track-toggle{min-width:27px;min-height:27px;height:27px;font-size:11px}
+.song-stem-controls .mixer-stem-names{overflow:hidden;text-overflow:ellipsis}
+.song-stem-controls .mixer-stem-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

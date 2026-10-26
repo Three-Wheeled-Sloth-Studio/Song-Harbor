@@ -32,19 +32,18 @@ export function CleanupReview({
   const warningCount=findings.filter(item=>item.severity==="warning").length;
   const nextItem=visible[0];
   return <details className="production-tool-detail song-cleanup-panel" aria-label="Sound cleanup analyzer" open>
-    <summary>◇ Sound cleanup <span className="song-cleanup-summary-counter">{scanned?findings.length+" candidates":"Analyze"}</span></summary>
+    <summary>◇ Sound cleanup <span className="song-cleanup-summary-counter">{scanned?findings.length:"Scan"}</span></summary>
     <div className="song-cleanup-review">
       <div className="song-cleanup-toolbar">
         <button type="button" className="song-cleanup-run" disabled={!ready||busy||analyzing}
           onClick={onAnalyze}>{analyzing?"Analyzing…":scanned?"Re-analyze mix":"Analyze mix"}</button>
-        {scanned&&<small>{warningCount} warning{warningCount===1?"":"s"} · {findings.length} candidate{findings.length===1?"":"s"}</small>}
+        {scanned&&<small>{warningCount} warnings · {findings.length} findings</small>}
       </div>
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}
-      {!scanned&&<p className="song-cleanup-description">Inspect levels, abrupt transitions, high-frequency texture, possible vocal harshness, noisy quiet passages, stereo cancellation, dynamics and unusually persistent tonal signals. No audio is changed, and this is not a watermark verifier.</p>}
       {scanned&&<>
         {comparison&&<div className="song-cleanup-stage-comparison" role="status">
           <strong>Dry stems → processed mix</strong>
-          <small>{comparison.findings.length} large changes to review · {comparison.analyzedSeconds.toFixed(1)}s compared at {comparison.windowSeconds}s intervals. Intentional automation can trigger these flags.</small>
+          <small>{comparison.findings.length} mix changes · review, not defects</small>
         </div>}
         <label className="song-cleanup-filter">Findings
           <select aria-label="Filter sound cleanup findings" value={filter} onChange={e=>setFilter(e.target.value)}>
@@ -68,13 +67,12 @@ export function CleanupReview({
                     <small>{FINDING_GROUPS[item.kind as AudioFindingKind]} · {item.severity==="warning"?"Warning":"Review"}</small>
                   </div>
                 </div>
-                <p>{item.detail}</p>
+                <details className="song-finding-detail"><summary>Details</summary><p>{item.detail}</p>{item.suggestion&&<p>{item.suggestion}</p>}</details>
                 {!!item.sources?.length&&<p className="song-cleanup-sources">Active raw stems: {item.sources.join(", ")} <span>(hint, not confirmed cause)</span></p>}
-                {item.suggestion&&<p className="song-cleanup-suggestion">{item.suggestion}</p>}
                 <div className="song-cleanup-actions">
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
-                  {(item.kind==="headroom"||item.kind==="pumping")&&
-                    <button type="button" onClick={()=>onTryCorrection(item)}>Try correction A/B</button>}
+                  {(["headroom","pumping","sibilance","harshness","fizz","noise"].includes(item.kind))&&
+                    <button type="button" onClick={()=>onTryCorrection(item)}>Try Fix</button>}
                   {comparison?.findings.includes(item)&&<button type="button"
                     aria-pressed={markedIntentional.has(id)}
                     onClick={()=>{setMarkedIntentional(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
@@ -91,7 +89,7 @@ export function CleanupReview({
         {nextItem&&<button type="button" className="song-cleanup-next"
           onClick={()=>onSeek(nextItem.timeSeconds)}>Jump to first unreviewed finding</button>}
       </>}
-      <small className="song-cleanup-limits">Heuristic listening suggestions, not diagnoses. Sibilance-like energy may be cymbals; harshness may be intended instrumentation. Stem hints reflect raw audio activity, not proven artifact sources. Signal anomalies are not evidence of fingerprints or acoustic watermarks. Nothing is removed or filtered automatically.</small>
+      <small className="song-cleanup-limits">Listening suggestions only · no automatic edits or watermark removal.</small>
     </div>
   </details>;
 }

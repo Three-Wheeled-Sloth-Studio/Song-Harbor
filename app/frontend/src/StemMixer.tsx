@@ -862,7 +862,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       relevant.find(item=>item.kind==="comp"&&
         finding.sources?.some(name=>item.source_key.includes("("+name+")")))||
       relevant.find(item=>item.kind==="duck")||relevant[0];
-    const suggestedStem=preferred?.source_key||
+    const suggestedStem=(["harshness","fizz","noise","signal_audit"].includes(finding.kind)?undefined:preferred?.source_key)||
       files.find(f=>finding.sources?.some(name=>f.includes("("+name+")")))||
       files.find(f=>f.includes("(Drums)"))||files[0];
     const kind=finding.kind==="headroom"?"trim":
@@ -905,7 +905,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(index<0){setCorrectionError("Align a saved section before accepting a dynamics correction.");return;}
     const alias=trial.file.match(/\(([^)]+)\)/)?.[1];
     if(!alias){setCorrectionError("Track has no script-safe stem alias.");return;}
-    if(trial.kind==="spectral"&&!trial.eqBand){setCorrectionError("Choose a free EQ band.");return;}
+    if(trial.kind==="spectral"&&(!trial.eqBand||eqTargets.some(item=>item.section_id===trial.sectionId&&item.source_key===trial.file&&item.band===trial.eqBand))){
+      setCorrectionError("Selected EQ band is occupied for this source and section. Choose a different track or edit the existing EQ.");return;
+    }
     const directive=trial.kind==="spectral"?
       `${alias}.eq${trial.eqBand}:${trial.frequency},${trial.q.toFixed(1)},-${Math.min(9,trial.depth).toFixed(1)}@${trial.transition}s:smooth`:
       trial.kind==="comp"?
@@ -1316,7 +1318,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {tool==="cleanup"&&correction&&<>
           <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
             reduction={meters.find(item=>item.filename===correction.file)}
-            busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
+            busy={correctionSaving} onChange={next=>{
+              if(next.kind==="spectral"&&next.file!==correction.file){
+                const used=eqTargets.filter(item=>item.section_id===next.sectionId&&item.source_key===next.file).map(item=>item.band);
+                next={...next,eqBand:([3,2,1] as const).find(band=>!used.includes(band))};
+              }
+              setCorrection(next);
+            }} onAccept={()=>{void acceptCorrection();}}
             onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}

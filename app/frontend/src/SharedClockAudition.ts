@@ -50,7 +50,7 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number}|null=null;
+  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
@@ -197,11 +197,17 @@ export class SharedClockAudition {
     const gain=this.context.createGain();
     gain.gain.value=0;
     gain.connect(this.master);
-    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0};
+    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0,trimDb:0};
     if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
   }
   setCandidatePreviewEnabled(value:boolean){
     this.setCandidatePreviewBlend(value?100:0);
+  }
+  setCandidatePreviewTrimDb(db:number){
+    const candidate=this.candidatePreview;
+    if(!candidate)return;
+    candidate.trimDb=Math.max(-12,Math.min(9,db));
+    this.setCandidatePreviewBlend(candidate.blend*100);
   }
   /** Equal-power preview crossfade; source stems and exported tracks remain unchanged. */
   setCandidatePreviewBlend(percent:number){
@@ -229,7 +235,7 @@ export class SharedClockAudition {
         this.originalPreviewBus.gain.linearRampToValueAtTime(1,finish+.02);
       }
     }
-    candidate.gain.gain.setTargetAtTime(Math.sin(p*Math.PI/2),now,.012);
+    candidate.gain.gain.setTargetAtTime(Math.sin(p*Math.PI/2)*Math.pow(10,candidate.trimDb/20),now,.012);
   }
   candidateWaveform(size=160):number[]{
     const buffer=this.candidatePreview?.buffer;
@@ -267,7 +273,7 @@ export class SharedClockAudition {
     source.buffer=candidate.buffer;
     source.connect(candidate.gain);
     candidate.source=source;
-    candidate.gain.gain.setValueAtTime(Math.sin(candidate.blend*Math.PI/2),at);
+    candidate.gain.gain.setValueAtTime(Math.sin(candidate.blend*Math.PI/2)*Math.pow(10,candidate.trimDb/20),at);
     this.setCandidatePreviewBlend(candidate.blend*100);
     if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
     else source.start(at,offset-candidate.startSeconds);

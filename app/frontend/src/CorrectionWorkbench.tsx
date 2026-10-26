@@ -3,7 +3,8 @@ export type CorrectionDraft={
   finding:AudioFinding;
   sectionId:string;
   file:string;
-  kind:"comp"|"duck"|"deess"|"trim";
+  kind:"comp"|"duck"|"deess"|"trim"|"spectral";
+  eqBand?:1|2|3;
   frequency:number;
   q:number;
   maxReduction:number;
@@ -45,7 +46,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
       </div>
     </div>
     {draft.kind!=="trim"&&<>
-      <details className="song-correction-meter-detail"><summary>Live reduction</summary>      <div className="song-dynamics-meter" aria-label="Live dynamics gain reduction">
+      {draft.kind!=="spectral"&&<details className="song-correction-meter-detail"><summary>Live reduction</summary>      <div className="song-dynamics-meter" aria-label="Live dynamics gain reduction">
         {reductionItems.map(([name,value])=><div key={name} className="song-dynamics-meter-row">
           <span>{name}</span><meter min={0} max={12} value={Math.min(12,value)}/><output>{value.toFixed(1)} dB</output>
         </div>)}
@@ -55,8 +56,8 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
         <label>Strength <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true})}>
           <option value={1}>1×</option><option value={3}>3× preview</option>
         </select></label>
-        <label>Effect <select value={draft.kind} onChange={e=>edit({kind:e.target.value as "comp"|"duck"|"deess",proposed:true})}>
-          <option value="comp">Compression</option><option value="duck">Ducking</option><option value="deess">De-esser</option>
+        <label>Effect <select value={draft.kind} onChange={e=>edit({kind:e.target.value as "comp"|"duck"|"deess"|"spectral",proposed:true})}>
+          <option value="comp">Compression</option><option value="duck">Ducking</option><option value="deess">De-esser</option><option value="spectral">Spectral cut</option>
         </select></label>
         <label>Track <select value={draft.file} onChange={e=>edit({file:e.target.value,proposed:true})}>
           {files.filter(f=>draft.kind!=="duck"||!f.includes("(Vocals)")).map(f=>
@@ -64,7 +65,11 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
         </select></label>
       </div>
       <div className="song-correction-knobs">
-        {draft.kind==="deess"?<>
+        {draft.kind==="spectral"?<>
+          <Knob label="Frequency" value={draft.frequency} min={300} max={12000} step={100} suffix="Hz" onChange={value=>edit({frequency:value,proposed:true})}/>
+          <Knob label="Q" value={draft.q} min={.5} max={8} step={.1} onChange={value=>edit({q:value,proposed:true})}/>
+          <Knob label="Cut" value={draft.depth} min={0} max={9} step={.5} suffix="dB" onChange={value=>edit({depth:value,proposed:true})}/>
+        </>:draft.kind==="deess"?<>
           <Knob label="Frequency" value={draft.frequency} min={3000} max={11000} step={100} suffix="Hz" onChange={value=>edit({frequency:value,proposed:true})}/>
           <Knob label="Q" value={draft.q} min={.4} max={8} step={.1} onChange={value=>edit({q:value,proposed:true})}/>
           <Knob label="Threshold" value={draft.threshold} min={-70} max={-10} step={1} suffix="dB" onChange={value=>edit({threshold:value,proposed:true})}/>

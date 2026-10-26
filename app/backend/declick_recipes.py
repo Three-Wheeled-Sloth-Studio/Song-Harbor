@@ -1,6 +1,7 @@
 """Non-destructive, revisioned de-click edit recipes scoped to one Song Harbor job."""
 from __future__ import annotations
 import json
+import re
 import math
 import os
 import uuid
@@ -28,7 +29,11 @@ def _checked(item: dict[str, Any], filenames: set[str]) -> dict[str, Any]:
     key = item.get("source_key")
     if not isinstance(key, str) or len(key)>220 or not key:
         raise ValueError("Repair source identity is missing")
+    digest=item.get("source_sha256")
+    if not isinstance(digest,str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+        raise ValueError("Repair requires verified source PCM file identity")
     return {"id": rid, "filename": filename, "source_key": key,
+            "source_sha256": digest,
             "time_seconds": float(time), "half_window_ms": float(half)}
 
 

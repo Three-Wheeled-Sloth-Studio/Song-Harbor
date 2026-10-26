@@ -16,7 +16,7 @@ class DeclickRecipeTests(unittest.TestCase):
             wav.write_bytes(b"existing source must not be edited")
             before=wav.read_bytes()
             recipe={"id":"click-1","filename":"Vocals.wav","source_key":"Vocals.wav",
-                    "time_seconds":21.35,"half_window_ms":1.0}
+                    "time_seconds":21.35,"half_window_ms":1.0,"source_sha256":"a"*64}
             saved=declick_recipes.append(folder,recipe,{"Vocals.wav"})
             self.assertEqual(saved,[recipe])
             self.assertEqual(declick_recipes.read(folder),saved)
@@ -29,7 +29,7 @@ class DeclickRecipeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             folder=Path(temporary)
             repair={"id":"same","filename":"Other.wav","source_key":"Other.wav",
-                    "time_seconds":3.0,"half_window_ms":.5}
+                    "time_seconds":3.0,"half_window_ms":.5,"source_sha256":"b"*64}
             with self.assertRaisesRegex(ValueError,"not an active"):
                 declick_recipes.append(folder,repair,{"Vocals.wav"})
             declick_recipes.append(folder,repair,{"Other.wav"})
@@ -42,7 +42,7 @@ class DeclickRecipeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             folder=Path(temporary)
             repair={"id":"test","filename":"A.wav","source_key":"A.wav",
-                    "time_seconds":float("nan"),"half_window_ms":1}
+                    "time_seconds":float("nan"),"half_window_ms":1,"source_sha256":"c"*64}
             with self.assertRaisesRegex(ValueError,"time"):
                 declick_recipes.append(folder,repair,{"A.wav"})
             repair["time_seconds"]=1

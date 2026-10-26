@@ -832,6 +832,7 @@ def _declick_folder(ident: str) -> tuple[Path, set[str]]:
     tracks=project.get("source_tracks") or []
     filenames={row.get("working_filename") for row in tracks if isinstance(row, dict)}
     filenames={name for name in filenames if isinstance(name,str)}
+    filenames.update(name for name in project.get("files",[]) if isinstance(name,str))
     return DATA_ROOT / "jobs" / ident, filenames
 
 
@@ -850,6 +851,16 @@ def accept_declick_repair(ident: str, body: DeclickRepairBody, request: Request)
     folder,filenames=_declick_folder(ident)
     if body.source_key not in (body.filename,body.filename+":left",body.filename+":right"):
         raise HTTPException(400,"Invalid source key")
+    project=projects.read_project(DATA_ROOT,ident) or {}
+    identities=project.get("source_tracks") or []
+    source_start=next((float(row.get("start_seconds") or 0)
+                       for row in identities if row.get("working_filename")==body.filename),0.0)
+    wav=folder/"stems"/body.filename
+    if not wav.is_file():
+        raise HTTPException(409,"Repair source is missing")
+    duration=probe_duration(wav)
+    if not source_start+.01 < body.time_seconds < source_start+duration-.01:
+        raise HTTPException(409,"De-click must be inside the source clip, away from its edges")
     try:
         with lock:
             return {"repairs": declick_recipes.append(folder,body.model_dump(),filenames)}

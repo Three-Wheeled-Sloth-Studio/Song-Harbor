@@ -2102,6 +2102,7 @@ def ace_service_stop(request: Request) -> dict[str, Any]:
 import ace_adapter
 import ace_candidates
 import ace_transport
+import ace_isolation
 
 
 class AceCandidateRequest(BaseModel):
@@ -2163,8 +2164,10 @@ def _run_ace_candidate(folder: Path, candidate_id: str, bpm: int | None, key: st
                 ace_candidates.save_record(directory, record)
                 source = ace_transport.download_candidate(client, result["assets"][0],
                                                           directory / "generated.wav")
-                ace_candidates.crop_generated_candidate(folder, candidate_id, source,
-                                                        dependency_tool("ffmpeg"))
+                ready = ace_candidates.crop_generated_candidate(folder, candidate_id, source,
+                                                                 dependency_tool("ffmpeg"))
+                if ready["task_type"] == "lego":
+                    _audit_lego_isolation(folder, candidate_id)
                 return
             if state in ("failed", "cancelled"):
                 raise ace_adapter.AceError("ACE " + state + ": " +
@@ -2177,6 +2180,43 @@ def _run_ace_candidate(folder: Path, candidate_id: str, bpm: int | None, key: st
         record["state"] = "failed"
         record["error"] = str(exc)[:500]
         ace_candidates.save_record(directory, record)
+
+
+def _audit_lego_isolation(folder: Path, candidate_id: str) -> dict[str, Any]:
+    directory = ace_candidates.candidate_directory(folder, candidate_id)
+    record = ace_candidates.load_record(folder, candidate_id)
+    if record.get("task_type") != "lego" or record.get("state") not in ("ready", "review_required"):
+        raise ValueError("Only finished Lego candidates can be checked")
+    bounds = record["samples"]
+    duration = (bounds["context_end"] - bounds["context_start"]) / record["sample_rate_hz"]
+    audit = ace_isolation.assess_context_leakage(
+        dependency_tool("ffmpeg"),
+        directory / record["context_file"],
+        directory / "generated.wav", duration)
+    record["source_similarity"] = audit
+    if audit["status"] == "suspected_source_leakage":
+        record["state"] = "review_required"
+        record["error"] = ("Generated audio closely matches the source mix; "
+                           "not suitable for acceptance as an isolated instrument.")
+    elif audit["status"] == "not_detected":
+        record["state"] = "ready"
+        record.pop("error", None)
+    else:
+        record["state"] = "review_required"
+        record["error"] = "Cannot verify the generated instrument is distinct from the backing."
+    ace_candidates.save_record(directory, record)
+    return record
+
+
+@app.post("/api/projects/{ident}/ace/candidates/{candidate_id}/check-isolation")
+def check_ace_candidate_isolation(ident: str, candidate_id: str,
+                                  request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    _, folder, _ = _ace_project(ident)
+    try:
+        return _audit_lego_isolation(folder, candidate_id)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.post("/api/projects/{ident}/ace/candidates")
@@ -2273,7 +2313,7 @@ def ace_candidate_audio(ident: str, candidate_id: str):
     _, folder, _ = _ace_project(ident)
     try:
         record = ace_candidates.load_record(folder, candidate_id)
-        if record.get("state") != "ready":
+        if record.get("state") not in ("ready", "review_required"):
             raise HTTPException(409, "Candidate has not finished processing")
         path = ace_candidates.candidate_directory(folder, candidate_id) / "target.wav"
         if not path.is_file():

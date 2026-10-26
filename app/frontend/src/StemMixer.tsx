@@ -1214,6 +1214,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               if(!playRef.current)void togglePlayback();
             }}/>
         </>}
+        {tool==="cleanup"&&correction&&<>
+          <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
+            reduction={meters.find(item=>item.filename===correction.file)}
+            busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
+            onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
+          {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
+        </>}
         {tool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
@@ -1226,13 +1233,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(!playRef.current)void togglePlayback();
           }}/>
 
-        </>}
-        {tool==="cleanup"&&correction&&<>
-          <CorrectionWorkbench draft={correction} files={files} trimBase={masterTrimDb}
-            reduction={meters.find(item=>item.filename===correction.file)}
-            busy={correctionSaving} onChange={setCorrection} onAccept={()=>{void acceptCorrection();}}
-            onCancel={()=>{setCorrection(null);setCorrectionError("");}}/>
-          {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}
         {tool==="ab"&&<>
         <details className="production-tool-detail" aria-label="A/B audition" open>

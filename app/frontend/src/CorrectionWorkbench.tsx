@@ -14,6 +14,7 @@ export type CorrectionDraft={
   trimDelta:number;
   transition:number;
   proposed:boolean;
+  compare:"original"|"current"|"fix";
 };
 export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChange,onAccept,onCancel}:{
   draft:CorrectionDraft;
@@ -32,11 +33,10 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
       <strong>Correction trial · {draft.finding.label}</strong>
       <button type="button" onClick={onCancel} title="Discard trial" aria-label="Close correction trial">×</button>
     </div>
-    <small>Loop audition compares saved mix (A) to an unsaved proposed change (B).
-      Only Accept writes a production directive. No source WAV is modified. Mix export is unavailable during an unsaved trial.</small>
     <div className="song-correction-switch" role="group" aria-label="Correction comparison">
-      <button type="button" aria-pressed={!draft.proposed} onClick={()=>edit({proposed:false})}>A · Saved</button>
-      <button type="button" aria-pressed={draft.proposed} onClick={()=>edit({proposed:true})}>B · Proposed</button>
+      <button type="button" aria-pressed={draft.compare==="original"} onClick={()=>edit({compare:"original",proposed:false})}>Original</button>
+      <button type="button" aria-pressed={draft.compare==="current"} onClick={()=>edit({compare:"current",proposed:false})}>Current</button>
+      <button type="button" aria-pressed={draft.compare==="fix"} onClick={()=>edit({compare:"fix",proposed:true,compare:"fix"})}>Fix</button>
     </div>
     {draft.kind!=="trim"&&<>
       <div className="song-dynamics-meter" aria-label="Live dynamics gain reduction">
@@ -48,7 +48,6 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
         <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true})}>
           <option value={1}>Actual setting · 1×</option><option value={3}>Exaggerated audition · 3×</option>
         </select>
-        <small>3× exaggerates reduction only during audition; Accept saves the unboosted values shown below.</small>
       </label>
       <label>Effect<select value={draft.kind} onChange={e=>edit({kind:e.target.value as "comp"|"duck"|"deess"})}>
         <option value="comp">Compression</option>
@@ -89,7 +88,6 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
       <button type="button" disabled={busy||!draft.proposed} onClick={onAccept}>{busy?"Saving…":"Accept correction"}</button>
       <button type="button" onClick={onCancel}>Discard</button>
     </div>
-    {draft.kind==="trim"&&<small>Master output trim is currently session-only.
-      Accept changes the active mix/export setting but cannot persist it across restarts.</small>}
+    {draft.kind==="trim"&&<small>Output trim is session-only until project persistence is implemented.</small>}
   </section>;
 }

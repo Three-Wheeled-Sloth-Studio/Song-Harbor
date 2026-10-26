@@ -211,6 +211,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [mixUrl, setMixUrl] = useState<string | null>(null);
   const renderedUrl=useRef<string|null>(null);
   useEffect(()=>()=>{if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);},[]);
+  useEffect(()=>()=>{audio.current?.setReferenceOriginal(false);},[]);
   const [error, setError] = useState("");
   const [channels,setChannels]=useState<ChannelSets>({});
   const [routingVersion,setRoutingVersion]=useState(0);
@@ -267,6 +268,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   stemsRef.current = stems;
   const anySolo = stems.some(s => s.solo);
   useEffect(()=>{audio.current?.setEffectBypass(correction?{...bypassed,compression:false,ducking:false,deess:false}:bypassed);},[bypassed,audioReady,correction]);
+  useEffect(()=>{audio.current?.setReferenceOriginal(correction?.compare==="original");},[correction?.compare,audioReady]);
   useEffect(()=>{if(headroomIssue)headroomFixRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"});},[headroomIssue]);
   useEffect(()=>{audio.current?.setOutputTrimDb(masterTrimDb+(correction?.kind==="trim"&&correction.proposed?correction.trimDelta:0));},[masterTrimDb,correction,audioReady]);
   const visibleSeconds=duration>0?duration/zoom:0;
@@ -791,9 +793,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrectionError("");
     setCorrection({
       finding,sectionId:section?.id||"",file,kind,
-      threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1,depth:0,transition:1.5,
+      threshold:kind==="deess"?-40:(preferred?.threshold_db??-18),ratio:1.6,depth:2,transition:1.5,
       frequency:6500,q:2,maxReduction:4,auditionBoost:1,
-      trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false
+      trimDelta:-Math.max(0,Math.min(12,Math.round((peak+1)*10)/10)),proposed:false,compare:"current"
     });
     loopAround(finding.timeSeconds-1,finding.timeSeconds+2);
   }

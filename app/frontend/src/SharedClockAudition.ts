@@ -6,6 +6,7 @@ import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,makeDeEssEnvelope,scheduleDeEss,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
 import {compareAudioStages,type StageComparison} from "./AudioStageComparison";
+import {regionSpectrogram} from "./RegionSpectrogram.ts";
 import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionInsights.ts";
 /**
  * Song Harbor shared-clock audition engine.
@@ -571,6 +572,11 @@ export class SharedClockAudition {
     this.lastStageComparison=compareAudioStages(dry,rendered,this.sourceDurationSeconds);
     this.lastAnalysis=[...processedFindings,...this.lastStageComparison.findings]
       .sort((a,b)=>a.timeSeconds-b.timeSeconds).slice(0,64);
+    // Bounded on-demand evidence. Cap tiles and use one already-rendered buffer;
+    // never retain a second whole-song PCM copy for the UI.
+    for(const finding of this.lastAnalysis.slice(0,20)){
+      finding.spectrum=regionSpectrogram(rendered,finding.timeSeconds);
+    }
     return this.lastAnalysis;
   }
 

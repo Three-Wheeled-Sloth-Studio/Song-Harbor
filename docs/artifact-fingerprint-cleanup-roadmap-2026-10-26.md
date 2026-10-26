@@ -239,3 +239,14 @@ Important constraints:
 - These are sound-shaping options, not evidence that a classified anomaly is genuinely objectionable. Intentional industrial harmonics and synth noise should often be left alone. Never use a falling AI-detection score as evidence that audio sounds cleaner.
 - Windows build and audio QA have not run in this GitHub-only session. Run `npm run build` and `python -m unittest app.backend.tests.test_spectral_cleanup_directives`, then listen across the entire target and following sections; compare Fix with resulting Current after acceptance and the exported WAV.
 - Next material improvement: genuinely **region-scoped** attenuation with attack/release and transient protection, spectral delta measurement pre/post, persist/replay exact slice, targeted de-clip and de-noise candidates. Avoid adding a third duplicate cleanup panel.
+
+
+## 2026-10-26 course correction: detection research is NOT yet implemented
+
+**User challenge and agreed answer:** The prior Sound Cleanup progression delivered conventional DSP analysis, source attribution hints, a de-click recipe workflow, and section EQ/ducking/de-ess audition. These are valuable production infrastructure but **not faithful implementations of the three pinned AI-music detector projects**. No validated KillrBee multi-domain checkerboard/harmonic/reverb/vocal artifact suite, lofcz ONNX fakeprint extractor, or lcrosvila robustness/embedding bench has been integrated. Do not market section EQ as fingerprint cleaning.
+
+**New next priority:** inspect and reproduce the actual upstream algorithms, their corpus limits, model contracts, available licenses, and failure modes. Build an explicit detector capability/QA matrix, then implement one *interpretable, temporally localizable* KillrBee-inspired artifact detector and test it on both positive fixtures and intentional industrial negative controls. Bench lofcz separately (research-only; not a quality score) and use lcrosvila methodology for robustness. The existing compact Sound Cleanup tool is the only UI destination and Original/Current/Fix is reserved for manually approved *audible* corrections.
+
+**Boundaries:** Fingerprints/provenance, audible artifacts, and repairs remain three different categories. No attempts to strip watermarks or optimize to evade classifiers. Avoid grand "AI probability" or "human score" claims. No Windows runtime/audio QA claimed for many preceding commits; verify before shipping.
+
+Canonical implementation handoff: `refs/handoffs/currentHandoff.md` (top section CURRENT HANDOFF — 2026-10-26).

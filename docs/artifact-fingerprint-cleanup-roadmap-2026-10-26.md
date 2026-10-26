@@ -167,3 +167,24 @@ Changes on main:
 - Source hints are approximate; they are not proven causality. Better stem-specific spectral attribution remains P1.
 
 QA: test scrolling a small tool window and a full-width one; confirm Accept is reachable without scrolling, dials change values by dragging and arrow keys, switching comparisons doesn't seek, accepting leaves the list and its review state intact with a stale marker, rescan replaces the snapshot, and successful export remains non-destructive. No automated Windows build or browser QA has been executed.
+
+## P1 spectral source-evidence and de-click foundation (2026-10-26)
+
+Commits on main:
+- `app/frontend/src/StemArtifactAttribution.ts`: bounded, zero-dependency Goertzel band-energy estimate (7 probe frequencies × max 4 windows × <=256 samples per stem) around each finding. Known spectral bands: 2.5–4.9 kHz harshness, 5–9.5 kHz sibilance, 7.5–11.5 kHz fizz, 6–11.5 kHz noise, 4–11.5 kHz signal audit. Other findings use generic low/mid-band screening. Evidence shares and uncertainty are indicative only: no phase-aware source mix reconstruction, account for source bleed, nor processing-stage causality.
+- `SharedClockAudition.ts`: replaces broad unfiltered RMS source hints for rendered-audio findings with frequency-specific source evidence; source reference uses the track's real start offset and static mixer gain. Evidence collection is non-mutating and only executes during an explicit scan.
+- `AudioCleanupAnalyzer.ts`: optional typed per-source evidence and uncertainty.
+- `CleanupReview.tsx`: compact collapsed spectral evidence details, displays strongest source without asserting proof, expands to band and sampled energy shares. No additional verbose default paragraph.
+- `app/frontend/tests/stem-artifact-attribution.test.mjs`: synthetic tests for harmonic source ranking, silence and unchanged input.
+- `app/frontend/src/LocalizedDeclick.ts`: candidate-only, sub-3ms interpolation with smooth boundary blend and explicit replacement samples. It copies buffers and does not modify the source. `tests/localized-declick.test.mjs` verifies bounded replacement and baseline preservation.
+
+**Important incomplete integration**: The de-click primitive is NOT yet hooked into Original/Current/Fix audition, project recipe persistence, or export. It is not presented as an actionable UI repair. Implement waveform-local verified click detection, select region, effect-chain audition including exact undo, non-destructive stored correction recipe, and export parity before enabling Accept. We are not auto-repairing drums or intended industrial transients.
+
+Known design risk: fractional source-band energy is an *energy association* only. Correlated separated stems and compressor/duck dynamics can produce a false attribution. A score of 80% is not an 80% probability that the source caused the issue. Future display should use uncertainty weighting and source-isolation audition.
+
+Local QA from `app/frontend`:
+```powershell
+npm run build
+node --test tests/stem-artifact-attribution.test.mjs tests/localized-declick.test.mjs tests/audio-cleanup.test.mjs
+```
+No Windows TS build or browser listening QA was performed in the GitHub-only implementation environment. This remains a development milestone, not release mastering approval.

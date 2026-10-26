@@ -142,3 +142,14 @@ QA command from `app/frontend`:
 `node --test tests/audio-stage-comparison.test.mjs tests/audio-cleanup.test.mjs tests/region-spectrogram.test.mjs`
 
 **Runtime limitation:** GitHub file edits were not exercised on the user's Windows browser/audio device here. Build and audio QA required before release use.
+
+## UX consolidation after desktop screenshot QA (2026-10-26)
+
+The screenshot showing version 0.1.0:1:1097 captured the separate legacy **Audio forensics (experimental)** popover, not **Sound cleanup**. The former reused the same scan findings but did not expose new Original / Current / Fix correction actions or stage-comparison evidence. This was a confusing duplicate tool entry, not evidence that the frontend update failed.
+
+Resolution committed on main:
+- Collapsed the toolbar into **Sound cleanup & forensics**, with the existing `cleanup` tool identifier and consolidated correction/report view.
+- Removed the old `forensics` window path from `StemMixer.tsx`; its historical `ForensicsReview.tsx` source remains unused pending a separate housekeeping pass.
+- Fixed parameter adjustments in `CorrectionWorkbench.tsx` so edits always select **Fix** audibly, including after switching to Original.
+- Current/Original/Fix comparison is shown **after clicking Try Fix on a supported finding**, not as a global toggle in the scan summary. Stage comparison and regional spectrum live in the same combined tool.
+- No backend models or audio exports were changed in this UI fix. Desktop frontend build and listening QA are still required.

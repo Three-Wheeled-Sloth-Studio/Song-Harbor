@@ -50,7 +50,7 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number}|null=null;
+  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
@@ -197,11 +197,18 @@ export class SharedClockAudition {
     const gain=this.context.createGain();
     gain.gain.value=0;
     gain.connect(this.master);
-    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0,trimDb:0};
+    this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0,trimDb:0,solo:false};
     if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
   }
   setCandidatePreviewEnabled(value:boolean){
     this.setCandidatePreviewBlend(value?100:0);
+  }
+  /** True Solo is a separate routing state, not a blend approximation. */
+  setCandidatePreviewSolo(value:boolean){
+    const candidate=this.candidatePreview;
+    if(!candidate)return;
+    candidate.solo=value;
+    this.setCandidatePreviewBlend(candidate.blend*100);
   }
   setCandidatePreviewTrimDb(db:number){
     const candidate=this.candidatePreview;
@@ -209,33 +216,43 @@ export class SharedClockAudition {
     candidate.trimDb=Math.max(-12,Math.min(9,db));
     this.setCandidatePreviewBlend(candidate.blend*100);
   }
-  /** Equal-power preview crossfade; source stems and exported tracks remain unchanged. */
-  setCandidatePreviewBlend(percent:number){
+  /** Route every original stem AND wet FX through one mix bus. Solo hard-mutes
+   * that bus throughout audition (including preroll); blend attenuates it only
+   * inside the candidate interval. No original stems bypass this bus.
+   */
+  setCandidatePreviewBlend(percent:number,at=this.context.currentTime,offset=this.position){
     const candidate=this.candidatePreview;
     if(!candidate)return;
     const p=Math.max(0,Math.min(100,percent))/100;
     candidate.blend=p;
-    candidate.enabled=p>0;
+    candidate.enabled=candidate.solo||p>0;
+    const originalLevel=candidate.solo?0:Math.cos(p*Math.PI/2);
+    const generatedLevel=(candidate.solo?1:Math.sin(p*Math.PI/2))*Math.pow(10,candidate.trimDb/20);
     const now=this.context.currentTime;
-    this.originalPreviewBus.gain.cancelScheduledValues(now);
-    const originalLevel=Math.cos(p*Math.PI/2);
-    const clipEnd=candidate.startSeconds+candidate.buffer.duration;
-    const position=this.position;
-    const inClip=position>=candidate.startSeconds&&position<clipEnd;
-    this.originalPreviewBus.gain.setTargetAtTime(inClip?originalLevel:1,now,.012);
-    if(this.running){
-      if(position<candidate.startSeconds){
-        const begin=now+candidate.startSeconds-position;
-        this.originalPreviewBus.gain.setValueAtTime(1,Math.max(now,begin-.02));
-        this.originalPreviewBus.gain.linearRampToValueAtTime(originalLevel,begin+.02);
+    const original=this.originalPreviewBus.gain;
+    original.cancelScheduledValues(now);
+    // No underlying instrument or reverb can sound while Solo is engaged.
+    if(candidate.solo){
+      original.setTargetAtTime(0,now,.005);
+    }else{
+      const clipStart=candidate.startSeconds;
+      const clipEnd=clipStart+candidate.buffer.duration;
+      const inClip=offset>=clipStart&&offset<clipEnd;
+      original.setTargetAtTime(inClip?originalLevel:1,now,.008);
+      // Audio nodes are scheduled from a shared future clock, even if the
+      // audition was seeking from before the generated clip's beginning.
+      if(offset<clipStart){
+        const begin=at+clipStart-offset;
+        original.setValueAtTime(1,Math.max(now,begin-.02));
+        original.linearRampToValueAtTime(originalLevel,begin+.02);
       }
-      if(position<clipEnd){
-        const finish=now+clipEnd-position;
-        this.originalPreviewBus.gain.setValueAtTime(originalLevel,Math.max(now,finish-.02));
-        this.originalPreviewBus.gain.linearRampToValueAtTime(1,finish+.02);
+      if(offset<clipEnd){
+        const finish=at+clipEnd-offset;
+        original.setValueAtTime(originalLevel,Math.max(now,finish-.02));
+        original.linearRampToValueAtTime(1,finish+.02);
       }
     }
-    candidate.gain.gain.setTargetAtTime(Math.sin(p*Math.PI/2)*Math.pow(10,candidate.trimDb/20),now,.012);
+    candidate.gain.gain.setTargetAtTime(generatedLevel,now,.008);
   }
   candidateWaveform(size=160):number[]{
     const buffer=this.candidatePreview?.buffer;
@@ -273,8 +290,7 @@ export class SharedClockAudition {
     source.buffer=candidate.buffer;
     source.connect(candidate.gain);
     candidate.source=source;
-    candidate.gain.gain.setValueAtTime(Math.sin(candidate.blend*Math.PI/2)*Math.pow(10,candidate.trimDb/20),at);
-    this.setCandidatePreviewBlend(candidate.blend*100);
+    this.setCandidatePreviewBlend(candidate.blend*100,at,offset);
     if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
     else source.start(at,offset-candidate.startSeconds);
   }

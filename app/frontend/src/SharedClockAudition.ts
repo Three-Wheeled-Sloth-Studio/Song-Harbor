@@ -45,6 +45,7 @@ export class SharedClockAudition {
   private spaceStages=new Map<string,SpatialReflectionStage>();
   private reverb:ConvolverNode;
   private reverbDrive:GainNode;
+  private referenceOriginal=false;
   private bypassEffects={pan:false,width:false,space:false,reverb:false,ending:false,eq:false,compression:false,ducking:false,deess:false};
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
@@ -367,28 +368,38 @@ export class SharedClockAudition {
     else this.configurePreviewNodes(this.context.currentTime+0.02,this.offset);
   }
   get comparingOriginal(){return Object.values(this.bypassEffects).every(Boolean);}
+  /** Playback-only dry reference for Original/Current/Fix correction comparisons.
+   * Retains source timing, static mixer levels, and original L/R routing;
+   * omits section gain, EQ, dynamics, width, pan, reflections, reverb and fade.
+   * Does not affect offline mix export or saved automation.
+   */
+  setReferenceOriginal(enabled:boolean){
+    if(this.referenceOriginal===enabled)return;
+    this.referenceOriginal=enabled;
+    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
+  }
   private configurePreviewNodes(at:number,offset:number){
     for(const track of this.tracks){
       const src=track.source;
       scheduleAutomation(track.sectionGain.gain,
-        this.automation[src.filename]?.gain||[{time:0,value:1}],offset,at);
+        !this.referenceOriginal&&this.automation[src.filename]?.gain||[{time:0,value:1}],offset,at);
       scheduleAutomation(track.childGain.gain,
-        this.automation[src.key]?.gain&&src.key!==src.filename
+        !this.referenceOriginal&&this.automation[src.key]?.gain&&src.key!==src.filename
           ?this.automation[src.key].gain!:[{time:0,value:1}],offset,at);
       scheduleAutomation(track.panner.pan,
-        !this.bypassEffects.pan&&src.key!==src.filename&&this.automation[src.key]?.pan
+        !this.referenceOriginal&&!this.bypassEffects.pan&&src.key!==src.filename&&this.automation[src.key]?.pan
           ?this.automation[src.key].pan!:[{time:0,value:src.pan}],offset,at);
       if(track.childEq)scheduleEq(track.childEq,this.automation[src.key]?.eq||{},
-        offset,at,this.bypassEffects.eq);
+        offset,at,this.referenceOriginal||this.bypassEffects.eq);
       if(src.key!==src.filename){
         const send=this.reverbSends.get(src.key);
         if(send)scheduleAutomation(send.gain,
-          !this.bypassEffects.reverb&&
+          !this.referenceOriginal&&!this.bypassEffects.reverb&&
           (this.automation[src.key]?.reverb||this.automation[src.filename]?.reverb)
             ||[{time:0,value:0}],offset,at);
       }
     }
-    const bypass=this.bypassEffects;
+    const bypass=this.referenceOriginal?{pan:true,width:true,space:true,reverb:true,ending:true,eq:true,compression:true,ducking:true,deess:true}:this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
       const eq=this.eqStages.get(filename);
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);

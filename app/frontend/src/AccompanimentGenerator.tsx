@@ -39,6 +39,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
   const [blend,setBlend]=useState(35);
+  const [previewTrimDb,setPreviewTrimDb]=useState(0);
   const [previewPeaks,setPreviewPeaks]=useState<number[]>([]);
   const [loadedId,setLoadedId]=useState<string|null>(null);
   const [error,setError]=useState("");
@@ -85,6 +86,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     candidateRef.current=candidate?.candidate_id||null;
     engine?.clearCandidatePreview();
     setBlend(35);
+    setPreviewTrimDb(0);
     setPreviewPeaks([]);
     setLoadedId(null);
     setPreviewBusy(false);
@@ -132,6 +134,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
       engine.setCandidatePreviewBlend(blend);
+      engine.setCandidatePreviewTrimDb(previewTrimDb);
       setPreviewPeaks(engine.candidateWaveform());
       setLoadedId(candidate.candidate_id);
       onSeek(Math.max(0,candidate.target_start_seconds-preRoll));
@@ -253,6 +256,15 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,onSeek,onP
             disabled={loadedId!==candidate.candidate_id} value={blend} onChange={e=>{const value=Number(e.target.value);setBlend(value);engine?.setCandidatePreviewBlend(value);}}/>
         </label>
         <small>0 original · 100 generated only · equal-power preview. Audition first to enable blend.</small>
+        <details>
+          <summary>Audition level correction</summary>
+          <label style={{display:"grid",gap:"0.2rem"}}>Generated trim · {previewTrimDb>0?"+":""}{previewTrimDb} dB
+            <input type="range" min="-12" max="9" step="1" value={previewTrimDb}
+              disabled={loadedId!==candidate.candidate_id}
+              onChange={e=>{const db=Number(e.target.value);setPreviewTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/>
+          </label>
+          <small>Preview-only; positive trim may clip. Not applied to accepted track.</small>
+        </details>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <button type="button" disabled={busy} onClick={()=>void accept()}>Accept and insert</button>
       </>}

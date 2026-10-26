@@ -1027,6 +1027,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           aria-label={s.name}><AudioIcon kind={trackAliases?.[s.filename]||labelOf(s.filename)} size={32}/>
           {trackLabels?.[s.filename]?<span className="mixer-stem-names"><span className="mixer-stem-name">{s.name}</span>
             <small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small></span>:<span className="sr-only">{s.name}</span>}
+          <span className="stem-label-toggles" aria-label={s.name+" quick controls"}>
+            <button type="button" className={"track-toggle"+(s.mute?" is-muted":"")} aria-label={"Mute "+s.name}
+              aria-pressed={s.mute} title={"Mute "+s.name} onClick={()=>update(s.filename,{mute:!s.mute})}>M</button>
+            <button type="button" className={"track-toggle"+(s.solo?" is-solo":"")} aria-label={"Isolate "+s.name}
+              aria-pressed={s.solo} title={"Isolate (solo) "+s.name} onClick={()=>update(s.filename,{solo:!s.solo})}>S</button>
+          </span>
         </strong>
         <div className="track-actions">
           <button type="button" className="track-toggle" disabled={renamingTrack!==null}
@@ -1041,10 +1047,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               onClick={()=>void removeTrack(trackIdentities.find(t=>t.working_filename===s.filename)!)}
               title={"Remove "+s.name} aria-label={"Remove "+s.name}>×</button>
           </>}
-          <button type="button" className={"track-toggle" + (s.mute ? " is-muted" : "")}
-            aria-pressed={s.mute} title={"Mute " + s.name} onClick={() => update(s.filename, { mute: !s.mute })}>M</button>
-          <button type="button" className={"track-toggle" + (s.solo ? " is-solo" : "")}
-            aria-pressed={s.solo} title={"Solo " + s.name} onClick={() => update(s.filename, { solo: !s.solo })}>S</button>
         </div>
         <input type="range" min="0" max="100" step="1" value={s.gain}
           aria-label={s.name + " volume"} onChange={e => update(s.filename, {gain: Number(e.target.value)})} />

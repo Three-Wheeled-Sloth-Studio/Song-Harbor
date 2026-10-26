@@ -1213,7 +1213,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             }}/>
         </>}
         {tool==="cleanup"&&<>
-        <CleanupReview findings={cleanupFindings} scanned={cleanupScanned}
+        <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
           onLoop={(start,end)=>{

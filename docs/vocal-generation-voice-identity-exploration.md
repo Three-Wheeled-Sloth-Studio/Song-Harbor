@@ -39,3 +39,14 @@ References:
 - https://github.com/openutau/OpenUtau/wiki/DiffSinger-support
 - https://github.com/Plachtaa/seed-vc
 - https://ace-step.github.io/ACE-Step-1.5/en/INFERENCE
+
+## Decision and pause (2026-10-26)
+
+Record for future Song Harbor development, not a dependency for the current Infra Choir release:
+- **First priority:** Applio/RVC for a stable trained voice identity applied to an existing isolated sung performance.
+- **Second priority:** DiffSinger/OpenUtau for score-driven vocal phrase and harmony synthesis; combine with RVC if appropriate.
+- **Lower-cost exploration:** ACE-Step Base `vocals` and `backing_vocals` Lego, with source-leakage screening and manual listening QA before acceptance.
+- **Research only:** Seed-VC reference-conditioned singing conversion, contingent on actively maintained forks and license review.
+- Future Song Harbor abstraction: performance source -> Singer Profile/voice conversion -> waveform, solo, regional audition, non-destructive insertion or replacement.
+
+**Work paused intentionally:** Do not initiate model training, voicebank downloads, vocal generation integrations, or further experimental instrument replacement for the current release. Resume as a separate development workstream after the current track has been exported and QA-approved.

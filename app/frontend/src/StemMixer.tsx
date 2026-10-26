@@ -200,6 +200,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
+  const [cleanupStale,setCleanupStale]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
   const [cleanupError,setCleanupError]=useState("");
   const analysisRevision=useRef(0);
@@ -593,10 +594,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setDuration(engine.duration);
   },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,correction,sectionPreviewActive,sectionPreview]);
 
-  // Findings describe a specific processed mix; edits invalidate those results.
+  // Retain the previous findings after a mix change as a labelled snapshot.
+  // Old scan results must not be presented as analysis of the new settings.
   useEffect(()=>{
     analysisRevision.current++;
-    setCleanupScanned(false);setCleanupFindings([]);setSectionInsights([]);
+    setCleanupStale(true);
   },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
@@ -872,7 +874,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     const engine=audio.current;
     if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
     const revision=analysisRevision.current;
-    setAnalyzing(true);setCleanupError("");setCleanupScanned(false);setCleanupFindings([]);
+    setAnalyzing(true);setCleanupError("");
     try{
       const results=await engine.analyzeMix(timelineSections);
       if(analysisRevision.current!==revision){
@@ -882,6 +884,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       setCleanupFindings(results);
       setSectionInsights(engine.sectionInsights);
       setCleanupScanned(true);
+      setCleanupStale(false);
     }catch(e){
       setCleanupError(e instanceof Error?e.message:"Sound analysis failed");
     }finally{setAnalyzing(false);}
@@ -898,8 +901,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setError("");
     setNotice("");
     setHeadroomIssue(null);
-    setCleanupScanned(false);
-    setCleanupFindings([]);
+    setCleanupStale(true);
     try{
       if(overrideTrimDb!==undefined){
         engine.setOutputTrimDb(overrideTrimDb);
@@ -908,6 +910,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       const blob=await engine.renderWav24();
       setCleanupFindings(engine.cleanupFindings);
       setCleanupScanned(true);
+      setCleanupStale(false);
       if(renderedUrl.current)URL.revokeObjectURL(renderedUrl.current);
       renderedUrl.current=URL.createObjectURL(blob);
       setMixUrl(renderedUrl.current);
@@ -1208,7 +1211,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}
         {tool==="cleanup"&&<>
-        <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned}
+        <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection}
           onLoop={(start,end)=>{

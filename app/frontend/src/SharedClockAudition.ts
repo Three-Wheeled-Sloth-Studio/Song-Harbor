@@ -211,7 +211,24 @@ export class SharedClockAudition {
     candidate.blend=p;
     candidate.enabled=p>0;
     const now=this.context.currentTime;
-    this.originalPreviewBus.gain.setTargetAtTime(Math.cos(p*Math.PI/2),now,.012);
+    this.originalPreviewBus.gain.cancelScheduledValues(now);
+    const originalLevel=Math.cos(p*Math.PI/2);
+    const clipEnd=candidate.startSeconds+candidate.buffer.duration;
+    const position=this.position;
+    const inClip=position>=candidate.startSeconds&&position<clipEnd;
+    this.originalPreviewBus.gain.setTargetAtTime(inClip?originalLevel:1,now,.012);
+    if(this.running){
+      if(position<candidate.startSeconds){
+        const begin=now+candidate.startSeconds-position;
+        this.originalPreviewBus.gain.setValueAtTime(1,Math.max(now,begin-.02));
+        this.originalPreviewBus.gain.linearRampToValueAtTime(originalLevel,begin+.02);
+      }
+      if(position<clipEnd){
+        const finish=now+clipEnd-position;
+        this.originalPreviewBus.gain.setValueAtTime(originalLevel,Math.max(now,finish-.02));
+        this.originalPreviewBus.gain.linearRampToValueAtTime(1,finish+.02);
+      }
+    }
     candidate.gain.gain.setTargetAtTime(Math.sin(p*Math.PI/2),now,.012);
   }
   candidateWaveform(size=160):number[]{
@@ -235,6 +252,7 @@ export class SharedClockAudition {
     candidate.source?.disconnect();
     candidate.gain.disconnect();
     this.candidatePreview=null;
+    this.originalPreviewBus.gain.cancelScheduledValues(this.context.currentTime);
     this.originalPreviewBus.gain.setTargetAtTime(1,this.context.currentTime,.012);
   }
   private scheduleCandidate(at:number,offset:number){
@@ -250,6 +268,7 @@ export class SharedClockAudition {
     source.connect(candidate.gain);
     candidate.source=source;
     candidate.gain.gain.setValueAtTime(Math.sin(candidate.blend*Math.PI/2),at);
+    this.setCandidatePreviewBlend(candidate.blend*100);
     if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
     else source.start(at,offset-candidate.startSeconds);
   }

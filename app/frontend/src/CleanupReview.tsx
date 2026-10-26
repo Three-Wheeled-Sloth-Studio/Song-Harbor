@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCleanupAnalyzer";
+import type {StageComparison} from "./AudioStageComparison";
 
 const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics","Signal audit"] as const;
 const stamp=(seconds:number)=>{
@@ -7,9 +8,10 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,scanned,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
+  findings,comparison,scanned,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection
 }:{
   findings:readonly AudioFinding[];
+  comparison?:StageComparison|null;
   scanned:boolean;analyzing:boolean;error:string;ready:boolean;busy:boolean;
   onAnalyze:()=>void;
   onSeek:(seconds:number)=>void;
@@ -19,9 +21,10 @@ export function CleanupReview({
   const [filter,setFilter]=useState<string>("All");
   const [reviewed,setReviewed]=useState<Set<string>>(()=>new Set());
   const [showReviewed,setShowReviewed]=useState(false);
+  const [markedIntentional,setMarkedIntentional]=useState<Set<string>>(()=>new Set());
   const keyOf=(finding:AudioFinding)=>finding.kind+":"+finding.timeSeconds.toFixed(2);
   // New scan invalidates previous decisions about which candidates are reviewed.
-  useEffect(()=>{setReviewed(new Set());},[findings]);
+  useEffect(()=>{setReviewed(new Set());setMarkedIntentional(new Set());},[findings]);
   const categories=useMemo(()=>new Set(findings.map(item=>FINDING_GROUPS[item.kind])),[findings]);
   const visible=useMemo(()=>findings.filter(item=>
     (filter==="All"||FINDING_GROUPS[item.kind]===filter) &&
@@ -39,6 +42,10 @@ export function CleanupReview({
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}
       {!scanned&&<p className="song-cleanup-description">Inspect levels, abrupt transitions, high-frequency texture, possible vocal harshness, noisy quiet passages, stereo cancellation, dynamics and unusually persistent tonal signals. No audio is changed, and this is not a watermark verifier.</p>}
       {scanned&&<>
+        {comparison&&<div className="song-cleanup-stage-comparison" role="status">
+          <strong>Dry stems → processed mix</strong>
+          <small>{comparison.findings.length} large changes to review · {comparison.analyzedSeconds.toFixed(1)}s compared at {comparison.windowSeconds}s intervals. Intentional automation can trigger these flags.</small>
+        </div>}
         <label className="song-cleanup-filter">Findings
           <select aria-label="Filter sound cleanup findings" value={filter} onChange={e=>setFilter(e.target.value)}>
             {FILTERS.filter(item=>item==="All"||categories.has(item)).map(item=><option key={item}>{item}</option>)}
@@ -68,6 +75,12 @@ export function CleanupReview({
                   <button type="button" onClick={()=>onLoop(Math.max(0,item.timeSeconds-1),item.timeSeconds+Math.max(2,item.durationSeconds||0)+1)}>Loop ± context</button>
                   {(item.kind==="headroom"||item.kind==="pumping")&&
                     <button type="button" onClick={()=>onTryCorrection(item)}>Try correction A/B</button>}
+                  {comparison?.findings.includes(item)&&<button type="button"
+                    aria-pressed={markedIntentional.has(id)}
+                    onClick={()=>{setMarkedIntentional(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
+                      setReviewed(current=>new Set(current).add(id));}}>
+                    {markedIntentional.has(id)?"Intentional ✓":"Mark intentional"}
+                  </button>}
                   <button type="button" onClick={()=>setReviewed(existing=>{
                     const next=new Set(existing);if(next.has(id))next.delete(id);else next.add(id);return next;
                   })}>{isReviewed?"Unmark":"Mark reviewed"}</button>

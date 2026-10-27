@@ -1,12 +1,14 @@
 # Audible artifact benchmark harness (2026-10-27)
 
 ## Scope
-**This harness evaluates audible-acoustic observations, not generator fingerprints.** It currently exercises the standalone isolated attack-rise diagnostic. Benchmark labels refer to the physical envelope fixture and intent, never an "AI"/"human" class. No audio modification or repair is executed.
+**This harness evaluates audible-acoustic observations, not generator fingerprints.** It exercises the isolated attack-rise and reverb-tail envelope diagnostics. Benchmark labels refer to physical envelope fixtures and intent, never an "AI"/"human" class. No audio modification or repair is executed.
 
 ## Code
 - `app/frontend/tests/artifact-evaluation.mjs` provides timestamp-based one-to-one event matching and aggregate metrics.
 - `app/frontend/tests/artifact-fixtures.mjs` defines deterministic 24 kHz, two-channel synthetic signals with annotated positive events and negative controls.
 - `app/frontend/tests/run-artifact-benchmark.mjs` runs the production `inspectAttackRise` algorithm against the fixtures and prints versioned JSON.
+- `app/frontend/tests/run-reverb-tail-benchmark.mjs` separately scores cutoff/stall observations and preserves the intentional-gate false positive.
+- `app/frontend/tests/reverb-tail.test.mjs` covers localization, confounds, silence, steady/short/invalid input and PCM immutability.
 - `app/frontend/tests/artifact-evaluation.test.mjs` verifies matching logic, duplicate suppression in scores, localization bounds, negative-case false-positive accounting, undefined metric handling, deterministic fixture construction and report shape.
 - `.github/workflows/frontend-build.yml` executes the benchmark and retains `artifact-benchmark.json` as a workflow artifact for 30 days. It separately runs existing audio cleanup and attack-rise tests.
 
@@ -16,6 +18,7 @@ From repository root with Node 22+:
 ```sh
 node --experimental-strip-types --test app/frontend/tests/artifact-evaluation.test.mjs
 node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json
+node --experimental-strip-types app/frontend/tests/run-reverb-tail-benchmark.mjs > reverb-tail-benchmark.json
 npm run build --prefix app/frontend
 ```
 
@@ -42,4 +45,4 @@ Synthetic data does not establish audibility, artifact cause, source attribution
 5. Keep lofcz ONNX/CQT fakeprints and lcrosvila-style generator robustness under a **separate research protocol**, with model metadata and provenance retained; never optimize generator identification scores as an audio quality metric.
 
 ## Verification
-This GitHub-authored slice is **pending CI and local Node test confirmation**. Do not report it as passing until a run for the final commit is actually confirmed green. Windows audio QA and listening remain separate.
+Local Windows build and synthetic tests passed for implementation SHA `871003dfccec153623aa70e3eac847632f872b5e`; exact results are in `docs/artifact-validation-results-2026-10-27.md`. GitHub CI, Windows audio QA and listening remain separately reported rather than inferred.

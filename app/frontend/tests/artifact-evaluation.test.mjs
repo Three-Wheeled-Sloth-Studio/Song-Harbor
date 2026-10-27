@@ -51,3 +51,26 @@ test("benchmark produces inspectable per-case results with synthetic provenance"
   assert.equal(result.totals.tp+result.totals.fn,2);
   assert.ok(result.totals.fp>=0);
 });
+
+test("overlapping timestamp candidates maximize valid event recall",()=>{
+  // Nearest-first greedily consumes truth .03 for observation .04;
+  // matching .00 -> .03 and .04 -> .07 correctly captures two events.
+  const m=matchEvents([{timeSeconds:0},{timeSeconds:.04}],
+    [{timeSeconds:.03},{timeSeconds:.07}],.04);
+  assert.equal(m.tp,2);
+  assert.equal(m.fp,0);
+  assert.equal(m.fn,0);
+});
+test("invalid nonfinite timestamps and tolerances fail clearly",()=>{
+  assert.throws(()=>matchEvents([{timeSeconds:NaN}],[],.05),TypeError);
+  assert.throws(()=>matchEvents([{timeSeconds:0}],[{timeSeconds:Infinity}],.05),TypeError);
+  assert.throws(()=>matchEvents([],[],NaN),RangeError);
+});
+test("separate categories cannot hide intentional-effect false alarms",()=>{
+  const result=runAttackRiseBenchmark();
+  const negatives=result.cases.filter(x=>x.negative);
+  assert.ok(negatives.length>=6);
+  assert.ok(negatives.some(x=>x.id==="intentional-pad-envelope"));
+  assert.equal(negatives.reduce((n,x)=>n+x.fp,0)+result.cases.filter(x=>!x.negative).reduce((n,x)=>n+x.fp,0),result.totals.fp);
+  assert.equal(Object.values(result.categories).reduce((n,x)=>n+x.negativeCasesWithFalsePositives,0),result.totals.negativeCasesWithFalsePositives);
+});

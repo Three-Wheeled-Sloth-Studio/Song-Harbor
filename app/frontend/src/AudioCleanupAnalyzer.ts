@@ -1,4 +1,5 @@
 import {screenAcousticSignals} from "./SignalAudit.ts";
+import {inspectAttackRise} from "./AttackRiseDiagnostic.ts";
 import type {SpectralPreview} from "./RegionSpectrogram.ts";
 import type {AttributionEvidence} from "./StemArtifactAttribution.ts";
 /** Non-destructive, mix-level QC. These are listening candidates, never a diagnosis.
@@ -7,7 +8,7 @@ import type {AttributionEvidence} from "./StemArtifactAttribution.ts";
  * No cloud access or modification of audio buffers.
  */
 export type AudioFindingKind=
-  "headroom"|"transient"|"clip_shape"|"sibilance"|"harshness"|
+  "headroom"|"transient"|"attack_rise"|"clip_shape"|"sibilance"|"harshness"|
   "fizz"|"noise"|"phase"|"pumping"|"signal_audit";
 export type AudioFinding={
   kind:AudioFindingKind;
@@ -24,7 +25,7 @@ export type AudioFinding={
   spectrum?:SpectralPreview;
 };
 export const FINDING_GROUPS:Record<AudioFindingKind,string>={
-  headroom:"Levels",clip_shape:"Levels",transient:"Transitions",
+  headroom:"Levels",clip_shape:"Levels",transient:"Transitions",attack_rise:"Transitions",
   sibilance:"Vocal / high frequency",harshness:"Vocal / high frequency",
   fizz:"Vocal / high frequency",noise:"Quiet passages",
   phase:"Stereo / mono",pumping:"Dynamics",signal_audit:"Signal audit"
@@ -220,6 +221,15 @@ export function inspectRenderedAudio(buffer:AudioLike,outputTrimDb=0,maxFindings
           detail,suggestion},6);
       }else sustain[kind]=0;
     }
+  }
+  // Attack envelope evidence is separate from sample discontinuity screening.
+  // Slow attacks can be intentional. No repair is suggested without stem A/B.
+  for(const event of inspectAttackRise(buffer)){
+    offer({kind:"attack_rise",timeSeconds:event.timeSeconds,
+      durationSeconds:event.riseMs/1000,severity:"review",
+      label:"Gradual isolated attack",
+      detail:"An isolated attack rose from 10% to 90% RMS over "+event.riseMs.toFixed(1)+" ms. Soft instrument attacks, fades and production effects can be intentional; this is not an AI-origin test.",
+      suggestion:"Listen to the isolated source and original at this timestamp. Only investigate transient restoration if the softened attack is unwanted."},.3);
   }
   // This is anomaly screening, NOT watermark detection or fingerprint matching.
   // It never modifies PCM samples and has no access to vendor-specific keys.

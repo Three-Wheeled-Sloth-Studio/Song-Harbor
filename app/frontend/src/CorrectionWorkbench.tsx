@@ -51,7 +51,7 @@ export function CorrectionWorkbench({draft,files,trimBase,busy,reduction,onChang
           <span>{name}</span><meter min={0} max={12} value={Math.min(12,value)}/><output>{value.toFixed(1)} dB</output>
         </div>)}
       </div>
-</details>
+      </details>}
       <div className="song-correction-selects">
         <label>Strength <select value={draft.auditionBoost} onChange={e=>edit({auditionBoost:Number(e.target.value),proposed:true})}>
           <option value={1}>1×</option><option value={3}>3× preview</option>

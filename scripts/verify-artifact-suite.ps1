@@ -18,6 +18,7 @@ try {
   }
   $tests = @(
     'app/frontend/tests/attack-rise.test.mjs',
+    'app/frontend/tests/reverb-tail.test.mjs',
     'app/frontend/tests/audio-cleanup.test.mjs',
     'app/frontend/tests/artifact-evaluation.test.mjs',
     'app/frontend/tests/planned-artifact-fixtures.test.mjs'
@@ -31,7 +32,15 @@ try {
   if ($json.kind -ne 'audible-artifact-evaluation' -or $json.totals.cases -lt 9) {
     throw 'Artifact benchmark report missing expected data'
   }
+  $reverbReport = Join-Path $reportDir 'reverb-tail-benchmark.json'
+  & node --experimental-strip-types app/frontend/tests/run-reverb-tail-benchmark.mjs | Set-Content -Encoding utf8 $reverbReport
+  if ($LASTEXITCODE -ne 0) { throw "Reverb-tail benchmark failed with code $LASTEXITCODE" }
+  $reverbJson = Get-Content -Raw $reverbReport | ConvertFrom-Json
+  if ($reverbJson.kind -ne 'audible-artifact-evaluation' -or $reverbJson.totals.cases -lt 4) {
+    throw 'Reverb-tail benchmark report missing expected data'
+  }
   Write-Host "Artifact suite complete. Inspect $report"
+  Write-Host "Reverb-tail benchmark complete. Inspect $reverbReport"
   Write-Host 'Synthetic benchmark metrics are research-only and do not establish audible defect detection.'
 } finally {
   Pop-Location

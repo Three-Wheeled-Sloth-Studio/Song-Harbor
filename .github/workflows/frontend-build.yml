@@ -26,18 +26,22 @@ jobs:
       - name: Verify frequency-selective de-esser against synthetic audio
         run: node --test app/frontend/tests/section-deess.test.mjs
       - name: Verify sound cleanup and attack-rise diagnostics
-        run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs app/frontend/tests/attack-rise.test.mjs
+        run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs app/frontend/tests/attack-rise.test.mjs app/frontend/tests/reverb-tail.test.mjs
       - name: Verify artifact evaluation metrics and synthetic controls
         run: node --experimental-strip-types --test app/frontend/tests/artifact-evaluation.test.mjs
       - name: Verify planned-method acoustic fixture contracts
         run: node --test app/frontend/tests/planned-artifact-fixtures.test.mjs
       - name: Generate synthetic artifact benchmark report
-        run: node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json
+        run: |
+          node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json
+          node --experimental-strip-types app/frontend/tests/run-reverb-tail-benchmark.mjs > reverb-tail-benchmark.json
       - name: Retain synthetic benchmark evidence
         uses: actions/upload-artifact@v4
         with:
           name: synthetic-artifact-benchmark
-          path: artifact-benchmark.json
+          path: |
+            artifact-benchmark.json
+            reverb-tail-benchmark.json
           retention-days: 30
       - name: Install Chromium smoke dependencies
         run: |

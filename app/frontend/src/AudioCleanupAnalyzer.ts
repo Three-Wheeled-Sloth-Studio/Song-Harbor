@@ -1,5 +1,6 @@
 import {screenAcousticSignals} from "./SignalAudit.ts";
 import {inspectAttackRise} from "./AttackRiseDiagnostic.ts";
+import {inspectReverbTail} from "./ReverbTailDiagnostic.ts";
 import type {SpectralPreview} from "./RegionSpectrogram.ts";
 import type {AttributionEvidence} from "./StemArtifactAttribution.ts";
 /** Non-destructive, mix-level QC. These are listening candidates, never a diagnosis.
@@ -8,7 +9,7 @@ import type {AttributionEvidence} from "./StemArtifactAttribution.ts";
  * No cloud access or modification of audio buffers.
  */
 export type AudioFindingKind=
-  "headroom"|"transient"|"attack_rise"|"clip_shape"|"sibilance"|"harshness"|
+  "headroom"|"transient"|"attack_rise"|"reverb_tail"|"clip_shape"|"sibilance"|"harshness"|
   "fizz"|"noise"|"phase"|"pumping"|"signal_audit";
 export type AudioFinding={
   kind:AudioFindingKind;
@@ -25,7 +26,7 @@ export type AudioFinding={
   spectrum?:SpectralPreview;
 };
 export const FINDING_GROUPS:Record<AudioFindingKind,string>={
-  headroom:"Levels",clip_shape:"Levels",transient:"Transitions",attack_rise:"Transitions",
+  headroom:"Levels",clip_shape:"Levels",transient:"Transitions",attack_rise:"Transitions",reverb_tail:"Transitions / tails",
   sibilance:"Vocal / high frequency",harshness:"Vocal / high frequency",
   fizz:"Vocal / high frequency",noise:"Quiet passages",
   phase:"Stereo / mono",pumping:"Dynamics",signal_audit:"Signal audit"
@@ -230,6 +231,16 @@ export function inspectRenderedAudio(buffer:AudioLike,outputTrimDb=0,maxFindings
       label:"Gradual isolated attack",
       detail:"An isolated attack rose from 10% to 90% RMS over "+event.riseMs.toFixed(1)+" ms. Soft instrument attacks, fades and production effects can be intentional; this is not an AI-origin test.",
       suggestion:"Listen to the isolated source and original at this timestamp. Only investigate transient restoration if the softened attack is unwanted."},.3);
+  }
+  for(const event of inspectReverbTail(buffer)){
+    const cutoff=event.kind==="cutoff";
+    offer({kind:"reverb_tail",timeSeconds:event.timeSeconds,
+      durationSeconds:event.durationSeconds,severity:"review",
+      label:cutoff?"Abrupt tail-like level end":"Tail-like decay becomes flat",
+      detail:cutoff
+        ?"A decaying envelope ended abruptly and remained near-silent. A render cutoff and an intentional gate can produce identical audio; intent requires context."
+        :"A decaying envelope settled into a sustained flat level. Freeze effects, held instruments, noise and intentional sound design can look similar.",
+      suggestion:"Compare the source, effect return and exported mix at this timestamp. No repair is proposed without listening and stage evidence."},.5);
   }
   // This is anomaly screening, NOT watermark detection or fingerprint matching.
   // It never modifies PCM samples and has no access to vendor-specific keys.

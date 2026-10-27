@@ -97,3 +97,11 @@ test("hard attack does not create an attack-rise finding",()=>{
   const signal=audio(2,t=>t<.5?0:.28*Math.min(1,(t-.5)/.004)*Math.sin(2*Math.PI*440*t));
   assert.equal(kinds(inspectRenderedAudio(signal)).has("attack_rise"),false);
 });
+test("tail-envelope evidence flows through the same review pipeline",()=>{
+  const signal=audio(3,(t,c)=>t<.5||t>=1.15?0:
+    .28*Math.exp(-3*(t-.5))*Math.sin(2*Math.PI*(c?443:440)*t));
+  const found=inspectRenderedAudio(signal).filter(x=>x.kind==="reverb_tail");
+  assert.ok(found.some(x=>Math.abs(x.timeSeconds-1.15)<=.02));
+  assert.match(found[0].detail,/intentional gate can produce identical audio/i);
+  assert.equal(FINDING_GROUPS.reverb_tail,"Transitions / tails");
+});

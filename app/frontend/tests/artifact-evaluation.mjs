@@ -11,21 +11,36 @@
  */
 export function matchEvents(observations,truth,toleranceSeconds=.05){
   if(!Number.isFinite(toleranceSeconds)||toleranceSeconds<0)throw new RangeError("Invalid time tolerance");
-  const pairs=[];
-  observations.forEach((o,i)=>{
+  // Maximum-cardinality matching: nearest-first greedy alone can lose a valid
+  // match when one observation can explain either of two nearby truth events.
+  const candidates=observations.map((o,i)=>{
     if(!Number.isFinite(o.timeSeconds))throw new TypeError("Invalid observation timestamp");
-    truth.forEach((t,j)=>{
+    return truth.map((t,j)=>{
       if(!Number.isFinite(t.timeSeconds))throw new TypeError("Invalid truth timestamp");
-      const error=Math.abs(o.timeSeconds-t.timeSeconds);
-      if(error<=toleranceSeconds)pairs.push({i,j,error});
-    });
+      return {i,j,error:Math.abs(o.timeSeconds-t.timeSeconds)};
+    }).filter(pair=>pair.error<=toleranceSeconds)
+      .sort((a,b)=>a.error-b.error||a.j-b.j);
   });
-  pairs.sort((a,b)=>a.error-b.error||a.i-b.i||a.j-b.j);
-  const usedObs=new Set(),usedTruth=new Set(),errors=[];
-  for(const pair of pairs){
-    if(usedObs.has(pair.i)||usedTruth.has(pair.j))continue;
-    usedObs.add(pair.i);usedTruth.add(pair.j);errors.push(pair.error);
+  const matchForTruth=new Array(truth.length).fill(-1);
+  function assign(observation,visited){
+    for(const pair of candidates[observation]){
+      if(visited.has(pair.j))continue;
+      visited.add(pair.j);
+      const prior=matchForTruth[pair.j];
+      if(prior===-1||assign(prior,visited)){
+        matchForTruth[pair.j]=observation;
+        return true;
+      }
+    }
+    return false;
   }
+  const order=candidates.map((_,i)=>i)
+    .sort((a,b)=>candidates[a].length-candidates[b].length||a-b);
+  for(const i of order)assign(i,new Set());
+  const errors=[];
+  matchForTruth.forEach((i,j)=>{
+    if(i>=0)errors.push(Math.abs(observations[i].timeSeconds-truth[j].timeSeconds));
+  });
   const tp=errors.length,fp=observations.length-tp,fn=truth.length-tp;
   return {tp,fp,fn,localizationErrorsSeconds:errors};
 }

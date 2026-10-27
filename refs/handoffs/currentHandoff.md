@@ -1,5 +1,6 @@
 # CURRENT HANDOFF — 2026-10-26 — Return to actual AI-artifact / fingerprint discovery
 
+> **2026-10-27 testing-agent preparation:** An executable Windows test command, synthetic planned-method fixtures, optimized event matching and a full agent brief are now available. Start with `refs/handoffs/artifact-validation-agent-2026-10-27.md` and `pwsh -File scripts/verify-artifact-suite.ps1`. This is harness preparation, **not** completed Windows/real-music or fingerprint-model validation. Continue honoring the October 26 acoustic/fingerprint distinction.\n\n
 ## Read this first (next thread)
 **User decision:** After several Song Harbor Sound Cleanup implementation slices, the user asked whether those were actually the specialized techniques from the three pinned GitHub discovery projects. The answer was **mostly no**. We built valuable conventional DSP/QA infrastructure but drifted away from the original AI-generated audio artifact and fingerprint research. **Next thread must correct that direction rather than continue building generic mastering controls.**
 

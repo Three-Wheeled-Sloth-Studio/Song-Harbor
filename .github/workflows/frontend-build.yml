@@ -29,6 +29,8 @@ jobs:
         run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs app/frontend/tests/attack-rise.test.mjs
       - name: Verify artifact evaluation metrics and synthetic controls
         run: node --experimental-strip-types --test app/frontend/tests/artifact-evaluation.test.mjs
+      - name: Verify planned-method acoustic fixture contracts
+        run: node --test app/frontend/tests/planned-artifact-fixtures.test.mjs
       - name: Generate synthetic artifact benchmark report
         run: node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json
       - name: Retain synthetic benchmark evidence

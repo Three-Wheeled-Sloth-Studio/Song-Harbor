@@ -1,3 +1,5 @@
+import {pathToFileURL} from "node:url";
+import {resolve} from "node:path";
 import {inspectAttackRise} from "../src/AttackRiseDiagnostic.ts";
 import {attackRiseFixtures} from "./artifact-fixtures.mjs";
 import {summarizeArtifactCases} from "./artifact-evaluation.mjs";
@@ -14,6 +16,6 @@ export function runAttackRiseBenchmark(){
     createdBy:"Song Harbor offline fixture harness",
     ...summarizeArtifactCases(cases,.05)};
 }
-if(process.argv[1]&&import.meta.url===new URL("file://"+process.argv[1].replaceAll("\\","/")).href){
+if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   process.stdout.write(JSON.stringify(runAttackRiseBenchmark(),null,2)+"\n");
 }

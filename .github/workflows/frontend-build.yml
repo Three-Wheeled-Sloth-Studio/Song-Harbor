@@ -25,8 +25,8 @@ jobs:
         run: node --test app/frontend/tests/auto-pan.test.mjs
       - name: Verify frequency-selective de-esser against synthetic audio
         run: node --test app/frontend/tests/section-deess.test.mjs
-      - name: Verify sound cleanup DSP against synthetic audio
-        run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs
+      - name: Verify sound cleanup and attack-rise diagnostics
+        run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs app/frontend/tests/attack-rise.test.mjs
       - name: Install Chromium smoke dependencies
         run: |
           npm install --prefix app/frontend --no-save playwright

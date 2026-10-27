@@ -55,3 +55,28 @@ Stem scans exposed the confound rate: bass and drums each reached the six-observ
 | Local continuity preview | 1 | 1 | 0 | 400 ms of preserved raw crop blended at -24 dB; detector clears, but a small amount of raw bleed is reintroduced |
 
 The preview is not in the project manifest and is not accepted. It preserves -17.9 LUFS and -5.3 dBTP, changes 0.400 seconds, and adds energy at -33.2 dB relative to the cleaned file. Its SHA-256 is `0C47BFB00243729CEF0716D68118666BC298EEFA0A3FC5D56B46C44EB29AB2B3`. A blind, level-matched user audition under the full mix is required before any import or replacement.
+
+### Non-cello stem cleanup assessment
+
+The six original Demucs stems were checked separately for immediate cleanup need. No stem had flattened/clipped samples, samples at or above 0.998, a production `phase` finding, or an abrupt-transition finding at the analyzer's threshold.
+
+| Stem | Integrated loudness | True peak | Global stereo correlation | Follow-up decision |
+| --- | ---: | ---: | ---: | --- |
+| Bass | -18.4 LUFS | -5.7 dBTP | 0.912 | No immediate cleanup |
+| Drums | -17.4 LUFS | -3.0 dBTP | 0.970 | No immediate cleanup |
+| Guitar | -18.4 LUFS | -6.1 dBTP | 0.935 | No immediate cleanup |
+| Other | -23.1 LUFS | -6.0 dBTP | 0.731 | No immediate cleanup; widest stem, but globally positive correlation |
+| Piano | -54.3 LUFS | -24.8 dBTP | 0.887 | Review whether the very quiet stem is useful; do not normalize automatically |
+| Vocals | -17.6 LUFS | -4.7 dBTP | 0.791 | Only stem needing targeted near-term audition |
+
+The six-stem sum measured -14.1 LUFS, matching the source integrated loudness, with true peak -3.7 dBTP versus source -4.0 dBTP. Source-minus-sum residual measured -33.8 LUFS, 19.7 LU below the source. This indicates useful but nontransparent reconstruction; it is not proof that individual separation artifacts are inaudible.
+
+The strongest vocal candidates occur in both the vocal stem and source full mix: presence-band/harshness at 18.859, 28.928 and 147.200 seconds, plus sibilance at 260.352 seconds. Other vocal-only detections are masked in the supplied full mix and do not justify immediate treatment from measurement alone.
+
+Project-state follow-up:
+
+1. Render the current processed mix before changing raw stems.
+2. Audition the Intro at 18.859 and 28.928 seconds.
+3. At 147.200 seconds, compare the current Pre-Chorus 2 vocal boost of +1.5 dB at 3.2 kHz against neutral or a conservative reduction; do not assume the raw-source harshness remains objectionable after rendering.
+4. At 260.352 seconds, verify the existing 6.5 kHz de-esser (maximum 4 dB reduction) rather than stacking another de-esser.
+5. Leave Bass, Drums, Guitar and Other unchanged unless rendered-mix listening identifies a specific fault. Treat Piano as an arrangement/usefulness choice, not a cleanup target.

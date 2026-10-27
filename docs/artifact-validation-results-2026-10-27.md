@@ -49,3 +49,11 @@ For the starting SHA, GitHub exposed no check runs, so Frontend build and Single
 The Frontend build emitted informational runner/action migration annotations; they did not fail a step.
 
 The reverb-tail method was integrated into the existing Sound cleanup & forensics finding pipeline only. It creates review evidence and no automatic or suggested audio processing. Fingerprint/provenance research remains separate and no external model weights or datasets were downloaded.
+
+## Rights-cleared real-audio continuation
+
+The user subsequently supplied local job `586a03b40c9c` as rights-cleared. `scripts/run-real-audio-diagnostics.mjs` now provides a read-only FFmpeg adapter to run the production analyzer on supplied files. It does not render the project, edit PCM or accept repairs.
+
+The 341.360-second source, six equal-duration Demucs stems and the imported 10.683-second cello were scanned. The source produced a reverb-stall candidate at 30.570 seconds and multiple attack/dynamics/spectral review candidates. Bass and drums each hit the six-result reverb-tail cap on ordinary stem decays, showing that unannotated real music has substantial confounds and that raw finding counts cannot be treated as defect prevalence.
+
+The clearest stage-relative result was the imported cello. Separation cleanup reduced attack-rise observations from 4 to 1 and pumping observations from 2 to 1, but introduced a cutoff-like observation at local 2.080 seconds (project time 73.799 seconds). The boundary did not have a click-sized sample jump. A separate audition-only preview blended 400 ms of the preserved raw crop at -24 dB; it removed the cutoff observation without changing integrated loudness or true peak, but necessarily reintroduced a small amount of raw material. It was not imported or accepted. Full evidence and the remaining listener requirement are in `docs/artifact-real-corpus-manifest-2026-10-27.md`.

@@ -213,7 +213,7 @@ export class SharedClockAudition {
       const repair=makeDeclickCandidate(out,sourceTime,recipe.half_window_ms,false);
       for(let channel=0;channel<out.numberOfChannels;channel++){
         const row=repair.replacements[channel];
-        out.copyToChannel(row.values,channel,row.startFrame);
+        out.getChannelData(channel).set(row.values,row.startFrame);
       }
     }
     return out;

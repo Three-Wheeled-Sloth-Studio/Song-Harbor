@@ -84,3 +84,16 @@ test("signal audit is observational and leaves all input audio unchanged",()=>{
   inspectRenderedAudio(signal);
   assert.deepEqual(signal.getChannelData(0),before);
 });
+
+test("attack-rise evidence flows through the existing forensic finding pipeline",()=>{
+  const signal=audio(2,t=>t<.5?0:.28*Math.min(1,(t-.5)/.085)*Math.sin(2*Math.PI*440*t));
+  const found=inspectRenderedAudio(signal).filter(x=>x.kind==="attack_rise");
+  assert.ok(found.some(x=>Math.abs(x.timeSeconds-.51)<.04));
+  assert.equal(found[0].severity,"review");
+  assert.match(found[0].detail,/not an AI-origin test/i);
+  assert.equal(FINDING_GROUPS.attack_rise,"Transitions");
+});
+test("hard attack does not create an attack-rise finding",()=>{
+  const signal=audio(2,t=>t<.5?0:.28*Math.min(1,(t-.5)/.004)*Math.sin(2*Math.PI*440*t));
+  assert.equal(kinds(inspectRenderedAudio(signal)).has("attack_rise"),false);
+});

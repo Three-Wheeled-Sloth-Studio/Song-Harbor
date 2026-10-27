@@ -27,6 +27,16 @@ jobs:
         run: node --test app/frontend/tests/section-deess.test.mjs
       - name: Verify sound cleanup and attack-rise diagnostics
         run: node --experimental-strip-types --test app/frontend/tests/audio-cleanup.test.mjs app/frontend/tests/attack-rise.test.mjs
+      - name: Verify artifact evaluation metrics and synthetic controls
+        run: node --experimental-strip-types --test app/frontend/tests/artifact-evaluation.test.mjs
+      - name: Generate synthetic artifact benchmark report
+        run: node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json
+      - name: Retain synthetic benchmark evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-artifact-benchmark
+          path: artifact-benchmark.json
+          retention-days: 30
       - name: Install Chromium smoke dependencies
         run: |
           npm install --prefix app/frontend --no-save playwright

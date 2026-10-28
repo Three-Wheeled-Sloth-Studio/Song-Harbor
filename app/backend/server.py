@@ -2330,8 +2330,7 @@ def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
         if body.task_type == "lego":
             import instrument_generation
             if body.instrument == "backing_vocals":
-                if not body.vocal_phrase.strip():
-                    raise ValueError("Experimental humming requires a short vocal phrase")
+                raise ValueError("Backing-vocal Lego is temporarily disabled after a system freeze; resource preflight and emergency-stop recovery are required")
             else:
                 instrument_generation.validate_intent("add", body.instrument, body.prompt, None, [])
             if body.model != "acestep-v15-base":

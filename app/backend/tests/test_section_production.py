@@ -87,14 +87,14 @@ class ProductionNotationTests(unittest.TestCase):
                   "{Vocals.pan:left.60@2s:smooth Vocals.width:140@2s:smooth Vocals.reverb:20@2s:smooth}\n"
                   "[Verse 0:10-0:20]\n"
                   "[Chorus 0:20-0:30]\n"
-                  "{Vocals.width:150@2s:smooth Drums.width:120@2s:smooth}\n"
+                  "{Vocals.width:190@2s:smooth Drums.width:120@2s:smooth}\n"
                   "[Outro 0:30-0:40]\n"
                   "{all.reset@2s:smooth Master.fade:6s:smooth Master.tail:3s}\n")
         project = {"sections": [], "files": FILES}
         result = section_import.apply(project, script, "replace", 40)
         vocal_width = [x["width"] for x in result["section_width_automation"]
                        if "(Vocals)" in x["source_key"]]
-        self.assertEqual(vocal_width, [140, 150, 100])
+        self.assertEqual(vocal_width, [140, 190, 100])
         self.assertEqual(len(result["section_width_automation"]), 9)
         self.assertEqual(result["section_ending"]["tail_seconds"], 3)
         self.assertEqual(len([x for x in result["section_pan_automation"]
@@ -105,12 +105,13 @@ class ProductionNotationTests(unittest.TestCase):
         self.assertEqual(roundtrip["section_width_automation"], result["section_width_automation"])
 
     def test_width_rejects_invalid_targets(self):
-        for entry in ("{Vocals.width:151}", "{Vocals.width:-5}", "{Drums.width:wide}",
-                      "{Vocals.width:120 Vocals.width:130}", "{Bass.width:200@2s:smooth}"):
+        for entry in ("{Vocals.width:201}", "{Vocals.width:-5}", "{Drums.width:wide}",
+                      "{Vocals.width:120 Vocals.width:130}", "{Bass.width:250@2s:smooth}"):
             with self.subTest(entry=entry), self.assertRaises(ValueError):
                 section_production.parse_block(entry)
         self.assertEqual(section_production.parse_block("{Vocals.width:0}")[0]["width"], 0)
         self.assertEqual(section_production.parse_block("{Vocals.width:100}")[0]["width"], 100)
+        self.assertEqual(section_production.parse_block("{Vocals.width:200}")[0]["width"], 200)
 
     def test_space_send_inherits_and_resets(self):
         script = ("[Intro 0:00-0:10]\n"

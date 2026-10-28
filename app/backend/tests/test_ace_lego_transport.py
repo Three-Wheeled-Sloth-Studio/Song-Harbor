@@ -22,10 +22,30 @@ class LegoTransportTests(unittest.TestCase):
                 "Violin",1,task_type="lego",track_name="strings")
 
     def test_lego_rejects_vocals_and_unknown_family(self):
-        for name in ("vocals","backing_vocals","violin","cello",""):
+        for name in ("vocals","violin","cello",""):
             with self.subTest(name=name),self.assertRaises(ValueError):
                 ace_transport.submit_instrument(self.client,self.context,"acestep-v15-base",
                     "Instrument",1,task_type="lego",track_name=name)
+
+    def test_backing_hum_is_explicit_and_keeps_vocal_phrase(self):
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,*args):
+                return b'{"code":200,"error":null,"data":{"task_id":"aabbccddeeff00112233445566778899"}}'
+        def capture(request,timeout):
+            body=request.data
+            self.assertIn(b'name="track_name"\r\n\r\nbacking_vocals',body)
+            self.assertIn(b'name="lyrics"\r\n\r\nMmm, mmm, mmm',body)
+            self.assertIn(b"isolated nonverbal backing humming",body)
+            return Response()
+        with patch("ace_transport.urllib.request.urlopen",side_effect=capture):
+            ace_transport.submit_instrument(self.client,self.context,"acestep-v15-base",
+                "Soft female humming, no words",150719,task_type="lego",
+                track_name="backing_vocals",lyrics="Mmm, mmm, mmm")
+        with self.assertRaises(ValueError):
+            ace_transport.submit_instrument(self.client,self.context,"acestep-v15-base",
+                "Soft hum",1,task_type="lego",track_name="backing_vocals",lyrics="")
 
     def test_multipart_has_native_task_family_and_base_steps(self):
         class Response:

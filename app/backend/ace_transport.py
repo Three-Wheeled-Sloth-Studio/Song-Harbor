@@ -32,7 +32,7 @@ def _headers(client: AceClient) -> dict[str, str]:
 def submit_instrument(client: AceClient, context_file: Path, model: str, prompt: str,
                  seed: int, bpm: int | None = None, key: str = "",
                  meter: str = "4/4", duration: float | None = None, *, task_type: str = "cover",
-                 track_name: str = "") -> str:
+                 track_name: str = "", lyrics: str = "[Instrumental]") -> str:
     """Multipart ctx_audio submission: ACE owns its temporary upload copy."""
     if not context_file.is_file() or not 44 <= context_file.stat().st_size <= MAX_CONTEXT_BYTES:
         raise ValueError("Context must be a valid-size WAV file")
@@ -45,12 +45,17 @@ def submit_instrument(client: AceClient, context_file: Path, model: str, prompt:
     if task_type not in ("cover", "lego"):
         raise ValueError("Unsupported ACE instrumental task type")
     if task_type == "lego":
-        from instrument_generation import normalize_instrument
+        from instrument_generation import normalize_lego_track
         if model != "acestep-v15-base":
             raise ValueError("Native Lego requires the loaded ACE Base model")
-        track_name = normalize_instrument(track_name)
+        track_name = normalize_lego_track(track_name)
+        if track_name == "backing_vocals":
+            if not isinstance(lyrics, str) or not lyrics.strip() or len(lyrics) > 200:
+                raise ValueError("Backing-vocal Lego requires a short humming phrase")
+        elif lyrics != "[Instrumental]":
+            raise ValueError("Instrument Lego must retain [Instrumental] lyrics")
     fields: dict[str, Any] = {
-        "task_type": task_type, "model": model, "prompt": prompt, "lyrics": "[Instrumental]",
+        "task_type": task_type, "model": model, "prompt": prompt, "lyrics": lyrics,
         "thinking": False, "use_random_seed": False, "seed": seed,
         "inference_steps": 50 if task_type == "lego" else 8, "guidance_scale": 7.0, "batch_size": 1,
         "audio_format": "wav", "use_tiled_decode": True,
@@ -58,7 +63,9 @@ def submit_instrument(client: AceClient, context_file: Path, model: str, prompt:
     }
     if task_type == "lego":
         fields["track_name"] = track_name
-        fields["instruction"] = "Generate the " + track_name.upper() + " track based on the audio context:"
+        fields["instruction"] = ("Generate an isolated nonverbal backing humming vocal track; no lead vocal, drums, bass or instruments:"
+                                 if track_name == "backing_vocals" else
+                                 "Generate the " + track_name.upper() + " track based on the audio context:")
         # Base Lego expects the target-instrument direction in prompt/caption.
         # No cover/noise or cover-mix parameters may leak into this request.
         fields["repainting_start"] = 0.0

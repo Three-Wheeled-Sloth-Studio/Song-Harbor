@@ -29,6 +29,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
   const [prompt,setPrompt]=useState("");
   const [mode,setMode]=useState<"lego"|"cover">("lego");
   const [instrument,setInstrument]=useState("strings");
+  const [vocalPhrase,setVocalPhrase]=useState("Mmm, mmm, mmm");
   const [alias,setAlias]=useState("Accompaniment");
   const [bpm,setBpm]=useState("");
   const [key,setKey]=useState("");
@@ -110,7 +111,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       engine?.clearCandidatePreview();
       setBlend(35);
       const body={from_section_id:fromId,to_section_id:toId,context_before:before,context_after:after,
-                  prompt,model:currentModel,task_type:mode,operation:"add",instrument:mode==="lego"?instrument:"",seed:Number(seed),
+                  prompt,model:currentModel,task_type:mode,operation:"add",instrument:mode==="lego"?instrument:"",vocal_phrase:mode==="lego"&&instrument==="backing_vocals"?vocalPhrase:"",seed:Number(seed),
                   bpm:bpm.trim()?Number(bpm):null,key};
       const result=await jsonResponse<Candidate>(base,{method:"POST",headers:{"Content-Type":"application/json"},
                                                        body:JSON.stringify(body)});
@@ -189,14 +190,18 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       </select>
       <label htmlFor="ace-operation">Operation</label>
       <select id="ace-operation" value="add" disabled aria-label="Operation">
-        <option value="add">Add instrument</option>
+        <option value="add">Add layer</option>
       </select>
     </div>
     {mode==="lego"&&<div className="song-ace-family-row">
       <label htmlFor="ace-instrument-family">Instr Family</label>
       <select id="ace-instrument-family" value={instrument} onChange={e=>setInstrument(e.target.value)}>
-        {["strings","bass","guitar","drums","percussion","keyboard","synth","woodwinds","brass","fx"].map(name=><option key={name} value={name}>{name.charAt(0).toUpperCase()+name.slice(1)}</option>)}
+        {["strings","bass","guitar","drums","percussion","keyboard","synth","woodwinds","brass","fx","backing_vocals"].map(name=><option key={name} value={name}>{name.charAt(0).toUpperCase()+name.slice(1)}</option>)}
       </select>
+    </div>}
+    {mode==="lego"&&instrument==="backing_vocals"&&<div style={{display:"grid",gap:"0.25rem"}}>
+      <small>Experimental backing hum. Requires ACE Base and listening/isolation QA. No singer identity guarantee.</small>
+      <label>Nonverbal vocal phrase <input value={vocalPhrase} maxLength={200} onChange={e=>setVocalPhrase(e.target.value)}/></label>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",columnGap:"0.65rem",alignItems:"start",width:"100%",minWidth:0}}>
       <div style={{display:"flex",flexDirection:"column",gap:"0.25rem",minWidth:0}}>
@@ -225,7 +230,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
         value={prompt} placeholder="Instrument, musical role, mood, and constraints"
         onChange={e=>setPrompt(e.target.value)}/>
     </div>
-    <button type="button" disabled={!ready||!validRange||!prompt.trim()||busy} onClick={()=>void generate()}>{busy?"Working...":mode==="lego"?"Generate Lego instrument":"Generate experimental Cover"}</button>
+    <button type="button" disabled={!ready||!validRange||!prompt.trim()||(mode==="lego"&&instrument==="backing_vocals"&&!vocalPhrase.trim())||busy} onClick={()=>void generate()}>{busy?"Working...":mode==="lego"?(instrument==="backing_vocals"?"Generate experimental hum":"Generate Lego instrument"):"Generate experimental Cover"}</button>
     {candidate&&<section style={{display:"grid",gap:"0.45rem"}}>
       <strong>Candidate: {candidate.state}</strong>
       {candidate.error&&<small role="alert">{candidate.error}</small>}

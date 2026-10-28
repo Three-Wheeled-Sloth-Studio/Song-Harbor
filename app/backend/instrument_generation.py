@@ -12,6 +12,14 @@ INSTRUMENTS = frozenset(("woodwinds", "brass", "fx", "synth", "strings",
                          "percussion", "keyboard", "guitar", "bass", "drums"))
 EXCLUDED_VOCAL_TRACKS = frozenset(("vocals", "backing_vocals"))
 OPERATIONS = frozenset(("add", "replace"))
+EXPERIMENTAL_VOCAL_LEGO = frozenset(("backing_vocals",))
+
+
+def normalize_lego_track(value: str) -> str:
+    """Explicitly permit an experimental isolated backing-vocal Lego target."""
+    if isinstance(value, str) and value.strip().lower() in EXPERIMENTAL_VOCAL_LEGO:
+        return value.strip().lower()
+    return normalize_instrument(value)
 
 
 @dataclass(frozen=True)

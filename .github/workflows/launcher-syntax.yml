@@ -21,7 +21,7 @@ jobs:
       - name: Validate PowerShell syntax without executing installations
         shell: pwsh
         run: |
-          $targets = @('scripts/start-song-harbor.ps1','scripts/relaunch-song-harbor.ps1','scripts/update-checkout.ps1','scripts/prepare-local-ports.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
+          $targets = @('scripts/start-song-harbor.ps1','scripts/launch-song-harbor-dev.ps1','scripts/relaunch-song-harbor.ps1','scripts/update-checkout.ps1','scripts/prepare-local-ports.ps1','scripts/bootstrap-windows.ps1','app/run.ps1')
           foreach ($path in $targets) {
             $tokens = $null
             $errors = $null
@@ -76,3 +76,40 @@ jobs:
             throw 'Conflicting update clobbered local work'
           }
           Write-Host 'Dirty safe-update and conflict-protection tests passed.'
+
+      - name: Validate isolated dev branch fast-forward
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = Join-Path $env:RUNNER_TEMP 'songharbor-dev-update-test'
+          New-Item -ItemType Directory -Force $base | Out-Null
+          $bare = Join-Path $base 'origin.git'
+          $seed = Join-Path $base 'seed'
+          $dev = Join-Path $base 'dev'
+          git init --bare $bare | Out-Null
+          git -C $bare symbolic-ref HEAD refs/heads/main
+          git init -b main $seed | Out-Null
+          git -C $seed config user.name 'Song Harbor CI'
+          git -C $seed config user.email 'ci@example.org'
+          'main base' | Set-Content (Join-Path $seed 'version.txt')
+          git -C $seed add .
+          git -C $seed commit -m initial | Out-Null
+          git -C $seed branch dev
+          git -C $seed remote add origin $bare
+          git -C $seed push origin main dev | Out-Null
+          git clone --branch dev --single-branch $bare $dev | Out-Null
+          git -C $seed switch dev | Out-Null
+          'dev update' | Set-Content (Join-Path $seed 'version.txt')
+          git -C $seed commit -am 'dev only' | Out-Null
+          git -C $seed push origin dev | Out-Null
+          & ./scripts/update-checkout.ps1 -Repository $dev
+          if ((Get-Content (Join-Path $dev 'version.txt') -Raw).Trim() -ne 'dev update') {
+            throw 'Dev checkout did not pull origin/dev'
+          }
+          if ((git -C $dev branch --show-current).Trim() -ne 'dev') {
+            throw 'Dev updater changed branches'
+          }
+          if ((git -C $seed rev-parse main).Trim() -eq (git -C $dev rev-parse HEAD).Trim()) {
+            throw 'Dev updater unexpectedly resolved main'
+          }
+          Write-Host 'Dev branch updater test passed.'

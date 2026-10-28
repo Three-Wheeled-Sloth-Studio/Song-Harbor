@@ -95,13 +95,13 @@ def render_srt(project: dict[str, Any]) -> dict[str, Any]:
             "warnings":sorted(set(warnings)),
             "timing":"Estimated evenly by lyric line inside each saved section; review against vocal playback."}
 
-_SRT_TIME = re.compile(r"(?m)^(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})\\s+-->\\s+(\\d{2}):(\\d{2}):(\\d{2}),(\\d{3})$")
+_SRT_TIME = re.compile(r"(?m)^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2}),(\d{3})$")
 def validate_srt(content: str, duration: float) -> None:
     """Reject malformed, overlapping or out-of-range manual lyric cues."""
     if not isinstance(content, str) or not content.strip() or len(content) > 120_000:
         raise ValueError("SRT must have 1-120000 characters")
     previous_end = 0
-    blocks = re.split(r"\\n\\s*\\n", content.replace("\\r", "").strip())
+    blocks = re.split(r"\n\s*\n", content.replace("\r", "").strip())
     if len(blocks) > 500:
         raise ValueError("Maximum 500 caption blocks")
     for i, block in enumerate(blocks, 1):

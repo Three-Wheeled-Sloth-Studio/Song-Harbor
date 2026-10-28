@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from "react";
+import {useRef,useState,type PointerEvent} from "react";
 
 export type CaptionCue={start:number;end:number;text:string};
 const TIMING=/^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2}),(\d{3})$/;
@@ -32,7 +32,7 @@ export function SrtTimelineEditor({value,onChange,position,duration,playing,onSe
  const [error,setError]=useState("");
  const drag=useRef<{index:number;edge:"start"|"end";rect:DOMRect;rangeStart:number;rangeEnd:number}|null>(null);
  let cues:CaptionCue[]=[];
- try{cues=parseSrt(value);if(error&&error.startsWith("Invalid SRT"))setTimeout(()=>setError(""),0);}
+ try{cues=parseSrt(value);}
  catch(e){return <div role="alert">Cannot show timing editor: {String(e)}. Repair SRT text below.</div>;}
  const full=Math.max(duration,...cues.map(c=>c.end),1);
  const windowSize=Math.min(full,Math.max(8,full/zoom));
@@ -47,14 +47,14 @@ export function SrtTimelineEditor({value,onChange,position,duration,playing,onSe
    else cue.end=Math.min(index+1<next.length?next[index+1].start:full,Math.max(value,cue.start+MIN));
    commit(next);
  }
- function begin(event:React.PointerEvent<HTMLButtonElement>,index:number,edge:"start"|"end"){
+ function begin(event:PointerEvent<HTMLButtonElement>,index:number,edge:"start"|"end"){
    event.preventDefault();event.stopPropagation();
    const rect=event.currentTarget.parentElement?.parentElement?.getBoundingClientRect();
    if(!rect)return;
    drag.current={index,edge,rect,rangeStart:left,rangeEnd:right};
    event.currentTarget.setPointerCapture(event.pointerId);
  }
- function move(event:React.PointerEvent<HTMLButtonElement>){
+ function move(event:PointerEvent<HTMLButtonElement>){
    const d=drag.current;if(!d)return;
    const next=d.rangeStart+(event.clientX-d.rect.left)/d.rect.width*(d.rangeEnd-d.rangeStart);
    adjust(d.index,d.edge,Math.round(next*1000)/1000);

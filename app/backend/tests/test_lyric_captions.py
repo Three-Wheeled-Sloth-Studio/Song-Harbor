@@ -2,7 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from lyric_captions import render_srt
+from lyric_captions import render_srt, validate_srt
 
 class LyricCaptionTests(unittest.TestCase):
     def test_even_spacing_section_boundary_and_chunking(self):
@@ -46,5 +46,24 @@ class LyricCaptionTests(unittest.TestCase):
         self.assertEqual(first,render_srt(project))
         self.assertEqual(before,repr(project))
         self.assertIn("00:01:00,250",first["content"])
+    def test_persisted_manual_alignment_is_exported_unchanged(self):
+        saved = "1\\n00:00:01,250 --> 00:00:02,800\\nHello\\nThere\\n"
+        project = {"source_duration_seconds": 10, "lyric_srt_override": saved,
+                   "sections": [], "section_lyrics": {}}
+        validate_srt(saved, 10)
+        result = render_srt(project)
+        self.assertEqual(result["content"], saved)
+        self.assertEqual(result["cue_count"], 1)
+
+    def test_invalid_manual_timing_rejected(self):
+        first = "1\\n00:00:01,000 --> 00:00:03,000\\nHello\\n"
+        for extra in (
+            "2\\n00:00:02,500 --> 00:00:04,000\\nOverlap",
+            "2\\n00:00:04,000 --> 00:00:11,000\\nToo late",
+            "2\\n00:00:04,000 --> 00:00:05,000\\nOne\\nTwo\\nThree\\nFour",
+        ):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                validate_srt(first + "\\n" + extra, 10)
+
 if __name__=="__main__":
     unittest.main()

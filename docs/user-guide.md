@@ -71,7 +71,7 @@ Use recognized stem aliases **Vocals**, **Drums**, **Bass**, **Guitar**, **Piano
 | Control | Example | Notes |
 | --- | --- | --- |
 | Pan | `Vocals.pan:left.40@2s:smooth` | Left/right 0-100% or center |
-| Width | `Other.width:135@2s:smooth` | 0-150%, 100% nominal original |
+| Width | `Other.width:135@2s:smooth` | 0-200%, 100% nominal original |
 | Space | `Guitar.space:20@2s:smooth` | 0-40 early reflections |
 | Reverb | `Vocals.reverb:30@2s:smooth` | 0-100 wet send |
 | EQ band 1-3 | `Vocals.eq1:320,1.2,-2@2s:smooth` | Frequency 30-16000 Hz, Q 0.3-12, gain -12 to +12 dB |

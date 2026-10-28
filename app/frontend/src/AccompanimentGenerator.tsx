@@ -10,8 +10,14 @@ type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
   onPause:()=>void;onInserted:(result:ImportResult)=>void;saveProject:()=>Promise<boolean>;
   onError:(message:string)=>void};
 
+function timelineTime(seconds:number):string{
+  const millis=Math.max(0,Math.round(seconds*1000));
+  const minutes=Math.floor(millis/60000);
+  const remaining=Math.floor(millis%60000/1000);
+  return minutes+":"+String(remaining).padStart(2,"0")+"."+String(millis%1000).padStart(3,"0");
+}
 function sectionLabel(section:SongSection):string{
-  return section.kind+(section.number?" "+section.number:"")+" ("+section.start_seconds.toFixed(1)+"s)";
+  return section.kind+(section.number?" "+section.number:"")+" ("+timelineTime(section.start_seconds)+")";
 }
 async function jsonResponse<T>(url:string,init?:RequestInit):Promise<T>{
   const response=await fetch(url,init);
@@ -102,7 +108,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
   const currentModel=mode==="lego"?"acestep-v15-base":"acestep-v15-turbo";
   const modelReady=!!runtime?.ready&&runtime.loaded_model===currentModel;
   const legoSupported=runtime?.models?.some(m=>m.name==="acestep-v15-base"&&m.reported_tasks?.includes("lego"));
-  const ready=modelReady&&(mode==="cover"||!!legoSupported);
+  const backingHumBlocked=mode==="lego"&&instrument==="backing_vocals";
+  const ready=modelReady&&(mode==="cover"||!!legoSupported)&&!backingHumBlocked;
   const audioUrl=candidate?base+"/"+candidate.candidate_id+"/audio":null;
   async function generate(){
     if(!validRange||!ready)return;
@@ -176,7 +183,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
       setBlend(35);
-      setNotice("Candidate accepted and inserted at "+candidate.target_start_seconds.toFixed(3)+"s.");
+      setNotice("Candidate accepted and inserted at "+timelineTime(candidate.target_start_seconds)+".");
       onInserted(result);
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
     finally{setBusy(false);}
@@ -200,7 +207,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       </select>
     </div>}
     {mode==="lego"&&instrument==="backing_vocals"&&<div style={{display:"grid",gap:"0.25rem"}}>
-      <small>Experimental backing hum. Requires ACE Base and listening/isolation QA. No singer identity guarantee.</small>
+      <small role="alert">Backing-vocal generation temporarily disabled after a reported system freeze. Resource preflight and emergency-stop recovery are required before another GPU test.</small>
       <label>Nonverbal vocal phrase <input value={vocalPhrase} maxLength={200} onChange={e=>setVocalPhrase(e.target.value)}/></label>
     </div>}
     <div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) minmax(0,1fr)",columnGap:"0.65rem",alignItems:"start",width:"100%",minWidth:0}}>

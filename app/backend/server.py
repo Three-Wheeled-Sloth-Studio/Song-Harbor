@@ -1305,7 +1305,7 @@ def save_song_ending(ident: str, request: Request, body: EndingRequest) -> dict[
 class SectionWidthTarget(BaseModel):
     section_id: str
     source_key: str = Field(min_length=1, max_length=260)
-    width: int = Field(ge=0, le=150)
+    width: int = Field(ge=0, le=200)
     transition_seconds: float = Field(default=1, ge=0.05, le=30)
     curve: str = "smooth"
 

@@ -239,8 +239,8 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
                     raise ValueError("Spatial reflection send must be 0-40 percent")
                 directive = {"kind":"space", "track":canonical, "amount":int(value)}
             elif parameter == "width":
-                if not value.isdigit() or int(value) > 150:
-                    raise ValueError("Width must be 0-150 percent (100 is original width)")
+                if not value.isdigit() or int(value) > 200:
+                    raise ValueError("Width must be 0-200 percent (100 is original width)")
                 directive = {"kind": "width", "track": canonical, "width": int(value)}
             elif parameter == "reverb":
                 if not value.isdigit() or int(value)>100:

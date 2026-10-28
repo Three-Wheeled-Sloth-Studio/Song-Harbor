@@ -46,7 +46,7 @@ export const HELP_TOPICS:Topic[]=[
    ]},
   {id:"effects",title:"Effects reference",summary:"Pan, width, reflections, reverb, EQ, compression and ducking.",
    body:[
-     "Pan: Track.pan:left.40, Track.pan:right.40 or Track.pan:center. Width: Track.width:125 (0-150%, 100 means unchanged). Space: Track.space:20 (0-40 early reflection amount). Reverb: Track.reverb:25 (0-100 wet send).",
+     "Pan: Track.pan:left.40, Track.pan:right.40 or Track.pan:center. Width: Track.width:125 (0-200%, 100 means unchanged). Space: Track.space:20 (0-40 early reflection amount). Reverb: Track.reverb:25 (0-100 wet send).",
      "Three EQ bands per stem: Track.eq1:320,1.2,-2. Frequency is 30-16000 Hz, Q 0.3-12, gain -12 to +12 dB.",
      "Compression: Track.comp:-18,2 means threshold -18 dBFS and 2:1 ratio; supported ratio 1-4. The compressor defaults to neutral 1:1 when no instruction is active.",
      "Vocal-keyed ducking: Guitar.duck:3 requests up to 3 dB reduction when the detected vocal signal is active. Ducking operates on non-vocal stems only, with 0-12 dB allowed. It is an approximate envelope rather than a fully adjustable external sidechain.",

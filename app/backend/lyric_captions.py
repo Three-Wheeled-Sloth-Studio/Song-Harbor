@@ -44,6 +44,11 @@ def _stamp(seconds: float) -> str:
 
 
 def render_srt(project: dict[str, Any]) -> dict[str, Any]:
+    saved = project.get("lyric_srt_override")
+    if isinstance(saved, str) and saved.strip():
+        validate_srt(saved, float(project.get("source_duration_seconds") or 900))
+        return {"content": saved, "cue_count": len(_SRT_TIME.findall(saved)),
+                "excluded_directions": 0, "warnings": [], "timing": "Manually aligned and saved"}
     sections = sorted(project.get("sections", []), key=lambda s: s["start_seconds"])
     lyrics = project.get("section_lyrics", {})
     cues: list[tuple[float,float,list[str]]] = []
@@ -89,3 +94,28 @@ def render_srt(project: dict[str, Any]) -> dict[str, Any]:
             "excluded_directions":ignored_directions,
             "warnings":sorted(set(warnings)),
             "timing":"Estimated evenly by lyric line inside each saved section; review against vocal playback."}
+
+_SRT_TIME = re.compile(r"(?m)^(\d{2}):(\d{2}):(\d{2}),(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2}),(\d{3})$")
+def validate_srt(content: str, duration: float) -> None:
+    """Reject malformed, overlapping or out-of-range manual lyric cues."""
+    if not isinstance(content, str) or not content.strip() or len(content) > 120_000:
+        raise ValueError("SRT must have 1-120000 characters")
+    previous_end = 0
+    blocks = re.split(r"\n\s*\n", content.replace("\r", "").strip())
+    if len(blocks) > 500:
+        raise ValueError("Maximum 500 caption blocks")
+    for i, block in enumerate(blocks, 1):
+        lines = block.splitlines()
+        match = _SRT_TIME.fullmatch(lines[1]) if len(lines) >= 3 else None
+        if not lines or lines[0] != str(i) or not match or not any(line.strip() for line in lines[2:]):
+            raise ValueError(f"Invalid caption block {i}")
+        times = [int(x) for x in match.groups()]
+        if times[1] > 59 or times[2] > 59 or times[5] > 59 or times[6] > 59:
+            raise ValueError(f"Invalid timecode in caption block {i}")
+        start = ((times[0] * 60 + times[1]) * 60 + times[2]) + times[3] / 1000
+        end = ((times[4] * 60 + times[5]) * 60 + times[6]) + times[7] / 1000
+        if start < previous_end - .001 or end - start < .1 or end > duration + .05:
+            raise ValueError(f"Caption {i} overlaps or falls outside the song")
+        if len(lines[2:]) > 3:
+            raise ValueError(f"Caption {i} exceeds three lyric lines")
+        previous_end = end

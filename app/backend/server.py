@@ -1523,6 +1523,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
                    "section_spatial_proposals": changed["section_spatial_proposals"],
                    "section_lyrics": changed["section_lyrics"],
                    "updated_at": time.time()})
+    record.pop("lyric_srt_override", None)  # Section lyric or time changes invalidate aligned subtitles.
     projects.write_project(DATA_ROOT, record)
     return {"sections": changed["sections"],
             "pan_targets": changed["section_pan_automation"],
@@ -1538,6 +1539,28 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "imported_count": changed["imported_count"],
             "auto_distributed": changed["auto_distributed"],
             "end_terminator_ignored": changed["end_terminator_ignored"]}
+
+
+class CaptionOverrideRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=120000)
+
+
+@app.put("/api/projects/{ident}/lyrics/captions")
+def save_lyric_captions(ident: str, request: Request, body: CaptionOverrideRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    job = get_job(ident)
+    if not record or not job or job.get("status") != "complete":
+        raise HTTPException(404, "Completed song not found")
+    import lyric_captions
+    try:
+        lyric_captions.validate_srt(body.content, resolved_song_duration(record, job))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    record["lyric_srt_override"] = body.content.replace("\\r", "")
+    record["updated_at"] = time.time()
+    projects.write_project(DATA_ROOT, record)
+    return {"saved": True}
 
 
 @app.get("/api/projects/{ident}/lyrics/captions")

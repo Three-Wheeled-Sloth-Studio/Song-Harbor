@@ -1239,6 +1239,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>}
         {tool==="songText"&&<>
         <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
+          position={position} duration={duration} playing={playing} onSeek={seek} onTogglePlay={()=>{void togglePlayback();}}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,auto,finish)=>{
             setPanTargets(targets);

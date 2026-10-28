@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {SongSection} from "./SectionEditor";
+import {SrtTimelineEditor} from "./SrtTimelineEditor";
 
 type Mode="replace"|"append";
 /** Convert a server "Line N: ..." validation error to a specific editor span.
@@ -33,9 +34,9 @@ export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"
 type SavedGainTarget={section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
 type SavedAutoPanTarget={section_id:string;target:"center";protected_sources:string[];transition_seconds:number;curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
-export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onApplied}:{
+export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,position,duration,playing,onSeek,onTogglePlay,onApplied}:{
   jobId:string;songTitle:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding)=>void;
+  revision:number;position:number;duration:number;playing:boolean;onSeek:(seconds:number)=>void;onTogglePlay:()=>void;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding)=>void;
 }){
   const [content,setContent]=useState(()=>temporarySectionDrafts.get(jobId)||"");
   const [dirty,setDirty]=useState(()=>temporarySectionDrafts.has(jobId));
@@ -52,6 +53,7 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
   const [captionStatus,setCaptionStatus]=useState("");
   const [captionWarnings,setCaptionWarnings]=useState<string[]>([]);
   const [captionBusy,setCaptionBusy]=useState(false);
+  const [captionDirty,setCaptionDirty]=useState(false);
   const editor=useRef<HTMLTextAreaElement|null>(null);
   const errorTarget=errorLocation(content,error);
   function jumpToError(){
@@ -166,11 +168,22 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
       const data=await response.json() as {content?:string;cue_count?:number;excluded_directions?:number;
         warnings?:string[];timing?:string;detail?:string};
       if(!response.ok||!data.content)throw Error(data.detail||"No saved lyrics available");
-      setCaptions(data.content);
+      setCaptions(data.content);setCaptionDirty(false);
       setCaptionWarnings(data.warnings||[]);
       setCaptionStatus((data.cue_count||0)+" captions generated from saved section timing. "+
         (data.excluded_directions||0)+" performance directions excluded. Review against playback.");
     }catch(e){setError(e instanceof Error?e.message:"Could not generate lyric captions");}
+    finally{setCaptionBusy(false);}
+  }
+  async function saveCaptions(){
+    if(!captions.trim()||captionBusy)return;
+    setCaptionBusy(true);setError("");
+    try{
+      const response=await fetch(`/api/projects/${jobId}/lyrics/captions`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:captions})});
+      const data=await response.json() as {detail?:string};
+      if(!response.ok)throw Error(data.detail||"Could not save captions");
+      setCaptionDirty(false);setCaptionStatus("Aligned lyric captions saved to this song. SRT export will use these timings.");
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setCaptionBusy(false);}
   }
   function downloadCaptions(){
@@ -219,12 +232,14 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
         <strong>YouTube lyric captions (.srt)</strong>
         <button type="button" onClick={()=>{setCaptions("");setCaptionStatus("");setCaptionWarnings([]);}} title="Close lyric export preview">×</button>
       </div>
-      <small>Estimated lyric timing is evenly distributed within each saved section. Edit caption text and times below before uploading as YouTube subtitles.</small>
+      <small>Play the song, select a lyric block, and drag its edges to align. The highlighted block follows the shared playback clock. Save timing to make future exports use your changes.</small>
+      <SrtTimelineEditor value={captions} onChange={next=>{setCaptions(next);setCaptionDirty(true);}} position={position} duration={duration} playing={playing} onSeek={onSeek} onTogglePlay={onTogglePlay} onSave={()=>{void saveCaptions();}} saving={captionBusy}/>
       <textarea aria-label="Editable YouTube SRT lyrics" spellCheck={false} value={captions} rows={12}
-        onChange={e=>setCaptions(e.target.value)}/>
+        onChange={e=>{setCaptions(e.target.value);setCaptionDirty(true);}}/>
       {captionStatus&&<small role="status">{captionStatus}</small>}
       {captionWarnings.map((item,i)=><small role="status" key={i}>{item}</small>)}
-      <button type="button" disabled={!captions.trim()} onClick={downloadCaptions}>Download .srt</button>
+      <button type="button" disabled={!captions.trim()||captionBusy} onClick={()=>{void saveCaptions();}}>Save timing</button>
+      <button type="button" disabled={!captions.trim()||captionDirty} title={captionDirty?"Save timing before export":"Download saved subtitles"} onClick={downloadCaptions}>Download .srt</button>
     </div>}
     {stale&&<small role="status">Timeline changed; reload to see new timestamps (unsaved text preserved).</small>}
     {message&&<small role="status">{message}</small>}

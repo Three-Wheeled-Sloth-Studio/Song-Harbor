@@ -3,7 +3,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from instrument_generation import validate_intent, require_native_lego
+from instrument_generation import validate_intent, require_native_lego, normalize_lego_track
 
 class InstrumentGenerationTests(unittest.TestCase):
     def setUp(self):
@@ -26,6 +26,11 @@ class InstrumentGenerationTests(unittest.TestCase):
         for instrument in ("vocals","backing_vocals","cello","violin"):
             with self.subTest(instrument=instrument), self.assertRaises(ValueError):
                 validate_intent("add",instrument,"Something",None,self.tracks)
+
+    def test_experimental_vocal_target_is_separate_from_instrument_intents(self):
+        self.assertEqual(normalize_lego_track("backing_vocals"),"backing_vocals")
+        with self.assertRaises(ValueError):
+            validate_intent("add","backing_vocals","Hum",None,self.tracks)
 
     def test_add_cannot_accidentally_replace(self):
         with self.assertRaises(ValueError):

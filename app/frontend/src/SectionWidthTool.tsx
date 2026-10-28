@@ -73,7 +73,7 @@ export function SectionWidthTool({jobId,sections,files,targets,onChange,initialS
         </select>
       </label>
       <label>Width: {width}%
-        <input aria-label="Stereo width percent" type="range" min="0" max="150" step="5"
+        <input aria-label="Stereo width percent" type="range" min="0" max="200" step="5"
           value={width} onChange={e=>setWidth(Number(e.target.value))}/>
       </label>
       <label>Transition (seconds)

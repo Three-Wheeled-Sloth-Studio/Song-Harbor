@@ -2209,6 +2209,7 @@ class AceCandidateRequest(BaseModel):
     key: str = Field(default="", max_length=80)
     task_type: str = Field(default="cover", pattern="^(cover|lego)$")
     instrument: str = Field(default="", max_length=32)
+    vocal_phrase: str = Field(default="", max_length=200)
     operation: str = Field(default="add", pattern="^(add|replace)$")
 
 
@@ -2241,7 +2242,8 @@ def _run_ace_candidate(folder: Path, candidate_id: str, bpm: int | None, key: st
             client, context, record["model"], record["prompt"], record["seed"],
             bpm=bpm, key=key, duration=(record["samples"]["context_end"] -
             record["samples"]["context_start"]) / 48000,
-            task_type=record["task_type"], track_name=record.get("instrument", ""))
+            task_type=record["task_type"], track_name=record.get("instrument", ""),
+            lyrics=record.get("vocal_phrase") or "[Instrumental]")
         record["ace_task_id"] = task_id
         ace_candidates.save_record(directory, record)
         # Poll for a bounded time; unknown ACE IDs are never considered success.
@@ -2327,7 +2329,11 @@ def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
             raise ValueError("Instrument replacement is not enabled until regional A/B and undo are implemented")
         if body.task_type == "lego":
             import instrument_generation
-            instrument_generation.validate_intent("add", body.instrument, body.prompt, None, [])
+            if body.instrument == "backing_vocals":
+                if not body.vocal_phrase.strip():
+                    raise ValueError("Experimental humming requires a short vocal phrase")
+            else:
+                instrument_generation.validate_intent("add", body.instrument, body.prompt, None, [])
             if body.model != "acestep-v15-base":
                 raise ValueError("Native Lego requires ACE Base")
         elif body.model != "acestep-v15-turbo":
@@ -2337,6 +2343,7 @@ def prepare_ace_candidate(ident: str, body: AceCandidateRequest,
             body.context_before, body.context_after, body.model, body.prompt,
             body.task_type, capabilities, dependency_tool("ffmpeg"), body.seed)
         record["instrument"] = body.instrument if body.task_type == "lego" else ""
+        record["vocal_phrase"] = body.vocal_phrase.strip() if body.task_type == "lego" and body.instrument == "backing_vocals" else ""
         record["operation"] = "add"
         ace_candidates.save_record(ace_candidates.candidate_directory(folder, record["candidate_id"]), record)
     except (ValueError, OSError, ace_adapter.AceError) as exc:

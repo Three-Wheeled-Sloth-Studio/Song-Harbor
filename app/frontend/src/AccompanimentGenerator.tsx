@@ -279,7 +279,7 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
         </div>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <div className="song-candidate-accept">
-          {originalGain<100&&<select aria-label="Original stem to mix" value={replaceTrackId} onChange={e=>setReplaceTrackId(e.target.value)}>
+          {originalGain<100&&<select aria-label="Original stem to mix" value={replaceTrackId} onChange={e=>{setReplaceTrackId(e.target.value);engine?.setCandidateOriginalMix(sourceTracks.find(t=>t.track_id===e.target.value)?.working_filename||"",originalGain);}}>
             <option value="">Source stem…</option>{sourceTracks.map(track=><option key={track.track_id} value={track.track_id}>{track.display_name}</option>)}
           </select>}
           <button type="button" disabled={busy||candidate.state!=="ready"||(originalGain<100&&!replaceTrackId)||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>✓ Add</button>

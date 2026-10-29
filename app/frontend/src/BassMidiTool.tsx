@@ -31,6 +31,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
  const [alias,setAlias]=useState("Reinstrumented");
+ const [instrument,setInstrument]=useState<"bowed"|"plucked"|"warm_pad">("bowed");
  const [previewReady,setPreviewReady]=useState(false);
  const ordered=[...sections].sort((a,b)=>a.start_seconds-b.start_seconds);
  const from=ordered.find(s=>s.id===fromId)||ordered[0];
@@ -76,7 +77,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    setBusy(true);setError("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
      const data=await req<Candidate>(base+"/"+candidate.candidate_id+"/render",{
-       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes})});
+       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes,instrument})});
      setCandidate(data);setNotes(data.notes);setPreviewReady(true);
      setMessage("Preview rendered.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
@@ -105,7 +106,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      const form=new FormData();
      form.append("file",new File([blob],"Bowed-"+candidate.candidate_id.slice(0,8)+".wav",{type:"audio/wav"}));
      form.append("stem_alias",alias);
-     form.append("display_name","Bowed-string reinstrument ("+alias+")");
+     form.append("display_name",({bowed:"Bowed strings",plucked:"Plucked bass",warm_pad:"Warm pad"}[instrument])+" ("+alias+")");
      form.append("start_seconds",String(candidate.start_seconds));
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
@@ -200,9 +201,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
        </details>
        <div className="song-midi-render">
-         <label title="Instrument renderer">Instrument <select value="bowed" disabled><option value="bowed">Bowed strings · test</option></select></label>
+         <label title="Instrument renderer">Instrument <select aria-label="Reinstrument preview voice" value={instrument} onChange={e=>{setInstrument(e.target.value as "bowed"|"plucked"|"warm_pad");setPreviewReady(false);engine?.clearCandidatePreview();setMessage("");}}><option value="bowed">Bowed strings · synth</option><option value="plucked">Plucked bass · synth</option><option value="warm_pad">Warm pad · synth</option></select></label>
          <div className="song-midi-controls">
-           <button type="button" title="Render bowed strings" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
+           <button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
            <button type="button" title="Audition in song" disabled={!previewReady||busy} onClick={()=>void audition(false)}>◉ A/B</button>
          </div>

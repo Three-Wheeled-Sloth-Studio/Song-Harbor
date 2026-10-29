@@ -157,8 +157,21 @@ def transcribe_region(source:Path,start:float,duration:float,ffmpeg:str)->list[d
     return validate_notes(notes,duration)
 
 
-def render_bowed_wav(path:Path,notes:list[dict],duration:float)->None:
-    """Original deterministic bowed-string approximation, not sampled cello."""
+INSTRUMENTS = {
+    "bowed": {"label": "Bowed strings · synth", "program": 42},
+    "plucked": {"label": "Plucked bass · synth", "program": 32},
+    "warm_pad": {"label": "Warm pad · synth", "program": 89},
+}
+
+def render_instrument_wav(path:Path, notes:list[dict], duration:float,
+                          instrument:str="bowed")->None:
+    """Three deliberately different, CPU-only synthetic audition voices.
+
+    These are not samples, SoundFonts, or instrument emulations with guaranteed
+    realism. The input MIDI notes and original audio are never modified.
+    """
+    if instrument not in INSTRUMENTS:
+        raise ValueError("Unsupported local instrument preview")
     notes=validate_notes(notes,duration)
     samples=int(math.ceil(duration*OUTPUT_RATE))
     if samples>int(MAX_REGION_SECONDS*OUTPUT_RATE):
@@ -170,13 +183,25 @@ def render_bowed_wav(path:Path,notes:list[dict],duration:float)->None:
         if b<=a:continue
         t=np.arange(b-a,dtype=np.float32)/OUTPUT_RATE
         frequency=440.0*2**((note["pitch"]-69)/12)
-        # Bow onset, steady friction and slow vibrato. Smooth at edges.
-        phase=2*np.pi*frequency*(t+.0015*np.sin(2*np.pi*5*t))
-        body=(.74*np.sin(phase)+.32*np.sin(2*phase)+.19*np.sin(3*phase)+
-              .10*np.sin(4*phase)+.045*np.sin(5*phase))
-        attack=np.minimum(1,t/.095)
-        release=np.minimum(1,np.maximum(0,(b-a)/OUTPUT_RATE-t)/.11)
-        env=np.minimum(attack,release)
+        length=(b-a)/OUTPUT_RATE
+        if instrument=="bowed":
+            phase=2*np.pi*frequency*(t+.0015*np.sin(2*np.pi*5*t))
+            body=(.74*np.sin(phase)+.32*np.sin(2*phase)+.19*np.sin(3*phase)+
+                  .10*np.sin(4*phase)+.045*np.sin(5*phase))
+            env=np.minimum(np.minimum(1,t/.095),
+                           np.minimum(1,np.maximum(0,length-t)/.11))
+        elif instrument=="plucked":
+            phase=2*np.pi*frequency*t
+            # Bright attack with quickly decaying upper harmonics.
+            body=(.76*np.sin(phase)+.26*np.exp(-t*9)*np.sin(2*phase)+
+                  .16*np.exp(-t*13)*np.sin(3*phase))
+            env=np.minimum(1,t/.006)*np.exp(-t*3.6)*np.minimum(1,np.maximum(0,length-t)/.02)
+        else:
+            phase=2*np.pi*frequency*t
+            # Rounded, slowly evolving sustained synthesizer pad.
+            body=(.72*np.sin(phase)+.20*np.sin(phase*2.005)+
+                  .12*np.sin(phase*0.5))
+            env=np.minimum(1,t/.35)*np.minimum(1,np.maximum(0,length-t)/.30)
         audio[a:b]+=body*env*min(1,note["velocity"]/100)*.2
     peak=float(np.max(np.abs(audio))) if len(audio) else 0
     if peak>.93:audio*=.93/peak
@@ -186,6 +211,10 @@ def render_bowed_wav(path:Path,notes:list[dict],duration:float)->None:
         dest.setnchannels(1);dest.setsampwidth(2);dest.setframerate(OUTPUT_RATE)
         dest.writeframes(pcm.tobytes())
 
+def render_bowed_wav(path:Path,notes:list[dict],duration:float)->None:
+    """Compatibility entry point for the original Blackwater Firmware test."""
+    render_instrument_wav(path,notes,duration,"bowed")
+
 def _variable(number:int)->bytes:
     data=[number&127]
     number >>=7
@@ -194,13 +223,14 @@ def _variable(number:int)->bytes:
         number >>=7
     return bytes(data)
 
-def midi_bytes(notes:list[dict],duration:float,bpm:int=120)->bytes:
+def midi_bytes(notes:list[dict],duration:float,bpm:int=120,instrument:str="bowed")->bytes:
     """Standard MIDI 1, one channel/program, tempo and absolute note timing."""
     notes=validate_notes(notes,duration)
+    if instrument not in INSTRUMENTS:raise ValueError("Unsupported MIDI instrument")
     ticks_per_beat=480
     ticks_per_second=bpm*ticks_per_beat/60
     events=[(0,0,b"\xff\x51\x03"+int(60000000/bpm).to_bytes(3,"big")),
-            (0,1,b"\xc0\x2a")] # GM program 43 (zero-indexed 42), cello
+            (0,1,bytes([0xc0,INSTRUMENTS[instrument]["program"]]))] # zero-based GM program
     for n in notes:
         events.append((round(n["start"]*ticks_per_second),2,bytes([0x90,n["pitch"],n["velocity"]])))
         events.append((round(n["end"]*ticks_per_second),0,bytes([0x80,n["pitch"],0])))

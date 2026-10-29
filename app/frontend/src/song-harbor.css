@@ -871,3 +871,13 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-candidate-volume button{padding:2px 5px;min-height:24px;min-width:24px;border-radius:5px}
 .song-midi-render .song-candidate-volume{margin-left:auto}
 .song-ace-preview-line .song-candidate-volume{flex:0 0 auto}
+
+/* Original-stem region mix, 0 = replace, 100 = preserve fully. */
+.song-original-mix{display:inline-flex;align-items:center;gap:5px;min-width:105px;font-size:11px;white-space:nowrap}
+.song-original-mix input[type="range"]{width:82px;min-width:48px;flex:1;accent-color:var(--tws-color-action-primary)}
+.song-original-mix output{min-width:31px;text-align:right;font:11px/1.2 Consolas,monospace;font-variant-numeric:tabular-nums}
+.song-midi-accept{flex-wrap:wrap}
+.song-midi-accept .song-original-mix{flex:1 1 140px}
+.song-midi-accept>button{flex:0 0 auto}
+.song-candidate-accept{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.song-ace-preview-line .song-original-mix{flex:1 1 150px}

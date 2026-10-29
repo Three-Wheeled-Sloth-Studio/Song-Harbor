@@ -282,11 +282,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            <button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
            <button type="button" title="Audition in song" disabled={!previewReady||busy} onClick={()=>void audition(false)}>◉ A/B</button>
+           <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);engine?.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",value);}}/><output>{originalGain}%</output></label>
            <div className="song-candidate-volume" title="Candidate level, also applied when adding the track">◖ <input type="range" aria-label="Candidate volume trim" min="-12" max="9" step="1" value={candidateTrimDb} onChange={e=>{const db=Number(e.target.value);setCandidateTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/><output>{candidateTrimDb>0?"+":""}{candidateTrimDb} dB</output><button type="button" title="Reset candidate volume" aria-label="Reset candidate volume" onClick={()=>{setCandidateTrimDb(0);engine?.setCandidatePreviewTrimDb(0);}}>↺</button></div>
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
-           <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);engine?.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",value);}}/><output>{originalGain}%</output></label>
            <button type="button" disabled={busy} title="Add candidate as a removable new stem" onClick={()=>void insert()}>✓ Add stem</button>
          </div>}
        </div>

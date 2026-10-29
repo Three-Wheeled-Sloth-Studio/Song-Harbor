@@ -150,3 +150,23 @@ The previous binary **Replace / Layer** dropdown has been removed from MIDI re-i
 Blackwater Firmware's two actual replacement spans (0.000–63.608 and 63.608–96.195) are adjacent, both at 10%. Previously each region independently faded up to unity at its end and down again at the next region's start, introducing a short gain bump near 63.608. Replacement envelopes now treat adjoining regions as continuous: the original remains at 10% across 63.608, then ramps back to its unmodified gain during the final 50 ms before 96.195. If adjoining regions have different levels, only their retained gain levels are crossfaded, never through unity.
 
 Tests now pin the exact Blackwater boundaries, steady gain between same-level adjacent replacement clips, transition between differing gains, and automatic return at the end. Live playback and offline export both use this shared envelope. A standalone JS runtime check of the exact boundary arithmetic passed; full Windows in-app listening QA remains pending.
+
+
+## 2026-10-29: Consistent section-scoped volume and end-anchored transitions
+
+The approved user-facing production grammar is **Stem.effect:value@duration:curve** for transitions beginning at the section start, and **Stem.effect:value#duration:curve** for transitions ending at the section end. This applies to ordinary effects, not a special reinstrument-only syntax.
+
+Examples:
+```text
+[Intro 0:00-0:25.045]
+{Bass.volume:10@10s:smooth Vocals.reverb:28@12s:smooth}
+[Chorus 1:13.569-1:36.195]
+{Vocals.reverb:0#8s:smooth Bass.volume:100#10s:smooth}
+```
+
+- `Bass.volume:10` means 10% of the existing Bass mixer gain, **multiplicative** and independent of the older `Bass.gain:+dB` effect. Omitting a new volume directive inherits its prior value. `Bass.volume:100` returns to the undamped level.
+- `@10s:smooth` means ramp **during the first 10 seconds of this section**; `#10s:smooth` means ramp **during the last 10 seconds of this section**. Both hold the new value afterward until another directive changes it. These use normal section boundaries; no absolute timestamp or internal track ID in these new directives.
+- The Python parser and roundtrip renderer now support section volume and the `#` anchor on existing effect grammar. Materialized targets include `transition_anchor`; frontend derives transition start from the current section start/end. Section-volume automation has an independent gain stage for both playback and offline export, and waveform opacity incorporates it. End-anchored durations longer than their section are rejected.
+- Backend section-script apply/export persists `section_volume_automation`. Section deletion and track rename preserve/recompute volume targets. Synthetic regression tests cover volume persistence, roundtrip, end-anchored reverb/pan/width, and duration bounds; frontend tests cover persistent interpolated value at the intended section end.
+
+**Important migration boundary:** Older accepted re-instrumentations are still stored as exact, replacement-linked time-range masks and still export their historical `Stem.original:percent%@start-end#trk_id` notation. They are **not yet converted** into section-scoped `Stem.volume` directives. That is deliberate: converting an arbitrary clip range to section boundaries or combining legacy masks with new `volume` directives could silently change the audible mix or double-attenuate Bass. Do not claim the new notation automatically replaces or edits those existing masks. Remaining work is a transaction-safe migration, section-scope policy for mid-section generated clips, linkage/undo semantics, and Windows integrated compilation/listening verification. Keep existing masks active and unmodified until that migration is tested. The new syntax can be used independently for sections not already controlled by legacy replacement masks.

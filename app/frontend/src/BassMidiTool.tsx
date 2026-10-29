@@ -8,6 +8,11 @@ type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
 type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean};
+// General MIDI programs, zero-based. Favorites prioritize Infra Choir's
+// gothic/industrial/orchestral palette without hiding any other presets.
+const STARTER_PROGRAMS=[42,43,44,45,48,49,50,52,54,55,57,60,61,62,30,34,38,89];
+const preferred=(x:InstrumentChoice)=>x.engine==="sf2"&&x.bank===0?STARTER_PROGRAMS.indexOf(x.program):-1;
+
 type Starter={id:string;name:string;description:string;source_page:string;installed:boolean};
 type Imported={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;selectedTrackId?:string;engine:SharedClockAudition|null;
@@ -42,7 +47,12 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [installingPack,setInstallingPack]=useState(false);
  const [starters,setStarters]=useState<Starter[]>([]);
  const [previewReady,setPreviewReady]=useState(false);
- const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter);
+ const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter).sort((a,b)=>{
+   const pa=preferred(a),pb=preferred(b);
+   if((pa>=0)!==(pb>=0))return pa>=0?-1:1;
+   if(pa>=0&&pb>=0&&pa!==pb)return pa-pb;
+   return a.name.localeCompare(b.name);
+ });
  const chosenInstrument=catalogue.instruments.find(x=>x.id===instrument&&x.pack_id===instrumentPack);
  const selectedLabel=chosenInstrument?.name||"Instrument";
  const selectedPackName=catalogue.packs.find(x=>x.id===instrumentPack)?.name||"Song Harbor Core";
@@ -77,7 +87,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      const data=await req<InstrumentCatalogue>("/api/instruments");
      setCatalogue(data);
      setPackFilter(response.pack_id);
-     const first=data.instruments.find(x=>x.pack_id===response.pack_id);
+     const first=data.instruments.find(x=>x.pack_id===response.pack_id&&x.program===42&&x.bank===0)||data.instruments.find(x=>x.pack_id===response.pack_id);
      if(first){setInstrument(first.id);setInstrumentPack(first.pack_id);}
      setPreviewReady(false);engine?.clearCandidatePreview();
      setMessage("Imported "+response.instruments+" instruments.");
@@ -94,7 +104,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        req<{starters:Starter[]}>("/api/instruments/starters")]);
      setCatalogue(library);setStarters(listing.starters);
      setPackFilter(outcome.pack_id);
-     const selected=library.instruments.find(x=>x.pack_id===outcome.pack_id);
+     const selected=library.instruments.find(x=>x.pack_id===outcome.pack_id&&x.program===42&&x.bank===0)||library.instruments.find(x=>x.pack_id===outcome.pack_id);
      if(selected)chooseInstrument(selected.pack_id,selected.id);
      setMessage(starter.name+" installed · "+outcome.instruments+" presets");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
@@ -252,7 +262,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        </details>
        <div className="song-midi-render">
          <div className="song-instrument-selectors">
-           <label title="Choose instrument">Instrument <select aria-label="Instrument" value={instrumentPack+"::"+instrument} onChange={e=>{const [pack,id]=e.target.value.split("::");chooseInstrument(pack,id);}}>{available.map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{x.name}{packFilter==="all"?" · "+(catalogue.packs.find(p=>p.id===x.pack_id)?.name||x.pack_id):""}</option>)}</select></label>
+           <label title="Choose instrument">Instrument <select aria-label="Instrument" value={instrumentPack+"::"+instrument} onChange={e=>{const [pack,id]=e.target.value.split("::");chooseInstrument(pack,id);}}>{available.map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{preferred(x)>=0?"★ ":""}{x.name}{packFilter==="all"?" · "+(catalogue.packs.find(p=>p.id===x.pack_id)?.name||x.pack_id):""}</option>)}</select></label>
            <label title="Filter instruments by pack">Pack <select aria-label="Instrument pack" value={packFilter} onChange={e=>{const filter=e.target.value;setPackFilter(filter);const options=catalogue.instruments.filter(x=>filter==="all"||x.pack_id===filter);if(!options.some(x=>x.id===instrument&&x.pack_id===instrumentPack)){const first=options[0];if(first)chooseInstrument(first.pack_id,first.id);}}}><option value="all">All packs</option>{catalogue.packs.map(pack=><option key={pack.id} value={pack.id}>{pack.name}</option>)}</select></label>
          </div>
          <div className="song-instrument-import">

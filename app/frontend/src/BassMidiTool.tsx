@@ -26,6 +26,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [customDuration,setCustomDuration]=useState(20);
  const [candidate,setCandidate]=useState<Candidate|null>(null);
  const [notes,setNotes]=useState<Note[]>([]);
+ const [notePage,setNotePage]=useState(0);
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
@@ -66,7 +67,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    try{
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
-     setCandidate(data);setNotes(data.notes.map(n=>({...n})));
+     setCandidate(data);setNotes(data.notes.map(n=>({...n})));setNotePage(0);
      setMessage(data.notes.length+" notes extracted.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
@@ -187,14 +188,15 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        </div>
        <details className="song-midi-edit-details">
          <summary>Notes · {notes.length} <span className="timecode">{clock(candidate.start_seconds)}–{clock(candidate.start_seconds+candidate.duration_seconds)}</span></summary>
+         <div className="song-midi-note-pagination"><button type="button" disabled={notePage===0} onClick={()=>setNotePage(p=>Math.max(0,p-1))} title="Previous notes">‹</button><span>{notes.length?notePage*40+1:0}–{Math.min(notes.length,(notePage+1)*40)} / {notes.length}</span><button type="button" disabled={(notePage+1)*40>=notes.length} onClick={()=>setNotePage(p=>p+1)} title="Next notes">›</button></div>
          <div className="song-midi-note-list" aria-label="Editable extracted MIDI notes">
-           {notes.map((note,i)=><div key={i} className="song-midi-note">
+           {notes.slice(notePage*40,(notePage+1)*40).map((note,pageIndex)=>{const i=notePage*40+pageIndex;return <div key={i} className="song-midi-note">
              <span>{i+1}</span>
              <label>Pitch <select aria-label={"Note "+(i+1)+" pitch"} value={note.pitch} onChange={e=>edited(i,{pitch:Number(e.target.value)})}>{Array.from({length:49},(_,j)=>j+28).map(p=><option key={p} value={p}>{pitchName(p)}</option>)}</select></label>
              <label>Start <input aria-label={"Note "+(i+1)+" start"} type="number" min="0" max={candidate.duration_seconds} step=".01" value={note.start} onChange={e=>edited(i,{start:Number(e.target.value)})}/></label>
              <label>End <input aria-label={"Note "+(i+1)+" end"} type="number" min="0" max={candidate.duration_seconds} step=".01" value={note.end} onChange={e=>edited(i,{end:Number(e.target.value)})}/></label>
              <button type="button" aria-label={"Remove note "+(i+1)} onClick={()=>{setNotes(current=>current.filter((_,j)=>j!==i));setPreviewReady(false);engine?.clearCandidatePreview();}}>×</button>
-           </div>)}
+           </div>;})}
          </div>
        </details>
        <div className="song-midi-render">

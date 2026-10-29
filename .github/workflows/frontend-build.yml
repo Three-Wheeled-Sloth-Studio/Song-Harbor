@@ -21,6 +21,8 @@ jobs:
         run: npm install --prefix app/frontend
       - name: Typecheck and bundle
         run: npm run build --prefix app/frontend
+      - name: Verify section end-anchored transitions and persistent effect values
+        run: node --experimental-strip-types --test app/frontend/tests/section-end-anchor.test.mjs
       - name: Verify replacement mask envelopes and reversible region gain
         run: node --experimental-strip-types --test app/frontend/tests/replacement-mask.test.mjs
       - name: Verify automatic stereo balance constraints

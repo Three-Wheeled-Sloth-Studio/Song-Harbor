@@ -1400,7 +1400,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
-          sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name}))}
+          sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name,working_filename:t.working_filename}))}
           engine={audio.current} playing={playing} position={position} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}

@@ -4,7 +4,7 @@ import type {AutomationCurve} from "./SectionAutomation";
 
 export type SavedPanTarget={
   section_id:string;source_key:string;pan:number;
-  transition_seconds:number;curve:AutomationCurve;
+  transition_seconds:number;transition_anchor?:"start"|"end";curve:AutomationCurve;
 };
 type Props={
   jobId:string;sections:SongSection[];files:string[]; initialSectionId?:string;

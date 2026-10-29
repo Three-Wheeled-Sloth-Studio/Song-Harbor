@@ -10,7 +10,7 @@ from typing import Any
 TOKEN = re.compile(
     r"(?i)^(?:(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<parameter>pan|reverb|width|space):(?P<value>center|left(?:\.\d{1,3})?|right(?:\.\d{1,3})?|reset|\d{1,3})"
     r"|(?P<reset>all\.reset|[A-Za-z][A-Za-z0-9_-]*\.reset))"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 ALIASES = ("Vocals", "Drums", "Bass", "Guitar", "Piano", "Other")
 def source_map(files:list[str], tracks:list[dict[str, Any]]|None=None, children:dict[str,Any]|None=None)->dict[str,str]:
@@ -53,18 +53,18 @@ def source_aliases(files:list[str], tracks:list[dict[str, Any]]|None=None, child
 EQ_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.eq(?P<band>[123]):"
     r"(?P<freq>\d{2,5}),(?P<q>\d+(?:\.\d{1,2})?),(?P<gain>[+-]?\d+(?:\.\d)?)"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 DYNAMICS_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?P<kind>comp|duck):"
     r"(?P<value>-?\d+(?:\.\d+)?)(?:,(?P<ratio>\d+(?:\.\d+)?))?"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 DEESS_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.deess:"
     r"(?P<freq>\d{4,5}),(?P<q>\d+(?:\.\d{1,2})?),"
     r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 VOLUME_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.volume:(?P<percent>\\d{1,3})"
@@ -73,7 +73,7 @@ VOLUME_TOKEN = re.compile(
 )
 GAIN_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.gain:(?P<gain>[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2}))"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 # Linked accepted replacement, editable in the section script without replacing
 # the track's independently authored gain automation.
@@ -83,12 +83,12 @@ ORIGINAL_MIX_TOKEN = re.compile(
     r"#(?P<replacement>trk_[A-Za-z0-9_-]{1,64})$"
 )
 AUTO_PAN_TOKEN = re.compile(
-    r"(?i)^auto\.pan:center(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s"
+    r"(?i)^auto\.pan:center(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s"
     r"(?::(?P<curve>smooth|linear))?)?$"
 )
 EVOLUTION_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.evolve:menacing"
-    r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 EVOLUTION_VERSION = 1
 FINISH = re.compile(r"(?i)^Master\.(fade|tail):(\d+(?:\.\d{1,3})?)s(?::(smooth|linear))?$")
@@ -153,7 +153,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             touched.add(key)
             directives.append({"kind":"evolve","track":canonical,"preset":"menacing",
                                "version":EVOLUTION_VERSION,"transition_seconds":duration,
-                               "curve":(evolution.group("curve") or "smooth").lower()})
+                               "curve":(evolution.group("curve") or "smooth").lower(),"transition_anchor":"end" if evolution.group("anchor")=="#" else "start"})
             continue
         auto_pan=AUTO_PAN_TOKEN.fullmatch(token)
         if auto_pan:
@@ -165,7 +165,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             touched.add("auto.pan")
             directives.append({"kind":"auto_pan","track":"auto",
                                "transition_seconds":duration,
-                               "curve":(auto_pan.group("curve") or "smooth").lower()})
+                               "curve":(auto_pan.group("curve") or "smooth").lower(),"transition_anchor":"end" if auto_pan.group("anchor")=="#" else "start"})
             continue
         gain_match=GAIN_TOKEN.fullmatch(token)
         if gain_match:
@@ -182,7 +182,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             touched.add(key)
             directives.append({"kind":"gain","track":canonical,"gain_db":gain_db,
                                "transition_seconds":duration,
-                               "curve":(gain_match.group("curve") or "smooth").lower()})
+                               "curve":(gain_match.group("curve") or "smooth").lower(),"transition_anchor":"end" if gain_match.group("anchor")=="#" else "start"})
             continue
         deess=DEESS_TOKEN.fullmatch(token)
         if deess:
@@ -203,7 +203,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             directives.append({"kind":"deess","track":canonical,"frequency":frequency,
                                "q":q,"threshold_db":threshold,"max_reduction_db":reduction,
                                "transition_seconds":transition,
-                               "curve":(deess.group("curve") or "smooth").lower()})
+                               "curve":(deess.group("curve") or "smooth").lower(),"transition_anchor":"end" if deess.group("anchor")=="#" else "start"})
             continue
         dynamics=DYNAMICS_TOKEN.fullmatch(token)
         if dynamics:
@@ -228,7 +228,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             if key in touched or "all" in touched or canonical.lower() in touched:
                 raise ValueError("Duplicate or conflicting dynamics directive")
             touched.add(key)
-            directive.update(transition_seconds=duration,curve=(dynamics.group("curve") or "smooth").lower())
+            directive.update(transition_seconds=duration,curve=(dynamics.group("curve") or "smooth").lower(),transition_anchor="end" if dynamics.group("anchor")=="#" else "start")
             directives.append(directive)
             continue
         eq=EQ_TOKEN.fullmatch(token)
@@ -252,7 +252,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             touched.add(key)
             directives.append({"kind":"eq","track":canonical,"band":band,
                                "frequency":frequency,"q":q,"gain_db":gain,
-                               "transition_seconds":transition,"curve":(eq.group("curve") or "smooth").lower()})
+                               "transition_seconds":transition,"curve":(eq.group("curve") or "smooth").lower(),"transition_anchor":"end" if eq.group("anchor")=="#" else "start"})
             continue
         finishing = FINISH.fullmatch(token)
         if finishing:
@@ -326,6 +326,7 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             raise ValueError("Transition must be between 0.05 and 30 seconds")
         directive["transition_seconds"] = duration
         directive["curve"] = (match.group("curve") or "smooth").lower()
+        directive["transition_anchor"] = "end" if match.group("anchor")=="#" else "start"
         directives.append(directive)
     return directives
 
@@ -342,10 +343,10 @@ def render_block(directives: list[dict[str, Any]]) -> str:
         if d["kind"] == "evolve":
             if d.get("preset")!="menacing" or d.get("version")!=EVOLUTION_VERSION:
                 raise ValueError("Unknown evolution macro version")
-            rendered.append(f"{d['track']}.evolve:menacing@{d['transition_seconds']:g}s:{d['curve']}")
+            rendered.append(f"{d['track']}.evolve:menacing{'#' if d.get('transition_anchor')=='end' else '@'}{d['transition_seconds']:g}s:{d['curve']}")
             continue
         if d["kind"] == "auto_pan":
-            rendered.append(f"auto.pan:center@{d['transition_seconds']:g}s:{d['curve']}")
+            rendered.append(f"auto.pan:center{'#' if d.get('transition_anchor')=='end' else '@'}{d['transition_seconds']:g}s:{d['curve']}")
             continue
         if d["kind"] in ("fade", "tail"):
             head = f"Master.{d['kind']}:{float(d['seconds']):g}s"
@@ -497,7 +498,7 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
                 output.append({"section_id":section["id"],"target":"center",
                                "protected_sources":[stems[a] for a in aliases if a in protected and a in stems],
                                "protected_gain_sources":[stems[a] for a in aliases if a in protected_gain and a in stems],
-                               "transition_seconds":d["transition_seconds"],"curve":d["curve"]})
+                               "transition_seconds":d["transition_seconds"],"transition_anchor":d.get("transition_anchor","start"),"curve":d["curve"]})
     return output
 
 
@@ -523,7 +524,7 @@ def materialize_pan(sections: list[dict[str, Any]],
                 output.append({
                     "section_id": section["id"], "source_key": stems[alias],
                     "pan": d["pan"] if d["kind"] == "pan" else 0.0,
-                    "transition_seconds": d["transition_seconds"],
+                    "transition_seconds": d["transition_seconds"],"transition_anchor":d.get("transition_anchor","start"),
                     "curve": d["curve"],
                 })
     return output
@@ -545,7 +546,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
                 output.append({
                     "section_id": section["id"], "source_key": stems[alias],
                     "wet": directive["wet"] if directive["kind"] == "reverb" else 0.0,
-                    "transition_seconds": directive["transition_seconds"],
+                    "transition_seconds": directive["transition_seconds"],"transition_anchor":directive.get("transition_anchor","start"),
                     "curve": directive["curve"],
                 })
     return output
@@ -571,7 +572,7 @@ def materialize_width(sections: list[dict[str, Any]],
                 output.append({
                     "section_id": section["id"], "source_key": stems[alias],
                     "width": directive["width"] if kind == "width" else 100,
-                    "transition_seconds": directive["transition_seconds"],
+                    "transition_seconds": directive["transition_seconds"],"transition_anchor":directive.get("transition_anchor","start"),
                     "curve": directive["curve"],
                 })
     return output
@@ -672,7 +673,7 @@ def materialize_dynamics(sections: list[dict[str, Any]],
                                 "frequency":directive.get("frequency",6500) if kind!="reset" else 6500,
                                 "q":directive.get("q",2) if kind!="reset" else 2,
                                 "max_reduction_db":directive.get("max_reduction_db",0) if kind!="reset" else 0,
-                                "transition_seconds":directive["transition_seconds"],"curve":directive["curve"]})
+                                "transition_seconds":directive["transition_seconds"],"transition_anchor":directive.get("transition_anchor","start"),"curve":directive["curve"]})
     return out
 
 def materialize_volume(sections:list[dict[str,Any]],

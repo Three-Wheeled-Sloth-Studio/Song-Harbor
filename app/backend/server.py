@@ -1795,6 +1795,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_eq_automation"] = changed["section_eq_automation"]
     record["section_dynamics_automation"] = changed["section_dynamics_automation"]
     record["section_gain_automation"] = changed["section_gain_automation"]
+    record["section_volume_automation"] = changed["section_volume_automation"]
     record["replacement_masks"] = changed["replacement_masks"]
     record["section_auto_pan"] = changed["section_auto_pan"]
     record["section_ending"] = changed["section_ending"]
@@ -1811,6 +1812,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "eq_targets": changed["section_eq_automation"],
             "dynamics_targets": changed["section_dynamics_automation"],
             "gain_targets": changed["section_gain_automation"],
+            "volume_targets": changed["section_volume_automation"],
             "replacement_masks": changed["replacement_masks"],
             "auto_pan_targets": changed["section_auto_pan"],
             "ending": changed["section_ending"],
@@ -1849,6 +1851,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "eq_targets": record.get("section_eq_automation", []),
             "dynamics_targets": record.get("section_dynamics_automation", []),
             "gain_targets": record.get("section_gain_automation", []),
+            "volume_targets": record.get("section_volume_automation", []),
             "replacement_masks": record.get("replacement_masks", []),
             "auto_pan_targets": record.get("section_auto_pan", []),
             "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}

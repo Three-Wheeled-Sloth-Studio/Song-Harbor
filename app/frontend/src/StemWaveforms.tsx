@@ -53,7 +53,7 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
 }
 
 export function StemWaveforms({jobId,files,duration,position,onSeek,onStemClick,viewStart,viewEnd,sections}:{
-  jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
+  jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;onStemClick?:(filename:string)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
 }){
   return <section className="waveform-overview" aria-label="Aligned stem waveforms">
     <div className="waveform-overview-heading"><strong>Stem waveforms</strong><span>{sections.length} section markers · click to seek</span></div>

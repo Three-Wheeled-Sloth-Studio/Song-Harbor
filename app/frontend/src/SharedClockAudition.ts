@@ -63,6 +63,7 @@ export class SharedClockAudition {
   private nodes:ActiveNode[]=[];
   private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean}|null=null;
   private replacementMasks:ReplacementMask[]=[];
+  private candidateOriginalMix:{filename:string;gain:number}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
@@ -266,6 +267,16 @@ export class SharedClockAudition {
     this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0,trimDb:0,solo:false};
     if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
   }
+  /** A/B the accepted result without attenuating unrelated backing stems.
+   * Applies a temporary original-stem region gain during candidate preview only. */
+  setCandidateOriginalMix(filename:string,originalPercent:number){
+    if(!this.candidatePreview)return;
+    const gain=Math.max(0,Math.min(100,originalPercent))/100;
+    if(this.candidateOriginalMix?.filename===filename&&this.candidateOriginalMix.gain===gain)return;
+    this.candidateOriginalMix={filename,gain};
+    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.03,this.position);
+    this.setCandidatePreviewBlend(this.candidatePreview.blend*100);
+  }
   setCandidatePreviewEnabled(value:boolean){
     this.setCandidatePreviewBlend(value?100:0);
   }
@@ -292,7 +303,7 @@ export class SharedClockAudition {
     const p=Math.max(0,Math.min(100,percent))/100;
     candidate.blend=p;
     candidate.enabled=candidate.solo||p>0;
-    const originalLevel=candidate.solo?0:Math.cos(p*Math.PI/2);
+    const originalLevel=candidate.solo?0:this.candidateOriginalMix?1:Math.cos(p*Math.PI/2);
     const generatedLevel=(candidate.solo?1:Math.sin(p*Math.PI/2))*Math.pow(10,candidate.trimDb/20);
     const now=this.context.currentTime;
     const original=this.originalPreviewBus.gain;
@@ -341,6 +352,8 @@ export class SharedClockAudition {
     candidate.source?.disconnect();
     candidate.gain.disconnect();
     this.candidatePreview=null;
+    this.candidateOriginalMix=null;
+    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
     this.originalPreviewBus.gain.cancelScheduledValues(this.context.currentTime);
     this.originalPreviewBus.gain.setTargetAtTime(1,this.context.currentTime,.012);
   }
@@ -446,7 +459,14 @@ export class SharedClockAudition {
       const src=track.source;
       scheduleAutomation(track.sectionGain.gain,
         !this.referenceOriginal&&this.automation[src.filename]?.gain||[{time:0,value:1}],offset,at);
-      scheduleAutomation(track.replacementGain.gain,replacementCurve(this.replacementMasks.filter(mask=>mask.source_filename===src.filename)),offset,at);
+      const audition=this.candidatePreview&&this.candidateOriginalMix?.filename===src.filename
+        ?[{replacement_track_id:"__audition__",source_track_id:"__audition__",source_filename:src.filename,
+            start_seconds:this.candidatePreview.startSeconds,
+            end_seconds:this.candidatePreview.startSeconds+this.candidatePreview.buffer.duration,
+            fade_seconds:.05,original_gain:this.candidateOriginalMix.gain}]
+        :[];
+      scheduleAutomation(track.replacementGain.gain,replacementCurve([
+        ...this.replacementMasks.filter(mask=>mask.source_filename===src.filename),...audition]),offset,at);
       scheduleAutomation(track.childGain.gain,
         !this.referenceOriginal&&this.automation[src.key]?.gain&&src.key!==src.filename
           ?this.automation[src.key].gain!:[{time:0,value:1}],offset,at);

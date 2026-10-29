@@ -1226,8 +1226,6 @@ def remove_project_track(ident: str, track_id: str, request: Request,
                 raise ValueError("Track changed since this window loaded; refresh before removing")
         except (ValueError,TypeError,KeyError) as exc:
             raise HTTPException(400,f"Removal rejected: {exc}") from exc
-        updated["replacement_masks"]=[mask for mask in updated.get("replacement_masks",[])
-                                      if mask.get("replacement_track_id")!=track_id]
         updated["updated_at"]=time.time()
         projects.write_project(DATA_ROOT,updated)
         job["files"]=updated["files"]

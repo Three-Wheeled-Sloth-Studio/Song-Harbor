@@ -82,7 +82,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }).sort((a, b) => {const x=names.indexOf(a.name),y=names.indexOf(b.name);return x<0||y<0?0:x-y;}));
   const [title, setTitle] = useState(initialTitle || "Untitled song");
   const [trackIdentities,setTrackIdentities]=useState<TrackIdentity[]>(trackDetails||[]);
-  const [replacementMasks]=useState<ReplacementMask[]>(initialReplacements||[]);
+  const [replacementMasks,setReplacementMasks]=useState<ReplacementMask[]>(initialReplacements||[]);
   const [renamingTrack,setRenamingTrack]=useState<string|null>(null);
   const [addingTrack,setAddingTrack]=useState(false);
   const [pendingFile,setPendingFile]=useState<File|null>(null);
@@ -1263,7 +1263,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {tool==="songText"&&<>
         <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,auto,finish)=>{
+          onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,auto,finish,replacements)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
@@ -1271,6 +1271,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setEqTargets(eq);
             setDynamicsTargets(dynamics);
             setGainTargets(gain);
+            setReplacementMasks(replacements);
             setAutoPanTargets(auto);
             setMixUrl(null);
             setEnding(finish);

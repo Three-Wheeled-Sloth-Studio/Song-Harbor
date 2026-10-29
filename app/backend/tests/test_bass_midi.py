@@ -53,6 +53,25 @@ class BassMidiTests(unittest.TestCase):
             bass_midi.render_bowed_wav(file,[{"pitch":40,"start":70,"end":70.4,"velocity":85}],90)
             self.assertGreater(file.stat().st_size,90*48000)
 
+    def test_instrument_presets_are_distinct_and_reject_unknown(self):
+        import wave
+        import hashlib
+        notes=[{"pitch":43,"start":.05,"end":.8,"velocity":100}]
+        samples=[]
+        with tempfile.TemporaryDirectory() as folder:
+            for name in bass_midi.INSTRUMENTS:
+                file=Path(folder)/(name+".wav")
+                bass_midi.render_instrument_wav(file,notes,1,name)
+                with wave.open(str(file),"rb") as audio:
+                    self.assertEqual(audio.getframerate(),48000)
+                    self.assertEqual(audio.getnframes(),48000)
+                    samples.append(hashlib.sha256(audio.readframes(48000)).hexdigest())
+                midi=bass_midi.midi_bytes(notes,1,instrument=name)
+                self.assertIn(bytes([0xc0,bass_midi.INSTRUMENTS[name]["program"]]),midi)
+        self.assertEqual(len(set(samples)),len(samples))
+        with self.assertRaises(ValueError):
+            bass_midi.render_instrument_wav(Path("never-written.wav"),notes,1,"invalid")
+
     def test_render_midi_and_source_untouched(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

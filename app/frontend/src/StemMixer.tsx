@@ -236,17 +236,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
   const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
-  const [contextStem,setContextStem]=useState<string|null>(null);
   const [midiStemId,setMidiStemId]=useState<string|undefined>(undefined);
-  function openStemContext(filename:string){
-    setContextStem(current=>current===filename?null:filename);
-  }
   function stemToMidi(filename:string){
     const track=trackIdentities.find(x=>x.working_filename===filename);
     if(!track){setError("Stem identity unavailable; reopen this song before transcription.");return;}
     setMidiStemId(track.track_id);
-    setContextStem(null);
-    setOpenTools(items=>[...items.filter(item=>item!=="bassMidi"),"bassMidi"]);
+    setOpenTools(items=>items.includes("bassMidi")?items:[...items,"bassMidi"]);
   }
   const [sectionEffect,setSectionEffect]=useState<"pan"|"reverb"|"width"|"space"|"eq"|"deess">("pan");
   const [sectionEditId,setSectionEditId]=useState("");
@@ -1140,8 +1135,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       {stems.map(s => <div className={"mixer-track"+(trackLabels?.[s.filename]?" mixer-track--named":"")} key={s.filename}>
         <strong className={"stem-icon-name"+(trackLabels?.[s.filename]?" stem-icon-name--named":"")}>
           <button type="button" className="song-stem-label-action"
-            aria-label={"Open "+s.name+" stem controls"} aria-expanded={contextStem===s.filename}
-            title={"Stem tools · "+s.name} onClick={()=>openStemContext(s.filename)}>
+            aria-label={"Open "+s.name+" stem controls"} aria-expanded={openTools.includes("bassMidi")&&midiStemId===trackIdentities.find(t=>t.working_filename===s.filename)?.track_id}
+            title={"Stem tools · "+s.name} onClick={()=>stemToMidi(s.filename)}>
             <AudioIcon kind={trackAliases?.[s.filename]||labelOf(s.filename)} size={32}/>
             <span className="mixer-stem-names"><span className="mixer-stem-name">{s.name}</span>
               <small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small></span>
@@ -1153,12 +1148,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               aria-pressed={s.solo} title={"Isolate (solo) "+s.name} onClick={()=>update(s.filename,{solo:!s.solo})}>S</button>
           </span>
         </strong>
-        {contextStem===s.filename&&<div className="song-stem-context-actions" role="group" aria-label={s.name+" tools"}>
-          <button type="button" onClick={()=>stemToMidi(s.filename)}>Stem → MIDI</button>
-          <button type="button" onClick={()=>{setContextStem(null);void renameTrack(s.filename);}}>Rename</button>
-          <button type="button" onClick={()=>{setContextStem(null);setOpenTools(items=>items.includes("cleanup")?items:[...items,"cleanup"]);}}>Sound cleanup</button>
-          <button type="button" onClick={()=>setContextStem(null)} aria-label="Close stem tools">×</button>
-        </div>}
         <div className="track-actions">
           <button type="button" className="track-toggle" disabled={renamingTrack!==null}
             onClick={()=>void renameTrack(s.filename)}
@@ -1404,6 +1393,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}
         {tool==="bassMidi"&&<BassMidiTool jobId={jobId} sections={timelineSections} songDuration={duration} position={position} selectedTrackId={midiStemId}
+          stemControls={stems.map(item=>({...item,trackId:trackIdentities.find(t=>t.working_filename===item.filename)?.track_id}))}
+          onStemMix={(filename,changes)=>update(filename,changes)}
           engine={audio.current} playing={playing} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}

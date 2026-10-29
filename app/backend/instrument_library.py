@@ -17,6 +17,20 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+# Curated opt-in starter. Remote samples are never bundled or resold.
+# The SHA256 pins the specific GeneralUser GS v2.0.3 bank: review upstream
+# before changing this hash or its URL.
+STARTER_PACKS={
+    "generaluser-gs":{
+        "name":"GeneralUser GS",
+        "url":"https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/main/GeneralUser-GS.sf2",
+        "sha256":"9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe",
+        "source_page":"https://www.schristiancollins.com/generaluser",
+        "license_page":"https://github.com/mrbumpy409/GeneralUser-GS/blob/main/documentation/LICENSE.txt",
+        "size_cap":40*1024*1024,
+        "description":"Compact General MIDI: strings, brass, bass, keys, pads and percussion",
+    },
+}
 SOUNDFONT_LIMIT=512*1024*1024
 PACK_ID=re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PACK_DIR="instrument-packs"
@@ -134,6 +148,57 @@ def install_sf2(runtime:Path,staged:Path,name:str)->dict:
     except Exception:
         shutil.rmtree(directory,ignore_errors=True)
         raise
+
+def starter_catalogue(runtime:Path)->list[dict]:
+    installed={p.get("name") for p in catalogue(runtime)["packs"]}
+    return [{"id":key,"name":spec["name"],"description":spec["description"],
+             "source_page":spec["source_page"],"installed":spec["name"] in installed}
+            for key,spec in STARTER_PACKS.items()]
+
+
+def install_starter(runtime:Path,starter_id:str)->dict:
+    """Explicit opt-in, HTTPS-only fixed-source download with pinned content hash."""
+    if starter_id not in STARTER_PACKS:raise ValueError("Unknown starter pack")
+    spec=STARTER_PACKS[starter_id]
+    # A requested repeat install is harmless, but don't duplicate a starter bank.
+    if any(p["name"]==spec["name"] for p in catalogue(runtime)["packs"]):
+        raise ValueError("Starter pack already installed")
+    from urllib.request import Request, urlopen
+    from urllib.parse import urlparse
+    url=spec["url"]
+    if urlparse(url).scheme!="https" or urlparse(url).hostname!="raw.githubusercontent.com":
+        raise ValueError("Unsupported starter download source")
+    root=pack_root(runtime)
+    root.mkdir(parents=True,exist_ok=True)
+    temp_path=None
+    try:
+        with tempfile.NamedTemporaryFile(dir=root,suffix=".sf2",delete=False) as dest:
+            temp_path=Path(dest.name)
+            request=Request(url,headers={"User-Agent":"SongHarbor-StarterPack/1"})
+            with urlopen(request,timeout=30) as source:
+                # Reject redirects to unrelated hosts, even though the expected
+                # GitHub CDN redirect is normally unnecessary.
+                final=urlparse(source.geturl())
+                if final.scheme!="https" or final.hostname not in (
+                    "raw.githubusercontent.com","objects.githubusercontent.com"):
+                    raise ValueError("Starter download redirected outside approved hosts")
+                digest=hashlib.sha256()
+                total=0
+                while chunk:=source.read(1024*1024):
+                    total+=len(chunk)
+                    if total>spec["size_cap"]:raise ValueError("Starter download exceeds size limit")
+                    digest.update(chunk)
+                    dest.write(chunk)
+            if digest.hexdigest()!=spec["sha256"]:
+                raise ValueError("Starter download checksum differs from reviewed version; install manually or update catalogue")
+        result=install_sf2(runtime,temp_path,spec["name"])
+        result["source"]="curated-user-opt-in"
+        return result
+    except Exception:
+        raise
+    finally:
+        if temp_path is not None:temp_path.unlink(missing_ok=True)
+
 
 def find_fluidsynth(runtime:Path)->str|None:
     locations=[os.environ.get("SONG_HARBOR_FLUIDSYNTH",""),

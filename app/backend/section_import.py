@@ -265,6 +265,48 @@ def apply(project: dict[str, Any], content: str, mode: str,
         for directive in directives:
             if directive.get("track","").casefold() in child_aliases and directive["kind"] not in ("gain","pan","reverb","eq","reset"):
                 raise ValueError("Child split channels currently support gain, pan, EQ and reverb only")
+    # Replacement annotations are editable commands, backed by a separate
+    # multiplicative gain layer. Never overwrite the user's own .gain scripts.
+    masks=list(project.get("replacement_masks",[])) if mode=="append" else []
+    source_by_alias=section_production.source_map(files,tracks,children)
+    ids={row.get("track_id"):row for row in tracks}
+    seen={mask.get("replacement_track_id") for mask in masks}
+    for section in validated:
+        directives=production.get(section["id"],[])
+        for directive in directives:
+            if directive.get("kind")!="original_mix":continue
+            replacement=directive["replacement_track_id"]
+            source=source_by_alias.get(directive["track"])
+            item=ids.get(replacement)
+            if not source or not item or not item.get("imported"):
+                raise ValueError("Original mix refers to a missing source or accepted replacement track")
+            if source==item.get("working_filename"):
+                raise ValueError("A replacement cannot attenuate itself")
+            if replacement in seen:
+                raise ValueError("Original mix has duplicate replacement IDs")
+            start=float(directive["start_seconds"])
+            end=float(directive["end_seconds"])
+            clip_start=float(item.get("start_seconds") or 0)
+            clip_end=clip_start+float(item.get("duration_seconds") or 0)
+            if start<clip_start-.005 or end>clip_end+.005:
+                raise ValueError("Original mix interval must remain within accepted replacement clip")
+            source_entry=next((row for row in tracks if row.get("working_filename")==source),None)
+            if source_entry:
+                source_start=float(source_entry.get("start_seconds") or 0)
+                source_end=source_start+float(source_entry.get("duration_seconds") or duration or 0)
+                if start<source_start-.005 or end>source_end+.005:
+                    raise ValueError("Original mix interval exceeds source stem")
+            seen.add(replacement)
+            masks.append({"replacement_track_id":replacement,
+                          "source_track_id":source_entry.get("track_id") if source_entry else "",
+                          "source_filename":source,
+                          "start_seconds":round(start,3),"end_seconds":round(end,3),
+                          "fade_seconds":round(min(.05,(end-start)/8),3),
+                          "original_gain":directive["percent"]/100})
+    # Special annotations do not enter the general per-effect automation
+    # materializer. They are projected into readable text on every export.
+    production={key:[d for d in directives if d.get("kind")!="original_mix"]
+                for key,directives in production.items()}
     auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
     # Keep authored macro intents in section_production for roundtrip.
     # Resolve deterministic effect targets only while materializing automation.
@@ -283,6 +325,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "section_reverb_automation": reverb_targets, "section_width_automation": width_targets,
             "section_space_automation": space_targets, "section_eq_automation": eq_targets,
             "section_dynamics_automation": dynamics_targets, "section_gain_automation": gain_targets,
+            "replacement_masks": masks,
             "section_auto_pan": auto_pan_targets,
             "section_ending": ending,
             "section_lyrics": lyrics,
@@ -300,7 +343,24 @@ def render_tags(project:dict[str,Any])->str:
             head+=" "+item["track_alias"]+":"+item["width"].capitalize()
             if item["bias"]!="center":head+="-"+item["bias"].capitalize()
         lines.append(head+"]")
-        directives = project.get("section_production", {}).get(entry["id"], [])
+        directives = list(project.get("section_production", {}).get(entry["id"], []))
+        all_sections=project.get("sections",[])
+        files=project.get("files",[])
+        lookup=section_production.source_map(files,project.get("source_tracks",[]))
+        for mask in project.get("replacement_masks",[]):
+            start=float(mask["start_seconds"])
+            containing=next((part for part in all_sections
+                             if float(part["start_seconds"])<=start<float(part["end_seconds"])),None)
+            if containing is None and all_sections:
+                containing=min(all_sections,key=lambda part:abs(float(part["start_seconds"])-start))
+            if containing is None or containing["id"]!=entry["id"]:continue
+            alias=next((name for name,filename in lookup.items()
+                        if filename==mask.get("source_filename")),None)
+            if not alias:continue
+            directives.append({"kind":"original_mix","track":alias,
+                               "percent":round(100*float(mask.get("original_gain",0))),
+                               "start_seconds":start,"end_seconds":float(mask["end_seconds"]),
+                               "replacement_track_id":mask["replacement_track_id"]})
         if directives:
             lines.append(section_production.render_block(directives))
         lyric = project.get("section_lyrics", {}).get(entry["id"], "")

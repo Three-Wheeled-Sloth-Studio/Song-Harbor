@@ -1,9 +1,11 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useId,useMemo,useState} from "react";
+import {valueAt,type AutomationPoint} from "./SectionAutomation";
+import {replacementGainAt,type ReplacementMask} from "./ReplacementMasks";
 import type {MouseEvent} from "react";
 import type {SongSection} from "./SectionEditor";
 
 type Peaks={bins:number;duration_seconds:number;clip_duration_seconds?:number;start_seconds?:number;min:number[];max:number[]};
-export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[]};
+export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[];gain?:number;gainPoints?:AutomationPoint[];replacementMasks?:ReplacementMask[]};
 function pathFor(peaks:Peaks):string {
   const count=Math.min(peaks.bins,peaks.min.length,peaks.max.length);
   if(count<=0)return "";
@@ -20,6 +22,12 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
   jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;onStemClick?:(filename:string)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
 }){
   const [peaks,setPeaks]=useState<Peaks|null>(null);
+  const gradientId=useId().replace(/:/g,"-");
+  const gainStops=useMemo(()=>Array.from({length:201},(_,index)=>{
+    const at=duration*index/200;
+    const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
+    return {offset:index/2,opacity:Math.max(.055,Math.min(.85,gain*.85))};
+  }),[duration,row.gain,row.gainPoints,row.replacementMasks]);
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();
@@ -40,7 +48,8 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
     <button type="button" className="waveform-seek" onClick={seekAt}
       aria-label={`Seek within ${row.label} waveform`} title={`Seek within ${row.label}`}>
       {peaks?<svg viewBox={`${duration>0?1000*viewStart/duration:0} 0 ${duration>0?Math.max(0.01,1000*(viewEnd-viewStart)/duration):1000} 40`} preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
-        <path d={d} stroke="currentColor" strokeWidth="0.7" strokeOpacity=".8" fill="none"
+        <defs><linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1000" y2="0">{gainStops.map((stop,i)=><stop key={i} offset={stop.offset+"%"} stopColor="currentColor" stopOpacity={stop.opacity}/>)}</linearGradient></defs>
+        <path d={d} stroke={`url(#${gradientId})`} strokeWidth="0.7" strokeOpacity=".8" fill="none"
           transform={`translate(${duration>0?1000*(peaks.start_seconds||0)/duration:0} 0) scale(${duration>0?(peaks.clip_duration_seconds||peaks.duration_seconds)/duration:1} 1)`}/>
       </svg>:<span className="waveform-loading">{failed?"Waveform preview unavailable":"Loading waveform…"}</span>}
       {viewEnd>viewStart&&sections.filter(section=>section.start_seconds>=viewStart&&section.start_seconds<=viewEnd)

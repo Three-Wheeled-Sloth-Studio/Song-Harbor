@@ -433,6 +433,7 @@ def expand_evolution(blocks:dict[str,list[dict[str,Any]]],
                     continue
                 expansions.append({"kind":kind,"track":target,
                                    "transition_seconds":directive["transition_seconds"],
+                                   "transition_anchor":directive.get("transition_anchor","start"),
                                    "curve":directive["curve"],
                                    **{k:v for k,v in params.items() if k!="track"}})
                 explicit.add(key)
@@ -685,6 +686,15 @@ def materialize_volume(sections:list[dict[str,Any]],
     output=[]
     for section in sorted(sections,key=lambda entry:entry["start_seconds"]):
         for d in blocks.get(section["id"],[]):
+            if d["kind"]=="reset":
+                aliases=list(stems) if d["track"]=="all" else [d["track"]]
+                for alias in aliases:
+                    if alias in stems:
+                        output.append({"section_id":section["id"],"source_key":stems[alias],
+                                       "volume":1.0,"transition_seconds":d["transition_seconds"],
+                                       "transition_anchor":d.get("transition_anchor","start"),
+                                       "curve":d["curve"]})
+                continue
             if d["kind"]!="volume":continue
             duration=d["transition_seconds"]
             if duration>section["end_seconds"]-section["start_seconds"]+1e-6:

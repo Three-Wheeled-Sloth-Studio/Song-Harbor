@@ -51,6 +51,40 @@ class ProductionNotationTests(unittest.TestCase):
             section_import.apply(project,
                 revised.replace("#trk_b","#trk_missing"),"replace",20)
 
+    def test_section_volume_and_end_anchored_effects_roundtrip(self):
+        project={"sections":[],"files":FILES}
+        script=("[Verse 0:00-0:20]\\n"
+                "{Bass.volume:10@10s:smooth Vocals.reverb:28@12s:smooth}\\n"
+                "[Chorus 0:20-0:40]\\n"
+                "{Bass.volume:100#10s:smooth Vocals.reverb:0#8s:smooth "
+                "Drums.pan:left.50#5s:linear Drums.width:65#4s:smooth}\\n"
+                "[Verse 2 0:40-1:00]\\n")
+        changed=section_import.apply(project,script,"replace",60)
+        self.assertEqual(len(changed["section_volume_automation"]),2)
+        self.assertEqual(changed["section_volume_automation"][0]["volume"],.1)
+        self.assertEqual(changed["section_volume_automation"][0]["transition_anchor"],"start")
+        self.assertEqual(changed["section_volume_automation"][1]["volume"],1)
+        self.assertEqual(changed["section_volume_automation"][1]["transition_anchor"],"end")
+        self.assertEqual(changed["section_reverb_automation"][-1]["transition_anchor"],"end")
+        self.assertEqual(changed["section_width_automation"][-1]["transition_anchor"],"end")
+        self.assertEqual(changed["section_pan_automation"][-1]["transition_anchor"],"end")
+        project.update(changed)
+        exported=section_import.render_tags(project)
+        self.assertIn("Bass.volume:100#10s:smooth",exported)
+        self.assertIn("Vocals.reverb:0#8s:smooth",exported)
+        again=section_import.apply(project,exported,"replace",60)
+        self.assertEqual(again["section_volume_automation"],changed["section_volume_automation"])
+        self.assertEqual(again["section_reverb_automation"],changed["section_reverb_automation"])
+
+    def test_end_anchored_effect_cannot_exceed_section(self):
+        project={"sections":[],"files":FILES}
+        script=("[Verse 0:00-0:05]\\n{Bass.volume:10#10s:smooth}\\n")
+        with self.assertRaisesRegex(ValueError,"cannot exceed"):
+            section_import.apply(project,script,"replace",5)
+        script=("[Verse 0:00-0:05]\\n{Vocals.reverb:10#8s:smooth}\\n")
+        with self.assertRaisesRegex(ValueError,"cannot exceed"):
+            section_import.apply(project,script,"replace",5)
+
     def test_round_trip_and_inheritance(self):
         script = ("[Verse 1 0:00-0:10]\n{Other.pan:left.60@2s:smooth}\n"
                   "[Chorus 0:10-0:20]\n{Other.pan:right.60@2s:smooth}\n"

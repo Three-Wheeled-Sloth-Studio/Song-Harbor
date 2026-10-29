@@ -538,7 +538,10 @@ export class SharedClockAudition {
   /** Independent non-destructive region mutes, linked to accepted replacement tracks.
    * This is a multiplicative layer, never an edit of the section script's gain curve. */
   setReplacementMasks(masks:ReplacementMask[]){
-    this.replacementMasks=masks;
+    // A section automation refresh must not restart playback when masks
+    // themselves have not changed.
+    if(JSON.stringify(this.replacementMasks)===JSON.stringify(masks))return;
+    this.replacementMasks=masks.map(mask=>({...mask}));
     if(this.running)this.seek(this.position);
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.offset);
   }

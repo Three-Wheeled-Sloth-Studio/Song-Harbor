@@ -329,3 +329,12 @@ Click a stem name/icon in **Mix levels** to open its contextual actions: **Stem 
 **Stem → MIDI / Reinstrument** lets you select any working stem and a section or custom 0.5–45s range, estimate monophonic notes on CPU, edit their pitches and timing, **Save / Export MIDI** without rendering audio, then optionally render a bowed-string approximation. Audition as a temporary candidate before adding a separate removable track. Removing the imported track restores the original mix; no source stem is overwritten.
 
 This is a proof of workflow, not general-purpose drum/polyphonic transcription and not a realistic sampled cello. The original Blackwater Firmware bass-to-cello experiment remains supported. MIDI import from other sources and alternative instrument renderers are follow-on work.
+
+
+### Stem tools compact controls and range selection (October 29, 2026)
+
+Interactive stem names open the compact **Stem tools** floating window. The function switch has **◉ Mix** and **♮ MIDI**; only the chosen function's settings appear. Mix reuses existing live base Gain, Mute, Solo and Reset. MIDI has **Whole song**, **Section → section** (inclusive), and **Custom** region controls. The selected stem's actual clip boundaries govern valid ranges.
+
+The MIDI extraction backend processes long regions in bounded 30-second CPU chunks, with a ten-minute limit and up to 4000 notes; this is exploratory monophonic transcription and long-song results may need editing. Notes are collapsed until opened, in pages of 40 to avoid overwhelming the popover. MIDI export and bowed-string rendering remain separate, reversible actions.
+
+Future scope: add all eligible global/base stem effects (pan, width, reverb, reflections, EQ, compression, ducking, de-essing) to this same hub with per-effect reset and script override awareness. **Those effects are not yet implemented as editable base settings here.**

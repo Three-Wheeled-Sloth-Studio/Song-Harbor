@@ -830,3 +830,6 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-midi-status,.song-midi-error{font-size:11px}
 .song-midi-error{color:var(--tws-color-text-danger,#ffaca2)!important}
 @media(max-width:620px){.song-stem-hub{min-width:0}.song-midi-span{grid-template-columns:1fr 1fr}.song-midi-span>button{grid-column:1/-1}}
+
+.song-midi-note-pagination{display:flex;align-items:center;justify-content:flex-end;gap:7px;padding:3px 0;font-size:11px;font-variant-numeric:tabular-nums}
+.song-midi-note-pagination button{min-width:25px}

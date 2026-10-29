@@ -141,3 +141,12 @@ The previous binary **Replace / Layer** dropdown has been removed from MIDI re-i
 - Project removal of the linked replacement still discards its mask. Source WAV and other preexisting automation are preserved.
 
 **Regression coverage:** two existing replacements are rendered to editable text, one percentage is changed, the other directive is deleted, the original `Bass.gain` remains unchanged, and a bad replacement ID is rejected. Windows TypeScript build and integrated song QA remain outstanding.
+
+
+## 2026-10-29: Original-stem gain automatically restores at region end
+
+`Bass.original:10%@63.608-96.195#trk_...` is a **bounded region directive**, not a permanent 10% fader adjustment. At 96.195 seconds, the overlay automatically returns to unity (1.0 relative to the original mixer level and all existing section automation). No additional `Bass.original:100%` command is required or generated in Verse 2.
+
+Blackwater Firmware's two actual replacement spans (0.000–63.608 and 63.608–96.195) are adjacent, both at 10%. Previously each region independently faded up to unity at its end and down again at the next region's start, introducing a short gain bump near 63.608. Replacement envelopes now treat adjoining regions as continuous: the original remains at 10% across 63.608, then ramps back to its unmodified gain during the final 50 ms before 96.195. If adjoining regions have different levels, only their retained gain levels are crossfaded, never through unity.
+
+Tests now pin the exact Blackwater boundaries, steady gain between same-level adjacent replacement clips, transition between differing gains, and automatic return at the end. Live playback and offline export both use this shared envelope. A standalone JS runtime check of the exact boundary arithmetic passed; full Windows in-app listening QA remains pending.

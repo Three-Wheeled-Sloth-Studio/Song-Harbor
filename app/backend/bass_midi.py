@@ -223,14 +223,21 @@ def _variable(number:int)->bytes:
         number >>=7
     return bytes(data)
 
-def midi_bytes(notes:list[dict],duration:float,bpm:int=120,instrument:str="bowed")->bytes:
+def midi_bytes(notes:list[dict],duration:float,bpm:int=120,instrument:str="bowed",
+               program:int|None=None,bank:int=0)->bytes:
     """Standard MIDI 1, one channel/program, tempo and absolute note timing."""
     notes=validate_notes(notes,duration)
-    if instrument not in INSTRUMENTS:raise ValueError("Unsupported MIDI instrument")
+    if program is None:
+        if instrument not in INSTRUMENTS:raise ValueError("Unsupported MIDI instrument")
+        program=INSTRUMENTS[instrument]["program"]
+    if type(program)!=int or not 0<=program<=127 or type(bank)!=int or not 0<=bank<=16383:
+        raise ValueError("Invalid MIDI bank or program")
     ticks_per_beat=480
     ticks_per_second=bpm*ticks_per_beat/60
     events=[(0,0,b"\xff\x51\x03"+int(60000000/bpm).to_bytes(3,"big")),
-            (0,1,bytes([0xc0,INSTRUMENTS[instrument]["program"]]))] # zero-based GM program
+            (0,1,bytes([0xb0,0,(bank>>7)&127])),
+            (0,2,bytes([0xb0,32,bank&127])),
+            (0,3,bytes([0xc0,program]))] # bank/program selection
     for n in notes:
         events.append((round(n["start"]*ticks_per_second),2,bytes([0x90,n["pitch"],n["velocity"]])))
         events.append((round(n["end"]*ticks_per_second),0,bytes([0x80,n["pitch"],0])))

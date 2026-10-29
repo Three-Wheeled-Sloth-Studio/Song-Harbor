@@ -724,6 +724,8 @@ async def add_project_track(ident: str, request: Request,
     if not isinstance(section_id,str):section_id=None
     if not isinstance(start_seconds,(int,float)):start_seconds=0.0
     if not isinstance(preview_trim_db,(int,float)):preview_trim_db=0.0
+    if not isinstance(accept_mode,str):accept_mode="layer"
+    if not isinstance(replace_source_track_id,str):replace_source_track_id=""
     if accept_mode not in ("replace","layer"):
         raise HTTPException(400,"Select Replace or Layer")
     if accept_mode=="replace" and not replace_source_track_id:

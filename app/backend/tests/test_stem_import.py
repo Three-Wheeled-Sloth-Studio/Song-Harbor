@@ -161,6 +161,7 @@ class ImportTracksTests(unittest.TestCase):
             self.assertEqual(len(saved["files"]),3)
             self.assertEqual(saved["files"][:2],files)
             self.assertEqual([x["gain"] for x in saved["stems"]],[1,1,1])
+            self.assertFalse(saved.get("replacement_masks"),"Layer/default imports must not mute original stems")
             self.assertEqual(saved["source_tracks"][-1]["stem_alias"],"Cello_Accent")
             self.assertTrue(saved["source_tracks"][-1]["track_id"].startswith("trk_"))
             self.assertEqual(result["job"]["status"],"complete")

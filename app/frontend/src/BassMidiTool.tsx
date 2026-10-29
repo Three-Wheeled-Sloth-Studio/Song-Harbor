@@ -40,7 +40,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
  const [alias,setAlias]=useState("Reinstrumented");
- const [acceptMode,setAcceptMode]=useState<"replace"|"layer">("replace");
+ const [originalGain,setOriginalGain]=useState(10);
  const [packFilter,setPackFilter]=useState("all");
  const [instrument,setInstrument]=useState("bowed");
  const [instrumentPack,setInstrumentPack]=useState("song-harbor-core");
@@ -172,8 +172,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      form.append("display_name",selectedLabel+" ("+alias+")");
      form.append("start_seconds",String(candidate.start_seconds));
      form.append("preview_trim_db",String(candidateTrimDb));
-     form.append("accept_mode",acceptMode);
-     if(acceptMode==="replace")form.append("replace_source_track_id",trackId);
+     form.append("original_gain_percent",String(originalGain));
+     if(originalGain<100)form.append("replace_source_track_id",trackId);
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
      setMessage("New track added. Source preserved; remove the imported track to undo.");
@@ -285,7 +285,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
-           <select aria-label="Acceptance mode" title="Replace mutes the source only in this region" value={acceptMode} onChange={e=>setAcceptMode(e.target.value as "replace"|"layer")}><option value="replace">Replace</option><option value="layer">Layer</option></select>
+           <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>setOriginalGain(Number(e.target.value))}/><output>{originalGain}%</output></label>
            <button type="button" disabled={busy} title="Add candidate as a removable new stem" onClick={()=>void insert()}>✓ Add stem</button>
          </div>}
        </div>

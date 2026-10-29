@@ -16,6 +16,7 @@ import library
 import server
 import section_import
 import track_routing
+import track_lifecycle
 
 
 class ImportTracksTests(unittest.TestCase):

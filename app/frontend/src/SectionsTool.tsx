@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {SongSection} from "./SectionEditor";
+import {exportSongLyrics,type LyricExportFormat} from "./LyricPromptExport";
 
 type Mode="replace"|"append";
 /** Convert a server "Line N: ..." validation error to a specific editor span.
@@ -173,6 +174,20 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
     }catch(e){setError(e instanceof Error?e.message:"Could not generate lyric captions");}
     finally{setCaptionBusy(false);}
   }
+  async function copyModelLyrics(format:LyricExportFormat){
+    try{
+      if(!content.trim())throw Error("Load the whole-song section text before exporting.");
+      const exported=exportSongLyrics(content,format);
+      await navigator.clipboard.writeText(exported);
+      setError("");
+      setMessage((format==="yue2"?"YuE2":"ACE")+" lyrics copied. "+
+        (dirty?"Includes unapplied section-text edits. ":"")+
+        (format==="yue2"?"Set song-level style and ABC controls separately.":"Stage directions retained."));
+    }catch(e){
+      setMessage("");
+      setError(e instanceof Error?e.message:"Could not copy lyrics to clipboard");
+    }
+  }
   function downloadCaptions(){
     if(!captions.trim())return;
     const blob=new Blob([captions],{type:"application/x-subrip;charset=utf-8"});
@@ -210,6 +225,8 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
       <button type="button" disabled={captionBusy||saving} title="Generate timestamped YouTube SRT subtitles from saved sections" onClick={()=>{void prepareCaptions();}}>
         {captionBusy?"Generating...":"Lyrics SRT"}
       </button>
+      <button type="button" disabled={!content.trim()||saving} title="Copy YuE2 lyrics: section tags and lyrics only, without Song Harbor effects or stage directions" onClick={()=>{void copyModelLyrics("yue2");}}>Copy YuE2</button>
+      <button type="button" disabled={!content.trim()||saving} title="Copy ACE lyrics: section tags, lyrics and performance notes; no Song Harbor effects" onClick={()=>{void copyModelLyrics("ace");}}>Copy ACE</button>
       <button type="button" disabled={saving||!content.trim()} onClick={()=>{void apply();}}>
         {saving?"…":"Apply"}
       </button>

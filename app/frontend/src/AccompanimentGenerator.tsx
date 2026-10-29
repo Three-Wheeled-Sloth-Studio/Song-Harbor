@@ -180,6 +180,7 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       form.append("stem_alias",alias);
       form.append("display_name","ACE accompaniment ("+alias+")");
       form.append("start_seconds",String(candidate.target_start_seconds));
+      form.append("preview_trim_db",String(previewTrimDb));
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
       setBlend(35);
@@ -270,15 +271,13 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
           {previewPeaks.map((height,i)=><line key={i} x1={i*2+1} x2={i*2+1} y1={33-height*29} y2={33+height*29} stroke="#73c4cb" strokeWidth="1.6"/>)}
           <line x1={previewProgress*3.2} x2={previewProgress*3.2} y1="0" y2="66" stroke="#f4c177" strokeWidth="1.8"/>
         </svg>}
-        <details>
-          <summary>Audition level correction</summary>
-          <label style={{display:"grid",gap:"0.2rem"}}>Generated trim · {previewTrimDb>0?"+":""}{previewTrimDb} dB
-            <input type="range" min="-12" max="9" step="1" value={previewTrimDb}
-              disabled={loadedId!==candidate.candidate_id}
-              onChange={e=>{const db=Number(e.target.value);setPreviewTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/>
-          </label>
-          <small>Preview-only; positive trim may clip. Not applied to accepted track.</small>
-        </details>
+        <label className="song-candidate-volume" title="Candidate level, carried into accepted track">
+          ◖ <input type="range" aria-label="Generated candidate volume" min="-12" max="9" step="1" value={previewTrimDb}
+            onChange={e=>{const db=Number(e.target.value);setPreviewTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/>
+          <output>{previewTrimDb>0?"+":""}{previewTrimDb} dB</output>
+          <button type="button" title="Reset candidate volume" aria-label="Reset candidate volume"
+            onClick={()=>{setPreviewTrimDb(0);engine?.setCandidatePreviewTrimDb(0);}}>↺</button>
+        </label>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <button type="button" disabled={busy||candidate.state!=="ready"||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>Accept and insert</button>
       </>}

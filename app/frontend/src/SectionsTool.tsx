@@ -33,11 +33,12 @@ type SavedSpaceTarget={section_id:string;source_key:string;amount:number;transit
 type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;q:number;gain_db:number;transition_seconds:number;curve:"linear"|"smooth"};
 export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;curve:"smooth"|"linear"};
 type SavedGainTarget={section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
+type SavedVolumeTarget={section_id:string;source_key:string;volume:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 type SavedAutoPanTarget={section_id:string;target:"center";protected_sources:string[];transition_seconds:number;curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
 export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onApplied}:{
   jobId:string;songTitle:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding,replacements:ReplacementMask[])=>void;
+  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],volume:SavedVolumeTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding,replacements:ReplacementMask[])=>void;
 }){
   const [content,setContent]=useState(()=>temporarySectionDrafts.get(jobId)||"");
   const [dirty,setDirty]=useState(()=>temporarySectionDrafts.has(jobId));
@@ -141,9 +142,9 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({content,mode})
       });
-      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:SavedSpaceTarget[];eq_targets?:SavedEqTarget[];dynamics_targets?:SavedDynamicsTarget[];gain_targets?:SavedGainTarget[];auto_pan_targets?:SavedAutoPanTarget[];ending?:SavedEnding;replacement_masks?:ReplacementMask[]};
+      const result=await r.json() as {sections?:SongSection[];detail?:string;auto_distributed?:boolean;imported_count?:number;pan_targets?:SavedPanTarget[];reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:SavedSpaceTarget[];eq_targets?:SavedEqTarget[];dynamics_targets?:SavedDynamicsTarget[];gain_targets?:SavedGainTarget[];volume_targets?:SavedVolumeTarget[];auto_pan_targets?:SavedAutoPanTarget[];ending?:SavedEnding;replacement_masks?:ReplacementMask[]};
       if(!r.ok||!result.sections)throw Error(result.detail||"Import failed");
-      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.space_targets||[],result.eq_targets||[],result.dynamics_targets||[],result.gain_targets||[],result.auto_pan_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"},result.replacement_masks||[]);
+      onApplied(result.sections,result.pan_targets||[],result.reverb_targets||[],result.width_targets||[],result.space_targets||[],result.eq_targets||[],result.dynamics_targets||[],result.gain_targets||[],result.volume_targets||[],result.auto_pan_targets||[],result.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"},result.replacement_masks||[]);
       setDirty(false);setStale(false);setCaptions("");setCaptionStatus("");
       loadedRevision.current=-1;
       setMode("replace");

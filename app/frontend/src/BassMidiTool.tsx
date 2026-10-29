@@ -150,7 +150,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    try{
      await engine.loadCandidatePreview(base+"/"+candidate.candidate_id+"/audio?revision="+Date.now(),candidate.start_seconds);
      engine.setCandidatePreviewSolo(solo);
-     engine.setCandidatePreviewBlend(solo?100:60);
+     engine.setCandidatePreviewBlend(100);
+     engine.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",originalGain);
      engine.setCandidatePreviewTrimDb(candidateTrimDb);
      onSeek(candidate.start_seconds);
      if(!playing)await onPlay();
@@ -285,7 +286,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
-           <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>setOriginalGain(Number(e.target.value))}/><output>{originalGain}%</output></label>
+           <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);engine?.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",value);}}/><output>{originalGain}%</output></label>
            <button type="button" disabled={busy} title="Add candidate as a removable new stem" onClick={()=>void insert()}>✓ Add stem</button>
          </div>}
        </div>

@@ -117,3 +117,27 @@ The previous binary **Replace / Layer** dropdown has been removed from MIDI re-i
 - **QA:** dial original to 10%, 0%, 50%, and 100% while A/B plays; verify only the intended source changes, not unrelated stems; accept and compare; save/reopen; export; remove and confirm undo; test ACE with no source selected at 100% and explicit source required below 100%; verify a previously saved 0% replacement.
 
 **Future ACE/YuE2 regenerate/revoice** should inherit the same Original control, defaulting to 10% unless the regeneration operation requires otherwise. This does not imply those future functions are already implemented.
+
+
+## 2026-10-29: Original-region gain is editable in the canonical section script
+
+**Fix for hidden replacement mutations:** Whole Song Section Text now projects accepted original-stem gain masks into ordinary production blocks. Existing accepted replacements appear on the next script export, without migrating or changing any source WAV. Example:
+
+```text
+[Verse 0:20-0:40]
+{
+  Bass.gain:+1.5@8s:smooth
+  Bass.original:10%@22.000-35.000#trk_0123456789abcdef
+}
+```
+
+- `Bass.original` means the retained relative gain of the selected original stem. `10%` means it retains 10% of *its current, scripted* gain, not a new absolute track volume. `0%` silences the original during the region and `100%` preserves it.
+- `@22.000-35.000` identifies the absolute song-time interval. The time span must lie within the accepted replacement clip and original source stem; the parser rejects invalid ranges.
+- `#trk_...` binds the instruction to the immutable replacement track. **Keep this suffix when editing the percentage or duration.** Missing/reused/invalid IDs reject the import.
+- Remove the `Bass.original...` token to remove the relative-gain overlay while keeping the accepted instrument layer. This does not delete the new instrument stem.
+- Existing `Bass.gain`, EQ, pan, reverb and other automation remain unmodified: the script command is materialized into the separate reversible gain layer rather than replacing existing gain directives.
+- The scripts are an editable projection, not a second source of truth. Every script Apply validates and atomically rewrites `replacement_masks`. Exported text and current playback are generated from the same persisted masks; after Apply the frontend immediately receives refreshed masks, so no project reload is required.
+- The directive may appear under the section containing its start time even when the replacement region crosses sections. Its timestamp range, not the enclosing section, controls the actual gain.
+- Project removal of the linked replacement still discards its mask. Source WAV and other preexisting automation are preserved.
+
+**Regression coverage:** two existing replacements are rendered to editable text, one percentage is changed, the other directive is deleted, the original `Bass.gain` remains unchanged, and a bad replacement ID is rejected. Windows TypeScript build and integrated song QA remain outstanding.

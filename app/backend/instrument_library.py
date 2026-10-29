@@ -106,6 +106,14 @@ def resolve_instrument(runtime:Path,pack_id:str,instrument_id:str)->tuple[dict,P
     path=None if found["engine"]=="synthetic" else pack_root(runtime)/pack_id/"bank.sf2"
     return found,path
 
+def hash_file(path:Path)->str:
+    digest=hashlib.sha256()
+    with path.open("rb") as source:
+        while block:=source.read(1024*1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def install_sf2(runtime:Path,staged:Path,name:str)->dict:
     presets=sf2_presets(staged)
     root=pack_root(runtime)
@@ -119,7 +127,7 @@ def install_sf2(runtime:Path,staged:Path,name:str)->dict:
         items=[{"id":f"p-{i}-b-{p['bank']}-n-{p['program']}","name":p["name"],
                 "bank":p["bank"],"program":p["program"]} for i,p in enumerate(presets)]
         manifest={"schema_version":1,"id":identifier,"name":_safe_label(name),"engine":"sf2",
-                  "source":"user-installed","sha256":hashlib.sha256(destination.read_bytes()).hexdigest(),
+                  "source":"user-installed","sha256":hash_file(destination),
                   "instruments":items}
         (directory/"manifest.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
         return {"pack_id":identifier,"instruments":len(items)}

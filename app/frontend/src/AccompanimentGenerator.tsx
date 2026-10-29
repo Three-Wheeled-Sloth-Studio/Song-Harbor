@@ -6,7 +6,7 @@ type Runtime={status:string;ready?:boolean;loaded_model?:string|null;models?:{na
 type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number;task_type?:string;instrument?:string;operation?:string;source_similarity?:{status:string;correlations?:number[];reason?:string};};
 type ImportResult={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
- sourceTracks?:{track_id:string;display_name:string}[];
+ sourceTracks?:{track_id:string;display_name:string;working_filename:string}[];
   playing:boolean;position:number;onSeek:(time:number)=>void;onPlay:()=>Promise<void>;
   onPause:()=>void;onInserted:(result:ImportResult)=>void;saveProject:()=>Promise<boolean>;
   onError:(message:string)=>void};
@@ -48,10 +48,8 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
   const [history,setHistory]=useState<Candidate[]>([]);
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
-  const [blend,setBlend]=useState(35);
   const [previewTrimDb,setPreviewTrimDb]=useState(0);
   const [soloPreview,setSoloPreview]=useState(false);
-  const [priorBlend,setPriorBlend]=useState(35);
   const [previewPeaks,setPreviewPeaks]=useState<number[]>([]);
   const [loadedId,setLoadedId]=useState<string|null>(null);
   const [error,setError]=useState("");
@@ -97,7 +95,6 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
     if(candidateRef.current===candidate?.candidate_id)return;
     candidateRef.current=candidate?.candidate_id||null;
     engine?.clearCandidatePreview();
-    setBlend(35);
     setSoloPreview(false);
     setPreviewTrimDb(0);
     setPreviewPeaks([]);
@@ -119,7 +116,6 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
     setBusy(true);setError("");setNotice("");
     try{
       engine?.clearCandidatePreview();
-      setBlend(35);
       const body={from_section_id:fromId,to_section_id:toId,context_before:before,context_after:after,
                   prompt,model:currentModel,task_type:mode,operation:"add",instrument:mode==="lego"?instrument:"",vocal_phrase:mode==="lego"&&instrument==="backing_vocals"?vocalPhrase:"",seed:Number(seed),
                   bpm:bpm.trim()?Number(bpm):null,key};
@@ -156,7 +152,8 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
     setPreviewBusy(true);setError("");
     try{
       await engine.loadCandidatePreview(audioUrl,candidate.target_start_seconds);
-      engine.setCandidatePreviewBlend(blend);
+      engine.setCandidatePreviewBlend(100);
+      engine.setCandidateOriginalMix(sourceTracks.find(t=>t.track_id===replaceTrackId)?.working_filename||"",originalGain);
       engine.setCandidatePreviewTrimDb(previewTrimDb);
       engine.setCandidatePreviewSolo(solo||soloPreview);
       if(solo)setSoloPreview(true);
@@ -188,7 +185,6 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
       if(originalGain<100)form.append("replace_source_track_id",replaceTrackId);
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
-      setBlend(35);
       setNotice("Candidate accepted and inserted at "+timelineTime(candidate.target_start_seconds)+".");
       onInserted(result);
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
@@ -256,16 +252,14 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
         <div className="song-ace-preview-line">
           <button type="button" disabled={previewBusy||!engine?.ready} onClick={()=>void audition()}>{previewBusy?"Loading...":"Preview"}</button>
           <button type="button" aria-pressed={soloPreview} title="Listen to generated audio only" onClick={()=>{
-            if(loadedId!==candidate.candidate_id){setPriorBlend(blend);void audition(true);return;}
-            if(!soloPreview){setPriorBlend(blend);setSoloPreview(true);engine?.setCandidatePreviewSolo(true);}
-            else{setSoloPreview(false);setBlend(priorBlend);engine?.setCandidatePreviewSolo(false);engine?.setCandidatePreviewBlend(priorBlend);}
+            if(loadedId!==candidate.candidate_id){void audition(true);return;}
+            setSoloPreview(v=>!v);engine?.setCandidatePreviewSolo(!soloPreview);
           }}>♫ Solo</button>
-          <label className="song-ace-knob" title={"Original / generated blend: "+(soloPreview?100:blend)+"%"} aria-label="Original to generated blend">
-            <span aria-hidden="true">◉</span>
-            <input type="range" min="0" max="100" step="1" aria-label="Original to generated audition blend"
-              disabled={loadedId!==candidate.candidate_id} value={soloPreview?100:blend}
-              onChange={e=>{const value=Number(e.target.value);setBlend(value);setSoloPreview(false);engine?.setCandidatePreviewSolo(false);engine?.setCandidatePreviewBlend(value);}}/>
-            <output>{soloPreview?100:blend}%</output>
+          <label className="song-original-mix" title="Original stem level within the generated section; 100% layers and 0% replaces">
+            Original <input type="range" min="0" max="100" step="1" aria-label="ACE original stem retained gain"
+              value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);
+                engine?.setCandidateOriginalMix(sourceTracks.find(t=>t.track_id===replaceTrackId)?.working_filename||"",value);}}/>
+            <output>{originalGain}%</output>
           </label>
           <details className="song-ace-preroll">
             <summary>⋯</summary>
@@ -285,7 +279,6 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
         </div>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <div className="song-candidate-accept">
-          <label className="song-original-mix" title="Gain retained from original during generated section. 100% layers, 0% replaces">Original <input type="range" min="0" max="100" step="1" aria-label="ACE original stem retained gain" value={originalGain} onChange={e=>setOriginalGain(Number(e.target.value))}/><output>{originalGain}%</output></label>
           {originalGain<100&&<select aria-label="Original stem to mix" value={replaceTrackId} onChange={e=>setReplaceTrackId(e.target.value)}>
             <option value="">Source stem…</option>{sourceTracks.map(track=><option key={track.track_id} value={track.track_id}>{track.display_name}</option>)}
           </select>}

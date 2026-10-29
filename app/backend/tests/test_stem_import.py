@@ -169,6 +169,22 @@ class ImportTracksTests(unittest.TestCase):
             self.assertTrue((folder/"stems"/saved["files"][-1]).is_file())
             self.assertTrue((folder/"stems"/files[0]).read_bytes()==b"existing WAV")
 
+    def test_original_gain_percentage_is_bounded_and_requires_source(self):
+        request=Request({"type":"http","headers":[]})
+        for level in (-1,101,float("nan"),float("inf")):
+            upload=UploadFile(filename="valid.wav",file=io.BytesIO(b"audio"))
+            with self.subTest(level=level),self.assertRaises(Exception) as problem:
+                asyncio.run(server.add_project_track(
+                    "abcdef123456",request,upload,stem_alias="NewStem",
+                    display_name="New stem",original_gain_percent=level))
+            self.assertIn("Original stem gain",str(problem.exception))
+        upload=UploadFile(filename="valid.wav",file=io.BytesIO(b"audio"))
+        with self.assertRaises(Exception) as problem:
+            asyncio.run(server.add_project_track(
+                "abcdef123456",request,upload,stem_alias="NewStem",
+                display_name="New stem",original_gain_percent=15))
+        self.assertIn("Select an original source stem",str(problem.exception))
+
     def test_replace_acceptance_adds_mask_and_remove_restores_unmodified_source(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

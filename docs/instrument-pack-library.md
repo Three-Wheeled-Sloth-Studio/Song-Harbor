@@ -102,3 +102,18 @@ The primary app header is sticky at viewport top, beneath floating tools/dialogs
 10. Run backend track import/lifecycle tests, frontend replacement-envelope tests, and local Windows TypeScript build. **Do not treat feature implementation as final production QA without these checks.**
 
 Limitations: saved replacement masks are a separate automation layer and do not yet have dedicated editing rows in the textual script editor. The Undo pathway is currently removal of the accepted replacement track. Future inline-script visualization should show replacement masks distinctly instead of overwriting authored instructions.
+
+
+## 2026-10-29: Continuous original-stem mix replaces Replace/Layer choice
+
+The previous binary **Replace / Layer** dropdown has been removed from MIDI re-instrumentation and ACE accompaniment. Instead, each audition has one **Original** gain slider, from **0% to 100%**, which applies to the chosen original/source stem only within the added candidate's region. It multiplies the source's existing mixer gain and scripted gain, without editing authored automation. **It is not the candidate volume/trim**, which remains a separate independent control.
+
+- **MIDI reinstrumentation** defaults to **10% original**, preserving a quiet foundation under the new instrument.
+- **ACE accompaniment** defaults to **100% original**, layering generated accompaniment without reducing the source.
+- **0% original** is the former full Replace behavior; **100% original** is the former Layer behavior. Intermediate values are partial blends; the newly added stem is always at its independently approved candidate trim.
+- During A/B, the generated candidate is heard at full approved level alongside the rest of the unchanged song; only the selected original stem is reduced by this slider. No global crossfade of all backing stems. In ACE, if Original is below 100%, the user must select which source stem is affected.
+- At acceptance, backend validates 0–100 and records `replacement_masks[].original_gain` from 0 to 1 only when below 100%; 100% creates no original-gain mask. The mask has the same short fade-in/out region boundaries as the original Replace implementation and links to the accepted track ID for undo. Earlier masks with no `original_gain` still mean 0% (backward compatible). Existing clients using `accept_mode` continue to map Replace→0%, Layer→100%.
+- The gain overlay is carried through live playback, offline WAV export, and opacity of original and split-channel waveforms. Removing the accepted track restores the original gain without altering its WAV or prior section effects.
+- **QA:** dial original to 10%, 0%, 50%, and 100% while A/B plays; verify only the intended source changes, not unrelated stems; accept and compare; save/reopen; export; remove and confirm undo; test ACE with no source selected at 100% and explicit source required below 100%; verify a previously saved 0% replacement.
+
+**Future ACE/YuE2 regenerate/revoice** should inherit the same Original control, defaulting to 10% unless the regeneration operation requires otherwise. This does not imply those future functions are already implemented.

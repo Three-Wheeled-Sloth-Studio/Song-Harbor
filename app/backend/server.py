@@ -1196,6 +1196,8 @@ def position_project_track(ident: str, request: Request, body: PositionTrack) ->
         record=projects.read_project(DATA_ROOT,ident) if job else None
         if not job or job.get("status")!="complete" or not record:
             raise HTTPException(404,"Completed song not found")
+        if any(mask.get("replacement_track_id")==body.track_id for mask in record.get("replacement_masks",[])):
+            raise HTTPException(409,"Remove or undo replacement before repositioning its linked audio")
         try:
             updated=track_lifecycle.position(record,body.track_id,body.start_seconds,
                                              resolved_song_duration(record,job))
@@ -1216,6 +1218,8 @@ def remove_project_track(ident: str, track_id: str, request: Request,
         record=projects.read_project(DATA_ROOT,ident) if job else None
         if not job or job.get("status")!="complete" or not record:
             raise HTTPException(404,"Completed song not found")
+        if any(mask.get("source_track_id")==track_id for mask in record.get("replacement_masks",[])):
+            raise HTTPException(409,"Remove its replacement clips before removing this source track")
         try:
             updated,removed=track_lifecycle.remove(record,track_id)
             if removed["stem_alias"]!=body.expected_alias:

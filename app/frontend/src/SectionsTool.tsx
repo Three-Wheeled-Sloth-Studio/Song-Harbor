@@ -27,14 +27,14 @@ export function errorLocation(content:string,message:string):{start:number;end:n
 const temporarySectionDrafts=new Map<string,string>();
 type ExportData={content:string;sections:SongSection[];detail?:string};
 import type {SavedPanTarget} from "./SectionPanTool";
-type SavedReverbTarget={section_id:string;source_key:string;wet:number;transition_seconds:number;curve:"linear"|"smooth"};
-type SavedWidthTarget={section_id:string;source_key:string;width:number;transition_seconds:number;curve:"linear"|"smooth"};
-type SavedSpaceTarget={section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"};
-type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;q:number;gain_db:number;transition_seconds:number;curve:"linear"|"smooth"};
-export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;curve:"smooth"|"linear"};
-type SavedGainTarget={section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"};
+type SavedReverbTarget={section_id:string;source_key:string;wet:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"};
+type SavedWidthTarget={section_id:string;source_key:string;width:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"};
+type SavedSpaceTarget={section_id:string;source_key:string;amount:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"};
+type SavedEqTarget={section_id:string;source_key:string;band:number;frequency:number;q:number;gain_db:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"};
+export type SavedDynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
+type SavedGainTarget={section_id:string;source_key:string;gain_db:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 type SavedVolumeTarget={section_id:string;source_key:string;volume:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
-type SavedAutoPanTarget={section_id:string;target:"center";protected_sources:string[];transition_seconds:number;curve:"smooth"|"linear"};
+type SavedAutoPanTarget={section_id:string;target:"center";protected_sources:string[];transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"};
 export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onApplied}:{
   jobId:string;songTitle:string;open:boolean;onClose:()=>void;focused:SongSection|null;

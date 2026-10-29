@@ -48,7 +48,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [starters,setStarters]=useState<Starter[]>([]);
  const [previewReady,setPreviewReady]=useState(false);
  const [candidateTrimDb,setCandidateTrimDb]=useState(0);
- const [auditionMode,setAuditionMode]=useState<"solo"|"ab"|null>(null);
  const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter).sort((a,b)=>{
    const pa=preferred(a),pb=preferred(b);
    if((pa>=0)!==(pb>=0))return pa>=0?-1:1;
@@ -152,7 +151,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      engine.setCandidatePreviewSolo(solo);
      engine.setCandidatePreviewBlend(solo?100:60);
      engine.setCandidatePreviewTrimDb(candidateTrimDb);
-     setAuditionMode(solo?"solo":"ab");
      onSeek(candidate.start_seconds);
      if(!playing)await onPlay();
    }catch(e){setError(String(e));}finally{setBusy(false);}

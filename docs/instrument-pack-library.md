@@ -64,3 +64,13 @@ Open header gear **Settings → Components → FluidSynth**. The compact row sho
 FluidSynth auto-discovery still works when no override is configured. Future installer workflow should only be added after the separately installed Windows executable completes real render QA.
 
 The primary app header is sticky at viewport top, beneath floating tools/dialogs, and has compact responsive branding/action spacing. Verify scrolling both Library and Song views, opening menus/dialogs, and narrow widths. This is a layout stabilization, not a full header redesign.
+
+
+## Candidate level during A/B and acceptance (2026-10-29)
+
+- **MIDI reinstrument** and **ACE accompaniment** both expose compact **◖ Candidate volume** trim during A/B/Solo. Default 0 dB; bounds -12 to +9 dB, 1 dB steps; reset returns to 0 dB.
+- Level is handled through the already shared preview engine's `setCandidatePreviewTrimDb` in real time, not by altering the original/generated candidate. Selection persists through repeated auditions of the same candidate; new ACE candidates reset to 0 dB.
+- **Accept / Add stem** now posts `preview_trim_db` to the existing track import endpoint. The server validates it before import and applies exactly the same dB volume adjustment **to the imported track's working WAV only** using FFmpeg during conversion. The candidate WAV and original uploaded track remain unmodified. Remove the imported track to undo.
+- Positive trim can clip when converting to integer PCM; listen to high-level audio before acceptance. This uses a pre-mixer gain change and does not embed an editable future script automation; imported track mixer gain still works normally.
+- All other regular imported stems default to 0 dB trim. Existing projects and generated tracks are unaffected.
+- QA: change candidate trim while solo/A-B playback runs; A/B 0 and -6 and +3 dB; accept and compare track level with candidate at same blend/monitor; verify zero trim and existing stem import regression; project save/reload; remove imported track to undo; original/generated WAV hash unchanged.

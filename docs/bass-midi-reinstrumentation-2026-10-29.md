@@ -65,3 +65,12 @@ Remain on **main** for normal Song Harbor development. Reserve `dev` for explici
 - **QA outstanding:** local Windows frontend build, UI interaction and focus, selection persistence, audio/MIDI comparison, imported clip alignment, user listening, and integration regressions.
 
 This is the first architecture slice, **not** a claim of robust transcription for drum/polyphonic/vocal/mixed stems. Avoid adding instrument-pair buttons as permanent sidebar tools.
+
+## Compact stem-tools UX revision (2026-10-29)
+
+- **Stem tools** is a compact resizable floating hub, not a permanent Bass-to-Cello feature. Interactive mixer stem labels open the hub; the tool rail remains a secondary entry point.
+- Function selector: **Mix** and **MIDI**. Only the selected function's controls are displayed. Mix immediately exposes the existing live base gain %, Mute, Solo and Reset controls. Changes follow the existing song-save behavior. MIDI's extraction, note editor, renderer and audition controls are hidden until MIDI is selected. Notes remain collapsed until requested.
+- Region presets under MIDI: **Whole song**, **From section → To section** (inclusive endpoints), or **Custom** position/length, with Start-at-playhead. Region validation considers the selected stem's playable clip, not just total song length.
+- Long transcriptions: backend decodes and analyzes bounded 30-second chunks; maximum aggregate region length is **600 seconds** and 4000 estimated note events. The original <=45s path remains unchanged. Long renders remain separate; do not assume acoustic-cello timbre or accurate polyphony. Transcription is CPU-only and synchronous during this prototype.
+- **Global stem effects future contract**: expand Mix into a compact base-effects rack supporting Gain, Pan, Width, Reverb, Early reflections, EQ, Compression, Ducking and De-essing where applicable. This is the *base layer* that section scripts override/inherit, not a competing automation system. Do not display inert controls for unimplemented effects. Keep per-effect reset, A/B and script override visibility. Allow the same effect logic to be reused by per-section scripting without duplicated DSP implementations.
+- QA: normal launcher / main; check accessibility/keyboard focus, popover width after large resizes, selection change, direct MIDI/preview, inclusive section ranges, full-song runtime and CPU load, state invalidation, combined candidate placement, source untouched, and no disruption to prior Blackwater Firmware test.

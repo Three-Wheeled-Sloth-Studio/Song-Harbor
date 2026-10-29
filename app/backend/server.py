@@ -918,6 +918,25 @@ def list_instrument_library()->dict[str,Any]:
     return result
 
 
+@app.get("/api/instruments/starters")
+def list_instrument_starters()->dict[str,Any]:
+    return {"starters":instrument_library.starter_catalogue(DATA_ROOT)}
+
+
+class StarterInstallRequest(BaseModel):
+    starter_id: str = Field(min_length=1,max_length=60)
+
+
+@app.post("/api/instruments/starters/install")
+def install_instrument_starter(request:Request,body:StarterInstallRequest)->dict[str,Any]:
+    """Install only after user action, from an allowlisted hash-verified source."""
+    require_local_origin(request)
+    try:
+        return instrument_library.install_starter(DATA_ROOT,body.starter_id)
+    except (ValueError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
 @app.post("/api/instruments/sf2")
 async def install_instrument_soundfont(request:Request,
                                       file:UploadFile=File(...),

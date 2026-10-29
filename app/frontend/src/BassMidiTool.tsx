@@ -6,16 +6,16 @@ type Note={pitch:number;start:number;end:number;velocity:number};
 type Candidate={candidate_id:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
 type Track={track_id:string;stem_alias:string;display_name:string};
 type Imported={project:unknown;job:unknown};
-type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;engine:SharedClockAudition|null;
+type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;selectedTrackId?:string;engine:SharedClockAudition|null;
  playing:boolean;onSeek:(seconds:number)=>void;onPlay:()=>Promise<void>;onPause:()=>void;
  onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void};
 function clock(seconds:number){const ms=Math.max(0,Math.round(seconds*1000));return Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");}
 const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Bass MIDI operation failed");return data;}
-export function BassMidiTool({jobId,sections,songDuration,position,engine,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
+export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
  const [trackId,setTrackId]=useState("");
- const [bassExists,setBassExists]=useState(true);
+ const [trackRows,setTrackRows]=useState<Track[]>([]);
  const [sectionId,setSectionId]=useState("custom");
  const [customStart,setCustomStart]=useState(0);
  const [customDuration,setCustomDuration]=useState(20);
@@ -24,7 +24,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
- const [alias,setAlias]=useState("BassCello");
+ const [alias,setAlias]=useState("Reinstrumented");
  const [previewReady,setPreviewReady]=useState(false);
  const chosen=sections.find(s=>s.id===sectionId);
  const start=chosen?chosen.start_seconds:customStart;
@@ -32,9 +32,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
  const inBounds=Number.isFinite(start)&&Number.isFinite(duration)&&start>=0&&duration>=.5&&duration<=45&&start+duration<=songDuration+.005;
  const base="/api/projects/"+jobId+"/bass-midi";
  useEffect(()=>{let live=true;void req<{tracks:Track[]}>("/api/projects/"+jobId+"/tracks").then(data=>{
-   if(!live)return;const bass=data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass");
-   setTrackId(bass?.track_id||"");setBassExists(!!bass);
- }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId]);
+   if(!live)return;setTrackRows(data.tracks);
+   setTrackId(current=>data.tracks.some(t=>t.track_id===selectedTrackId)?selectedTrackId!:
+      data.tracks.some(t=>t.track_id===current)?current:
+      (data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass")||data.tracks[0])?.track_id||"");
+ }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
 
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
  function edited(index:number,patch:Partial<Note>){
@@ -48,7 +50,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
      setCandidate(data);setNotes(data.notes.map(n=>({...n})));
-     setMessage(data.notes.length+" estimated bass notes. Correct pitch/timing, then render preview.");
+     setMessage(data.notes.length+" estimated notes. Edit the MIDI notes, then render or export.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
  async function render(){
@@ -106,14 +108,13 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
  }
  function transpose(semitones:number){setNotes(current=>current.map(n=>({...n,pitch:Math.min(76,Math.max(28,n.pitch+semitones))})));setPreviewReady(false);engine?.clearCandidatePreview();}
  return <div className="song-midi-tool">
-   <strong>Bass to MIDI / bowed bass test</strong>
-   <small>CPU-only, monophonic prototype. Pitch and note boundaries are estimates. The rendered sound is an original bowed-string approximation, not a sampled acoustic cello.</small>
-   {!bassExists&&<small role="alert">A separated track with alias Bass is required.</small>}
-   <label>Source <input value="Bass (original stem only)" disabled/></label>
+   <strong>Stem → MIDI → Reinstrument</strong>
+   <small>CPU-only monophonic transcription. Edit MIDI notes independently, then render with a selected instrument. Current bowed-string renderer is experimental, not a sampled cello. Dense, polyphonic and drum stems need separate transcription methods.</small>
+   <label>Source stem <select value={trackId} onChange={e=>{setTrackId(e.target.value);setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>{trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.display_name} ({t.stem_alias})</option>)}</select></label>
    <label>Region <select value={sectionId} onChange={e=>setSectionId(e.target.value)}><option value="custom">Custom range</option>{sections.map(s=><option key={s.id} value={s.id}>{s.kind}{s.number?" "+s.number:""} · {clock(s.start_seconds)}–{clock(s.end_seconds)} ({(s.end_seconds-s.start_seconds).toFixed(1)}s)</option>)}</select></label>
    {sectionId==="custom"&&<div className="song-midi-controls"><label>Start (s) <input type="number" min="0" max={songDuration} step=".1" value={customStart} onChange={e=>setCustomStart(Number(e.target.value))}/></label><label>Length (s) <input type="number" min=".5" max="45" step=".1" value={customDuration} onChange={e=>setCustomDuration(Number(e.target.value))}/></label><button type="button" onClick={()=>setCustomStart(Math.max(0,Math.min(position,songDuration-customDuration)))}>Start at playhead</button></div>}
    <small>{!inBounds?"Select a 0.5–45s range entirely within the song.":"Start with 10–30 seconds of relatively clean separated bass."}</small>
-   <button type="button" disabled={!trackId||!inBounds||busy} onClick={()=>void analyze()}>{busy?"Working...":"Extract bass notes (CPU)"}</button>
+   <button type="button" disabled={!trackId||!inBounds||busy} onClick={()=>void analyze()}>{busy?"Working...":"Extract MIDI notes (CPU)"}</button>
    {candidate&&<><div className="song-midi-controls">
      <strong>{notes.length} notes · {clock(candidate.start_seconds)}–{clock(candidate.start_seconds+candidate.duration_seconds)}</strong>
      <button type="button" disabled={busy} onClick={revert}>Revert edits</button>
@@ -130,6 +131,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
       <button type="button" aria-label={"Remove note "+(i+1)} onClick={()=>{setNotes(current=>current.filter((_,j)=>j!==i));setPreviewReady(false);engine?.clearCandidatePreview();}}>×</button>
     </div>)}
    </div>
+   <label>Instrument renderer <select value="bowed" disabled><option value="bowed">Bowed strings (experimental)</option></select></label>
    <div className="song-midi-controls"><button type="button" disabled={busy||!notes.length} onClick={()=>void render()}>{busy?"Working...":"Render bowed-string candidate"}</button>
     <button type="button" disabled={!previewReady||busy} onClick={()=>void audition(true)}>Solo candidate</button>
     <button type="button" disabled={!previewReady||busy} onClick={()=>void audition(false)}>A/B with song</button>
@@ -137,7 +139,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,engine,playin
    </div>
    <label>New track alias <input value={alias} maxLength={32} onChange={e=>setAlias(e.target.value)}/></label>
    <button type="button" disabled={!previewReady||busy} onClick={()=>void insert()}>Accept as NEW track (original preserved)</button>
-   <small>Undo after acceptance: remove the imported bowed-bass track. The original Bass stem remains untouched and may be unmuted any time.</small>
+   <small>Undo after acceptance: remove the imported bowed-bass track. The selected source stem remains untouched and may be unmuted any time.</small>
    </>}
    {message&&<small role="status">{message}</small>}
    {error&&<small role="alert">{error}</small>}

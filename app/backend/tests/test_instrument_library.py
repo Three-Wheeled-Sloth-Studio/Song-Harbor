@@ -5,6 +5,7 @@ import json
 import hashlib
 import io
 from unittest.mock import patch
+from types import SimpleNamespace
 import struct
 import sys
 import tempfile
@@ -30,6 +31,31 @@ def make_sf2(path:Path)->None:
 
 
 class InstrumentLibraryTests(unittest.TestCase):
+    def test_fluidsynth_path_configuration_and_discovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            executable=root/"fluidsynth.exe"
+            executable.write_bytes(b"test executable, version checked by mock")
+            result=SimpleNamespace(returncode=0,stdout="FluidSynth version 2.4",stderr="")
+            with patch.object(lib.subprocess,"run",return_value=result) as launched:
+                saved=lib.save_fluidsynth(root,str(executable))
+                self.assertEqual(saved,str(executable.resolve()))
+                self.assertEqual(lib.configured_fluidsynth(root),saved)
+                self.assertEqual(lib.find_fluidsynth(root,root),saved)
+                self.assertTrue(launched.called)
+                with self.assertRaisesRegex(ValueError,"Select fluidsynth"):
+                    lib.save_fluidsynth(root,str(root/"unexpected.exe"))
+
+    def test_config_rejects_invalid_version_without_modifying_settings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            executable=root/"fluidsynth.exe"
+            executable.write_bytes(b"dummy")
+            with patch.object(lib.subprocess,"run",return_value=SimpleNamespace(returncode=1,stdout="",stderr="error")):
+                with self.assertRaisesRegex(ValueError,"did not respond"):
+                    lib.save_fluidsynth(root,str(executable))
+            self.assertEqual(lib.configured_fluidsynth(root),"")
+
     def test_sf2_preset_and_registry(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)

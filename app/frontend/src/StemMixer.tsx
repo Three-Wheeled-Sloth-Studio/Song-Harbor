@@ -14,7 +14,7 @@ import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation, valueAt } from "./SectionAutomation";
-import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
+import type {ReplacementMask} from "./ReplacementMasks";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe } from "./SharedClockAudition";
 import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";

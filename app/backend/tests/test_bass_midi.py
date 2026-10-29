@@ -39,21 +39,16 @@ class BassMidiTests(unittest.TestCase):
             root=Path(folder)
             source=root/"Bass.wav"
             source.write_bytes(b"unaltered source")
-            with wave_or_skip():
-                notes=[{"pitch":40,"start":.05,"end":.4,"velocity":85},
-                       {"pitch":43,"start":.5,"end":.8,"velocity":90}]
-                data=bass_midi.midi_bytes(notes,1)
-                self.assertTrue(data.startswith(b"MThd"))
-                self.assertIn(b"MTrk",data)
-                self.assertIn(bytes([0xc0,42]),data)
-                preview=root/"generated"/"cello.wav"
-                bass_midi.render_bowed_wav(preview,notes,1)
-                self.assertGreater(preview.stat().st_size,1000)
+            notes=[{"pitch":40,"start":.05,"end":.4,"velocity":85},
+                   {"pitch":43,"start":.5,"end":.8,"velocity":90}]
+            data=bass_midi.midi_bytes(notes,1)
+            self.assertTrue(data.startswith(b"MThd"))
+            self.assertIn(b"MTrk",data)
+            self.assertIn(bytes([0xc0,42]),data)
+            preview=root/"generated"/"cello.wav"
+            bass_midi.render_bowed_wav(preview,notes,1)
+            self.assertGreater(preview.stat().st_size,1000)
             self.assertEqual(source.read_bytes(),b"unaltered source")
-
-from contextlib import nullcontext
-def wave_or_skip():
-    return nullcontext()
 
 if __name__=="__main__":
     unittest.main()

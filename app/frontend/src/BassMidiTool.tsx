@@ -87,7 +87,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      const form=new FormData();
      form.append("file",new File([blob],"Bowed-"+candidate.candidate_id.slice(0,8)+".wav",{type:"audio/wav"}));
      form.append("stem_alias",alias);
-     form.append("display_name","Bowed bass MIDI test ("+alias+")");
+     form.append("display_name","Bowed-string reinstrument ("+alias+")");
      form.append("start_seconds",String(candidate.start_seconds));
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
@@ -96,9 +96,17 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
  }
  async function midi(){
-   if(!candidate||!previewReady)return;
-   const a=document.createElement("a");a.href=base+"/"+candidate.candidate_id+"/midi";
-   a.download="Bass-to-Cello.mid";document.body.appendChild(a);a.click();a.remove();
+   if(!candidate||busy)return;
+   setBusy(true);setError("");
+   try{
+     const saved=await req<Candidate>(base+"/"+candidate.candidate_id+"/notes",{
+       method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes})});
+     setCandidate(saved);setNotes(saved.notes);setPreviewReady(false);
+     engine?.clearCandidatePreview();
+     const a=document.createElement("a");a.href=base+"/"+candidate.candidate_id+"/midi";
+     a.download="Stem-to-MIDI.mid";document.body.appendChild(a);a.click();a.remove();
+     setMessage("Edited MIDI saved and exported. Render an instrument separately when ready.");
+   }catch(e){setError(String(e));}finally{setBusy(false);}
  }
  function addNote(){
    const t=Math.max(0,Math.min(candidate?.duration_seconds||1,notes.length?notes[notes.length-1].end:0));
@@ -135,7 +143,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    <div className="song-midi-controls"><button type="button" disabled={busy||!notes.length} onClick={()=>void render()}>{busy?"Working...":"Render bowed-string candidate"}</button>
     <button type="button" disabled={!previewReady||busy} onClick={()=>void audition(true)}>Solo candidate</button>
     <button type="button" disabled={!previewReady||busy} onClick={()=>void audition(false)}>A/B with song</button>
-    <button type="button" disabled={!previewReady} onClick={()=>void midi()}>Export .mid</button>
+    <button type="button" disabled={!candidate||busy} onClick={()=>void midi()}>Save / Export MIDI</button>
    </div>
    <label>New track alias <input value={alias} maxLength={32} onChange={e=>setAlias(e.target.value)}/></label>
    <button type="button" disabled={!previewReady||busy} onClick={()=>void insert()}>Accept as NEW track (original preserved)</button>

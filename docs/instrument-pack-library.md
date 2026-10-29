@@ -74,3 +74,31 @@ The primary app header is sticky at viewport top, beneath floating tools/dialogs
 - Positive trim can clip when converting to integer PCM; listen to high-level audio before acceptance. This uses a pre-mixer gain change and does not embed an editable future script automation; imported track mixer gain still works normally.
 - All other regular imported stems default to 0 dB trim. Existing projects and generated tracks are unaffected.
 - QA: change candidate trim while solo/A-B playback runs; A/B 0 and -6 and +3 dB; accept and compare track level with candidate at same blend/monitor; verify zero trim and existing stem import regression; project save/reload; remove imported track to undo; original/generated WAV hash unchanged.
+
+
+## 2026-10-29: Combined replacement acceptance workflow
+
+**Integrated acceptance, not standalone acceptance QA**. MIDI re-instrumentation defaults to **Replace region**; ACE accompaniment defaults to **Layer**. Both offer Replace / Layer before adding, and both use the already implemented candidate-volume trim, applied to the added track's working WAV. ACE's optional Replace requires explicit source-stem selection. The eventual ACE/YuE2 regeneration and revoice features should default to Replace when built; this does not claim those operations exist today.
+
+**Replace** is one manifest transaction: add a removable rendered track at its timeline position, persist a short-fade replacement mask linked by stable permanent source/replacement track IDs, and leave the original audio and all existing section-production automation exactly as they were. The mask is stored as `replacement_masks[]` and applied as a **multiplicative independent region-gain layer** after the original scripted section gain. This avoids clobbering other gain, EQ, pan, or reverb instructions or rewriting section scripts. It is an inspectable companion automation record rather than literal inline edits to section text. Removal of the replacement track removes its mask and restores the original stem in the same manifest change. Repositioning a masked replacement or removing its source while linked is blocked until the replacement is undone, preventing silent desynchronization.
+
+**Layer** adds a removable track without touching the original, matching accompaniment expectations.
+
+**Waveforms** render gain-driven opacity (base mixer gain including mute/solo × scripted section gain × independent replacement masks) rather than signal RMS or perceived loudness. Active split L/R children inherit the parent gain and replacement mask, in addition to their channel-specific gain. Fully muted regions become near-background with a minimum opacity for visibility.
+
+**Transport / export parity:** SharedClockAudition now uses a dedicated non-destructive replacement gain node in the live synchronized playback chain, and the same mask envelope is applied in the offline WAV rendering path. Unchanged masks do not restart playback during routine automation refreshes.
+
+### Mandatory combined QA before production use
+
+1. MIDI extraction -> Cello rendering -> A/B candidate volume adjustment -> **Replace** acceptance. Confirm one new instrument stem appears and original Bass attenuates only within replacement span, with short click-free boundaries.
+2. A/B the same candidate as **Layer**. Confirm both sources remain audible; no replacement mask is created.
+3. Original Bass existing gain/pan/EQ/reverb automation persists byte-for-byte after replacement, after save/reopen, and after removing the replacement. No automation is flattened or reset.
+4. Waveform opacity follows base gain, scripted section gain, mute/solo, and replace mask; split-channel L/R rows should inherit the parent gain and mask. Opacity must not depend on waveform RMS.
+5. Offline WAV export reproduces the muted original region and adjusted accepted candidate level; compare to live mix at the same trim and headroom.
+6. Remove the accepted replacement and confirm immediate restoration of original audio and waveform opacity, including across application restart.
+7. ACE accompaniment default Layer and live volume trim carry into accepted track; optional Replace requires a source selection.
+8. Ensure invalid/expired source IDs, imported-clip bounds, malformed replacement requests, overlapping replacement regions and duplicate adds fail safely and do not corrupt projects.
+9. Confirm the original stem and initial generated candidate WAV hashes are unchanged. Any clipping induced by positive trim must remain detectable; no hidden limiter.
+10. Run backend track import/lifecycle tests, frontend replacement-envelope tests, and local Windows TypeScript build. **Do not treat feature implementation as final production QA without these checks.**
+
+Limitations: saved replacement masks are a separate automation layer and do not yet have dedicated editing rows in the textual script editor. The Undo pathway is currently removal of the accepted replacement track. Future inline-script visualization should show replacement masks distinctly instead of overwriting authored instructions.

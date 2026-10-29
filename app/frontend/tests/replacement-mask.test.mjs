@@ -26,3 +26,27 @@ test("overlapping replacements preserve complete muting and do not change input"
   assert.equal(replacementGainAt([b],5),1);
   assert.equal(JSON.stringify([a,b]),before);
 });
+
+test("relative original-stem gain preserves 10% without overwriting script envelope",()=>{
+  const original={replacement_track_id:"cello",source_track_id:"bass",
+    source_filename:"Bass.wav",start_seconds:12,end_seconds:18,fade_seconds:.05,original_gain:.10};
+  const masks=[original];
+  assert.equal(replacementGainAt(masks,11),1);
+  assert.equal(replacementGainAt(masks,13),.1);
+  assert.ok(Math.abs(replacementGainAt(masks,12.025)-.55)<1e-8);
+  assert.equal(replacementGainAt(masks,19),1);
+  assert.equal(replacementGainAt([{...original,original_gain:1}],14),1);
+  assert.equal(replacementGainAt([{...original,original_gain:0}],14),0);
+  assert.equal(replacementGainAt([{...original}],14),0); // legacy masks default to Replace=0
+  const savedScriptGain=.65;
+  assert.ok(Math.abs(savedScriptGain*replacementGainAt(masks,13)-.065)<1e-8);
+  assert.deepEqual(masks[0],original);
+});
+
+test("overlapping partial replacements multiply relative gains without affecting unrelated regions",()=>{
+  const first={replacement_track_id:"a",source_track_id:"src",source_filename:"Bass.wav",start_seconds:4,end_seconds:12,fade_seconds:.05,original_gain:.25};
+  const second={...first,replacement_track_id:"b",start_seconds:8,end_seconds:16,original_gain:.5};
+  assert.equal(replacementGainAt([first,second],10),.125);
+  assert.equal(replacementGainAt([first,second],3),1);
+  assert.equal(replacementGainAt([first,second],14),.5);
+});

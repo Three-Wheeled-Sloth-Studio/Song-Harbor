@@ -15,14 +15,15 @@ import numpy as np
 
 RATE=12000
 OUTPUT_RATE=48000
-MAX_SECONDS=45.0
-MAX_NOTES=320
+MAX_SECONDS=45.0  # decoded chunk maximum
+MAX_REGION_SECONDS=600.0  # whole-song/section-to-section safety ceiling
+MAX_NOTES=4000
 MIDI_LOW=28
 MIDI_HIGH=76
 
 def validate_notes(notes: list[dict], duration: float) -> list[dict]:
     if not isinstance(notes,list) or len(notes)>MAX_NOTES:
-        raise ValueError("Maximum 320 notes")
+        raise ValueError("Maximum 4000 notes")
     clean=[]
     for row in notes:
         if not isinstance(row,dict):
@@ -120,11 +121,47 @@ def transcribe(pcm:np.ndarray)->list[dict]:
         else:merged.append(note)
     return validate_notes(merged[:MAX_NOTES],len(pcm)/RATE)
 
+def transcribe_region(source:Path,start:float,duration:float,ffmpeg:str)->list[dict]:
+    """Decode bounded 30s chunks and combine one monophonic MIDI timeline.
+
+    Short regions run through the original single-chunk path unchanged.
+    Never load the full-song PCM into memory.
+    """
+    if not math.isfinite(start) or start<0 or not .5<=duration<=MAX_REGION_SECONDS:
+        raise ValueError("Region must be 0.5 to 600 seconds")
+    if duration<=MAX_SECONDS:
+        return transcribe(decode_excerpt(source,start,duration,ffmpeg))
+    notes=[]
+    offset=0.0
+    while offset<duration-.001:
+        length=min(30.0,duration-offset)
+        if length<.5:
+            break
+        piece=transcribe(decode_excerpt(source,start+offset,length,ffmpeg))
+        for item in piece:
+            note=dict(item)
+            note["start"]=round(note["start"]+offset,3)
+            note["end"]=round(min(duration,note["end"]+offset),3)
+            if notes and note["start"]<notes[-1]["end"]:
+                note["start"]=notes[-1]["end"]
+            if note["end"]-note["start"]<.06:
+                continue
+            if (notes and notes[-1]["pitch"]==note["pitch"]
+                    and note["start"]-notes[-1]["end"]<=.11):
+                notes[-1]["end"]=note["end"]
+            else:
+                notes.append(note)
+            if len(notes)>MAX_NOTES:
+                raise ValueError("More than 4000 estimated notes; select a smaller region")
+        offset+=length
+    return validate_notes(notes,duration)
+
+
 def render_bowed_wav(path:Path,notes:list[dict],duration:float)->None:
     """Original deterministic bowed-string approximation, not sampled cello."""
     notes=validate_notes(notes,duration)
     samples=int(math.ceil(duration*OUTPUT_RATE))
-    if samples>int(MAX_SECONDS*OUTPUT_RATE):
+    if samples>int(MAX_REGION_SECONDS*OUTPUT_RATE):
         raise ValueError("Audio duration exceeds limit")
     audio=np.zeros(samples,dtype=np.float32)
     for note in notes:

@@ -5,6 +5,7 @@ import {AceServiceControls} from "./AceServiceControls";
 
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
+type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
@@ -16,6 +17,8 @@ export function AppSettings({open,onOpenChange,health,onReady}:{
   const [notice,setNotice]=useState("");
   const [showTools,setShowTools]=useState(false);
   const [ffmpegOpen,setFfmpegOpen]=useState(false);
+  const [fluid,setFluid]=useState<FluidSynthSettings|null>(null);
+  const [fluidPath,setFluidPath]=useState("");
 
   useEffect(()=>{
     if(!open)return;
@@ -24,6 +27,8 @@ export function AppSettings({open,onOpenChange,health,onReady}:{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
+    void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
+      .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
   },[open]);
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
@@ -63,7 +68,31 @@ export function AppSettings({open,onOpenChange,health,onReady}:{
           {showTools&&<><div className="setting-tool-row">
             <span>FFmpeg <Status tone={health?.ffmpeg?"success":"warning"}>{health?.ffmpeg?"Ready":"Setup needed"}</Status></span>
             <Button size="compact" variant="secondary" onClick={()=>setFfmpegOpen(true)}>Configure</Button>
-          </div><AceServiceControls open={open&&showTools}/></>}
+          </div>
+          <div className="setting-tool-row">
+            <span>FluidSynth <Status tone={fluid?.resolved_path?"success":"warning"}>{fluid?.resolved_path?"Ready":"Not configured"}</Status></span>
+          </div>
+          <div className="setting-controls setting-component-path">
+            <input aria-label="FluidSynth executable path" value={fluidPath}
+              onChange={e=>setFluidPath(e.target.value)} placeholder="Path to fluidsynth.exe or its bin folder"/>
+            <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+              const x=await response<{path:string|null}>("/api/settings/fluidsynth/browse","POST");
+              if(x.path)setFluidPath(x.path);
+            })}>Browse</Button>
+          </div>
+          <div className="setting-controls">
+            <Button size="compact" variant="primary" disabled={busy||!fluidPath.trim()||fluidPath===fluid?.configured_path} onClick={()=>void act(async()=>{
+              const x=await response<FluidSynthSettings>("/api/settings/fluidsynth","PUT",{path:fluidPath});
+              setFluid(x);setFluidPath(x.configured_path);
+              setNotice("FluidSynth verified and saved. Ready for SF2 rendering.");
+            })}>Verify & save</Button>
+            <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+              const x=await response<FluidSynthSettings>("/api/settings/fluidsynth","GET");
+              setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");
+              setNotice(x.resolved_path?"FluidSynth detected.":"FluidSynth not detected in standard locations.");
+            })}>Detect</Button>
+          </div>
+          <AceServiceControls open={open&&showTools}/></>}
         </div>
         {notice&&<p role="status" className="song-save-notice">{notice}</p>}
         {error&&<p role="alert" className="error-message">{error}</p>}

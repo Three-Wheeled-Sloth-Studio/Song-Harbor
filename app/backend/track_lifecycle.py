@@ -47,6 +47,8 @@ def position(project:dict[str,Any],track_id:str,start_seconds:float,
     match=next((row for row in rows if row["track_id"]==track_id),None)
     if match is None:raise ValueError("Unknown permanent track ID")
     if not match.get("imported"):raise ValueError("Original separated stems cannot be repositioned")
+    if any(mask.get("replacement_track_id")==track_id for mask in updated.get("replacement_masks",[])):
+        raise ValueError("Remove or undo the replacement before moving its linked clip")
     duration=float(match.get("duration_seconds") or 0)
     if duration<=0:raise ValueError("Imported clip duration is unavailable")
     if start_seconds+duration>song_duration+.001:
@@ -62,6 +64,8 @@ def remove(project:dict[str,Any],track_id:str)->tuple[dict[str,Any],dict[str,Any
     match=next((row for row in rows if row["track_id"]==track_id),None)
     if match is None:raise ValueError("Unknown permanent track ID")
     if not match.get("imported"):raise ValueError("Original separated stems cannot be removed")
+    if any(mask.get("source_track_id")==track_id for mask in updated.get("replacement_masks",[])):
+        raise ValueError("Remove its replacement clips before removing this source")
     filename=match["working_filename"]
     alias=match["stem_alias"].casefold()
     updated["source_tracks"]=[row for row in rows if row["track_id"]!=track_id]
@@ -78,6 +82,8 @@ def remove(project:dict[str,Any],track_id:str)->tuple[dict[str,Any],dict[str,Any
                     str(item.get("source_key","")).split(":",1)[0]==filename or
                     str(item.get("track_alias","")).casefold()==alias or
                     str(item.get("track","")).casefold() in (alias,alias+"-left",alias+"-right")))]
+    updated["replacement_masks"]=[mask for mask in updated.get("replacement_masks",[])
+                                  if mask.get("replacement_track_id")!=track_id]
     updated["imported_tracks"]=any(row.get("imported") for row in updated["source_tracks"])
     return updated,match
 

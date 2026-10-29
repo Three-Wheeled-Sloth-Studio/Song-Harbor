@@ -979,6 +979,29 @@ def get_bass_midi_candidate(ident:str,candidate_id:str)->dict[str,Any]:
     except (ValueError,OSError) as exc:raise HTTPException(404,str(exc)) from exc
 
 
+@app.put("/api/projects/{ident}/bass-midi/{candidate_id}/notes")
+def save_stem_midi_notes(ident:str,candidate_id:str,request:Request,
+                         body:BassMidiRenderRequest)->dict[str,Any]:
+    """Persist editable MIDI independently of reinstrumented audio rendering."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
+        record=bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
+        notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],
+                                       float(record["duration_seconds"]))
+        (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(
+            notes,float(record["duration_seconds"])))
+        record["notes"]=notes
+        # Old WAV must not be accepted after MIDI edits without a new render.
+        record["rendered"]=False
+        (folder/"bowed-preview.wav").unlink(missing_ok=True)
+        bass_midi.write_json(folder/"candidate.json",record)
+        return record
+    except (ValueError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
 @app.post("/api/projects/{ident}/bass-midi/{candidate_id}/render")
 def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
                                body:BassMidiRenderRequest)->dict[str,Any]:

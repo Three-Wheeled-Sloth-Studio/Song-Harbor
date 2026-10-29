@@ -188,7 +188,7 @@ class ImportTracksTests(unittest.TestCase):
             upload=UploadFile(filename="cello.wav",file=io.BytesIO(b"generated-cello"))
             request=Request({"type":"http","headers":[]})
             def convert(command,**_):
-                self.assertIn("volume=-4.0dB",command)
+                self.assertTrue(any("volume=-4.0dB" in str(arg) for arg in command))
                 Path(command[-1]).write_bytes(b"working WAV"*8)
                 return SimpleNamespace(returncode=0,stderr="")
             with (patch.object(server,"DATA_ROOT",root),

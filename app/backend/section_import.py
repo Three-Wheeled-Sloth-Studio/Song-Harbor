@@ -258,6 +258,13 @@ def apply(project: dict[str, Any], content: str, mode: str,
             if not isinstance(item["lyrics"], str) or len(item["lyrics"]) > 20000:
                 raise ValueError("Lyrics text must be at most 20000 characters per section")
             lyrics[match["id"]] = item["lyrics"]
+    # Every end-anchored transition must fit entirely within its own section.
+    # The section, not the directive, owns the timeline.
+    for section in validated:
+        for directive in production.get(section["id"],[]):
+            if directive.get("transition_anchor")=="end":
+                if directive["transition_seconds"]>float(section["end_seconds"])-float(section["start_seconds"])+1e-6:
+                    raise ValueError("End-anchored transition cannot exceed the section duration")
     # Child processing is presently supported for individual gain, pan,
     # reverb sends and EQ. Never silently claim child width/spatial/dynamics.
     child_aliases={alias.casefold() for alias in aliases if alias not in parents}

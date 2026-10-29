@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 try:
@@ -33,6 +34,24 @@ class BassMidiTests(unittest.TestCase):
                     [{"pitch":45,"start":1,"end":1.02,"velocity":85}]):
             with self.subTest(bad=bad),self.assertRaises(ValueError):
                 bass_midi.validate_notes(bad,2)
+
+    def test_chunked_whole_song_preserves_offsets_and_mono(self):
+        note={"pitch":45,"start":0.1,"end":0.5,"velocity":85}
+        with patch.object(bass_midi,"decode_excerpt",return_value=np.zeros(12000,dtype=np.float32)) as decoder:
+            with patch.object(bass_midi,"transcribe",return_value=[note]):
+                rows=bass_midi.transcribe_region(Path("source.wav"),10,95,"ffmpeg")
+        self.assertEqual(len(rows),4)
+        self.assertEqual([round(n["start"],1) for n in rows],[.1,30.1,60.1,90.1])
+        self.assertTrue(all(n["end"]<=95 for n in rows))
+        self.assertEqual(decoder.call_count,4)
+
+    def test_region_limits_and_long_render(self):
+        with self.assertRaises(ValueError):
+            bass_midi.transcribe_region(Path("missing.wav"),0,601,"ffmpeg")
+        with tempfile.TemporaryDirectory() as folder:
+            file=Path(folder)/"full.wav"
+            bass_midi.render_bowed_wav(file,[{"pitch":40,"start":70,"end":70.4,"velocity":85}],90)
+            self.assertGreater(file.stat().st_size,90*48000)
 
     def test_render_midi_and_source_untouched(self):
         with tempfile.TemporaryDirectory() as folder:

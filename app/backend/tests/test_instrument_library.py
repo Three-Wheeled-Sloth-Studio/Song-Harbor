@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import io
+from unittest.mock import patch
 import struct
 import sys
 import tempfile
@@ -45,6 +48,44 @@ class InstrumentLibraryTests(unittest.TestCase):
             self.assertFalse(sample.exists())
             with self.assertRaises(ValueError):
                 lib.resolve_instrument(root,installed["pack_id"],"../../bad")
+
+    def test_starter_download_is_explicit_verified_and_installed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            source=root/"source.sf2"
+            make_sf2(source)
+            payload=source.read_bytes()
+            with patch.dict(lib.STARTER_PACKS,{"generaluser-gs":{
+                    **lib.STARTER_PACKS["generaluser-gs"],
+                    "sha256":hashlib.sha256(payload).hexdigest()}},clear=True):
+                class Response(io.BytesIO):
+                    def geturl(self):return lib.STARTER_PACKS["generaluser-gs"]["url"]
+                    def __enter__(self):return self
+                    def __exit__(self,*args):self.close()
+                with patch("urllib.request.urlopen",return_value=Response(payload)) as fetched:
+                    self.assertFalse(lib.starter_catalogue(root)[0]["installed"])
+                    self.assertEqual(fetched.call_count,0)
+                    result=lib.install_starter(root,"generaluser-gs")
+                    self.assertEqual(result["instruments"],1)
+                    self.assertTrue(lib.starter_catalogue(root)[0]["installed"])
+                    self.assertEqual(fetched.call_count,1)
+                    with self.assertRaises(ValueError):lib.install_starter(root,"generaluser-gs")
+                with patch("urllib.request.urlopen",return_value=Response(payload)):
+                    with self.assertRaises(ValueError):lib.install_starter(root,"unknown")
+
+    def test_starter_checksum_rejects_mutated_download(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            source=root/"fake.sf2";make_sf2(source)
+            payload=source.read_bytes()
+            class Response(io.BytesIO):
+                def geturl(self):return lib.STARTER_PACKS["generaluser-gs"]["url"]
+                def __enter__(self):return self
+                def __exit__(self,*args):self.close()
+            with patch("urllib.request.urlopen",return_value=Response(payload)):
+                with self.assertRaisesRegex(ValueError,"checksum"):
+                    lib.install_starter(root,"generaluser-gs")
+            self.assertEqual(len(lib.catalogue(root)["packs"]),1)
 
     def test_invalid_soundfont_and_bad_manifest_skipped(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -537,7 +537,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "auto_pan"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:

@@ -38,3 +38,20 @@ SFZ sample maps and VST3/CLAP hosting are **not implemented** in this release. T
 7. Check project portability: the candidate WAV survives even if an original instrument pack becomes unavailable; a fresh render requires the pack to be reinstalled.
 
 No paid or third-party samples are bundled or repackaged in this slice.
+
+
+## Starter default library (2026-10-29)
+
+**GeneralUser GS 2.0.3** is the first optional downloadable starter, from the author's official repository. It contains **261 melodic presets and 13 drum kits** in approximately 31 MB and is well suited to FluidSynth 2.3+. Its custom license permits commercial music production; **Song Harbor never bundles, resells, or repackages the bank**. Click **↓ Starter GM** in the MIDI Instrument panel to request an explicit download. The backend validates the HTTPS source, limits size to 40 MB and compares SHA-256 to the reviewed 2.0.3 bank before installing through the same user-import SF2 registry. If upstream changes, the checksum deliberately blocks installation until reviewed. Manual **＋ SF2** import remains available.
+
+In the Instrument dropdown, usable general-purpose presets appear in the initial favorites section with **★**: cello, contrabass, tremolo/pizzicato strings, string ensemble, choir, synth voice, orchestral hit, trombone, French horn, brass/synth brass, distorted guitar, electric/synth bass, warm pad. All other presets remain visible. After starter installation, **Cello** is selected by default while **Pack** selects the installed GeneralUser pack. The global default Pack filter before installation remains **All packs**.
+
+No instrument data enters the source repository. CI tests use a tiny generated fake SF2 fixture and mock network requests; no real download in CI.
+
+Original author: https://www.schristiancollins.com/generaluser
+
+Canonical bank: https://github.com/mrbumpy409/GeneralUser-GS
+
+We should evaluate this bank sonically first; for a genuinely expressive *Blackwater Firmware* solo cello, the CC0 Bigcat Cello SFZ sample instrument is still a better follow-on once SFZ is supported.
+
+**Release QA remaining:** verify Windows download, trust/checksum, FluidSynth discovery, starter preset listing, live audition, and no source mutation through main launcher.

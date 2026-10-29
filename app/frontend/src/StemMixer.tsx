@@ -33,7 +33,7 @@ type SectionPreview =
   |{kind:"space";targets:SavedSpaceTarget[]}
   |{kind:"eq";targets:SavedEqTarget[]}
   |{kind:"deess";targets:typeof EMPTY_DYNAMICS_TARGETS};
-type DynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;curve:"smooth"|"linear"};
+type DynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 const EMPTY_DYNAMICS_TARGETS:DynamicsTarget[]=[];
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
 type ChildSet = {active:boolean;export:string;tracks:{left:{url:string;file:string};right:{url:string;file:string}}};
@@ -229,12 +229,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
   const [eqTargets,setEqTargets]=useState<SavedEqTarget[]>([]);
-  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";protected_sources:string[];protected_gain_sources?:string[];transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
+  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";protected_sources:string[];protected_gain_sources?:string[];transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [autoPanReports,setAutoPanReports]=useState<string[]>([]);
-  const [gainTargets,setGainTargets]=useState<{section_id:string;source_key:string;gain_db:number;transition_seconds:number;curve:"smooth"|"linear"}[]>([]);
+  const [gainTargets,setGainTargets]=useState<{section_id:string;source_key:string;gain_db:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [volumeTargets,setVolumeTargets]=useState<{section_id:string;source_key:string;volume:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [dynamicsTargets,setDynamicsTargets]=useState<DynamicsTarget[]>([]);
-  const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;curve:"linear"|"smooth"}[]>([]);
+  const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"}[]>([]);
   const [panLoaded,setPanLoaded]=useState(false);
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
     fade_seconds:0,tail_seconds:0,curve:"smooth"

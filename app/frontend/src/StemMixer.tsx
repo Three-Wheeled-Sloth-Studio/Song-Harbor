@@ -20,6 +20,7 @@ import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
+import {BassMidiTool} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import type { SongSection } from "./SectionEditor";
@@ -1378,6 +1379,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
           engine={audio.current} playing={playing} position={position} onSeek={seek}
+          onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
+          saveProject={saveProject} onError={setError}/>}
+        {tool==="bassMidi"&&<BassMidiTool jobId={jobId} sections={timelineSections}
+          engine={audio.current} playing={playing} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}
         {tool==="ending"&&<>

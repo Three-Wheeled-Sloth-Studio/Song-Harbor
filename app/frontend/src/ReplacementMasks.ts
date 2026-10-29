@@ -7,15 +7,18 @@ export type ReplacementMask={
   start_seconds:number;
   end_seconds:number;
   fade_seconds:number;
+  /** Relative original-stem gain inside region; legacy replacement masks imply 0. */
+  original_gain?:number;
 };
 function gainAt(masks:readonly ReplacementMask[],time:number):number{
   let gain=1;
   for(const item of masks){
     const fade=Math.max(.001,Math.min(item.fade_seconds,(item.end_seconds-item.start_seconds)/4));
     if(time<item.start_seconds||time>item.end_seconds)continue;
-    if(time<item.start_seconds+fade)gain*=Math.max(0,1-(time-item.start_seconds)/fade);
-    else if(time>item.end_seconds-fade)gain*=Math.max(0,1-(item.end_seconds-time)/fade);
-    else gain=0;
+    const retained=Math.max(0,Math.min(1,item.original_gain??0));
+    if(time<item.start_seconds+fade)gain*=1-(1-retained)*Math.max(0,(time-item.start_seconds)/fade);
+    else if(time>item.end_seconds-fade)gain*=1-(1-retained)*Math.max(0,(item.end_seconds-time)/fade);
+    else gain*=retained;
   }
   return gain;
 }

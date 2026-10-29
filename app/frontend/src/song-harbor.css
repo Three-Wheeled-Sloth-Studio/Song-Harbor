@@ -783,3 +783,10 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-midi-note input,.song-midi-note select{min-width:0;width:100%;padding:4px;font-size:12px}
 .song-midi-note button{padding:4px}
 .song-midi-tool button{cursor:pointer}
+
+/* Interactive stem labels: contextual tools without sacrificing mixer width. */
+.song-stem-label-action{border:0;background:transparent;color:inherit;display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;cursor:pointer;text-align:left;padding:2px 4px;border-radius:5px;font:inherit}
+.song-stem-label-action:hover,.song-stem-label-action[aria-expanded="true"]{background:var(--tws-color-action-subtle)}
+.song-stem-label-action:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
+.song-stem-context-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;grid-column:1/-1;padding:5px;border:1px solid var(--tws-color-border-normal);border-radius:6px;background:var(--tws-color-surface-raised)}
+.song-stem-context-actions button{padding:4px 8px;font-size:11px}

@@ -5,7 +5,7 @@ import type {MouseEvent} from "react";
 import type {SongSection} from "./SectionEditor";
 
 type Peaks={bins:number;duration_seconds:number;clip_duration_seconds?:number;start_seconds?:number;min:number[];max:number[]};
-export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[];gain?:number;gainPoints?:AutomationPoint[];replacementMasks?:ReplacementMask[]};
+export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[];gain?:number;gainPoints?:AutomationPoint[];parentGainPoints?:AutomationPoint[];replacementMasks?:ReplacementMask[]};
 function pathFor(peaks:Peaks):string {
   const count=Math.min(peaks.bins,peaks.min.length,peaks.max.length);
   if(count<=0)return "";
@@ -25,9 +25,9 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
   const gradientId=useId().replace(/:/g,"-");
   const gainStops=useMemo(()=>Array.from({length:201},(_,index)=>{
     const at=duration*index/200;
-    const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
+    const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*(row.parentGainPoints?valueAt(row.parentGainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
     return {offset:index/2,opacity:Math.max(.055,Math.min(.85,gain*.85))};
-  }),[duration,row.gain,row.gainPoints,row.replacementMasks]);
+  }),[duration,row.gain,row.gainPoints,row.parentGainPoints,row.replacementMasks]);
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();

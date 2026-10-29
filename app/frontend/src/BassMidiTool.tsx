@@ -52,6 +52,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
 
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
+ function clearCandidate(){
+   setCandidate(null);setNotes([]);setPreviewReady(false);setMessage("");setError("");
+   engine?.clearCandidatePreview();
+ }
  function edited(index:number,patch:Partial<Note>){
    setNotes(current=>current.map((note,i)=>i===index?{...note,...patch}:note));setPreviewReady(false);engine?.clearCandidatePreview();
  }
@@ -152,19 +156,19 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    </div>}
    {functionMode==="midi"&&<>
      <div className="song-midi-region">
-       <label title="Selection scope">Region <select aria-label="MIDI extraction region" value={regionMode} onChange={e=>setRegionMode(e.target.value as "song"|"span"|"custom")}>
+       <label title="Selection scope">Region <select aria-label="MIDI extraction region" value={regionMode} onChange={e=>{clearCandidate();setRegionMode(e.target.value as "song"|"span"|"custom");}}>
          <option value="song">Whole song</option>
          <option value="span">Section → section</option>
          <option value="custom">Custom</option>
        </select></label>
        {regionMode==="span"&&<div className="song-midi-span">
-         <label>From <select aria-label="From section" value={from?.id||""} onChange={e=>setFromId(e.target.value)}>{ordered.map(x=><option key={x.id} value={x.id}>{x.kind}{x.number?" "+x.number:""} · {clock(x.start_seconds)}</option>)}</select></label>
-         <label>To <select aria-label="To section" value={to?.id||""} onChange={e=>setToId(e.target.value)}>{ordered.map(x=><option key={x.id} value={x.id}>{x.kind}{x.number?" "+x.number:""} · {clock(x.end_seconds)}</option>)}</select></label>
+         <label>From <select aria-label="From section" value={from?.id||""} onChange={e=>{clearCandidate();setFromId(e.target.value);}}>{ordered.map(x=><option key={x.id} value={x.id}>{x.kind}{x.number?" "+x.number:""} · {clock(x.start_seconds)}</option>)}</select></label>
+         <label>To <select aria-label="To section" value={to?.id||""} onChange={e=>{clearCandidate();setToId(e.target.value);}}>{ordered.map(x=><option key={x.id} value={x.id}>{x.kind}{x.number?" "+x.number:""} · {clock(x.end_seconds)}</option>)}</select></label>
        </div>}
        {regionMode==="custom"&&<div className="song-midi-span">
-         <label>Start <input aria-label="MIDI region start seconds" type="number" min="0" step=".1" value={customStart} onChange={e=>setCustomStart(Number(e.target.value))}/></label>
-         <label>Length <input aria-label="MIDI region length seconds" type="number" min=".5" max="600" step=".1" value={customDuration} onChange={e=>setCustomDuration(Number(e.target.value))}/></label>
-         <button type="button" title="Start at current playhead" onClick={()=>setCustomStart(Math.max(0,Math.min(position,songDuration-customDuration)))}>⌖</button>
+         <label>Start <input aria-label="MIDI region start seconds" type="number" min="0" step=".1" value={customStart} onChange={e=>{clearCandidate();setCustomStart(Number(e.target.value));}}/></label>
+         <label>Length <input aria-label="MIDI region length seconds" type="number" min=".5" max="600" step=".1" value={customDuration} onChange={e=>{clearCandidate();setCustomDuration(Number(e.target.value));}}/></label>
+         <button type="button" title="Start at current playhead" onClick={()=>{clearCandidate();setCustomStart(Math.max(0,Math.min(position,songDuration-customDuration)));}}>⌖</button>
        </div>}
        <div className="song-midi-region-footer">
          <span className="timecode">{clock(Math.max(0,start))} – {clock(Math.max(0,end))}</span>

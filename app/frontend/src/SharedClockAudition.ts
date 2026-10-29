@@ -22,7 +22,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1;startSeconds:number;timelinePositioned:boolean};
 export type AuditionLevel = {gain:number};
 export type DeclickRecipe={id:string;filename:string;source_key:string;time_seconds:number;half_window_ms:number};
-type Track = {source:AuditionSource;buffer:AudioBuffer;rawBuffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;replacementGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
+type Track = {source:AuditionSource;buffer:AudioBuffer;rawBuffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;scriptVolume:GainNode;replacementGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
 export const MAX_DECODED_AUDIO_BYTES=768*1024*1024;
@@ -64,7 +64,7 @@ export class SharedClockAudition {
   private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean}|null=null;
   private replacementMasks:ReplacementMask[]=[];
   private candidateOriginalMix:{filename:string;gain:number}|null=null;
-  private automation:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
+  private automation:Record<string,{gain?:AutomationPoint[];volume?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
   private duckEnvelopes=new Map<string,AutomationPoint[]>();
   private deessEnvelopes=new Map<string,AutomationPoint[]>();
   get dynamicsMeters(){
@@ -168,12 +168,14 @@ export class SharedClockAudition {
         panner.pan.value=src.pan;
         const sectionGain=this.context.createGain();
         sectionGain.gain.value=1;
+        const scriptVolume=this.context.createGain();
+        scriptVolume.gain.value=1;
         const replacementGain=this.context.createGain();
         replacementGain.gain.value=1;
         const childGain=this.context.createGain();
         childGain.gain.value=1;
         const childEq=src.key!==src.filename?createEqStage(this.context):undefined;
-        gain.connect(sectionGain).connect(replacementGain).connect(childGain).connect(panner);
+        gain.connect(sectionGain).connect(scriptVolume).connect(replacementGain).connect(childGain).connect(panner);
         if(childEq){
           panner.connect(childEq[0]);
           childEq[2].connect(this.eqStages.get(src.filename)![0]);
@@ -185,7 +187,7 @@ export class SharedClockAudition {
           this.reverbSends.set(src.key,childSend);
         }else panner.connect(this.eqStages.get(src.filename)![0]);
         gain.gain.value=0;
-        this.tracks.push({source:src,buffer,rawBuffer:buffer,gain,sectionGain,replacementGain,childGain,childEq,panner});
+        this.tracks.push({source:src,buffer,rawBuffer:buffer,gain,sectionGain,scriptVolume,replacementGain,childGain,childEq,panner});
         onProgress?.(i+1,sources.length);
       }
       const duration=timelineDuration&&timelineDuration>0?timelineDuration:maxDuration;
@@ -465,6 +467,7 @@ export class SharedClockAudition {
             end_seconds:this.candidatePreview.startSeconds+this.candidatePreview.buffer.duration,
             fade_seconds:.05,original_gain:this.candidateOriginalMix.gain}]
         :[];
+      scheduleAutomation(track.scriptVolume.gain,this.automation[src.filename]?.volume||[{time:0,value:1}],offset,at);
       scheduleAutomation(track.replacementGain.gain,replacementCurve([
         ...this.replacementMasks.filter(mask=>mask.source_filename===src.filename),...audition]),offset,at);
       scheduleAutomation(track.childGain.gain,
@@ -566,7 +569,7 @@ export class SharedClockAudition {
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.offset);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
-  setAutomation(curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
+  setAutomation(curves:Record<string,{gain?:AutomationPoint[];volume?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
     this.automation=curves;
     this.duckEnvelopes.clear();
     this.refreshDuckingEnvelopes();
@@ -735,6 +738,8 @@ export class SharedClockAudition {
       const sectionGain=offline.createGain();
       scheduleAutomation(sectionGain.gain,
         this.automation[track.source.filename]?.gain||[{time:0,value:1}],0,0);
+      const scriptVolume=offline.createGain();
+      scheduleAutomation(scriptVolume.gain,this.automation[track.source.filename]?.volume||[{time:0,value:1}],0,0);
       const replacementGain=offline.createGain();
       scheduleAutomation(replacementGain.gain,replacementCurve(this.replacementMasks.filter(mask=>mask.source_filename===track.source.filename)),0,0);
       const childGain=offline.createGain();
@@ -744,7 +749,7 @@ export class SharedClockAudition {
       const childPanCurve=track.source.key!==track.source.filename
         ?this.automation[track.source.key]?.pan:undefined;
       if(childPanCurve)scheduleAutomation(childPan.pan,childPanCurve,0,0);
-      source.connect(gain).connect(sectionGain).connect(replacementGain).connect(childGain).connect(childPan);
+      source.connect(gain).connect(sectionGain).connect(scriptVolume).connect(replacementGain).connect(childGain).connect(childPan);
       if(track.source.key!==track.source.filename){
         const childEq=createEqStage(offline);
         childPan.connect(childEq[0]);
@@ -866,7 +871,7 @@ export class SharedClockAudition {
     this.prepared=false;
     this.stopSources();
     for(const track of this.tracks){
-      track.gain.disconnect();track.sectionGain.disconnect();track.replacementGain.disconnect();track.childGain.disconnect();
+      track.gain.disconnect();track.sectionGain.disconnect();track.scriptVolume.disconnect();track.replacementGain.disconnect();track.childGain.disconnect();
       track.panner.disconnect();track.childEq?.forEach(eq=>eq.disconnect());
     }
     for(const bus of this.groupPanners.values())bus.disconnect();

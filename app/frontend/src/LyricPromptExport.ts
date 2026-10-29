@@ -4,7 +4,7 @@
 export type LyricExportFormat="yue2"|"ace";
 const SECTION=/^\[(Intro|Verse|Pre-Chorus|Chorus|Bridge|Instrumental|Guitar Solo|Outro|End)(?:\s+(\d{1,2}))?(?:\s+.*)?\]$/;
 const TIME=/\d{1,3}:\d{2}(?:\.\d{1,3})?\s*-\s*\d{1,3}:\d{2}(?:\.\d{1,3})?/;
-function sectionTag(line:string):string {
+function sectionTag(line:string,format:LyricExportFormat):string {
   const m=SECTION.exec(line);
   if(!m)throw Error("Unrecognized section header: "+line);
   // Reject trailing unrelated material rather than silently feeding Song Harbor
@@ -13,7 +13,8 @@ function sectionTag(line:string):string {
   if(rest&&!TIME.test(rest)&&!/^\w[\w-]*:/.test(rest))
     throw Error("Cannot convert section header: "+line);
   const kind=m[1]==="Guitar Solo"?"Instrumental":m[1];
-  return "["+kind+(m[2]?" "+m[2]:"")+"]";
+  const number=m[2]&&(format==="ace"||kind==="Verse")?" "+m[2]:"";
+  return "["+kind+number+"]";
 }
 export function exportSongLyrics(sheet:string,format:LyricExportFormat):string {
   if(format!=="yue2"&&format!=="ace")throw Error("Unknown lyric export format");
@@ -39,7 +40,7 @@ export function exportSongLyrics(sheet:string,format:LyricExportFormat):string {
       continue;
     }
     if(line.startsWith("[")&&line.endsWith("]")){
-      const tag=sectionTag(line);
+      const tag=sectionTag(line,format);
       if(output.length&&output[output.length-1]!=="")output.push("");
       output.push(tag);
       sections++;

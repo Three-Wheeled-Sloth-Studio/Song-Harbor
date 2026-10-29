@@ -770,3 +770,16 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-correction-meter-detail .song-dynamics-meter{padding-top:7px}
 .song-correction-actions{display:none}
 @media(max-width:650px){.song-correction-selects{grid-template-columns:repeat(2,minmax(0,1fr))}.song-correction-selects label:last-child{grid-column:1/-1}}
+
+/* Bass-to-MIDI CPU prototype: compact note edits instead of full-width faders. */
+.song-midi-tool{display:grid;gap:9px;min-width:min(420px,75vw);max-width:100%;font-size:12px}
+.song-midi-tool>label{display:grid;gap:3px}
+.song-midi-tool small{color:var(--tws-color-text-muted)}
+.song-midi-controls{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.song-midi-controls strong{flex-basis:100%}
+.song-midi-note-list{display:grid;gap:3px;max-height:260px;overflow-y:auto}
+.song-midi-note{display:grid;grid-template-columns:22px minmax(105px,1.2fr) minmax(74px,1fr) minmax(74px,1fr) 26px;align-items:end;gap:3px;background:var(--tws-color-surface-panel);padding:5px;border-radius:5px}
+.song-midi-note label{display:grid;gap:2px;min-width:0}
+.song-midi-note input,.song-midi-note select{min-width:0;width:100%;padding:4px;font-size:12px}
+.song-midi-note button{padding:4px}
+.song-midi-tool button{cursor:pointer}

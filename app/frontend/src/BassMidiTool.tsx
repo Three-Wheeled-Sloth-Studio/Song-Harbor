@@ -6,17 +6,19 @@ type Note={pitch:number;start:number;end:number;velocity:number};
 type Candidate={candidate_id:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
 type Track={track_id:string;stem_alias:string;display_name:string};
 type Imported={project:unknown;job:unknown};
-type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
+type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;engine:SharedClockAudition|null;
  playing:boolean;onSeek:(seconds:number)=>void;onPlay:()=>Promise<void>;onPause:()=>void;
  onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void};
 function clock(seconds:number){const ms=Math.max(0,Math.round(seconds*1000));return Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");}
 const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Bass MIDI operation failed");return data;}
-export function BassMidiTool({jobId,sections,engine,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
+export function BassMidiTool({jobId,sections,songDuration,position,engine,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
  const [trackId,setTrackId]=useState("");
  const [bassExists,setBassExists]=useState(true);
- const [sectionId,setSectionId]=useState("");
+ const [sectionId,setSectionId]=useState("custom");
+ const [customStart,setCustomStart]=useState(0);
+ const [customDuration,setCustomDuration]=useState(20);
  const [candidate,setCandidate]=useState<Candidate|null>(null);
  const [notes,setNotes]=useState<Note[]>([]);
  const [busy,setBusy]=useState(false);
@@ -24,25 +26,27 @@ export function BassMidiTool({jobId,sections,engine,playing,onSeek,onPlay,onPaus
  const [error,setError]=useState("");
  const [alias,setAlias]=useState("BassCello");
  const [previewReady,setPreviewReady]=useState(false);
- const chosen=sections.find(s=>s.id===sectionId)||sections[0];
- const duration=chosen?chosen.end_seconds-chosen.start_seconds:0;
+ const chosen=sections.find(s=>s.id===sectionId);
+ const start=chosen?chosen.start_seconds:customStart;
+ const duration=chosen?chosen.end_seconds-chosen.start_seconds:customDuration;
+ const inBounds=Number.isFinite(start)&&Number.isFinite(duration)&&start>=0&&duration>=.5&&duration<=45&&start+duration<=songDuration+.005;
  const base="/api/projects/"+jobId+"/bass-midi";
  useEffect(()=>{let live=true;void req<{tracks:Track[]}>("/api/projects/"+jobId+"/tracks").then(data=>{
    if(!live)return;const bass=data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass");
    setTrackId(bass?.track_id||"");setBassExists(!!bass);
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId]);
- useEffect(()=>{if(!sectionId&&sections.length)setSectionId(sections[0].id);},[sectionId,sections]);
+
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
  function edited(index:number,patch:Partial<Note>){
    setNotes(current=>current.map((note,i)=>i===index?{...note,...patch}:note));setPreviewReady(false);engine?.clearCandidatePreview();
  }
  function revert(){setNotes(candidate?.original_notes.map(n=>({...n}))||[]);setPreviewReady(false);engine?.clearCandidatePreview();setMessage("Original extracted notes restored.");}
  async function analyze(){
-   if(!trackId||!chosen||duration<=0||duration>45||busy)return;
+   if(!trackId||!inBounds||busy)return;
    setBusy(true);setError("");setMessage("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({track_id:trackId,start_seconds:chosen.start_seconds,duration_seconds:duration})});
+       body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
      setCandidate(data);setNotes(data.notes.map(n=>({...n})));
      setMessage(data.notes.length+" estimated bass notes. Correct pitch/timing, then render preview.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
@@ -106,9 +110,10 @@ export function BassMidiTool({jobId,sections,engine,playing,onSeek,onPlay,onPaus
    <small>CPU-only, monophonic prototype. Pitch and note boundaries are estimates. The rendered sound is an original bowed-string approximation, not a sampled acoustic cello.</small>
    {!bassExists&&<small role="alert">A separated track with alias Bass is required.</small>}
    <label>Source <input value="Bass (original stem only)" disabled/></label>
-   <label>Region <select value={sectionId} onChange={e=>setSectionId(e.target.value)}>{sections.map(s=><option key={s.id} value={s.id}>{s.kind}{s.number?" "+s.number:""} · {clock(s.start_seconds)}–{clock(s.end_seconds)} ({(s.end_seconds-s.start_seconds).toFixed(1)}s)</option>)}</select></label>
-   <small>{duration>45?"Choose a section no longer than 45 seconds for this test.": "Use a clean bass-only section; start with 10–30 seconds if available."}</small>
-   <button type="button" disabled={!trackId||!chosen||duration>45||duration<=0||busy} onClick={()=>void analyze()}>{busy?"Working...":"Extract bass notes (CPU)"}</button>
+   <label>Region <select value={sectionId} onChange={e=>setSectionId(e.target.value)}><option value="custom">Custom range</option>{sections.map(s=><option key={s.id} value={s.id}>{s.kind}{s.number?" "+s.number:""} · {clock(s.start_seconds)}–{clock(s.end_seconds)} ({(s.end_seconds-s.start_seconds).toFixed(1)}s)</option>)}</select></label>
+   {sectionId==="custom"&&<div className="song-midi-controls"><label>Start (s) <input type="number" min="0" max={songDuration} step=".1" value={customStart} onChange={e=>setCustomStart(Number(e.target.value))}/></label><label>Length (s) <input type="number" min=".5" max="45" step=".1" value={customDuration} onChange={e=>setCustomDuration(Number(e.target.value))}/></label><button type="button" onClick={()=>setCustomStart(Math.max(0,Math.min(position,songDuration-customDuration)))}>Start at playhead</button></div>}
+   <small>{!inBounds?"Select a 0.5–45s range entirely within the song.":"Start with 10–30 seconds of relatively clean separated bass."}</small>
+   <button type="button" disabled={!trackId||!inBounds||busy} onClick={()=>void analyze()}>{busy?"Working...":"Extract bass notes (CPU)"}</button>
    {candidate&&<><div className="song-midi-controls">
      <strong>{notes.length} notes · {clock(candidate.start_seconds)}–{clock(candidate.start_seconds+candidate.duration_seconds)}</strong>
      <button type="button" disabled={busy} onClick={revert}>Revert edits</button>

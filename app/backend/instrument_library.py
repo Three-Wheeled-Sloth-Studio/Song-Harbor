@@ -200,9 +200,78 @@ def install_starter(runtime:Path,starter_id:str)->dict:
         if temp_path is not None:temp_path.unlink(missing_ok=True)
 
 
-def find_fluidsynth(runtime:Path)->str|None:
+def configured_fluidsynth(config_root:Path)->str:
+    """Get the machine-local FluidSynth override from shared settings."""
+    try:
+        data=json.loads((config_root/"config"/"settings.json").read_text(encoding="utf-8"))
+        value=data.get("fluidsynth_executable","")
+        return value if isinstance(value,str) else ""
+    except (OSError,ValueError,AttributeError):
+        return ""
+
+
+def validate_fluidsynth(path:str)->str:
+    """Validate a user-specified executable without launching arbitrary filenames."""
+    raw=Path(path.strip().strip('"')).expanduser()
+    if raw.is_dir():
+        raw=raw/("fluidsynth.exe" if os.name=="nt" else "fluidsynth")
+    if raw.name.lower() not in ("fluidsynth.exe","fluidsynth"):
+        raise ValueError("Select fluidsynth.exe (or its bin directory)")
+    if not raw.is_file():
+        raise ValueError("FluidSynth executable was not found")
+    command=[str(raw),"-V"]
+    try:
+        result=subprocess.run(command,capture_output=True,text=True,timeout=8,
+                              creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    except (OSError,subprocess.TimeoutExpired) as exc:
+        raise ValueError("Could not launch FluidSynth to verify its version") from exc
+    if result.returncode!=0 or "fluid" not in (result.stdout+result.stderr).lower():
+        raise ValueError("File did not respond as FluidSynth")
+    return str(raw.resolve())
+
+
+def save_fluidsynth(config_root:Path,path:str)->str:
+    """Persist beside existing user settings; preserve unrelated configuration."""
+    verified=validate_fluidsynth(path)
+    cfg_path=config_root/"config"/"settings.json"
+    cfg_path.parent.mkdir(parents=True,exist_ok=True)
+    try:
+        config=json.loads(cfg_path.read_text(encoding="utf-8"))
+        if not isinstance(config,dict):config={}
+    except (OSError,ValueError):
+        config={}
+    config["fluidsynth_executable"]=verified
+    with tempfile.NamedTemporaryFile(mode="w",encoding="utf-8",dir=cfg_path.parent,
+                                     suffix=".tmp",delete=False) as handle:
+        json.dump(config,handle,indent=2)
+        staged=Path(handle.name)
+    try:
+        os.replace(staged,cfg_path)
+    finally:
+        staged.unlink(missing_ok=True)
+    return verified
+
+
+def browse_fluidsynth()->str|None:
+    if os.name!="nt":
+        raise ValueError("Native executable selection is currently Windows-only")
+    import tkinter
+    from tkinter import filedialog
+    window=tkinter.Tk()
+    window.withdraw()
+    window.attributes("-topmost",True)
+    try:
+        return filedialog.askopenfilename(
+            title="Select FluidSynth executable",
+            filetypes=[("FluidSynth executable","fluidsynth.exe"),("Executables","*.exe")]) or None
+    finally:
+        window.destroy()
+
+
+def find_fluidsynth(runtime:Path,config_root:Path|None=None)->str|None:
     binary="fluidsynth.exe" if os.name=="nt" else "fluidsynth"
-    locations=[os.environ.get("SONG_HARBOR_FLUIDSYNTH",""),
+    locations=[configured_fluidsynth(config_root) if config_root else "",
+               os.environ.get("SONG_HARBOR_FLUIDSYNTH",""),
                str(runtime/"tools"/"fluidsynth"/"bin"/binary),
                str(runtime.parent/"FluidSynth"/"bin"/binary),
                str(Path(os.environ.get("ProgramFiles","C:/Program Files"))/"FluidSynth"/"bin"/binary),
@@ -222,8 +291,8 @@ def find_fluidsynth(runtime:Path)->str|None:
     return None
 
 def render_sf2(runtime:Path,instrument:dict,soundfont:Path,midi_bytes:bytes,
-               target:Path,duration:float,ffmpeg:str)->None:
-    exe=find_fluidsynth(runtime)
+               target:Path,duration:float,ffmpeg:str,config_root:Path|None=None)->None:
+    exe=find_fluidsynth(runtime,config_root)
     if not exe:raise ValueError("FluidSynth is not installed. Configure SONG_HARBOR_FLUIDSYNTH or install it on PATH.")
     if not soundfont.is_file():raise ValueError("The selected SoundFont is missing")
     if not .1<=duration<=600:raise ValueError("Invalid render duration")

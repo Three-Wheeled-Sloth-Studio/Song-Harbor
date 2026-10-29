@@ -913,7 +913,7 @@ import bass_midi
 class BassMidiAnalyzeRequest(BaseModel):
     track_id: str = Field(min_length=1,max_length=80)
     start_seconds: float = Field(ge=0)
-    duration_seconds: float = Field(gt=0,le=45)
+    duration_seconds: float = Field(gt=0,le=600)
 
 
 class BassMidiNote(BaseModel):
@@ -924,7 +924,7 @@ class BassMidiNote(BaseModel):
 
 
 class BassMidiRenderRequest(BaseModel):
-    notes: list[BassMidiNote] = Field(max_length=320)
+    notes: list[BassMidiNote] = Field(max_length=4000)
 
 
 @app.post("/api/projects/{ident}/bass-midi/analyze")
@@ -937,9 +937,9 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
     if not dependencies.resolve(APP_ROOT):
         raise HTTPException(409,"FFmpeg setup required to transcribe bass")
     song_duration=resolved_song_duration(record,job)
-    if (body.duration_seconds>bass_midi.MAX_SECONDS or
+    if (body.duration_seconds>bass_midi.MAX_REGION_SECONDS or
         body.start_seconds+body.duration_seconds>song_duration+.005):
-        raise HTTPException(400,"Select up to 45 seconds within the song")
+        raise HTTPException(400,"Select up to 10 minutes within the song")
     try:
         rows=track_lifecycle.ensure_identities(record)
         row=next((r for r in rows if r.get("track_id")==body.track_id),None)
@@ -956,14 +956,13 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
         track_duration=float(row.get("duration_seconds") or song_duration)
         if local_start < -.005 or local_start+body.duration_seconds > track_duration+.005:
             raise ValueError("Selected region falls outside the stem's playable clip")
-        pcm=bass_midi.decode_excerpt(source,max(0,local_start),body.duration_seconds,dependency_tool("ffmpeg"))
-        notes=bass_midi.transcribe(pcm)
-        if not notes:raise ValueError("No pitched bass notes found; choose a clearer region")
+        notes=bass_midi.transcribe_region(source,max(0,local_start),body.duration_seconds,dependency_tool("ffmpeg"))
+        if not notes:raise ValueError("No pitched notes found; choose a clearer region")
         candidate_id=uuid.uuid4().hex
         folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
         out={"candidate_id":candidate_id,"source_track_id":body.track_id,"source_alias":str(row.get("stem_alias") or ""),
              "source_working_filename":filename,"start_seconds":round(body.start_seconds,3),
-             "duration_seconds":round(len(pcm)/bass_midi.RATE,3),
+             "duration_seconds":round(body.duration_seconds,3),
              "notes":notes,"original_notes":notes,"render_kind":"synthetic_bowed_preview",
              "method":"CPU harmonic salience / monophonic pitched-stem estimate"}
         bass_midi.write_json(folder/"candidate.json",out)

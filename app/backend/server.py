@@ -908,6 +908,44 @@ def undo_declick_repair(ident: str, repair_id: str, request: Request) -> dict[st
 # CPU-only exploratory bass -> MIDI -> bowed-string reinstrumentation.
 # Candidate files live under generated/bass-midi; the original Bass stem never changes.
 import bass_midi
+import instrument_library
+
+
+@app.get("/api/instruments")
+def list_instrument_library()->dict[str,Any]:
+    result=instrument_library.catalogue(DATA_ROOT)
+    result["fluidsynth_ready"]=bool(instrument_library.find_fluidsynth(DATA_ROOT))
+    return result
+
+
+@app.post("/api/instruments/sf2")
+async def install_instrument_soundfont(request:Request,
+                                      file:UploadFile=File(...),
+                                      pack_name:str=Form("Imported SoundFont"))->dict[str,Any]:
+    """User-initiated local SF2 import; never download or execute pack contents."""
+    require_local_origin(request)
+    if not (file.filename or "").lower().endswith(".sf2"):
+        raise HTTPException(400,"Choose an .sf2 SoundFont")
+    if not 1<=len(pack_name.strip())<=100:
+        raise HTTPException(400,"Pack name must be 1–100 characters")
+    import tempfile
+    root=instrument_library.pack_root(DATA_ROOT)
+    root.mkdir(parents=True,exist_ok=True)
+    staged=None
+    try:
+        with tempfile.NamedTemporaryFile(dir=root,suffix=".sf2",delete=False) as temp:
+            staged=Path(temp.name)
+            total=0
+            while chunk:=await file.read(1024*1024):
+                total+=len(chunk)
+                if total>instrument_library.SOUNDFONT_LIMIT:
+                    raise ValueError("SoundFont exceeds 512 MB")
+                temp.write(chunk)
+        return instrument_library.install_sf2(DATA_ROOT,staged,pack_name.strip())
+    except (ValueError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+    finally:
+        if staged is not None:staged.unlink(missing_ok=True)
 
 
 class BassMidiAnalyzeRequest(BaseModel):
@@ -926,6 +964,8 @@ class BassMidiNote(BaseModel):
 class BassMidiRenderRequest(BaseModel):
     notes: list[BassMidiNote] = Field(max_length=4000)
     instrument: Literal["bowed", "plucked", "warm_pad"] = "bowed"
+    pack_id: str = Field(default="song-harbor-core",max_length=80)
+    instrument_id: str = Field(default="",max_length=120)
 
 
 @app.post("/api/projects/{ident}/bass-midi/analyze")
@@ -990,10 +1030,14 @@ def save_stem_midi_notes(ident:str,candidate_id:str,request:Request,
         record=bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
         notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],
                                        float(record["duration_seconds"]))
+        selected, _=instrument_library.resolve_instrument(
+            DATA_ROOT,body.pack_id,body.instrument_id or body.instrument)
         (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(
-            notes,float(record["duration_seconds"]),instrument=body.instrument))
+            notes,float(record["duration_seconds"]),
+            program=selected["program"],bank=selected["bank"]))
         record["notes"]=notes
-        record["instrument"]=body.instrument
+        record["instrument"]=selected["id"]
+        record["pack_id"]=selected["pack_id"]
         # Old WAV must not be accepted after MIDI edits without a new render.
         record["rendered"]=False
         (folder/"bowed-preview.wav").unlink(missing_ok=True)
@@ -1012,11 +1056,20 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
         folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
         record=bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
         notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],float(record["duration_seconds"]))
-        bass_midi.render_instrument_wav(folder/"bowed-preview.wav",notes,float(record["duration_seconds"]),body.instrument)
-        (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(notes,float(record["duration_seconds"]),instrument=body.instrument))
+        selected, font=instrument_library.resolve_instrument(
+            DATA_ROOT,body.pack_id,body.instrument_id or body.instrument)
+        duration=float(record["duration_seconds"])
+        midi=bass_midi.midi_bytes(notes,duration,program=selected["program"],bank=selected["bank"])
+        if selected["engine"]=="sf2":
+            instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
+                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"))
+        else:
+            bass_midi.render_instrument_wav(folder/"bowed-preview.wav",notes,duration,selected["id"])
+        (folder/"notes.mid").write_bytes(midi)
         record["notes"]=notes
-        record["render_kind"]="synthetic_"+body.instrument+"_preview"
-        record["instrument"]=body.instrument
+        record["render_kind"]=selected["engine"]+"_"+selected["id"]+"_preview"
+        record["instrument"]=selected["id"]
+        record["pack_id"]=selected["pack_id"]
         record["rendered"]=True
         bass_midi.write_json(folder/"candidate.json",record)
         return record

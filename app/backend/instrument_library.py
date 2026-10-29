@@ -201,8 +201,14 @@ def install_starter(runtime:Path,starter_id:str)->dict:
 
 
 def find_fluidsynth(runtime:Path)->str|None:
+    binary="fluidsynth.exe" if os.name=="nt" else "fluidsynth"
     locations=[os.environ.get("SONG_HARBOR_FLUIDSYNTH",""),
-               str(runtime/"tools"/"fluidsynth"/"bin"/("fluidsynth.exe" if os.name=="nt" else "fluidsynth")),
+               str(runtime/"tools"/"fluidsynth"/"bin"/binary),
+               str(runtime.parent/"FluidSynth"/"bin"/binary),
+               str(Path(os.environ.get("ProgramFiles","C:/Program Files"))/"FluidSynth"/"bin"/binary),
+               str(Path(os.environ.get("ChocolateyInstall","C:/ProgramData/chocolatey"))/"bin"/binary),
+               str(Path("C:/tools")/"fluidsynth"/"bin"/binary),
+               str(Path.home()/"scoop"/"apps"/"fluidsynth"/"current"/"bin"/binary),
                shutil.which("fluidsynth") or ""]
     for location in locations:
         if not location:continue

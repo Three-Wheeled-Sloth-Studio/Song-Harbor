@@ -4,7 +4,7 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"sectionEdit",icon:"≡",label:"Edit sections"},
   {id:"cleanup",icon:"◇",label:"Sound cleanup & forensics"},
   {id:"accompaniment",icon:"♫",label:"Generate accompaniment"},
-  {id:"bassMidi",icon:"♮",label:"Bass to MIDI / cello"},
+  {id:"bassMidi",icon:"♮",label:"Stem → MIDI / Reinstrument"},
   {id:"ab",icon:"◉",label:"A/B comparison"},
   {id:"ending",icon:"⇥",label:"Ending"},
   {id:"zoom",icon:"⌕",label:"Zoom"},

@@ -1104,6 +1104,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             gainPoints:(()=>{const edits=gainTargets.filter(item=>item.source_key===s.filename).flatMap(item=>{const section=timelineSections.find(sec=>sec.id===item.section_id);return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,value:Math.pow(10,item.gain_db/20),transitionSeconds:item.transition_seconds,curve:item.curve}]:[];});return edits.length?compileSectionAutomation(edits,1,{min:0,max:4}):undefined;})(),
             children:channels[s.filename]?.active?(["left","right"] as const).map(channel=>({
               filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
+              gain:s.mute||(stems.some(x=>x.solo)&&!s.solo)?0:s.gain/100,
+              replacementMasks:replacementMasks.filter(mask=>mask.source_filename===s.filename),
+              parentGainPoints:(()=>{const edits=gainTargets.filter(item=>item.source_key===s.filename).flatMap(item=>{const section=timelineSections.find(sec=>sec.id===item.section_id);return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,value:Math.pow(10,item.gain_db/20),transitionSeconds:item.transition_seconds,curve:item.curve}]:[];});return edits.length?compileSectionAutomation(edits,1,{min:0,max:4}):undefined;})(),
+              gainPoints:(()=>{const edits=gainTargets.filter(item=>item.source_key===s.filename+":"+channel).flatMap(item=>{const section=timelineSections.find(sec=>sec.id===item.section_id);return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,value:Math.pow(10,item.gain_db/20),transitionSeconds:item.transition_seconds,curve:item.curve}]:[];});return edits.length?compileSectionAutomation(edits,1,{min:0,max:4}):undefined;})(),
               waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
             })):[]
           }))} duration={duration} position={position} onSeek={seek}

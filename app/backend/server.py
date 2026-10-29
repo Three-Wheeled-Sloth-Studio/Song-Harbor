@@ -708,7 +708,8 @@ async def add_project_track(ident: str, request: Request,
                             stem_alias: str = Form(...),
                             display_name: str = Form(...),
                             start_seconds: float = Form(0.0),
-                            section_id: str | None = Form(None)) -> dict[str, Any]:
+                            section_id: str | None = Form(None),
+                            preview_trim_db: float = Form(0.0)) -> dict[str, Any]:
     """Add a short, timeline-positioned clip without padding or touching sources."""
     require_local_origin(request)
     if not track_lifecycle.ALIAS.fullmatch(stem_alias) or stem_alias.casefold() in track_lifecycle.RESERVED:
@@ -719,6 +720,9 @@ async def add_project_track(ident: str, request: Request,
     # directly by unit tests rather than through request binding.
     if not isinstance(section_id,str):section_id=None
     if not isinstance(start_seconds,(int,float)):start_seconds=0.0
+    if not isinstance(preview_trim_db,(int,float)):preview_trim_db=0.0
+    if not math.isfinite(preview_trim_db) or not -12<=preview_trim_db<=9:
+        raise HTTPException(400,"Candidate level must be between -12 and +9 dB")
     source_name=safe_name(file.filename or "")
     if Path(source_name).suffix not in ALLOWED:
         raise HTTPException(400,"Unsupported audio format")
@@ -773,7 +777,7 @@ async def add_project_track(ident: str, request: Request,
         ffmpeg=dependency_tool("ffmpeg")
         command=[ffmpeg,"-hide_banner","-loglevel","error","-nostdin","-y",
                  "-i",str(original),"-map","0:a:0","-vn",
-                 "-af","asetpts=PTS-STARTPTS",
+                 "-af","asetpts=PTS-STARTPTS,volume="+str(preview_trim_db)+"dB",
                  "-ac","2","-ar","48000","-c:a","pcm_s24le","-f","wav",str(staging)]
         result=subprocess.run(command,capture_output=True,text=True,timeout=360,
                               creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
@@ -787,7 +791,7 @@ async def add_project_track(ident: str, request: Request,
                         "display_name":display_name.strip(),"imported":True,
                         "start_seconds":round(float(start_seconds),3),
                         "duration_seconds":round(probe_duration(final),3),
-                        "content_sha256":digest})
+                        "content_sha256":digest,"import_trim_db":round(float(preview_trim_db),2)})
         record["source_tracks"]=updated
         record["files"]=list(record["files"])+[final_name]
         record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]

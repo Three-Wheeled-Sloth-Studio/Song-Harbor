@@ -911,10 +911,38 @@ import bass_midi
 import instrument_library
 
 
+class FluidSynthPathRequest(BaseModel):
+    path: str = Field(min_length=1,max_length=2048)
+
+
+@app.get("/api/settings/fluidsynth")
+def get_fluidsynth_settings()->dict[str,Any]:
+    return {"configured_path":instrument_library.configured_fluidsynth(APP_ROOT),
+            "resolved_path":instrument_library.find_fluidsynth(DATA_ROOT,APP_ROOT)}
+
+
+@app.put("/api/settings/fluidsynth")
+def put_fluidsynth_settings(body:FluidSynthPathRequest,request:Request)->dict[str,Any]:
+    require_local_origin(request)
+    try:
+        resolved=instrument_library.save_fluidsynth(APP_ROOT,body.path)
+        return {"configured_path":resolved,"resolved_path":resolved}
+    except (ValueError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.post("/api/settings/fluidsynth/browse")
+def browse_fluidsynth_settings(request:Request)->dict[str,str|None]:
+    require_local_origin(request)
+    try:return {"path":instrument_library.browse_fluidsynth()}
+    except (ValueError,OSError,RuntimeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
 @app.get("/api/instruments")
 def list_instrument_library()->dict[str,Any]:
     result=instrument_library.catalogue(DATA_ROOT)
-    result["fluidsynth_ready"]=bool(instrument_library.find_fluidsynth(DATA_ROOT))
+    result["fluidsynth_ready"]=bool(instrument_library.find_fluidsynth(DATA_ROOT,APP_ROOT))
     return result
 
 
@@ -1081,7 +1109,7 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
         midi=bass_midi.midi_bytes(notes,duration,program=selected["program"],bank=selected["bank"])
         if selected["engine"]=="sf2":
             instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
-                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"))
+                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
         else:
             bass_midi.render_instrument_wav(folder/"bowed-preview.wav",notes,duration,selected["id"])
         (folder/"notes.mid").write_bytes(midi)

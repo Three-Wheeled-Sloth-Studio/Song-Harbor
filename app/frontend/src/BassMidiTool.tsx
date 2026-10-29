@@ -47,6 +47,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [installingPack,setInstallingPack]=useState(false);
  const [starters,setStarters]=useState<Starter[]>([]);
  const [previewReady,setPreviewReady]=useState(false);
+ const [candidateTrimDb,setCandidateTrimDb]=useState(0);
+ const [auditionMode,setAuditionMode]=useState<"solo"|"ab"|null>(null);
  const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter).sort((a,b)=>{
    const pa=preferred(a),pb=preferred(b);
    if((pa>=0)!==(pb>=0))return pa>=0?-1:1;
@@ -149,6 +151,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      await engine.loadCandidatePreview(base+"/"+candidate.candidate_id+"/audio?revision="+Date.now(),candidate.start_seconds);
      engine.setCandidatePreviewSolo(solo);
      engine.setCandidatePreviewBlend(solo?100:60);
+     engine.setCandidatePreviewTrimDb(candidateTrimDb);
+     setAuditionMode(solo?"solo":"ab");
      onSeek(candidate.start_seconds);
      if(!playing)await onPlay();
    }catch(e){setError(String(e));}finally{setBusy(false);}
@@ -168,6 +172,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      form.append("stem_alias",alias);
      form.append("display_name",selectedLabel+" ("+alias+")");
      form.append("start_seconds",String(candidate.start_seconds));
+     form.append("preview_trim_db",String(candidateTrimDb));
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
      setMessage("New track added. Source preserved; remove the imported track to undo.");
@@ -275,6 +280,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            <button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
            <button type="button" title="Audition in song" disabled={!previewReady||busy} onClick={()=>void audition(false)}>◉ A/B</button>
+           <label className="song-candidate-volume" title="Candidate level, also applied when adding the track">◖ <input type="range" aria-label="Candidate volume trim" min="-12" max="9" step="1" value={candidateTrimDb} onChange={e=>{const db=Number(e.target.value);setCandidateTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/><output>{candidateTrimDb>0?"+":""}{candidateTrimDb} dB</output><button type="button" title="Reset candidate volume" aria-label="Reset candidate volume" onClick={()=>{setCandidateTrimDb(0);engine?.setCandidatePreviewTrimDb(0);}}>↺</button></label>
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>

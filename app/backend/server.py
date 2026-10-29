@@ -905,6 +905,113 @@ def undo_declick_repair(ident: str, repair_id: str, request: Request) -> dict[st
         raise HTTPException(409,str(exc)) from exc
 
 
+# CPU-only exploratory bass -> MIDI -> bowed-string reinstrumentation.
+# Candidate files live under generated/bass-midi; the original Bass stem never changes.
+import bass_midi
+
+
+class BassMidiAnalyzeRequest(BaseModel):
+    track_id: str = Field(min_length=1,max_length=80)
+    start_seconds: float = Field(ge=0)
+    duration_seconds: float = Field(gt=0,le=45)
+
+
+class BassMidiNote(BaseModel):
+    pitch: int = Field(ge=28,le=76)
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    velocity: int = Field(default=85,ge=1,le=127)
+
+
+class BassMidiRenderRequest(BaseModel):
+    notes: list[BassMidiNote] = Field(max_length=320)
+
+
+@app.post("/api/projects/{ident}/bass-midi/analyze")
+def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->dict[str,Any]:
+    require_local_origin(request)
+    job=get_job(ident)
+    record=projects.read_project(DATA_ROOT,ident) if job else None
+    if not record or not job or job.get("status")!="complete":
+        raise HTTPException(404,"Completed song not found")
+    if not dependencies.resolve(APP_ROOT):
+        raise HTTPException(409,"FFmpeg setup required to transcribe bass")
+    song_duration=resolved_song_duration(record,job)
+    if (body.duration_seconds>bass_midi.MAX_SECONDS or
+        body.start_seconds+body.duration_seconds>song_duration+.005):
+        raise HTTPException(400,"Select up to 45 seconds within the song")
+    try:
+        rows=track_lifecycle.ensure_identities(record)
+        row=next((r for r in rows if r.get("track_id")==body.track_id),None)
+        if not row or str(row.get("stem_alias","")).lower()!="bass":
+            raise ValueError("Choose the original separated Bass stem")
+        filename=str(row.get("working_filename",""))
+        base=(DATA_ROOT/"jobs"/ident/"stems").resolve()
+        source=(base/filename).resolve()
+        if source.parent!=base or not source.is_file() or source.suffix.lower()!=".wav":
+            raise ValueError("Bass working WAV unavailable")
+        pcm=bass_midi.decode_excerpt(source,body.start_seconds,body.duration_seconds,dependency_tool("ffmpeg"))
+        notes=bass_midi.transcribe(pcm)
+        if not notes:raise ValueError("No pitched bass notes found; choose a clearer region")
+        candidate_id=uuid.uuid4().hex
+        folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
+        out={"candidate_id":candidate_id,"source_track_id":body.track_id,"source_alias":"Bass",
+             "source_working_filename":filename,"start_seconds":round(body.start_seconds,3),
+             "duration_seconds":round(len(pcm)/bass_midi.RATE,3),
+             "notes":notes,"original_notes":notes,"render_kind":"synthetic_bowed_preview",
+             "method":"CPU harmonic salience / monophonic estimate"}
+        bass_midi.write_json(folder/"candidate.json",out)
+        return out
+    except (ValueError,OSError,subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/bass-midi/{candidate_id}")
+def get_bass_midi_candidate(ident:str,candidate_id:str)->dict[str,Any]:
+    _ace_project(ident)
+    try:return bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
+    except (ValueError,OSError) as exc:raise HTTPException(404,str(exc)) from exc
+
+
+@app.post("/api/projects/{ident}/bass-midi/{candidate_id}/render")
+def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
+                               body:BassMidiRenderRequest)->dict[str,Any]:
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
+        record=bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
+        notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],float(record["duration_seconds"]))
+        bass_midi.render_bowed_wav(folder/"bowed-preview.wav",notes,float(record["duration_seconds"]))
+        (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(notes,float(record["duration_seconds"])))
+        record["notes"]=notes
+        record["rendered"]=True
+        bass_midi.write_json(folder/"candidate.json",record)
+        return record
+    except (ValueError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/bass-midi/{candidate_id}/audio")
+def get_bass_midi_audio(ident:str,candidate_id:str)->FileResponse:
+    _ace_project(ident)
+    try:
+        path=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)/"bowed-preview.wav"
+        if not path.is_file():raise ValueError("Render candidate before audition")
+        return FileResponse(path,media_type="audio/wav",filename="bass-bowed-preview.wav")
+    except (ValueError,OSError) as exc:raise HTTPException(404,str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/bass-midi/{candidate_id}/midi")
+def get_bass_midi_file(ident:str,candidate_id:str)->FileResponse:
+    _ace_project(ident)
+    try:
+        path=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)/"notes.mid"
+        if not path.is_file():raise ValueError("Render candidate before MIDI export")
+        return FileResponse(path,media_type="audio/midi",filename="bass-to-cello.mid")
+    except (ValueError,OSError) as exc:raise HTTPException(404,str(exc)) from exc
+
+
 @app.get("/api/projects/{ident}/tracks")
 def list_project_tracks(ident: str) -> dict[str, Any]:
     """Upgrade legacy stem metadata without modifying the saved WAVs."""

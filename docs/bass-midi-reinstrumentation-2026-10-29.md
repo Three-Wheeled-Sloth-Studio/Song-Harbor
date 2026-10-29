@@ -36,3 +36,21 @@ Extract Blackwater Firmware's existing Bass stem into editable MIDI notes, optio
 - On Windows verify FFT note accuracy versus actual Bass, regional start alignment, silence gaps, note boundaries, render length, shared-clock audition, MIDI file import into DAW, re-import to Song Harbor, mute source, remove imported candidate, and original stem checksum unchanged.
 - Inspect 100% CPU, memory and GPU behavior; no GPU usage is expected.
 - Review sound quality separately. Move to high-quality cello SF2/VST preview **after** timing/pitch and reversible workflow pass acceptance.
+
+
+## Product direction confirmed after Blackwater Firmware listening QA
+
+The user reports that the experimental bass-to-bowed-cello treatment **sounds really good and moves the mix in the intended direction**. Treat this as subjective musical acceptance of the experiment, **not** an accuracy benchmark or approval of the temporary synth as a production cello.
+
+**Do not proliferate instrument-pair tools.** The current **Bass to MIDI / cello** entry is a temporary proof-of-concept. Its replacement must be two reusable operations:
+
+1. **Stem → MIDI** from any eligible stem. Transcription strategy depends on the audio (monophonic pitched, polyphonic, percussion, vocals), with explicit confidence/limitations, editable timing/pitch, and non-destructive export.
+2. **MIDI → Reinstrument** from generated or imported MIDI. Select and audition an instrument source (synth/SoundFont/sampler/plugin), edit notes independently, render to a new candidate audio track, compare A/B, and accept/remove without overwriting the original.
+
+**Stem-label interaction is the canonical entry point.** Labels in the mixer/timeline should be clickable/focusable controls opening stem-specific tools, including transcription, separation, cleanup, effects and routing. Avoid growing a permanent right-hand sidebar entry for every source/instrument combination. Preserve access through ordinary keyboard navigation and keep timeline width available.
+
+The MIDI intermediate representation should persist independently of the source stem, with a provenance link to the original source/region and editable revisions. The original stem and candidate must coexist; undo should require no regeneration. Follow the product's established **easy to do, easy to undo** principle.
+
+**Next implementation slices (not implemented here):** reusable stem selector/track contextual actions, decoupled MIDI extraction artifact, general MIDI editing, instrument registry/render backend, source vs candidate audition, and removal of the experiment-specific tool label after general workflow is available.
+
+Remain on **main** for normal Song Harbor development. Reserve `dev` for explicitly designated high-risk implementation experiments only.

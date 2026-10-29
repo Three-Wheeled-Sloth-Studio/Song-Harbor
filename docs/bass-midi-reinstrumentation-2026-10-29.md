@@ -54,3 +54,14 @@ The MIDI intermediate representation should persist independently of the source 
 **Next implementation slices (not implemented here):** reusable stem selector/track contextual actions, decoupled MIDI extraction artifact, general MIDI editing, instrument registry/render backend, source vs candidate audition, and removal of the experiment-specific tool label after general workflow is available.
 
 Remain on **main** for normal Song Harbor development. Reserve `dev` for explicitly designated high-risk implementation experiments only.
+
+## 2026-10-29 follow-on: Generic Stem → MIDI entry point (main)
+
+- **Interactive mixer stem labels:** click or keyboard-activate a stem's icon/name to reveal scoped tools: **Stem → MIDI**, Rename and Sound cleanup. Mute/Solo remain separate controls; the wider waveform stays intact.
+- **Generic source:** the MIDI tool receives a stable `track_id` from the selected label and offers an explicit source-stem selector. Backend uses selected working WAV and handles local offsets of imported clips, not just a hard-coded Bass stem.
+- **Separate MIDI step:** edit notes, then **Save / Export MIDI** without rendering a replacement instrument. Editing the MIDI invalidates any previous instrument preview; rerender before accepting.
+- **Reinstrument step:** currently offers the one experimental bowed-string synth. Additional renderers and generic MIDI file import remain future work.
+- **Safety:** the source stem remains immutable; the new track is optional and removable; MIDI candidate files stay within the song's generated folder. Existing bass-to-cello experiment is preserved, not migrated.
+- **QA outstanding:** local Windows frontend build, UI interaction and focus, selection persistence, audio/MIDI comparison, imported clip alignment, user listening, and integration regressions.
+
+This is the first architecture slice, **not** a claim of robust transcription for drum/polyphonic/vocal/mixed stems. Avoid adding instrument-pair buttons as permanent sidebar tools.

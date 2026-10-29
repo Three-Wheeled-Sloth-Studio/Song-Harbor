@@ -2,7 +2,7 @@ import {useEffect,useState} from "react";
 import type {SongSection} from "./SectionEditor";
 
 export type SavedWidthTarget={
-  section_id:string;source_key:string;width:number;transition_seconds:number;
+  section_id:string;source_key:string;width:number;transition_seconds:number;transition_anchor?:"start"|"end";
   curve:"linear"|"smooth";
 };
 type Props={

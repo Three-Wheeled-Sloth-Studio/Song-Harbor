@@ -31,7 +31,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const duration=chosen?chosen.end_seconds-chosen.start_seconds:customDuration;
  const inBounds=Number.isFinite(start)&&Number.isFinite(duration)&&start>=0&&duration>=.5&&duration<=45&&start+duration<=songDuration+.005;
  const base="/api/projects/"+jobId+"/bass-midi";
- useEffect(()=>{let live=true;void req<{tracks:Track[]}>("/api/projects/"+jobId+"/tracks").then(data=>{
+ useEffect(()=>{let live=true;setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();
+   void req<{tracks:Track[]}>("/api/projects/"+jobId+"/tracks").then(data=>{
    if(!live)return;setTrackRows(data.tracks);
    setTrackId(current=>data.tracks.some(t=>t.track_id===selectedTrackId)?selectedTrackId!:
       data.tracks.some(t=>t.track_id===current)?current:

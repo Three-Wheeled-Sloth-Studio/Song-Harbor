@@ -1381,7 +1381,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           engine={audio.current} playing={playing} position={position} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}
-        {tool==="bassMidi"&&<BassMidiTool jobId={jobId} sections={timelineSections}
+        {tool==="bassMidi"&&<BassMidiTool jobId={jobId} sections={timelineSections} songDuration={duration} position={position}
           engine={audio.current} playing={playing} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}

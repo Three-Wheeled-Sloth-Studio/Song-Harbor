@@ -610,14 +610,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       for(const correction of result.adjustments){
         if(!autoPanDesired.has(correction.filename))autoPanDesired.set(correction.filename,[]);
         autoPanDesired.get(correction.filename)!.push({
-          sectionId:section.id,start:effectStart(section,item),end:section.end_seconds,
+          sectionId:section.id,start:effectStart(section,request),end:section.end_seconds,
           value:correction.pan,transitionSeconds:request.transition_seconds,curve:request.curve});
         if(Math.abs(correction.gainDb)>.025){
           if(!autoGainDesired.has(correction.filename))autoGainDesired.set(correction.filename,[]);
           const base=byFile[correction.filename]?.gain
             ?valueAt(byFile[correction.filename].gain!,section.start_seconds):1;
           autoGainDesired.get(correction.filename)!.push({
-            sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+            sectionId:section.id,start:effectStart(section,request),end:section.end_seconds,
             value:base*Math.pow(10,correction.gainDb/20),
             transitionSeconds:request.transition_seconds,curve:request.curve});
         }

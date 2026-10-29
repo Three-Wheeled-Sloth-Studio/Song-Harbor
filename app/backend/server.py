@@ -991,8 +991,9 @@ def save_stem_midi_notes(ident:str,candidate_id:str,request:Request,
         notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],
                                        float(record["duration_seconds"]))
         (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(
-            notes,float(record["duration_seconds"])))
+            notes,float(record["duration_seconds"]),instrument=body.instrument))
         record["notes"]=notes
+        record["instrument"]=body.instrument
         # Old WAV must not be accepted after MIDI edits without a new render.
         record["rendered"]=False
         (folder/"bowed-preview.wav").unlink(missing_ok=True)

@@ -52,6 +52,29 @@ class TrackLifecycleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             track_lifecycle.rename(before,"not-a-track","CelloNew","Cello")
 
+    def test_replacement_lifecycle_preserves_script_and_restores_region(self):
+        project=self.sample()
+        clip="trk_replace (CelloTake).wav"
+        project["files"].append(clip)
+        project.setdefault("stems",[]).append({"filename":clip,"gain":1,"mute":False,"solo":False})
+        project["source_tracks"].append({"track_id":"trk_replace","stem_alias":"CelloTake",
+            "display_name":"Cello take","working_filename":clip,"original_filename":"trk_take.wav",
+            "imported":True,"start_seconds":6.0,"duration_seconds":4.0})
+        project["replacement_masks"]=[{
+            "replacement_track_id":"trk_replace","source_track_id":"trk0002",
+            "source_filename":FILES[1],"start_seconds":6.0,"end_seconds":10.0,"fade_seconds":.05}]
+        original=copy.deepcopy(project)
+        with self.assertRaisesRegex(ValueError,"replacement"):
+            track_lifecycle.position(project,"trk_replace",8,20)
+        moved=track_lifecycle.rename(project,"trk0002","OrchestraCello","Orchestra Cello")
+        self.assertEqual(moved["replacement_masks"],original["replacement_masks"])
+        self.assertEqual(project,original)
+        removed,_=track_lifecycle.remove(project,"trk_replace")
+        self.assertEqual(removed["replacement_masks"],[])
+        self.assertEqual(project,original)
+        self.assertEqual(removed["section_gain_automation"],original["section_gain_automation"])
+        self.assertEqual(removed["section_pan_automation"],original["section_pan_automation"])
+
     def test_stable_id_legacy_backfill(self):
         project={"files":FILES}
         first=track_lifecycle.ensure_identities(project)

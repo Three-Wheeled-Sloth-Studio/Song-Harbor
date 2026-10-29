@@ -23,11 +23,20 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
 }){
   const [peaks,setPeaks]=useState<Peaks|null>(null);
   const gradientId=useId().replace(/:/g,"-");
-  const gainStops=useMemo(()=>Array.from({length:201},(_,index)=>{
-    const at=duration*index/200;
-    const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*(row.parentGainPoints?valueAt(row.parentGainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
-    return {offset:index/2,opacity:Math.max(.055,Math.min(.85,gain*.85))};
-  }),[duration,row.gain,row.gainPoints,row.parentGainPoints,row.replacementMasks]);
+  const gainStops=useMemo(()=>{
+    const times=new Set<number>(Array.from({length:201},(_,index)=>duration*index/200));
+    for(const mask of row.replacementMasks||[]){
+      const fade=Math.max(.001,Math.min(mask.fade_seconds,(mask.end_seconds-mask.start_seconds)/4));
+      for(const t of [mask.start_seconds,mask.start_seconds+fade,mask.end_seconds-fade,mask.end_seconds])
+        times.add(Math.max(0,Math.min(duration,t)));
+    }
+    for(const point of [...(row.gainPoints||[]),...(row.parentGainPoints||[])])
+      times.add(Math.max(0,Math.min(duration,point.time)));
+    return [...times].sort((a,b)=>a-b).map(at=>{
+      const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*(row.parentGainPoints?valueAt(row.parentGainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
+      return {offset:duration>0?100*at/duration:0,opacity:Math.max(.055,Math.min(.85,gain*.85))};
+    });
+  },[duration,row.gain,row.gainPoints,row.parentGainPoints,row.replacementMasks]);
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();

@@ -16,7 +16,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Literal, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
@@ -925,6 +925,7 @@ class BassMidiNote(BaseModel):
 
 class BassMidiRenderRequest(BaseModel):
     notes: list[BassMidiNote] = Field(max_length=4000)
+    instrument: Literal["bowed", "plucked", "warm_pad"] = "bowed"
 
 
 @app.post("/api/projects/{ident}/bass-midi/analyze")
@@ -1010,9 +1011,11 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
         folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
         record=bass_midi.read_json(DATA_ROOT/"jobs"/ident,candidate_id)
         notes=bass_midi.validate_notes([n.model_dump() for n in body.notes],float(record["duration_seconds"]))
-        bass_midi.render_bowed_wav(folder/"bowed-preview.wav",notes,float(record["duration_seconds"]))
-        (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(notes,float(record["duration_seconds"])))
+        bass_midi.render_instrument_wav(folder/"bowed-preview.wav",notes,float(record["duration_seconds"]),body.instrument)
+        (folder/"notes.mid").write_bytes(bass_midi.midi_bytes(notes,float(record["duration_seconds"]),instrument=body.instrument))
         record["notes"]=notes
+        record["render_kind"]="synthetic_"+body.instrument+"_preview"
+        record["instrument"]=body.instrument
         record["rendered"]=True
         bass_midi.write_json(folder/"candidate.json",record)
         return record

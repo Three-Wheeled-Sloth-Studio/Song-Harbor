@@ -844,3 +844,22 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-instrument-import label:focus-within{outline:2px solid var(--tws-color-action-primary)}
 .song-instrument-import small:last-child{margin-left:auto}
 @media(max-width:550px){.song-instrument-selectors{grid-template-columns:1fr}}
+
+/* Keep application controls available while browsing long songs.
+   Header stays below dialogs and floating tools in the stacking order. */
+.topbar{position:sticky;top:0;z-index:80;min-height:56px;height:auto;flex-wrap:nowrap;isolation:isolate}
+.topbar .brand{min-width:0;gap:9px}
+.topbar .header-actions{min-width:0;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.topbar .brand strong{overflow:hidden;text-overflow:ellipsis}
+.setting-component-path input{min-width:0;flex:1}
+@media(max-width:760px){
+ .topbar{padding:6px 10px;gap:8px}
+ .topbar .brand{gap:5px;letter-spacing:0}
+ .topbar .brand>span:nth-child(2),.topbar .brand-divider{display:none}
+ .topbar .brand strong{font-size:13px}
+ .topbar .header-actions{gap:5px}
+ .topbar .header-actions .song-version-badge{max-width:80px}
+}
+@media(max-width:440px){
+ .topbar .header-actions .song-version-badge{max-width:52px}
+}

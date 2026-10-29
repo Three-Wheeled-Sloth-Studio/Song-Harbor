@@ -38,7 +38,7 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
   const [instrument,setInstrument]=useState("strings");
   const [vocalPhrase,setVocalPhrase]=useState("Mmm, mmm, mmm");
   const [alias,setAlias]=useState("Accompaniment");
-  const [acceptMode,setAcceptMode]=useState<"layer"|"replace">("layer");
+  const [originalGain,setOriginalGain]=useState(100);
   const [replaceTrackId,setReplaceTrackId]=useState("");
   const [bpm,setBpm]=useState("");
   const [key,setKey]=useState("");
@@ -184,8 +184,8 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
       form.append("display_name","ACE accompaniment ("+alias+")");
       form.append("start_seconds",String(candidate.target_start_seconds));
       form.append("preview_trim_db",String(previewTrimDb));
-      form.append("accept_mode",acceptMode);
-      if(acceptMode==="replace")form.append("replace_source_track_id",replaceTrackId);
+      form.append("original_gain_percent",String(originalGain));
+      if(originalGain<100)form.append("replace_source_track_id",replaceTrackId);
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
       setBlend(35);
@@ -285,13 +285,11 @@ export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],pl
         </div>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
         <div className="song-candidate-accept">
-          <select aria-label="ACE acceptance mode" title="Layer keeps the original. Replace region mutes selected source." value={acceptMode} onChange={e=>setAcceptMode(e.target.value as "layer"|"replace")}>
-            <option value="layer">Layer</option><option value="replace">Replace</option>
-          </select>
-          {acceptMode==="replace"&&<select aria-label="Original stem to replace" value={replaceTrackId} onChange={e=>setReplaceTrackId(e.target.value)}>
+          <label className="song-original-mix" title="Gain retained from original during generated section. 100% layers, 0% replaces">Original <input type="range" min="0" max="100" step="1" aria-label="ACE original stem retained gain" value={originalGain} onChange={e=>setOriginalGain(Number(e.target.value))}/><output>{originalGain}%</output></label>
+          {originalGain<100&&<select aria-label="Original stem to mix" value={replaceTrackId} onChange={e=>setReplaceTrackId(e.target.value)}>
             <option value="">Source stem…</option>{sourceTracks.map(track=><option key={track.track_id} value={track.track_id}>{track.display_name}</option>)}
           </select>}
-          <button type="button" disabled={busy||candidate.state!=="ready"||(acceptMode==="replace"&&!replaceTrackId)||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>✓ Add</button>
+          <button type="button" disabled={busy||candidate.state!=="ready"||(originalGain<100&&!replaceTrackId)||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>✓ Add</button>
         </div>
       </>}
     </section>}

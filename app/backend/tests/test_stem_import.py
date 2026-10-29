@@ -166,6 +166,56 @@ class ImportTracksTests(unittest.TestCase):
             self.assertTrue((folder/"stems"/saved["files"][-1]).is_file())
             self.assertTrue((folder/"stems"/files[0]).read_bytes()==b"existing WAV")
 
+    def test_replace_acceptance_adds_mask_and_remove_restores_unmodified_source(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            ident="abcdef123456"
+            folder=root/"jobs"/ident
+            (folder/"stems").mkdir(parents=True)
+            sources=["01 (Bass).wav","02 (Drums).wav"]
+            for name in sources:(folder/"stems"/name).write_bytes(b"original-source")
+            original={"version":projects.PROJECT_VERSION,"id":ident,
+                      "filename":"Song.wav","title":"Song","source_filename":"Song.wav",
+                      "files":sources,"stems":projects.default_settings(sources),
+                      "source_duration_seconds":12}
+            projects.write_project(root,original)
+            identities=track_lifecycle.ensure_identities(original)
+            project_bass=next(x for x in identities if x["stem_alias"]=="Bass")
+            projects.write_project(root,original)
+            job={"id":ident,"status":"complete","files":list(sources),"message":"ready"}
+            upload=UploadFile(filename="cello.wav",file=io.BytesIO(b"generated-cello"))
+            request=Request({"type":"http","headers":[]})
+            def convert(command,**_):
+                self.assertIn("volume=-4.0dB",command)
+                Path(command[-1]).write_bytes(b"working WAV"*8)
+                return SimpleNamespace(returncode=0,stderr="")
+            with (patch.object(server,"DATA_ROOT",root),
+                  patch.object(server,"jobs",{ident:job}),
+                  patch.object(server.dependencies,"resolve",return_value={"directory":str(root)}),
+                  patch.object(server,"probe_duration",return_value=3.5),
+                  patch.object(server,"dependency_tool",return_value="ffmpeg"),
+                  patch.object(server.subprocess,"run",side_effect=convert)):
+                added=asyncio.run(server.add_project_track(
+                    ident,request,upload,stem_alias="CelloTake",display_name="Cello",
+                    start_seconds=4,preview_trim_db=-4.0,accept_mode="replace",
+                    replace_source_track_id=project_bass["track_id"]))
+                saved=projects.read_project(root,ident)
+                mask=saved["replacement_masks"][0]
+                imported=saved["source_tracks"][-1]
+                self.assertEqual(mask["replacement_track_id"],imported["track_id"])
+                self.assertEqual(mask["source_track_id"],project_bass["track_id"])
+                self.assertEqual(mask["source_filename"],sources[0])
+                self.assertEqual((mask["start_seconds"],mask["end_seconds"]),(4,7.5))
+                self.assertEqual(imported["import_trim_db"],-4)
+                self.assertEqual((folder/"stems"/sources[0]).read_bytes(),b"original-source")
+                removed=server.remove_project_track(
+                    ident,imported["track_id"],request,
+                    server.RemoveTrack(expected_alias="CelloTake"))
+                restored=projects.read_project(root,ident)
+                self.assertEqual(restored.get("replacement_masks"),[])
+                self.assertEqual(restored["files"],sources)
+                self.assertEqual((folder/"stems"/sources[0]).read_bytes(),b"original-source")
+
     def test_add_stem_conversion_error_does_not_modify_existing_project(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)

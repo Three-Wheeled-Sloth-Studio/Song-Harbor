@@ -6,6 +6,7 @@ type Runtime={status:string;ready?:boolean;loaded_model?:string|null;models?:{na
 type Candidate={candidate_id:string;state:string;error?:string;target_start_seconds:number;target_end_seconds:number;model:string;isolation:string;prompt:string;seed:number;task_type?:string;instrument?:string;operation?:string;source_similarity?:{status:string;correlations?:number[];reason?:string};};
 type ImportResult={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];engine:SharedClockAudition|null;
+ sourceTracks?:{track_id:string;display_name:string}[];
   playing:boolean;position:number;onSeek:(time:number)=>void;onPlay:()=>Promise<void>;
   onPause:()=>void;onInserted:(result:ImportResult)=>void;saveProject:()=>Promise<boolean>;
   onError:(message:string)=>void};
@@ -26,7 +27,7 @@ async function jsonResponse<T>(url:string,init?:RequestInit):Promise<T>{
   return data;
 }
 
-export function AccompanimentGenerator({jobId,sections,engine,playing,position,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
+export function AccompanimentGenerator({jobId,sections,engine,sourceTracks=[],playing,position,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
   const [fromId,setFromId]=useState("");
   const [toId,setToId]=useState("");
   const [before,setBefore]=useState(15);
@@ -37,6 +38,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
   const [instrument,setInstrument]=useState("strings");
   const [vocalPhrase,setVocalPhrase]=useState("Mmm, mmm, mmm");
   const [alias,setAlias]=useState("Accompaniment");
+  const [acceptMode,setAcceptMode]=useState<"layer"|"replace">("layer");
+  const [replaceTrackId,setReplaceTrackId]=useState("");
   const [bpm,setBpm]=useState("");
   const [key,setKey]=useState("");
   const [seed,setSeed]=useState("150719");
@@ -181,6 +184,8 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
       form.append("display_name","ACE accompaniment ("+alias+")");
       form.append("start_seconds",String(candidate.target_start_seconds));
       form.append("preview_trim_db",String(previewTrimDb));
+      form.append("accept_mode",acceptMode);
+      if(acceptMode==="replace")form.append("replace_source_track_id",replaceTrackId);
       const result=await jsonResponse<ImportResult>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
       engine?.clearCandidatePreview();
       setBlend(35);
@@ -279,7 +284,15 @@ export function AccompanimentGenerator({jobId,sections,engine,playing,position,o
             onClick={()=>{setPreviewTrimDb(0);engine?.setCandidatePreviewTrimDb(0);}}>↺</button>
         </div>
         <label>New track alias <input value={alias} onChange={e=>setAlias(e.target.value)}/></label>
-        <button type="button" disabled={busy||candidate.state!=="ready"||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>Accept and insert</button>
+        <div className="song-candidate-accept">
+          <select aria-label="ACE acceptance mode" title="Layer keeps the original. Replace region mutes selected source." value={acceptMode} onChange={e=>setAcceptMode(e.target.value as "layer"|"replace")}>
+            <option value="layer">Layer</option><option value="replace">Replace</option>
+          </select>
+          {acceptMode==="replace"&&<select aria-label="Original stem to replace" value={replaceTrackId} onChange={e=>setReplaceTrackId(e.target.value)}>
+            <option value="">Source stem…</option>{sourceTracks.map(track=><option key={track.track_id} value={track.track_id}>{track.display_name}</option>)}
+          </select>}
+          <button type="button" disabled={busy||candidate.state!=="ready"||(acceptMode==="replace"&&!replaceTrackId)||(candidate.task_type==="lego"&&candidate.source_similarity?.status!=="not_detected")} onClick={()=>void accept()}>✓ Add</button>
+        </div>
       </>}
     </section>}
     <details><summary>Generation parameters</summary>

@@ -5,7 +5,7 @@ import type {MouseEvent} from "react";
 import type {SongSection} from "./SectionEditor";
 
 type Peaks={bins:number;duration_seconds:number;clip_duration_seconds?:number;start_seconds?:number;min:number[];max:number[]};
-export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[];gain?:number;gainPoints?:AutomationPoint[];parentGainPoints?:AutomationPoint[];replacementMasks?:ReplacementMask[]};
+export type WaveRowData={filename:string;label:string;waveUrl?:string;children?:WaveRowData[];gain?:number;gainPoints?:AutomationPoint[];volumePoints?:AutomationPoint[];parentGainPoints?:AutomationPoint[];replacementMasks?:ReplacementMask[]};
 function pathFor(peaks:Peaks):string {
   const count=Math.min(peaks.bins,peaks.min.length,peaks.max.length);
   if(count<=0)return "";
@@ -30,13 +30,13 @@ function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewE
       for(const t of [mask.start_seconds,mask.start_seconds+fade,mask.end_seconds-fade,mask.end_seconds])
         times.add(Math.max(0,Math.min(duration,t)));
     }
-    for(const point of [...(row.gainPoints||[]),...(row.parentGainPoints||[])])
+    for(const point of [...(row.gainPoints||[]),...(row.volumePoints||[]),...(row.parentGainPoints||[])])
       times.add(Math.max(0,Math.min(duration,point.time)));
     return [...times].sort((a,b)=>a-b).map(at=>{
-      const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*(row.parentGainPoints?valueAt(row.parentGainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
+      const gain=Math.max(0,(row.gain??1)*(row.gainPoints?valueAt(row.gainPoints,at):1)*(row.volumePoints?valueAt(row.volumePoints,at):1)*(row.parentGainPoints?valueAt(row.parentGainPoints,at):1)*replacementGainAt(row.replacementMasks||[],at));
       return {offset:duration>0?100*at/duration:0,opacity:Math.max(.055,Math.min(.85,gain*.85))};
     });
-  },[duration,row.gain,row.gainPoints,row.parentGainPoints,row.replacementMasks]);
+  },[duration,row.gain,row.gainPoints,row.volumePoints,row.parentGainPoints,row.replacementMasks]);
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();

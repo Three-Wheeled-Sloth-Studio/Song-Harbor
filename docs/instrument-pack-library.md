@@ -55,3 +55,12 @@ Canonical bank: https://github.com/mrbumpy409/GeneralUser-GS
 We should evaluate this bank sonically first; for a genuinely expressive *Blackwater Firmware* solo cello, the CC0 Bigcat Cello SFZ sample instrument is still a better follow-on once SFZ is supported.
 
 **Release QA remaining:** verify Windows download, trust/checksum, FluidSynth discovery, starter preset listing, live audition, and no source mutation through main launcher.
+
+
+## 2026-10-29: FluidSynth path in Settings
+
+Open header gear **Settings → Components → FluidSynth**. The compact row shows detection status, editable executable path, **Browse** (native Windows file picker), **Detect** (usual installed locations/PATH), and **Verify & save**. Choose `fluidsynth.exe` or its containing `bin` directory. The backend invokes `-V` with an 8-second timeout and checks the FluidSynth response before persisting `fluidsynth_executable` into the same machine-local `config/settings.json` used by FFmpeg and working-directory preferences. This is effective immediately for SF2 previews, without application restart. The installed pack and project data remain in the data root and aren't modified.
+
+FluidSynth auto-discovery still works when no override is configured. Future installer workflow should only be added after the separately installed Windows executable completes real render QA.
+
+The primary app header is sticky at viewport top, beneath floating tools/dialogs, and has compact responsive branding/action spacing. Verify scrolling both Library and Song views, opening menus/dialogs, and narrow widths. This is a layout stabilization, not a full header redesign.

@@ -151,7 +151,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    setBusy(true);setError("");
    try{
      const saved=await req<Candidate>(base+"/"+candidate.candidate_id+"/notes",{
-       method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes,instrument})});
+       method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes,instrument_id:instrument,pack_id:instrumentPack})});
      setCandidate(saved);setNotes(saved.notes);setPreviewReady(false);
      engine?.clearCandidatePreview();
      const a=document.createElement("a");a.href=base+"/"+candidate.candidate_id+"/midi";

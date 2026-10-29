@@ -320,3 +320,12 @@ Validation errors still report `Line N` based on the actual imported
 text lines, compatible with **Go to line N** in the editor. The parser
 accepts mixed spaces and line endings; it does not require you to convert
 Windows text files before importing.
+
+
+## Interactive stem labels and Stem → MIDI (experimental)
+
+Click a stem name/icon in **Mix levels** to open its contextual actions: **Stem → MIDI**, Rename, and Sound cleanup. Waveform stem names also open Stem → MIDI directly. Mute/Solo remain independent controls.
+
+**Stem → MIDI / Reinstrument** lets you select any working stem and a section or custom 0.5–45s range, estimate monophonic notes on CPU, edit their pitches and timing, **Save / Export MIDI** without rendering audio, then optionally render a bowed-string approximation. Audition as a temporary candidate before adding a separate removable track. Removing the imported track restores the original mix; no source stem is overwritten.
+
+This is a proof of workflow, not general-purpose drum/polyphonic transcription and not a realistic sampled cello. The original Blackwater Firmware bass-to-cello experiment remains supported. MIDI import from other sources and alternative instrument renderers are follow-on work.

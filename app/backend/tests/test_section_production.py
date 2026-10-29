@@ -8,6 +8,49 @@ import section_production
 FILES = [f"song ({name}).wav" for name in section_production.ALIASES]
 
 class ProductionNotationTests(unittest.TestCase):
+    def test_replacement_mixes_are_visible_editable_and_do_not_override_gain_script(self):
+        files=["01 (Bass).wav","02 (Drums).wav",
+               "trk_a (CelloA).wav","trk_b (CelloB).wav"]
+        tracks=[
+            {"track_id":"trk_bass","stem_alias":"Bass","working_filename":files[0],
+             "start_seconds":0,"duration_seconds":20},
+            {"track_id":"trk_drums","stem_alias":"Drums","working_filename":files[1],
+             "start_seconds":0,"duration_seconds":20},
+            {"track_id":"trk_a","stem_alias":"CelloA","working_filename":files[2],
+             "start_seconds":2,"duration_seconds":6,"imported":True},
+            {"track_id":"trk_b","stem_alias":"CelloB","working_filename":files[3],
+             "start_seconds":10,"duration_seconds":6,"imported":True}]
+        project={"files":files,"source_tracks":tracks,"sections":[]}
+        project.update(section_import.apply(project,
+            "[Verse 0:00-0:10]\n{Bass.gain:+2@2s:smooth}\n"
+            "[Chorus 0:10-0:20]\n{Bass.pan:right.30@2s:smooth}\n",
+            "replace",20))
+        project["replacement_masks"]=[
+            {"replacement_track_id":"trk_a","source_track_id":"trk_bass","source_filename":files[0],
+             "start_seconds":2,"end_seconds":8,"fade_seconds":.05,"original_gain":0},
+            {"replacement_track_id":"trk_b","source_track_id":"trk_bass","source_filename":files[0],
+             "start_seconds":10,"end_seconds":16,"fade_seconds":.05,"original_gain":.1}]
+        before_gain=project["section_gain_automation"]
+        script=section_import.render_tags(project)
+        self.assertIn("Bass.original:0%@2.000-8.000#trk_a",script)
+        self.assertIn("Bass.original:10%@10.000-16.000#trk_b",script)
+        self.assertIn("Bass.gain:+2",script)
+        revised=script.replace("Bass.original:10%","Bass.original:35%")
+        result=section_import.apply(project,revised,"replace",20)
+        self.assertEqual(result["section_gain_automation"],before_gain)
+        self.assertEqual([x["original_gain"] for x in result["replacement_masks"]],[0,.35])
+        project.update(result)
+        self.assertIn("Bass.original:35%",section_import.render_tags(project))
+        deleted=section_import.apply(project,
+            section_import.render_tags(project).replace(
+                "Bass.original:0%@2.000-8.000#trk_a",""),"replace",20)
+        self.assertEqual(len(deleted["replacement_masks"]),1)
+        self.assertEqual(deleted["replacement_masks"][0]["replacement_track_id"],"trk_b")
+        self.assertEqual(deleted["section_gain_automation"],before_gain)
+        with self.assertRaises(ValueError):
+            section_import.apply(project,
+                revised.replace("#trk_b","#trk_missing"),"replace",20)
+
     def test_round_trip_and_inheritance(self):
         script = ("[Verse 1 0:00-0:10]\n{Other.pan:left.60@2s:smooth}\n"
                   "[Chorus 0:10-0:20]\n{Other.pan:right.60@2s:smooth}\n"

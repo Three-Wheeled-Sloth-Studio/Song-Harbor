@@ -12,13 +12,24 @@ export type ReplacementMask={
 };
 function gainAt(masks:readonly ReplacementMask[],time:number):number{
   let gain=1;
+  const retained=(mask:ReplacementMask)=>Math.max(0,Math.min(1,mask.original_gain??0));
   for(const item of masks){
+    // Half-open intervals ensure only the incoming mask owns a shared boundary.
+    if(time<item.start_seconds||time>=item.end_seconds)continue;
     const fade=Math.max(.001,Math.min(item.fade_seconds,(item.end_seconds-item.start_seconds)/4));
-    if(time<item.start_seconds||time>item.end_seconds)continue;
-    const retained=Math.max(0,Math.min(1,item.original_gain??0));
-    if(time<item.start_seconds+fade)gain*=1-(1-retained)*Math.max(0,(time-item.start_seconds)/fade);
-    else if(time>item.end_seconds-fade)gain*=1-(1-retained)*Math.max(0,(item.end_seconds-time)/fade);
-    else gain*=retained;
+    const previous=masks.find(other=>other!==item &&
+      Math.abs(other.end_seconds-item.start_seconds)<.0005);
+    const following=masks.some(other=>other!==item &&
+      Math.abs(other.start_seconds-item.end_seconds)<.0005);
+    const target=retained(item);
+    // Consecutive masks are one continuous gain region. At a boundary,
+    // transition from the previous mask's gain, never from 100%.
+    const from=previous?retained(previous):1;
+    if(time<item.start_seconds+fade)
+      gain*=from+(target-from)*Math.max(0,(time-item.start_seconds)/fade);
+    else if(!following&&time>item.end_seconds-fade)
+      gain*=target+(1-target)*Math.max(0,(time-(item.end_seconds-fade))/fade);
+    else gain*=target;
   }
   return gain;
 }

@@ -66,6 +66,11 @@ DEESS_TOKEN = re.compile(
     r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+VOLUME_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.volume:(?P<percent>\\d{1,3})"
+    r"(?P<anchor>[@#])(?P<seconds>\\d+(?:\\.\\d{1,3})?)s"
+    r"(?::(?P<curve>smooth|linear))?$"
+)
 GAIN_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.gain:(?P<gain>[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2}))"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
@@ -98,6 +103,24 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        volume=VOLUME_TOKEN.fullmatch(token)
+        if volume:
+            canonical=next((a for a in aliases if a.casefold()==volume.group("track").casefold()),None)
+            if not canonical or canonical.casefold().endswith(("-left","-right")):
+                raise ValueError("Volume must target an existing parent stem")
+            percent=int(volume.group("percent"))
+            duration=float(volume.group("seconds"))
+            if percent>100 or not .05<=duration<=30:
+                raise ValueError("Volume needs 0..100 and .05..30s transition")
+            key=canonical.casefold()+".volume"
+            if key in touched:
+                raise ValueError("Duplicate volume directive in section")
+            touched.add(key)
+            directives.append({"kind":"volume","track":canonical,"percent":percent,
+                               "transition_seconds":duration,
+                               "transition_anchor":"end" if volume.group("anchor")=="#" else "start",
+                               "curve":(volume.group("curve") or "smooth").lower()})
+            continue
         original=ORIGINAL_MIX_TOKEN.fullmatch(token)
         if original:
             canonical=next((a for a in aliases if a.casefold()==original.group("track").casefold()),None)
@@ -330,11 +353,13 @@ def render_block(directives: list[dict[str, Any]]) -> str:
                 head += ":" + d["curve"]
             rendered.append(head)
             continue
-        suffix = f"@{d['transition_seconds']:g}s:{d['curve']}"
+        suffix = f"{'#' if d.get('transition_anchor')=='end' else '@'}{d['transition_seconds']:g}s:{d['curve']}"
         if d["kind"] == "reset":
             head = "all.reset" if d["track"] == "all" else d["track"] + ".reset"
         elif d["kind"] == "gain":
             head = f"{d['track']}.gain:{float(d['gain_db']):+g}"
+        elif d["kind"] == "volume":
+            head = f"{d['track']}.volume:{int(d['percent'])}"
         elif d["kind"] == "deess":
             head = f"{d['track']}.deess:{d['frequency']},{float(d['q']):g},{float(d['threshold_db']):g},{float(d['max_reduction_db']):g}"
         elif d["kind"] == "comp":
@@ -489,7 +514,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "auto_pan"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -649,6 +674,27 @@ def materialize_dynamics(sections: list[dict[str, Any]],
                                 "max_reduction_db":directive.get("max_reduction_db",0) if kind!="reset" else 0,
                                 "transition_seconds":directive["transition_seconds"],"curve":directive["curve"]})
     return out
+
+def materialize_volume(sections:list[dict[str,Any]],
+                       blocks:dict[str,list[dict[str,Any]]],
+                       files:list[str],tracks:list[dict[str,Any]]|None=None,
+                       children:dict[str,Any]|None=None)->list[dict[str,Any]]:
+    """Relative stem-volume automation, independent of existing dB gain scripts."""
+    stems=source_map(files,tracks,children)
+    output=[]
+    for section in sorted(sections,key=lambda entry:entry["start_seconds"]):
+        for d in blocks.get(section["id"],[]):
+            if d["kind"]!="volume":continue
+            duration=d["transition_seconds"]
+            if duration>section["end_seconds"]-section["start_seconds"]+1e-6:
+                raise ValueError("Volume transition cannot exceed its section")
+            output.append({"section_id":section["id"],"source_key":stems[d["track"]],
+                           "volume":d["percent"]/100,
+                           "transition_seconds":duration,
+                           "transition_anchor":d.get("transition_anchor","start"),
+                           "curve":d["curve"]})
+    return output
+
 
 def materialize_gain(sections: list[dict[str, Any]],
                      blocks: dict[str, list[dict[str, Any]]],

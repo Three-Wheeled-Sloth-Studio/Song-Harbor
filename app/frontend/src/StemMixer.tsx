@@ -14,6 +14,7 @@ import { SectionEqTool,type SavedEqTarget } from "./SectionEqTool";
 import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation, valueAt } from "./SectionAutomation";
+import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe } from "./SharedClockAudition";
 import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
@@ -57,13 +58,14 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   savedStems?: SavedStem[];
   trackLabels?: Record<string,string>;
   trackAliases?: Record<string,string>;
   trackDetails?: TrackIdentity[];
+  initialReplacements?: ReplacementMask[];
   initialSections?: SongSection[];
   initialTitle?: string;
   onSaved?: () => void;
@@ -80,6 +82,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   }).sort((a, b) => {const x=names.indexOf(a.name),y=names.indexOf(b.name);return x<0||y<0?0:x-y;}));
   const [title, setTitle] = useState(initialTitle || "Untitled song");
   const [trackIdentities,setTrackIdentities]=useState<TrackIdentity[]>(trackDetails||[]);
+  const [replacementMasks]=useState<ReplacementMask[]>(initialReplacements||[]);
   const [renamingTrack,setRenamingTrack]=useState<string|null>(null);
   const [addingTrack,setAddingTrack]=useState(false);
   const [pendingFile,setPendingFile]=useState<File|null>(null);
@@ -628,10 +631,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           1,{min:Math.pow(10,-24/20),max:Math.pow(10,12/20)})};
     }
     setAutoPanReports(previous=>previous.join("|")===reports.join("|")?previous:reports);
+    engine.setReplacementMasks(replacementMasks);
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,correction,sectionPreviewActive,sectionPreview]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,replacementMasks,correction,sectionPreviewActive,sectionPreview]);
 
   // Retain the previous findings after a mix change as a labelled snapshot.
   // Old scan results must not be presented as analysis of the new settings.
@@ -1095,6 +1099,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             </div>}
           <StemWaveforms jobId={jobId} files={stems.map(s=>({
             filename:s.filename,label:s.name,
+            gain:s.mute||(stems.some(x=>x.solo)&&!s.solo)?0:s.gain/100,
+            replacementMasks:replacementMasks.filter(mask=>mask.source_filename===s.filename),
+            gainPoints:(()=>{const edits=gainTargets.filter(item=>item.source_key===s.filename).flatMap(item=>{const section=timelineSections.find(sec=>sec.id===item.section_id);return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,value:Math.pow(10,item.gain_db/20),transitionSeconds:item.transition_seconds,curve:item.curve}]:[];});return edits.length?compileSectionAutomation(edits,1,{min:0,max:4}):undefined;})(),
             children:channels[s.filename]?.active?(["left","right"] as const).map(channel=>({
               filename:s.filename+":"+channel,label:"↳ "+channel.toUpperCase(),
               waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
@@ -1389,6 +1396,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
+          sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name}))}
           engine={audio.current} playing={playing} position={position} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           saveProject={saveProject} onError={setError}/>}

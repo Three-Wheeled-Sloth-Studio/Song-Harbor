@@ -710,7 +710,9 @@ async def add_project_track(ident: str, request: Request,
                             display_name: str = Form(...),
                             start_seconds: float = Form(0.0),
                             section_id: str | None = Form(None),
-                            preview_trim_db: float = Form(0.0)) -> dict[str, Any]:
+                            preview_trim_db: float = Form(0.0),
+                            accept_mode: str = Form("layer"),
+                            replace_source_track_id: str = Form("")) -> dict[str, Any]:
     """Add a short, timeline-positioned clip without padding or touching sources."""
     require_local_origin(request)
     if not track_lifecycle.ALIAS.fullmatch(stem_alias) or stem_alias.casefold() in track_lifecycle.RESERVED:
@@ -722,6 +724,10 @@ async def add_project_track(ident: str, request: Request,
     if not isinstance(section_id,str):section_id=None
     if not isinstance(start_seconds,(int,float)):start_seconds=0.0
     if not isinstance(preview_trim_db,(int,float)):preview_trim_db=0.0
+    if accept_mode not in ("replace","layer"):
+        raise HTTPException(400,"Select Replace or Layer")
+    if accept_mode=="replace" and not replace_source_track_id:
+        raise HTTPException(400,"Replacement requires the original source stem")
     if not math.isfinite(preview_trim_db) or not -12<=preview_trim_db<=9:
         raise HTTPException(400,"Candidate level must be between -12 and +9 dB")
     source_name=safe_name(file.filename or "")
@@ -738,6 +744,9 @@ async def add_project_track(ident: str, request: Request,
         rows=track_lifecycle.ensure_identities(record)
         if len(rows)>=stem_import.MAX_TRACKS:
             raise HTTPException(400,"Maximum 64 source tracks")
+        source_row=next((row for row in rows if row.get("track_id")==replace_source_track_id),None)
+        if accept_mode=="replace" and not source_row:
+            raise HTTPException(400,"The original stem is no longer available")
         if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
             raise HTTPException(409,"Script alias already belongs to a track")
         if section_id:
@@ -772,6 +781,11 @@ async def add_project_track(ident: str, request: Request,
         song_duration=resolved_song_duration(record,job)
         if start_seconds+original_duration>song_duration+DURATION_TOLERANCE_SECONDS:
             raise ValueError("Placed stem extends beyond the song; choose an earlier timestamp or trim it")
+        if accept_mode=="replace":
+            original_start=float(source_row.get("start_seconds") or 0)
+            original_end=original_start+float(source_row.get("duration_seconds") or song_duration)
+            if start_seconds<original_start-.005 or start_seconds+original_duration>original_end+.005:
+                raise ValueError("Replacement extends outside the original stem region")
         for row in rows:
             if row.get("content_sha256")==digest and abs(float(row.get("start_seconds",0))-start_seconds)<.001:
                 raise ValueError("This audio is already imported at the same timeline position")
@@ -794,6 +808,13 @@ async def add_project_track(ident: str, request: Request,
                         "duration_seconds":round(probe_duration(final),3),
                         "content_sha256":digest,"import_trim_db":round(float(preview_trim_db),2)})
         record["source_tracks"]=updated
+        if accept_mode=="replace":
+            record.setdefault("replacement_masks",[]).append({
+                "replacement_track_id":track_id,"source_track_id":replace_source_track_id,
+                "source_filename":str(source_row["working_filename"]),
+                "start_seconds":round(float(start_seconds),3),
+                "end_seconds":round(float(start_seconds+original_duration),3),
+                "fade_seconds":round(min(.05,original_duration/8),3)})
         record["files"]=list(record["files"])+[final_name]
         record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]
         record["imported_tracks"]=True
@@ -1180,6 +1201,8 @@ def position_project_track(ident: str, request: Request, body: PositionTrack) ->
                                              resolved_song_duration(record,job))
         except (ValueError,TypeError,KeyError) as exc:
             raise HTTPException(400,f"Position rejected: {exc}") from exc
+        updated["replacement_masks"]=[mask for mask in updated.get("replacement_masks",[])
+                                      if mask.get("replacement_track_id")!=track_id]
         updated["updated_at"]=time.time()
         projects.write_project(DATA_ROOT,updated)
     return {"project":updated,"job":snapshot(job)}

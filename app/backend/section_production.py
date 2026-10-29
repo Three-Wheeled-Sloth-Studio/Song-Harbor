@@ -70,6 +70,13 @@ GAIN_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.gain:(?P<gain>[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2}))"
     r"(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+# Linked accepted replacement, editable in the section script without replacing
+# the track's independently authored gain automation.
+ORIGINAL_MIX_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.original:(?P<percent>\\d{1,3})%"
+    r"@(?P<start>\\d+(?:\\.\\d{1,3})?)-(?P<end>\\d+(?:\\.\\d{1,3})?)"
+    r"#(?P<replacement>trk_[A-Za-z0-9_-]{1,64})$"
+)
 AUTO_PAN_TOKEN = re.compile(
     r"(?i)^auto\.pan:center(?:@(?P<seconds>\d+(?:\.\d{1,3})?)s"
     r"(?::(?P<curve>smooth|linear))?)?$"
@@ -91,6 +98,24 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        original=ORIGINAL_MIX_TOKEN.fullmatch(token)
+        if original:
+            canonical=next((a for a in aliases if a.casefold()==original.group("track").casefold()),None)
+            if not canonical or canonical.lower().endswith(("-left","-right")):
+                raise ValueError("Original mix must target an existing parent stem")
+            percent=int(original.group("percent"))
+            begin=float(original.group("start"))
+            end=float(original.group("end"))
+            if percent>100 or not 0<=begin<end or end-begin>900:
+                raise ValueError("Original mix needs 0..100% and a valid time span")
+            replacement_id=original.group("replacement")
+            key="original:"+replacement_id
+            if key in touched:raise ValueError("Duplicate original mix for replacement")
+            touched.add(key)
+            directives.append({"kind":"original_mix","track":canonical,"percent":percent,
+                               "start_seconds":begin,"end_seconds":end,
+                               "replacement_track_id":replacement_id})
+            continue
         evolution=EVOLUTION_TOKEN.fullmatch(token)
         if evolution:
             canonical=next((a for a in aliases if a.casefold()==evolution.group("track").casefold()),None)
@@ -285,6 +310,12 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "original_mix":
+            rendered.append(
+                f"{d['track']}.original:{int(d['percent'])}%"
+                f"@{float(d['start_seconds']):.3f}-{float(d['end_seconds']):.3f}"
+                f"#{d['replacement_track_id']}")
+            continue
         if d["kind"] == "evolve":
             if d.get("preset")!="menacing" or d.get("version")!=EVOLUTION_VERSION:
                 raise ValueError("Unknown evolution macro version")

@@ -8,6 +8,7 @@ type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
 type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean};
+type Starter={id:string;name:string;description:string;source_page:string;installed:boolean};
 type Imported={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;selectedTrackId?:string;engine:SharedClockAudition|null;
  stemControls:{filename:string;trackId?:string;gain:number;mute:boolean;solo:boolean;name:string}[];
@@ -39,6 +40,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [instrumentPack,setInstrumentPack]=useState("song-harbor-core");
  const [catalogue,setCatalogue]=useState<InstrumentCatalogue>({packs:[],instruments:[],fluidsynth_ready:false});
  const [installingPack,setInstallingPack]=useState(false);
+ const [starters,setStarters]=useState<Starter[]>([]);
  const [previewReady,setPreviewReady]=useState(false);
  const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter);
  const chosenInstrument=catalogue.instruments.find(x=>x.id===instrument&&x.pack_id===instrumentPack);
@@ -64,7 +66,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
       (data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass")||data.tracks[0])?.track_id||"");
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
 
- useEffect(()=>{let live=true;void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId]);
+ useEffect(()=>{let live=true;void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(e=>{if(live)setError(String(e));});void req<{starters:Starter[]}>("/api/instruments/starters").then(data=>{if(live)setStarters(data.starters);}).catch(()=>{});return()=>{live=false;};},[jobId]);
  async function installPack(file:File|undefined){
    if(!file||installingPack)return;
    setInstallingPack(true);setError("");setMessage("");
@@ -79,6 +81,22 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(first){setInstrument(first.id);setInstrumentPack(first.pack_id);}
      setPreviewReady(false);engine?.clearCandidatePreview();
      setMessage("Imported "+response.instruments+" instruments.");
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+ }
+ async function installStarter(starter:Starter){
+   if(installingPack)return;
+   setInstallingPack(true);setMessage("");setError("");
+   try{
+     const outcome=await req<{pack_id:string;instruments:number}>("/api/instruments/starters/install",{
+       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({starter_id:starter.id})});
+     const [library,listing]=await Promise.all([
+       req<InstrumentCatalogue>("/api/instruments"),
+       req<{starters:Starter[]}>("/api/instruments/starters")]);
+     setCatalogue(library);setStarters(listing.starters);
+     setPackFilter(outcome.pack_id);
+     const selected=library.instruments.find(x=>x.pack_id===outcome.pack_id);
+     if(selected)chooseInstrument(selected.pack_id,selected.id);
+     setMessage(starter.name+" installed · "+outcome.instruments+" presets");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
  function chooseInstrument(packId:string,id:string){
@@ -238,6 +256,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            <label title="Filter instruments by pack">Pack <select aria-label="Instrument pack" value={packFilter} onChange={e=>{const filter=e.target.value;setPackFilter(filter);const options=catalogue.instruments.filter(x=>filter==="all"||x.pack_id===filter);if(!options.some(x=>x.id===instrument&&x.pack_id===instrumentPack)){const first=options[0];if(first)chooseInstrument(first.pack_id,first.id);}}}><option value="all">All packs</option>{catalogue.packs.map(pack=><option key={pack.id} value={pack.id}>{pack.name}</option>)}</select></label>
          </div>
          <div className="song-instrument-import">
+           {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
            <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<small role="status" title="Install FluidSynth and configure SONG_HARBOR_FLUIDSYNTH or put it on PATH">FluidSynth required for SF2 render</small>}
            <small title="Current source pack">{selectedPackName}</small>

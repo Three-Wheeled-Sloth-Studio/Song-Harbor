@@ -1396,6 +1396,9 @@ def save_sections(ident: str, request: Request, body: SectionsRequest) -> dict[s
     record["section_gain_automation"] = [
         target for target in record.get("section_gain_automation", []) if target.get("section_id") in keep
     ]
+    record["section_volume_automation"] = [
+        target for target in record.get("section_volume_automation", []) if target.get("section_id") in keep
+    ]
     record["section_eq_automation"] = [
         target for target in record.get("section_eq_automation", [])
         if target.get("section_id") in keep

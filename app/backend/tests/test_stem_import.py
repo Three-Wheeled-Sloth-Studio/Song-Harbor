@@ -162,6 +162,7 @@ class ImportTracksTests(unittest.TestCase):
             self.assertEqual(saved["files"][:2],files)
             self.assertEqual([x["gain"] for x in saved["stems"]],[1,1,1])
             self.assertFalse(saved.get("replacement_masks"),"Layer/default imports must not mute original stems")
+            self.assertEqual(len(saved.get("replacement_masks",[])),0)
             self.assertEqual(saved["source_tracks"][-1]["stem_alias"],"Cello_Accent")
             self.assertTrue(saved["source_tracks"][-1]["track_id"].startswith("trk_"))
             self.assertEqual(result["job"]["status"],"complete")
@@ -199,7 +200,7 @@ class ImportTracksTests(unittest.TestCase):
                   patch.object(server.subprocess,"run",side_effect=convert)):
                 added=asyncio.run(server.add_project_track(
                     ident,request,upload,stem_alias="CelloTake",display_name="Cello",
-                    start_seconds=4,preview_trim_db=-4.0,accept_mode="replace",
+                    start_seconds=4,preview_trim_db=-4.0,original_gain_percent=10,
                     replace_source_track_id=project_bass["track_id"]))
                 saved=projects.read_project(root,ident)
                 mask=saved["replacement_masks"][0]
@@ -207,6 +208,7 @@ class ImportTracksTests(unittest.TestCase):
                 self.assertEqual(mask["replacement_track_id"],imported["track_id"])
                 self.assertEqual(mask["source_track_id"],project_bass["track_id"])
                 self.assertEqual(mask["source_filename"],sources[0])
+                self.assertEqual(mask["original_gain"],0.1)
                 self.assertEqual((mask["start_seconds"],mask["end_seconds"]),(4,7.5))
                 self.assertEqual(imported["import_trim_db"],-4)
                 self.assertEqual((folder/"stems"/sources[0]).read_bytes(),b"original-source")

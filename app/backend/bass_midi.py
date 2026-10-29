@@ -66,14 +66,17 @@ def transcribe(pcm:np.ndarray)->list[dict]:
         raise ValueError("At least 0.5s of source audio required")
     frame=4096
     hop=256
-    starts=np.arange(0,max(1,len(pcm)-frame+1),hop,dtype=np.int64)
+    # Center each analysis window on its audio timestamp so note endings are
+    # not truncated by half the FFT window (about 170 ms at 12 kHz).
+    padded=np.pad(pcm,(frame//2,frame//2))
+    starts=np.arange(0,len(pcm),hop,dtype=np.int64)
     pitches=np.arange(MIDI_LOW,MIDI_HIGH+1,dtype=np.int32)
     frequencies=440.0*2.0**((pitches-69)/12.0)
     window=np.hanning(frame).astype(np.float32)
     picked=[]
     energy=[]
     for at in starts:
-        segment=pcm[at:at+frame]
+        segment=padded[at:at+frame]
         if len(segment)<frame:
             segment=np.pad(segment,(0,frame-len(segment)))
         rms=float(np.sqrt(np.mean(segment*segment)+1e-12))

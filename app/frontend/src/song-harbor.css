@@ -863,3 +863,11 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 @media(max-width:440px){
  .topbar .header-actions .song-version-badge{max-width:52px}
 }
+
+/* Shared generated-candidate volume dial: live A/B and accepted track use the same dB trim. */
+.song-candidate-volume{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;font-size:13px;white-space:nowrap}
+.song-candidate-volume>input[type="range"]{width:56px;min-width:40px;margin:0;accent-color:var(--tws-color-action-primary);cursor:pointer}
+.song-candidate-volume output{font:11px/1.2 Consolas,monospace;min-width:43px;text-align:right;font-variant-numeric:tabular-nums}
+.song-candidate-volume button{padding:2px 5px;min-height:24px;min-width:24px;border-radius:5px}
+.song-midi-render .song-candidate-volume{margin-left:auto}
+.song-ace-preview-line .song-candidate-volume{flex:0 0 auto}

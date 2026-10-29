@@ -16,8 +16,8 @@ function pathFor(peaks:Peaks):string {
   }
   return parts.join("");
 }
-function WaveRow({jobId,row,duration,position,onSeek,viewStart,viewEnd,sections}:{
-  jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
+function WaveRow({jobId,row,duration,position,onSeek,onStemClick,viewStart,viewEnd,sections}:{
+  jobId:string;row:WaveRowData;duration:number;position:number;onSeek:(time:number)=>void;onStemClick?:(filename:string)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
 }){
   const [peaks,setPeaks]=useState<Peaks|null>(null);
   const [failed,setFailed]=useState(false);
@@ -36,7 +36,7 @@ function WaveRow({jobId,row,duration,position,onSeek,viewStart,viewEnd,sections}
     onSeek(Math.max(0,Math.min(duration,viewStart+(e.clientX-bounds.left)/bounds.width*(viewEnd-viewStart))));
   }
   return <div className="waveform-row">
-    <span className="waveform-row-label" title={row.label}>{row.label}</span>
+    {onStemClick?<button type="button" className="waveform-row-label song-waveform-stem-action" title={"Open "+row.label+" stem tools"} aria-label={"Open "+row.label+" stem tools"} onClick={()=>onStemClick(row.filename)}>{row.label}</button>:<span className="waveform-row-label" title={row.label}>{row.label}</span>}
     <button type="button" className="waveform-seek" onClick={seekAt}
       aria-label={`Seek within ${row.label} waveform`} title={`Seek within ${row.label}`}>
       {peaks?<svg viewBox={`${duration>0?1000*viewStart/duration:0} 0 ${duration>0?Math.max(0.01,1000*(viewEnd-viewStart)/duration):1000} 40`} preserveAspectRatio="none" width="100%" height="100%" aria-hidden="true">
@@ -52,13 +52,13 @@ function WaveRow({jobId,row,duration,position,onSeek,viewStart,viewEnd,sections}
   </div>;
 }
 
-export function StemWaveforms({jobId,files,duration,position,onSeek,viewStart,viewEnd,sections}:{
+export function StemWaveforms({jobId,files,duration,position,onSeek,onStemClick,viewStart,viewEnd,sections}:{
   jobId:string;files:WaveRowData[];duration:number;position:number;onSeek:(time:number)=>void;viewStart:number;viewEnd:number;sections:SongSection[];
 }){
   return <section className="waveform-overview" aria-label="Aligned stem waveforms">
     <div className="waveform-overview-heading"><strong>Stem waveforms</strong><span>{sections.length} section markers · click to seek</span></div>
     {files.map(row=><div key={row.filename}>
-      <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd} sections={sections}/>
+      <WaveRow jobId={jobId} row={row} duration={duration} position={position} onSeek={onSeek} onStemClick={onStemClick} viewStart={viewStart} viewEnd={viewEnd} sections={sections}/>
       {row.children?.map(child=><div className="waveform-child-row" key={child.filename}>
         <WaveRow jobId={jobId} row={child} duration={duration} position={position} onSeek={onSeek} viewStart={viewStart} viewEnd={viewEnd} sections={sections}/>
       </div>)}

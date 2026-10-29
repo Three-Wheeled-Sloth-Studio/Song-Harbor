@@ -712,7 +712,8 @@ async def add_project_track(ident: str, request: Request,
                             section_id: str | None = Form(None),
                             preview_trim_db: float = Form(0.0),
                             accept_mode: str = Form("layer"),
-                            replace_source_track_id: str = Form("")) -> dict[str, Any]:
+                            replace_source_track_id: str = Form(""),
+                            original_gain_percent: float | None = Form(None)) -> dict[str, Any]:
     """Add a short, timeline-positioned clip without padding or touching sources."""
     require_local_origin(request)
     if not track_lifecycle.ALIAS.fullmatch(stem_alias) or stem_alias.casefold() in track_lifecycle.RESERVED:
@@ -726,10 +727,15 @@ async def add_project_track(ident: str, request: Request,
     if not isinstance(preview_trim_db,(int,float)):preview_trim_db=0.0
     if not isinstance(accept_mode,str):accept_mode="layer"
     if not isinstance(replace_source_track_id,str):replace_source_track_id=""
+    # Existing clients keep their historical Replace=0% / Layer=100% behavior.
+    if not isinstance(original_gain_percent,(int,float)):
+        original_gain_percent=0 if accept_mode=="replace" else 100
+    if not math.isfinite(original_gain_percent) or not 0<=original_gain_percent<=100:
+        raise HTTPException(400,"Original stem gain must be between 0 and 100 percent")
     if accept_mode not in ("replace","layer"):
         raise HTTPException(400,"Select Replace or Layer")
-    if accept_mode=="replace" and not replace_source_track_id:
-        raise HTTPException(400,"Replacement requires the original source stem")
+    if original_gain_percent<100 and not replace_source_track_id:
+        raise HTTPException(400,"Select an original source stem when lowering its region gain")
     if not math.isfinite(preview_trim_db) or not -12<=preview_trim_db<=9:
         raise HTTPException(400,"Candidate level must be between -12 and +9 dB")
     source_name=safe_name(file.filename or "")
@@ -747,7 +753,7 @@ async def add_project_track(ident: str, request: Request,
         if len(rows)>=stem_import.MAX_TRACKS:
             raise HTTPException(400,"Maximum 64 source tracks")
         source_row=next((row for row in rows if row.get("track_id")==replace_source_track_id),None)
-        if accept_mode=="replace" and not source_row:
+        if original_gain_percent<100 and not source_row:
             raise HTTPException(400,"The original stem is no longer available")
         if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
             raise HTTPException(409,"Script alias already belongs to a track")
@@ -783,7 +789,7 @@ async def add_project_track(ident: str, request: Request,
         song_duration=resolved_song_duration(record,job)
         if start_seconds+original_duration>song_duration+DURATION_TOLERANCE_SECONDS:
             raise ValueError("Placed stem extends beyond the song; choose an earlier timestamp or trim it")
-        if accept_mode=="replace":
+        if original_gain_percent<100:
             original_start=float(source_row.get("start_seconds") or 0)
             original_end=original_start+float(source_row.get("duration_seconds") or song_duration)
             if start_seconds<original_start-.005 or start_seconds+original_duration>original_end+.005:
@@ -810,13 +816,14 @@ async def add_project_track(ident: str, request: Request,
                         "duration_seconds":round(probe_duration(final),3),
                         "content_sha256":digest,"import_trim_db":round(float(preview_trim_db),2)})
         record["source_tracks"]=updated
-        if accept_mode=="replace":
+        if original_gain_percent<100:
             record.setdefault("replacement_masks",[]).append({
                 "replacement_track_id":track_id,"source_track_id":replace_source_track_id,
                 "source_filename":str(source_row["working_filename"]),
                 "start_seconds":round(float(start_seconds),3),
                 "end_seconds":round(float(start_seconds+original_duration),3),
-                "fade_seconds":round(min(.05,original_duration/8),3)})
+                "fade_seconds":round(min(.05,original_duration/8),3),
+                "original_gain":round(original_gain_percent/100,4)})
         record["files"]=list(record["files"])+[final_name]
         record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]
         record["imported_tracks"]=True

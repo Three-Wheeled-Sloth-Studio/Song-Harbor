@@ -943,23 +943,29 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
     try:
         rows=track_lifecycle.ensure_identities(record)
         row=next((r for r in rows if r.get("track_id")==body.track_id),None)
-        if not row or str(row.get("stem_alias","")).lower()!="bass":
-            raise ValueError("Choose the original separated Bass stem")
+        if not row:
+            raise ValueError("Selected stem does not exist")
         filename=str(row.get("working_filename",""))
         base=(DATA_ROOT/"jobs"/ident/"stems").resolve()
         source=(base/filename).resolve()
         if source.parent!=base or not source.is_file() or source.suffix.lower()!=".wav":
-            raise ValueError("Bass working WAV unavailable")
-        pcm=bass_midi.decode_excerpt(source,body.start_seconds,body.duration_seconds,dependency_tool("ffmpeg"))
+            raise ValueError("Selected stem working WAV unavailable")
+        # Imported clips have their own local clock, independent of their song placement.
+        track_start=float(row.get("start_seconds") or 0)
+        local_start=body.start_seconds-track_start
+        track_duration=float(row.get("duration_seconds") or song_duration)
+        if local_start < -.005 or local_start+body.duration_seconds > track_duration+.005:
+            raise ValueError("Selected region falls outside the stem's playable clip")
+        pcm=bass_midi.decode_excerpt(source,max(0,local_start),body.duration_seconds,dependency_tool("ffmpeg"))
         notes=bass_midi.transcribe(pcm)
         if not notes:raise ValueError("No pitched bass notes found; choose a clearer region")
         candidate_id=uuid.uuid4().hex
         folder=bass_midi.candidate_folder(DATA_ROOT/"jobs"/ident,candidate_id)
-        out={"candidate_id":candidate_id,"source_track_id":body.track_id,"source_alias":"Bass",
+        out={"candidate_id":candidate_id,"source_track_id":body.track_id,"source_alias":str(row.get("stem_alias") or ""),
              "source_working_filename":filename,"start_seconds":round(body.start_seconds,3),
              "duration_seconds":round(len(pcm)/bass_midi.RATE,3),
              "notes":notes,"original_notes":notes,"render_kind":"synthetic_bowed_preview",
-             "method":"CPU harmonic salience / monophonic estimate"}
+             "method":"CPU harmonic salience / monophonic pitched-stem estimate"}
         bass_midi.write_json(folder/"candidate.json",out)
         return out
     except (ValueError,OSError,subprocess.TimeoutExpired) as exc:

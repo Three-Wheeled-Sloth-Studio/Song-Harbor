@@ -1105,6 +1105,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               waveUrl:"/api/projects/"+jobId+"/channels/waveform/"+encodeURIComponent(s.filename)+"/"+channel
             })):[]
           }))} duration={duration} position={position} onSeek={seek}
+            onStemClick={filename=>stemToMidi(filename)}
             viewStart={viewStart} viewEnd={viewEnd} sections={timelineSections}/>
         </section>
         <details className="song-stem-controls" open>

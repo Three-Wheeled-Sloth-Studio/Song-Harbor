@@ -790,3 +790,7 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-stem-label-action:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}
 .song-stem-context-actions{display:flex;align-items:center;gap:4px;flex-wrap:wrap;grid-column:1/-1;padding:5px;border:1px solid var(--tws-color-border-normal);border-radius:6px;background:var(--tws-color-surface-raised)}
 .song-stem-context-actions button{padding:4px 8px;font-size:11px}
+
+.song-waveform-stem-action{cursor:pointer;text-align:left;background:transparent;color:inherit;border:0;font:inherit;padding:2px 4px}
+.song-waveform-stem-action:hover{background:var(--tws-color-action-subtle);color:var(--tws-color-action-primary)}
+.song-waveform-stem-action:focus-visible{outline:2px solid var(--tws-color-action-primary);outline-offset:2px}

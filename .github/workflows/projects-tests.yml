@@ -49,6 +49,30 @@ jobs:
             test_library_routes.py
             test_daw.py
             test_audacity_handoff.py
+            test_ace_adapter.py
+            test_ace_candidates.py
+            test_ace_install.py
+            test_ace_isolation.py
+            test_ace_lego_transport.py
+            test_ace_locations.py
+            test_ace_service.py
+            test_ace_transport.py
+            test_channel_split.py
+            test_declick_recipes.py
+            test_dependencies.py
+            test_duration_recovery.py
+            test_duration_validation.py
+            test_instrument_generation.py
+            test_mix_validation.py
+            test_production_cues.py
+            test_section_auto_pan.py
+            test_section_gain.py
+            test_section_import.py
+            test_sections.py
+            test_spectral_cleanup_directives.py
+            test_track_routing.py
+            test_waveform_peaks.py
+            test_workspace_settings.py
           )
           for pattern in "${patterns[@]}"; do
             echo "::group::${pattern}"

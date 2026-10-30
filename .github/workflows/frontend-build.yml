@@ -58,6 +58,6 @@ jobs:
       - name: Verify application renders in Chromium
         run: node app/frontend/scripts/browser-smoke.mjs
       - name: Install minimal local API dependencies
-        run: python3 -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3"
+        run: python3 -m pip install "fastapi>=0.115,<1" "uvicorn>=0.30" "python-multipart>=0.0.9" "pydantic>=2,<3" "numpy>=1.26,<3"
       - name: Verify Chromium renders from real FastAPI server
         run: node app/frontend/scripts/browser-smoke.mjs --backend

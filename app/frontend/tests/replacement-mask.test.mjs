@@ -37,7 +37,7 @@ test("relative original-stem gain preserves 10% without overwriting script envel
   assert.equal(replacementGainAt(masks,19),1);
   assert.equal(replacementGainAt([{...original,original_gain:1}],14),1);
   assert.equal(replacementGainAt([{...original,original_gain:0}],14),0);
-  assert.equal(replacementGainAt([{...original}],14),0); // legacy masks default to Replace=0
+  assert.equal(replacementGainAt([{...original,original_gain:undefined}],14),0); // legacy masks omit original_gain
   const savedScriptGain=.65;
   assert.ok(Math.abs(savedScriptGain*replacementGainAt(masks,13)-.065)<1e-8);
   assert.deepEqual(masks[0],original);

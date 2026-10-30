@@ -19,7 +19,7 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             ace=Path(temp)/"ACE"
             ace.mkdir()
-            (ace/".env").write_text("ACESTEP_CHECKPOINTS_DIR=weights\\n")
+            (ace/".env").write_text("ACESTEP_CHECKPOINTS_DIR=weights\n")
             self.assertEqual(checkpoint_root(ace,{}), (ace/"weights").resolve())
             custom=Path(temp)/"shared_models"
             self.assertEqual(checkpoint_root(ace,{"ACESTEP_CHECKPOINTS_DIR":str(custom)}),custom.resolve())

@@ -8,6 +8,10 @@ on:
     paths:
       - 'app/backend/**'
       - '.github/workflows/projects-tests.yml'
+# Keep only the latest check for each branch while commits are landing rapidly.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   projects:
     runs-on: ubuntu-latest

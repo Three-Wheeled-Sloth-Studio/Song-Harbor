@@ -199,6 +199,9 @@ class ImportTracksTests(unittest.TestCase):
                       "source_duration_seconds":12}
             projects.write_project(root,original)
             identities=track_lifecycle.ensure_identities(original)
+            # Persist the initially assigned IDs; a legacy manifest without
+            # source_tracks generates fresh IDs on each read.
+            original["source_tracks"]=identities
             project_bass=next(x for x in identities if x["stem_alias"]=="Bass")
             projects.write_project(root,original)
             job={"id":ident,"status":"complete","files":list(sources),"message":"ready"}

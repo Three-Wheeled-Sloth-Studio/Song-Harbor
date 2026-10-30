@@ -127,7 +127,7 @@ class SectionImportTests(unittest.TestCase):
         retimed = rendered.replace("0:00-1:00", "0:00-0:55").replace("1:00-2:00", "0:55-2:00")
         adjusted = section_import.apply(self.project, retimed, "replace", 120)
         self.assertEqual(first_id, adjusted["sections"][0]["id"])
-        self.assertEqual("The city keeps its secrets\\nA quiet line",
+        self.assertEqual("The city keeps its secrets\nA quiet line",
                          adjusted["section_lyrics"][first_id])
         self.assertEqual(55.0, adjusted["sections"][0]["end_seconds"])
 

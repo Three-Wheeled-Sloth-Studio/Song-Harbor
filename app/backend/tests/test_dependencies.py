@@ -1,5 +1,6 @@
 """FFmpeg configuration/recovery tests without downloading or executing software."""
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -20,7 +21,7 @@ class DependencyRecoveryTests(unittest.TestCase):
             root = Path(d)
             folder = root / "tools" / "ffmpeg" / "bin"
             folder.mkdir(parents=True)
-            for binary in ("ffmpeg.exe", "ffprobe.exe"):
+            for binary in (("ffmpeg.exe", "ffprobe.exe") if os.name == "nt" else ("ffmpeg", "ffprobe")):
                 (folder / binary).write_bytes(b"test")
             completed = type("Result", (), {"returncode": 0, "stdout": "ffmpeg version 7.0"})()
             with patch.object(dependencies.subprocess, "run", return_value=completed):
@@ -43,7 +44,7 @@ class DependencyRecoveryTests(unittest.TestCase):
             root = Path(d)
             folder = root / "tools" / "bin"
             folder.mkdir(parents=True)
-            for binary in ("ffmpeg.exe", "ffprobe.exe"):
+            for binary in (("ffmpeg.exe", "ffprobe.exe") if os.name == "nt" else ("ffmpeg", "ffprobe")):
                 (folder / binary).write_bytes(b"test")
             completed = type("Result", (), {"returncode": 0, "stdout": "ffprobe version 7.0"})()
             with patch.object(dependencies.subprocess, "run", return_value=completed):

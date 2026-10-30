@@ -12,6 +12,10 @@ on:
       - 'scripts/*.bat'
       - 'app/run.ps1'
       - '.github/workflows/launcher-syntax.yml'
+# Cancel superseded launcher checks during rapid edits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   parse:
     runs-on: windows-latest

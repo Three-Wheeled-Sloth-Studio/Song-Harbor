@@ -53,12 +53,12 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_section_volume_and_end_anchored_effects_roundtrip(self):
         project={"sections":[],"files":FILES}
-        script=("[Verse 0:00-0:20]\\n"
-                "{Bass.volume:10@10s:smooth Vocals.reverb:28@12s:smooth}\\n"
-                "[Chorus 0:20-0:40]\\n"
+        script=("[Verse 0:00-0:20]\n"
+                "{Bass.volume:10@10s:smooth Vocals.reverb:28@12s:smooth}\n"
+                "[Chorus 0:20-0:40]\n"
                 "{Bass.volume:100#10s:smooth Vocals.reverb:0#8s:smooth "
-                "Drums.pan:left.50#5s:linear Drums.width:65#4s:smooth}\\n"
-                "[Verse 2 0:40-1:00]\\n")
+                "Drums.pan:left.50#5s:linear Drums.width:65#4s:smooth}\n"
+                "[Verse 2 0:40-1:00]\n")
         changed=section_import.apply(project,script,"replace",60)
         self.assertEqual(len(changed["section_volume_automation"]),2)
         self.assertEqual(changed["section_volume_automation"][0]["volume"],.1)
@@ -78,10 +78,10 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_end_anchored_effect_cannot_exceed_section(self):
         project={"sections":[],"files":FILES}
-        script=("[Verse 0:00-0:05]\\n{Bass.volume:10#10s:smooth}\\n")
+        script=("[Verse 0:00-0:05]\\n{Bass.volume:10#10s:smooth}\n")
         with self.assertRaisesRegex(ValueError,"cannot exceed"):
             section_import.apply(project,script,"replace",5)
-        script=("[Verse 0:00-0:05]\\n{Vocals.reverb:10#8s:smooth}\\n")
+        script=("[Verse 0:00-0:05]\\n{Vocals.reverb:10#8s:smooth}\n")
         with self.assertRaisesRegex(ValueError,"cannot exceed"):
             section_import.apply(project,script,"replace",5)
 
@@ -255,7 +255,7 @@ class ProductionNotationTests(unittest.TestCase):
 
     def test_fail_closed(self):
         with self.assertRaises(ValueError):
-            section_production.parse_block("{Vocals.width:151@4s:smooth}")
+            section_production.parse_block("{Vocals.width:201@4s:smooth}")
         with self.assertRaises(ValueError):
             section_production.parse_block("{Other.pan:right.150}")
         with self.assertRaises(ValueError):

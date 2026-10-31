@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from "react";
+import {useMemo,useState} from "react";
 import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCleanupAnalyzer";
 import type {StageComparison} from "./AudioStageComparison";
 
@@ -8,9 +8,11 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick
+  findings,reviewed,onReviewedChange,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick
 }:{
   findings:readonly AudioFinding[];
+  reviewed:ReadonlySet<string>;
+  onReviewedChange:(next:Set<string>|((previous:Set<string>)=>Set<string>))=>void;
   comparison?:StageComparison|null;
   scanned:boolean;stale?:boolean;analyzing:boolean;error:string;ready:boolean;busy:boolean;
   onAnalyze:()=>void;
@@ -20,12 +22,9 @@ export function CleanupReview({
   onTryDeclick:(finding:AudioFinding)=>void;
 }){
   const [filter,setFilter]=useState<string>("All");
-  const [reviewed,setReviewed]=useState<Set<string>>(()=>new Set());
   const [showReviewed,setShowReviewed]=useState(false);
   const [markedIntentional,setMarkedIntentional]=useState<Set<string>>(()=>new Set());
   const keyOf=(finding:AudioFinding)=>finding.kind+":"+finding.timeSeconds.toFixed(2);
-  // New scan invalidates previous decisions about which candidates are reviewed.
-  useEffect(()=>{setReviewed(new Set());setMarkedIntentional(new Set());},[findings]);
   const categories=useMemo(()=>new Set(findings.map(item=>FINDING_GROUPS[item.kind])),[findings]);
   const visible=useMemo(()=>findings.filter(item=>
     (filter==="All"||FINDING_GROUPS[item.kind]===filter) &&
@@ -96,10 +95,10 @@ export function CleanupReview({
                   {comparison?.findings.includes(item)&&<button type="button"
                     aria-pressed={markedIntentional.has(id)}
                     onClick={()=>{setMarkedIntentional(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
-                      setReviewed(current=>new Set(current).add(id));}}>
+                      onReviewedChange(current=>new Set(current).add(id));}}>
                     {markedIntentional.has(id)?"Intentional ✓":"Mark intentional"}
                   </button>}
-                  <button type="button" onClick={()=>setReviewed(existing=>{
+                  <button type="button" onClick={()=>onReviewedChange(existing=>{
                     const next=new Set(existing);if(next.has(id))next.delete(id);else next.add(id);return next;
                   })}>{isReviewed?"Unmark":"Mark reviewed"}</button>
                 </div>

@@ -203,6 +203,23 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [duration, setDuration] = useState(expectedDuration || 0);
   const [exporting, setExporting] = useState(false);
   const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
+  // Stable finding identity is shared by the analyzer and both fix workbenches.
+  const findingKey=(finding:AudioFinding)=>finding.kind+":"+finding.timeSeconds.toFixed(2);
+  const reviewStorageKey="song-harbor:cleanup-reviewed:"+jobId;
+  const [reviewedFindings,setReviewedFindings]=useState<Set<string>>(()=>{
+    try{
+      const stored=JSON.parse(window.localStorage.getItem(reviewStorageKey)||"[]") as unknown;
+      return new Set(Array.isArray(stored)?stored.filter((id):id is string=>typeof id==="string"):[]);
+    }catch{return new Set<string>();}
+  });
+  const [declickFindingKey,setDeclickFindingKey]=useState<string|null>(null);
+  useEffect(()=>{
+    try{window.localStorage.setItem(reviewStorageKey,JSON.stringify([...reviewedFindings]));}catch{/* Browser storage may be unavailable. */}
+  },[reviewStorageKey,reviewedFindings]);
+  const markFindingReviewed=(key:string)=>{
+    setReviewedFindings(previous=>new Set(previous).add(key));
+  };
+
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [cleanupStale,setCleanupStale]=useState(false);
@@ -833,6 +850,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(!preferred){setDeclickError("No editable audio source");return;}
     setCorrection(null);
     setDeclickError("");
+    setDeclickFindingKey(findingKey(finding));
     setDeclickDraft({compare:"fix",recipe:{
       id:crypto.randomUUID(),filename:preferred.filename,source_key:preferred.key,
       time_seconds:finding.timeSeconds,half_window_ms:1
@@ -850,6 +868,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       });
       const body=await response.json() as {repairs?:DeclickRecipe[];detail?:string};
       if(!response.ok||!body.repairs)throw Error(body.detail||"Could not save de-click");
+      if(declickFindingKey)markFindingReviewed(declickFindingKey);
+      setDeclickFindingKey(null);
       setDeclickDraft(null);
       setDeclickRepairs(body.repairs);
       const engine=audio.current;
@@ -923,6 +943,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrectionError("");
     if(trial.kind==="trim"){
       setMasterTrimDb(Math.max(-60,masterTrimDb+trial.trimDelta));
+      markFindingReviewed(findingKey(trial.finding));
       setCorrection(null);setMixUrl(null);
       return;
     }
@@ -980,6 +1001,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:typeof spaceTargets;
         eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;gain_targets?:typeof gainTargets;volume_targets?:typeof volumeTargets;auto_pan_targets?:typeof autoPanTargets;ending?:typeof ending};
       if(!result.ok||!data.sections)throw Error(data.detail||"Could not save dynamics correction");
+      markFindingReviewed(findingKey(trial.finding));
       setCorrection(null);
       setExternalSections(data.sections);setTimelineSections(data.sections);
       setPanTargets(data.pan_targets||[]);setReverbTargets(data.reverb_targets||[]);
@@ -1345,7 +1367,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <DeclickWorkbench draft={declickDraft} sources={audio.current?.declickSourceKeys||[]}
             locked={declickBusy} onChange={setDeclickDraft}
             onAccept={()=>{void acceptDeclick();}}
-            onCancel={()=>{setDeclickDraft(null);setDeclickError("");}}/>
+            onCancel={()=>{setDeclickDraft(null);setDeclickFindingKey(null);setDeclickError("");}}/>
         </>}
         {tool==="cleanup"&&declickError&&<p role="alert" className="song-cleanup-error">{declickError}</p>}
         {tool==="cleanup"&&declickRepairs.length>0&&<details className="song-cleanup-repairs">
@@ -1370,7 +1392,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           {correctionError&&<p role="alert" className="song-cleanup-error">{correctionError}</p>}
         </>}
         {tool==="cleanup"&&<>
-        <CleanupReview findings={cleanupFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
+        <CleanupReview findings={cleanupFindings} reviewed={reviewedFindings} onReviewedChange={setReviewedFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection} onTryDeclick={tryDeclick}
           onLoop={(start,end)=>{

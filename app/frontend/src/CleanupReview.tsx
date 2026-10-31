@@ -1,5 +1,6 @@
 import {useMemo,useState} from "react";
 import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCleanupAnalyzer";
+import {findingReviewKey,toggleReviewed,markReviewed} from "./FindingReview";
 import type {StageComparison} from "./AudioStageComparison";
 
 const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics","Signal audit"] as const;
@@ -24,11 +25,10 @@ export function CleanupReview({
   const [filter,setFilter]=useState<string>("All");
   const [showReviewed,setShowReviewed]=useState(false);
   const [markedIntentional,setMarkedIntentional]=useState<Set<string>>(()=>new Set());
-  const keyOf=(finding:AudioFinding)=>finding.kind+":"+finding.timeSeconds.toFixed(2);
   const categories=useMemo(()=>new Set(findings.map(item=>FINDING_GROUPS[item.kind])),[findings]);
   const visible=useMemo(()=>findings.filter(item=>
     (filter==="All"||FINDING_GROUPS[item.kind]===filter) &&
-    (showReviewed||!reviewed.has(keyOf(item)))),[findings,filter,reviewed,showReviewed]);
+    (showReviewed||!reviewed.has(findingReviewKey(item)))),[findings,filter,reviewed,showReviewed]);
   const warningCount=findings.filter(item=>item.severity==="warning").length;
   const nextItem=visible[0];
   return <details className="production-tool-detail song-cleanup-panel" aria-label="Sound cleanup analyzer" open>
@@ -54,7 +54,7 @@ export function CleanupReview({
           visible.length===0?<p className="song-cleanup-empty">No unreviewed candidates in this category.</p>:
           <div className="song-cleanup-list" role="list" aria-label="Sound cleanup findings">
             {visible.map(item=>{
-              const id=keyOf(item),isReviewed=reviewed.has(id);
+              const id=findingReviewKey(item),isReviewed=reviewed.has(id);
               return <article key={id} role="listitem" className={"song-cleanup-item"+(isReviewed?" is-reviewed":"")}>
                 <div className="song-cleanup-item-top">
                   <button type="button" className="song-cleanup-time" title="Seek to finding"
@@ -95,12 +95,10 @@ export function CleanupReview({
                   {comparison?.findings.includes(item)&&<button type="button"
                     aria-pressed={markedIntentional.has(id)}
                     onClick={()=>{setMarkedIntentional(current=>{const next=new Set(current);if(next.has(id))next.delete(id);else next.add(id);return next;});
-                      onReviewedChange(current=>new Set(current).add(id));}}>
+                      onReviewedChange(current=>markReviewed(current,id));}}>
                     {markedIntentional.has(id)?"Intentional ✓":"Mark intentional"}
                   </button>}
-                  <button type="button" onClick={()=>onReviewedChange(existing=>{
-                    const next=new Set(existing);if(next.has(id))next.delete(id);else next.add(id);return next;
-                  })}>{isReviewed?"Unmark":"Mark reviewed"}</button>
+                  <button type="button" onClick={()=>onReviewedChange(existing=>toggleReviewed(existing,id))}>{isReviewed?"Unmark":"Mark reviewed"}</button>
                 </div>
               </article>;
             })}

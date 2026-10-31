@@ -18,6 +18,7 @@ import type {ReplacementMask} from "./ReplacementMasks";
 import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe } from "./SharedClockAudition";
 import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
+import {findingReviewKey,markReviewed} from "./FindingReview";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
@@ -204,7 +205,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [exporting, setExporting] = useState(false);
   const [cleanupFindings,setCleanupFindings]=useState<readonly AudioFinding[]>([]);
   // Stable finding identity is shared by the analyzer and both fix workbenches.
-  const findingKey=(finding:AudioFinding)=>finding.kind+":"+finding.timeSeconds.toFixed(2);
   const reviewStorageKey="song-harbor:cleanup-reviewed:"+jobId;
   const [reviewedFindings,setReviewedFindings]=useState<Set<string>>(()=>{
     try{
@@ -217,7 +217,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     try{window.localStorage.setItem(reviewStorageKey,JSON.stringify([...reviewedFindings]));}catch{/* Browser storage may be unavailable. */}
   },[reviewStorageKey,reviewedFindings]);
   const markFindingReviewed=(key:string)=>{
-    setReviewedFindings(previous=>new Set(previous).add(key));
+    setReviewedFindings(previous=>markReviewed(previous,key));
   };
 
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
@@ -850,7 +850,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(!preferred){setDeclickError("No editable audio source");return;}
     setCorrection(null);
     setDeclickError("");
-    setDeclickFindingKey(findingKey(finding));
+    setDeclickFindingKey(findingReviewKey(finding));
     setDeclickDraft({compare:"fix",recipe:{
       id:crypto.randomUUID(),filename:preferred.filename,source_key:preferred.key,
       time_seconds:finding.timeSeconds,half_window_ms:1
@@ -943,7 +943,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     setCorrectionError("");
     if(trial.kind==="trim"){
       setMasterTrimDb(Math.max(-60,masterTrimDb+trial.trimDelta));
-      markFindingReviewed(findingKey(trial.finding));
+      markFindingReviewed(findingReviewKey(trial.finding));
       setCorrection(null);setMixUrl(null);
       return;
     }
@@ -1001,7 +1001,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:typeof spaceTargets;
         eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;gain_targets?:typeof gainTargets;volume_targets?:typeof volumeTargets;auto_pan_targets?:typeof autoPanTargets;ending?:typeof ending};
       if(!result.ok||!data.sections)throw Error(data.detail||"Could not save dynamics correction");
-      markFindingReviewed(findingKey(trial.finding));
+      markFindingReviewed(findingReviewKey(trial.finding));
       setCorrection(null);
       setExternalSections(data.sections);setTimelineSections(data.sections);
       setPanTargets(data.pan_targets||[]);setReverbTargets(data.reverb_targets||[]);

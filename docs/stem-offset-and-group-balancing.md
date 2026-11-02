@@ -15,7 +15,7 @@
 
 Future variable offsets must be implemented as clip splits/crossfades, not by jumping the playback cursor within a song.
 
-## Next feature: group-aware gain and pan balancing (design only)
+## Group-aware gain and pan balancing (initial integration; combined QA pending)
 
 ```text
 [group DrumPair]
@@ -31,7 +31,7 @@ Future variable offsets must be implemented as clip splits/crossfades, not by ju
 }
 ```
 
-A group names stable stem aliases and defines the scope of the solver. `auto.pan:center` conserves total stereo energy balance WITHIN the group, not across unrelated stems. `auto.gain:0` preserves baseline group loudness when a member is boosted, compensating among the OTHER eligible members. Explicit pan/gain directives must remain protected; if constraints conflict, report residual imbalance rather than silently overriding user instructions. Group definitions, parser and group solver are not yet implemented.
+A group names stable stem aliases and defines the scope of the solver. `auto.pan:center` conserves total stereo energy balance WITHIN the group, not across unrelated stems. `auto.gain:0` preserves baseline group loudness when a member is boosted, compensating among the OTHER eligible members. Explicit pan/gain directives must remain protected; if constraints conflict, report residual imbalance rather than silently overriding user instructions. Group definitions, parser, and derived automation solver are now implemented in the initial slice; combined listening and render QA remain pending.
 
 Initial implementation should: measure group power in short representative windows with timing offsets applied; honor explicit automation, sidechain and pan locks; offer preview and undo; limit automated corrections and expose an intelligible explanation of unlocked members. Follow with nested groups and inheritance after the basic contracts pass.
 
@@ -66,11 +66,11 @@ Add a true wet/dry echo bus with milliseconds and beat-synced time, feedback, lo
 
 ## Implementation status (2026-11-02)
 
-- Pure group gain compensation and group-scoped pan solver adapter added in `app/frontend/src/GroupAutomation.ts`. This module is not yet connected to section scripts or rendering.
+- Pure group gain compensation and group-scoped pan solver adapter added in `app/frontend/src/GroupAutomation.ts`; connected to section scripts and derived gain/pan automation in the later combined slice described below.
 - Unit fixtures added in `app/frontend/tests/group-automation.test.mjs`, and included in frontend CI workflow.
-- Outstanding for user-visible behavior: parser/group storage, offset-aware audio measurement, section-to-solver orchestration, derived automation scheduling, preview/undo, rendered-output validation and end-to-end testing.
+- Group parser/storage, offset-aware measurement and derived automation scheduling were added in the subsequent slice. Remaining: robust group preview/undo UI, rendered-output validation, combined listening QA and complete end-to-end testing.
 - The gain solver accepts *linear RMS power estimates*, not amplitudes or LUFS. Explicitly boosted stems must be marked gainLocked so their authored gains cannot be overwritten; unrelated stems must never enter the group list.
-- Do not advertise group directives as supported before full parser, UI and audio parity land. This is an implementation foundation only.
+- Group directives are now accepted by the section script; final audio parity and quality require the combined QA pass.
 
 
 ## Combined echo + groups implementation handoff (2026-11-02)

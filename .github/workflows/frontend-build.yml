@@ -34,6 +34,7 @@ jobs:
             app/frontend/tests/replacement-mask.test.mjs \
             app/frontend/tests/auto-pan.test.mjs \
             app/frontend/tests/group-automation.test.mjs \
+            app/frontend/tests/echo-delay.test.mjs \
             app/frontend/tests/section-deess.test.mjs \
             app/frontend/tests/audio-cleanup.test.mjs \
             app/frontend/tests/attack-rise.test.mjs \

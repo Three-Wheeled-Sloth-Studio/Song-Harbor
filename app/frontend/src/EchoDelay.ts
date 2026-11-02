@@ -38,12 +38,19 @@ export function createEchoStage(ctx:BaseAudioContext,output:AudioNode):EchoStage
   filter.frequency.value=6500;
   return {input,delay,feedback,filter,wet};
 }
-export function configureEcho(stage:EchoStage,echo:EchoSettings|undefined,time:number):void{
+export function configureEcho(stage:EchoStage,echo:EchoSettings|undefined,time:number,remainingSeconds?:number):void{
   const settings=echo?validateEcho(echo):DEFAULT_ECHO;
+  for(const param of [stage.delay.delayTime,stage.feedback.gain,stage.filter.frequency,stage.wet.gain])
+    param.cancelScheduledValues(time);
   stage.delay.delayTime.setValueAtTime(settings.delayMs/1000,time);
   stage.feedback.gain.setValueAtTime(echo?settings.feedback:0,time);
   stage.filter.frequency.setValueAtTime(settings.lowpassHz,time);
   stage.wet.gain.setValueAtTime(echo?settings.wet:0,time);
+  if(echo&&settings.wet>0&&remainingSeconds!==undefined&&Number.isFinite(remainingSeconds)&&remainingSeconds>0){
+    const fade=Math.min(.3,remainingSeconds);
+    stage.wet.gain.setValueAtTime(settings.wet,time+Math.max(0,remainingSeconds-fade));
+    stage.wet.gain.linearRampToValueAtTime(0,time+remainingSeconds);
+  }
 }
 export function disconnectEcho(stage:EchoStage):void{
   for(const node of Object.values(stage))node.disconnect();

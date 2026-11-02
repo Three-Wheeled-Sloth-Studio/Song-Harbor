@@ -261,6 +261,33 @@ class ProductionNotationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             section_production.parse_block("{Other.pan:center Other.pan:left.30}")
 
+
+    def test_taiko_timing_offset_roundtrip_and_removal(self):
+        files=["01 (Drums).wav","02 (Taiko).wav"]
+        project={"sections":[],"files":files}
+        source="[Intro 0:00-0:10]\\n{Taiko.offset:150ms Drums.pan:right.45@5s:smooth}\\n[Verse 0:10-0:20]\\n"
+        result=section_import.apply(project,source,"replace",20)
+        self.assertEqual(result["stem_time_offsets"],{files[1]:.15})
+        project.update(result)
+        rendered=section_import.render_tags(project)
+        self.assertIn("Taiko.offset:150ms",rendered)
+        self.assertEqual(section_import.apply(project,rendered,"replace",20)["stem_time_offsets"],{files[1]:.15})
+        self.assertEqual(section_import.apply(project,rendered.replace("Taiko.offset:150ms",""),"replace",20)["stem_time_offsets"],{})
+
+    def test_taiko_timing_offset_rejects_invalid_and_repeated_values(self):
+        files=["01 (Drums).wav","02 (Taiko).wav"]
+        project={"sections":[],"files":files}
+        source="[Intro 0:00-0:10]\\n{Taiko.offset:200ms}\\n[Verse 0:10-0:20]\\n"
+        for text in (
+            source.replace("200ms","501ms"),
+            source.replace("200ms","-20ms"),
+            source.replace("Taiko.offset:200ms","Other.offset:200ms"),
+            source.replace("Taiko.offset:200ms","Taiko.offset:100ms Taiko.offset:200ms"),
+            source.replace("[Verse 0:10-0:20]","[Verse 0:10-0:20]\\n{Taiko.offset:100ms}")
+        ):
+            with self.subTest(text=text),self.assertRaises(ValueError):
+                section_import.apply(project,text,"replace",20)
+
     def test_replace_clears_removed_instruction(self):
         project = {"sections": [], "files": FILES}
         project.update(section_import.apply(project, "[Chorus 0:00-0:10]\n{Other.pan:left.50}", "replace", 10))

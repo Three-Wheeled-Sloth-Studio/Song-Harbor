@@ -1,4 +1,5 @@
 import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
+import {stemTimelineStart,stemPlaybackWindow} from "./StemTiming.ts";
 import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
 import {scheduleAutomation, valueAt, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
@@ -585,7 +586,7 @@ export class SharedClockAudition {
     }
   }
   private timelineStart(track:Track):number{
-    return track.source.startSeconds+(this.stemTimeOffsets[track.source.filename]||0);
+    return stemTimelineStart(track.source.startSeconds,this.stemTimeOffsets[track.source.filename]||0);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{gain?:AutomationPoint[];volume?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
@@ -838,10 +839,9 @@ export class SharedClockAudition {
       }
       this.configurePreviewNodes(startAt,offset);
       for(const {node,track} of made){
-        const clipStart=this.timelineStart(track),clipEnd=clipStart+track.buffer.duration;
-        if(offset>=clipEnd){node.disconnect();continue;}
-        if(offset<=clipStart)node.start(startAt+clipStart-offset,0);
-        else node.start(startAt,offset-clipStart);
+        const window=stemPlaybackWindow(offset,this.timelineStart(track),track.buffer.duration);
+        if(!window){node.disconnect();continue;}
+        node.start(startAt+window.delay,window.bufferOffset);
       }
       this.scheduleCandidate(startAt,offset);
       this.nodes=made.map(item=>item.node).filter(node=>node.numberOfOutputs>0);

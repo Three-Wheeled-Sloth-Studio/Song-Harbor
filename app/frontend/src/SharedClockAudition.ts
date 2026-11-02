@@ -597,7 +597,7 @@ export class SharedClockAudition {
     if(JSON.stringify(this.stemTimeOffsets)===JSON.stringify(offsets))return;
     this.stemTimeOffsets={...offsets};
     if(this.prepared){
-      this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(offsets))+this.ending.tail_seconds;
+      this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(offsets))+Math.max(this.ending.tail_seconds,...Object.values(this.echoSettings).map(echoTailSeconds),0);
       if(this.running)this.seek(this.position);
     }
   }

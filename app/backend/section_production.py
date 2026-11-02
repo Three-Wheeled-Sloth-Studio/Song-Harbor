@@ -87,6 +87,17 @@ ORIGINAL_MIX_TOKEN = re.compile(
     r"@(?P<start>\d+(?:\.\d{1,3})?)-(?P<end>\d+(?:\.\d{1,3})?)"
     r"#(?P<replacement>trk_[A-Za-z0-9_-]{1,64})$"
 )
+
+GROUP_DEFINITION_TOKEN = re.compile(
+    r"(?i)^group\.(?P<name>[A-Za-z][A-Za-z0-9_-]{0,31}):"
+    r"(?P<members>[A-Za-z][A-Za-z0-9_-]*(?:,[A-Za-z][A-Za-z0-9_-]*)+)$"
+)
+GROUP_AUTO_TOKEN = re.compile(
+    r"(?i)^(?P<group>[A-Za-z][A-Za-z0-9_-]{0,31})\.auto\."
+    r"(?P<axis>pan|gain):(?P<target>center|0)"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s"
+    r"(?::(?P<curve>smooth|linear))?)?$"
+)
 AUTO_PAN_TOKEN = re.compile(
     r"(?i)^auto\.pan:center(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s"
     r"(?::(?P<curve>smooth|linear))?)?$"
@@ -108,6 +119,44 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        group_def=GROUP_DEFINITION_TOKEN.fullmatch(token)
+        if group_def:
+            name=group_def.group("name")
+            members=group_def.group("members").split(",")
+            if name.casefold() in ("all","auto","master","group") or any(
+                name.casefold()==a.casefold() for a in aliases):
+                raise ValueError("Group name collides with a reserved or existing stem alias")
+            canonical=[]
+            for member in members:
+                alias=next((a for a in aliases if a.casefold()==member.casefold()),None)
+                if alias is None or alias.casefold().endswith(("-left","-right")):
+                    raise ValueError("Group members must be existing parent stems")
+                if alias.casefold() in {item.casefold() for item in canonical}:
+                    raise ValueError("Group members cannot be duplicated")
+                canonical.append(alias)
+            if len(canonical)>16:raise ValueError("Group has more than 16 stems")
+            key="group:"+name.casefold()
+            if key in touched:raise ValueError("Group already defined in section")
+            touched.add(key)
+            directives.append({"kind":"group_definition","track":name,"members":canonical})
+            continue
+        group_auto=GROUP_AUTO_TOKEN.fullmatch(token)
+        if group_auto:
+            axis=group_auto.group("axis").lower()
+            if (axis=="pan" and group_auto.group("target").lower()!="center") or (
+                axis=="gain" and group_auto.group("target")!="0"):
+                raise ValueError("Group auto pan needs center; auto gain needs 0 dB")
+            duration=float(group_auto.group("seconds") or 8)
+            if not .05<=duration<=30:raise ValueError("Group auto transition must be .05-30 seconds")
+            name=group_auto.group("group")
+            key="group-auto:"+name.casefold()+":"+axis
+            if key in touched:raise ValueError("Duplicate group auto target in section")
+            touched.add(key)
+            directives.append({"kind":"group_auto_"+axis,"track":name,
+                               "transition_seconds":duration,
+                               "transition_anchor":"end" if group_auto.group("anchor")=="#" else "start",
+                               "curve":(group_auto.group("curve") or "smooth").lower()})
+            continue
         offset=OFFSET_TOKEN.fullmatch(token)
         if offset:
             canonical=next((a for a in aliases if a.casefold()==offset.group("track").casefold()),None)
@@ -353,6 +402,15 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"]=="group_definition":
+            rendered.append(f"group.{d['track']}:{','.join(d['members'])}")
+            continue
+        if d["kind"] in ("group_auto_pan","group_auto_gain"):
+            axis="pan" if d["kind"]=="group_auto_pan" else "gain"
+            target="center" if axis=="pan" else "0"
+            anchor="#" if d.get("transition_anchor")=="end" else "@"
+            rendered.append(f"{d['track']}.auto.{axis}:{target}{anchor}{d['transition_seconds']:g}s:{d['curve']}")
+            continue
         if d["kind"] == "offset":
             rendered.append(f"{d['track']}.offset:{d['milliseconds']}ms")
             continue
@@ -487,6 +545,61 @@ def expand_broadcast(blocks: dict[str, list[dict[str, Any]]],
 
 
 
+def materialize_groups(sections:list[dict[str,Any]],
+                       blocks:dict[str,list[dict[str,Any]]],
+                       files:list[str],tracks:list[dict[str,Any]]|None=None)->dict[str,dict[str,Any]]:
+    stems=source_map(files,tracks)
+    groups={}
+    for section in sorted(sections,key=lambda x:x["start_seconds"]):
+        for directive in blocks.get(section["id"],[]):
+            if directive["kind"]!="group_definition":continue
+            name=directive["track"]
+            key=name.casefold()
+            if key in groups:raise ValueError("Group "+name+" is already defined")
+            if key in {alias.casefold() for alias in stems}:raise ValueError("Group name collides with a stem")
+            members=directive["members"]
+            if not 2<=len(members)<=16:raise ValueError("Group requires 2-16 distinct stems")
+            sources=[]
+            for member in members:
+                if member not in stems:raise ValueError("Unknown group member: "+member)
+                source=stems[member]
+                if source in sources:raise ValueError("Duplicate group member")
+                sources.append(source)
+            groups[key]={"name":name,"source_keys":sources}
+    return groups
+
+
+def materialize_group_gain(sections:list[dict[str,Any]],
+                           blocks:dict[str,list[dict[str,Any]]],
+                           files:list[str],tracks:list[dict[str,Any]]|None=None)->list[dict[str,Any]]:
+    groups=materialize_groups(sections,blocks,files,tracks)
+    stems=source_map(files,tracks)
+    locked=set()
+    out=[]
+    for section in sorted(sections,key=lambda item:item["start_seconds"]):
+        directives=blocks.get(section["id"],[])
+        for d in directives:
+            if d["kind"]=="reset":
+                if d["track"]=="all":locked.clear()
+                else:locked.discard(d["track"])
+            elif d["kind"] in ("gain","volume"):
+                if d["track"]=="all":locked.update(stems)
+                else:locked.add(d["track"])
+        for d in directives:
+            if d["kind"]!="group_auto_gain":continue
+            group=groups.get(d["track"].casefold())
+            if not group:raise ValueError("Undefined group: "+d["track"])
+            out.append({"section_id":section["id"],"group":group["name"],
+                        "source_keys":group["source_keys"],
+                        "protected_gain_sources":[stems[a] for a in stems if a in locked
+                                                  and stems[a] in group["source_keys"]],
+                        "target_db":0,
+                        "transition_seconds":d["transition_seconds"],
+                        "transition_anchor":d.get("transition_anchor","start"),
+                        "curve":d["curve"]})
+    return out
+
+
 def materialize_auto_pan(sections: list[dict[str, Any]],
                          blocks: dict[str, list[dict[str, Any]]],
                          files: list[str], tracks: list[dict[str, Any]]|None=None, children:dict[str,Any]|None=None) -> list[dict[str, Any]]:
@@ -497,6 +610,7 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
     """
     aliases=source_aliases(files,tracks)
     stems=source_map(files,tracks)
+    groups=materialize_groups(sections,blocks,files,tracks)
     protected=set()
     protected_gain=set()
     output=[]
@@ -517,10 +631,18 @@ def materialize_auto_pan(sections: list[dict[str, Any]],
                 if d["track"]=="all": protected_gain.update(stems)
                 else: protected_gain.add(d["track"])
         for d in directives:
-            if d["kind"]=="auto_pan":
+            if d["kind"] in ("auto_pan","group_auto_pan"):
+                group=groups.get(d["track"].casefold()) if d["kind"]=="group_auto_pan" else None
+                if d["kind"]=="group_auto_pan" and not group:
+                    raise ValueError("Undefined group: "+d["track"])
+                scope=group["source_keys"] if group else list(stems.values())
                 output.append({"section_id":section["id"],"target":"center",
-                               "protected_sources":[stems[a] for a in aliases if a in protected and a in stems],
-                               "protected_gain_sources":[stems[a] for a in aliases if a in protected_gain and a in stems],
+                               "group":group["name"] if group else None,
+                               "scope_sources":scope,
+                               "protected_sources":[stems[a] for a in aliases
+                                                    if a in protected and a in stems and stems[a] in scope],
+                               "protected_gain_sources":[stems[a] for a in aliases
+                                                         if a in protected_gain and a in stems and stems[a] in scope],
                                "transition_seconds":d["transition_seconds"],"transition_anchor":d.get("transition_anchor","start"),"curve":d["curve"]})
     return output
 
@@ -538,7 +660,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset", "group_definition", "group_auto_pan", "group_auto_gain"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -560,7 +682,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset", "group_definition", "group_auto_pan", "group_auto_gain"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:

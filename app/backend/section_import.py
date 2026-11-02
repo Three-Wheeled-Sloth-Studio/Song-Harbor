@@ -315,6 +315,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
     production={key:[d for d in directives if d.get("kind")!="original_mix"]
                 for key,directives in production.items()}
     auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
+    group_gain_targets = section_production.materialize_group_gain(validated, production, files, tracks)
     # Keep authored macro intents in section_production for roundtrip.
     # Resolve deterministic effect targets only while materializing automation.
     effective = section_production.expand_evolution(
@@ -338,6 +339,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "section_volume_automation": volume_targets,
             "stem_time_offsets": offsets,
             "section_auto_pan": auto_pan_targets,
+            "section_auto_gain": group_gain_targets,
             "section_ending": ending,
             "section_lyrics": lyrics,
             "imported_count": len(imported), "auto_distributed": distributed,

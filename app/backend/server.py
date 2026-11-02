@@ -1802,6 +1802,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["stem_time_offsets"] = changed["stem_time_offsets"]
     record["replacement_masks"] = changed["replacement_masks"]
     record["section_auto_pan"] = changed["section_auto_pan"]
+    record["section_auto_gain"] = changed["section_auto_gain"]
     record["section_ending"] = changed["section_ending"]
     record.update({"sections": changed["sections"],
                    "section_spatial_proposals": changed["section_spatial_proposals"],
@@ -1820,6 +1821,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "stem_time_offsets": changed["stem_time_offsets"],
             "replacement_masks": changed["replacement_masks"],
             "auto_pan_targets": changed["section_auto_pan"],
+            "group_gain_targets": changed["section_auto_gain"],
             "ending": changed["section_ending"],
             "spatial_proposals": changed["section_spatial_proposals"],
             "imported_count": changed["imported_count"],
@@ -1860,6 +1862,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "stem_time_offsets": record.get("stem_time_offsets", {}),
             "replacement_masks": record.get("replacement_masks", []),
             "auto_pan_targets": record.get("section_auto_pan", []),
+            "group_gain_targets": record.get("section_auto_gain", []),
             "ending": record.get("section_ending", {"fade_seconds": 0, "tail_seconds": 0, "curve": "smooth"})}
 
 

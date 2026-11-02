@@ -738,7 +738,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,echoSettings,stemGroups,sectionGroupTargets,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
-  useEffect(() => { setMixUrl(null); }, [stems]);
+  useEffect(() => { setMixUrl(null); }, [stems,echoSettings,stemGroups,sectionGroupTargets]);
 
   useEffect(()=>{
     if(!playing)return;
@@ -1372,7 +1372,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           </div>
         </>}
 
-        {autoPanReports.length>0&&<details className="auto-pan-diagnostics"><summary>Auto-pan diagnostics ({autoPanReports.length} sections, dry-stem estimates)</summary>
+        {autoPanReports.length>0&&<details className="auto-pan-diagnostics"><summary>Automatic balance diagnostics ({autoPanReports.length} sections, dry-stem estimates)</summary>
           {autoPanReports.map((line,i)=><p key={i}>{line}</p>)}
           <small>Final color scan measures actual effects-processed stereo mix, which can differ from this approximation.</small>
         </details>}

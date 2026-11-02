@@ -1,6 +1,7 @@
 /** Deterministic, bounded source-energy approximation for automatic stereo balancing.
  * Estimates dry stem contributions, not the effects-processed final bounce.
- * User-authored pan positions are immutable; optimization acts on free sources only.
+ * User-authored pans stay fixed. Gain may compensate on pan-locked stems only
+ * when gain is explicitly unlocked; no authored effect is rewritten.
  */
 export type AutoStem={
   filename:string;leftPower:number;rightPower:number;crossPower:number;
@@ -36,23 +37,22 @@ export function solveAutoPan(stems:AutoStem[],maxPanMove=.24,maxGainDb=.35):Auto
   const pans=new Map(active.map(s=>[s.filename,s.pan]));
   const gains=new Map(active.map(s=>[s.filename,0]));
   const beforeDb=balance(active,pans,gains);
-  const free=active.filter(s=>!s.locked);
-  if(!free.length)return {beforeDb,predictedDb:beforeDb,adjustments:[],
-    reached:Math.abs(beforeDb)<=.25,reason:"No eligible stems: inherited explicit pans are protected"};
+  const panFree=active.filter(s=>!s.locked);
+  const gainFree=active.filter(s=>!(s.gainLocked??s.locked));
+  if(!panFree.length&&!gainFree.length)return {beforeDb,predictedDb:beforeDb,adjustments:[],
+    reached:Math.abs(beforeDb)<=.25,reason:"No eligible stems: inherited explicit pans and gains are protected"};
   // Penalize movement more than remaining imbalance. Cap the perceptual footprint.
   const score=()=> {
     const error=balance(active,pans,gains);
     let movement=0;
-    for(const s of free){
-      movement+=1.8*((pans.get(s.filename)!-s.pan)/maxPanMove)**2;
-      movement+=2.8*((gains.get(s.filename)??0)/Math.max(.01,maxGainDb))**2;
-    }
+    for(const s of panFree)movement+=1.8*((pans.get(s.filename)!-s.pan)/maxPanMove)**2;
+    for(const s of gainFree)movement+=2.8*((gains.get(s.filename)??0)/Math.max(.01,maxGainDb))**2;
     return error*error*3+movement;
   };
   // Deterministic coordinate descent. Pan first, then minor gain compensation.
   // No rapid frame-wise servo and no non-reproducible stochastic search.
   for(let iter=0;iter<4;iter++){
-    for(const s of free){
+    for(const s of panFree){
       const start=s.pan;
       let best=pans.get(s.filename)!,cost=score();
       for(let i=-8;i<=8;i++){
@@ -66,8 +66,7 @@ export function solveAutoPan(stems:AutoStem[],maxPanMove=.24,maxGainDb=.35):Auto
   }
   if(Math.abs(balance(active,pans,gains))>.25){
     for(let iter=0;iter<2;iter++){
-      for(const s of free){
-        if(s.gainLocked)continue;
+      for(const s of gainFree){
         let best=0,cost=score();
         for(let i=-4;i<=4;i++){
           const candidate=i*maxGainDb/4;
@@ -80,7 +79,7 @@ export function solveAutoPan(stems:AutoStem[],maxPanMove=.24,maxGainDb=.35):Auto
     }
   }
   const predictedDb=balance(active,pans,gains);
-  const adjustments=free.map(s=>({
+  const adjustments=active.map(s=>({
     filename:s.filename,pan:pans.get(s.filename)!,
     gainDb:gains.get(s.filename)??0
   })).filter(x=>Math.abs(x.pan-(active.find(s=>s.filename===x.filename)?.pan??0))>.005||Math.abs(x.gainDb)>.025);

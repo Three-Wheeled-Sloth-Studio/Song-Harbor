@@ -749,7 +749,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,echoSettings,stemGroups,sectionGroupTargets,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
-  useEffect(() => { setMixUrl(null); }, [stems,echoSettings,stemGroups,sectionGroupTargets]);
+  useEffect(() => { setMixUrl(null); }, [stems,echoSettings,echoTargets,stemGroups,sectionGroupTargets]);
 
   useEffect(()=>{
     if(!playing)return;
@@ -1289,13 +1289,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <span className="track-percent">{s.gain}%</span>
         <button type="button" className={"track-toggle"+(echoSettings[s.filename]?" is-solo":"")}
           aria-label={"Toggle echo for "+s.name} aria-pressed={Boolean(echoSettings[s.filename])}
-          title={"Echo for "+s.name} onClick={()=>setEchoSettings(current=>{
+          disabled={echoTargets.some(item=>item.source_key===s.filename)}
+          title={echoTargets.some(item=>item.source_key===s.filename)
+            ?"Echo controlled by section script; edit the section text"
+            :"Echo fallback for "+s.name} onClick={()=>setEchoSettings(current=>{
             const next={...current};
             if(next[s.filename])delete next[s.filename];
             else next[s.filename]={delayMs:180,wet:.18,feedback:.25,lowpassHz:6500};
             setMixUrl(null);return next;
           })}>Echo</button>
-        {echoSettings[s.filename]&&<span className="track-echo-controls">
+        {echoTargets.some(item=>item.source_key===s.filename)&&<small title="Echo automation is defined in section text">Scripted echo</small>}
+        {echoSettings[s.filename]&&!echoTargets.some(item=>item.source_key===s.filename)&&<span className="track-echo-controls">
           <label title="Echo delay, milliseconds">ms <input type="number" min="20" max="2000" step="10"
             aria-label={s.name+" echo delay ms"} value={echoSettings[s.filename].delayMs}
             onChange={e=>{const n=Number(e.target.value);if(n>=20&&n<=2000)setEchoSettings(old=>({...old,[s.filename]:{...old[s.filename],delayMs:n}}));}} /></label>

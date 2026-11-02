@@ -71,3 +71,47 @@ Add a true wet/dry echo bus with milliseconds and beat-synced time, feedback, lo
 - Outstanding for user-visible behavior: parser/group storage, offset-aware audio measurement, section-to-solver orchestration, derived automation scheduling, preview/undo, rendered-output validation and end-to-end testing.
 - The gain solver accepts *linear RMS power estimates*, not amplitudes or LUFS. Explicitly boosted stems must be marked gainLocked so their authored gains cannot be overwritten; unrelated stems must never enter the group list.
 - Do not advertise group directives as supported before full parser, UI and audio parity land. This is an implementation foundation only.
+
+
+## Combined echo + groups implementation handoff (2026-11-02)
+
+The initial group scripting and mixing integration is now in source. Group definitions are expressed inside a section's production block, not as a separate section type:
+
+```text
+[Intro 0:00-0:25.045]
+{
+  group.DrumPair:Drums,Taiko
+  Drums.pan:right.55@10s:smooth
+  Taiko.pan:left.55@10s:smooth
+  Taiko.offset:150ms
+  Taiko.echo:180ms,18,25,6500
+}
+[Chorus 0:25.045-0:55.000]
+{
+  DrumPair.auto.gain:0@10s:smooth
+  DrumPair.auto.pan:center@10s:smooth
+  Drums.gain:+0.75@10s:smooth
+}
+```
+
+- `group.NAME:StemA,StemB` declares a flat group once per song. Groups refer to stable parent stem aliases in the script; the backend resolves filenames for execution.
+- `NAME.auto.gain:0` requests preservation of approximate dry-stem baseline group power through bounded, unlocked-member compensation.
+- `NAME.auto.pan:center` reuses the restrained auto-pan algorithm but is limited to group members.
+- `Stem.echo:180ms,18,25,6500` is song-wide delay time, wet percentage, feedback percentage, low-pass Hz. Unlike `.offset`, this adds genuine repeats and preserves the dry source.
+- Echo is routed from each stem bus to a wet feedback loop in both live and offline render. Effects are non-destructive. Tail extension is bounded; source media is not shifted.
+- Mixer Echo toggle, delay and wet controls are available for quick audition. These are not automatically written to the song script; use an echo directive for a durable setting.
+- Backend persists `stem_groups`, `section_group_targets`, and `stem_echo_settings`; section export and subsequent reload carry these settings.
+
+**QA status:** Implementation committed but not yet verified by a successful end-to-end browser/render test in this session. Automated regression tests for parsing, echo validation and group solver were added to their existing suites. Do not claim audio perceptual parity, correct group compensation on real stems, or complete CI success until observed.
+
+### Combined QA to run next
+
+1. Import the example using actual aliases and confirm export/reimport is stable. Invalid group aliases, duplicate declarations and out-of-range echo values must report actionable import errors.
+2. Preview and render taiko with 0, 150 and 500 ms offsets. A single dry hit must remain single, while echo creates genuine wet repeats; verify no offset is applied twice.
+3. Toggle echo and vary wet/feedback; compare live and exported WAV, including the tail beyond the source duration and seek behavior.
+4. Boost Drums with group gain holding baseline, inspect the amount of Taiko compensation and residual if limits prevent complete balance. Confirm unrelated stems remain unchanged.
+5. Apply explicit Taiko gain/pan then group automation. Manual values must remain locked; inspect diagnostics and compare processed WAV.
+6. Repeat with split L/R channels, solo, mute, accepted replacement masks, audio analysis, export and re-import.
+7. Verify high feedback never runs away, silence never produces NaN, and echo changes invalidate stale QC findings.
+
+**Not in this first slice:** tempo-synced echo, ping-pong/cross-channel feedback, nested groups, effect-bus routing UI, fully processed loudness optimization, per-section echo automation, permanent group UI editor. Group solver currently uses dry power estimates; rendered WAV analysis remains authoritative.

@@ -8,6 +8,29 @@ import section_production
 FILES = [f"song ({name}).wav" for name in section_production.ALIASES]
 
 class ProductionNotationTests(unittest.TestCase):
+    def test_named_groups_and_section_automation_roundtrip(self):
+        project={"sections":[],"files":FILES}
+        script=("[Verse 0:00-0:10]\\n"
+                "{group.DrumPair:Drums,Bass DrumPair.auto.gain:0@5s:smooth "
+                "Drums.gain:+.75@5s:smooth}\\n"
+                "[Chorus 0:10-0:20]\\n"
+                "{DrumPair.auto.pan:center@5s:smooth}\\n")
+        changed=section_import.apply(project,script,"replace",20)
+        self.assertEqual(changed["stem_groups"],[{"name":"DrumPair","sources":[FILES[1],FILES[2]]}])
+        self.assertEqual([r["dimension"] for r in changed["section_group_targets"]],["gain","pan"])
+        self.assertEqual(changed["section_group_targets"][0]["sources"],[FILES[1],FILES[2]])
+        project.update(changed)
+        exported=section_import.render_tags(project)
+        self.assertIn("group.DrumPair:Drums,Bass",exported)
+        self.assertEqual(section_import.apply(project,exported,"replace",20)["section_group_targets"],
+                         changed["section_group_targets"])
+        with self.assertRaisesRegex(ValueError,"Unknown group"):
+            section_import.apply({"sections":[],"files":FILES},
+                script.replace("group.DrumPair:Drums,Bass ",""),"replace",20)
+        with self.assertRaisesRegex(ValueError,"distinct"):
+            section_import.apply({"sections":[],"files":FILES},
+                script.replace("group.DrumPair:Drums,Bass","group.DrumPair:Drums,Drums"),"replace",20)
+
     def test_echo_songwide_roundtrip_and_bounds(self):
         project={"sections":[],"files":FILES}
         script=("[Verse 0:00-0:10]\\n"

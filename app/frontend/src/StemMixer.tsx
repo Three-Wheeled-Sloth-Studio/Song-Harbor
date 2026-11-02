@@ -656,6 +656,63 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           pan:compileSectionAutomation(merged,0,{min:-1,max:1})};
       }
     }
+    // Group balancing shares the same derived automation layer as auto-pan.
+    // Script-authored gains/pans remain protected, and unrelated stems are excluded.
+    const groupRequests=[...sectionGroupTargets].sort((a,b)=>
+      (sectionById.get(a.section_id)?.start_seconds??0)-(sectionById.get(b.section_id)?.start_seconds??0));
+    for(const request of groupRequests){
+      const section=sectionById.get(request.section_id);
+      const group=stemGroups.find(g=>g.name.toLowerCase()===request.name.toLowerCase());
+      if(!section||!group)continue;
+      const sources=group.sources.filter(filename=>files.includes(filename));
+      if(sources.length<2)continue;
+      const prior= (sectionId:string)=>{
+        const sectionItem=sectionById.get(sectionId);
+        return sectionItem!==undefined&&sectionItem.start_seconds<=section.start_seconds;
+      };
+      const gainLocked=[...new Set([
+        ...gainTargets.filter(item=>prior(item.section_id)).map(item=>item.source_key),
+        ...volumeTargets.filter(item=>prior(item.section_id)).map(item=>item.source_key)
+      ])];
+      const panLocked=[...new Set(trialPan.filter(item=>prior(item.section_id)).map(item=>item.source_key))];
+      if(request.dimension==="gain"){
+        const result=engine.solveSectionGroupGain(section.start_seconds,section.end_seconds,
+          sources,gainLocked,byFile);
+        reports.push("Group "+group.name+" "+section.start_seconds.toFixed(1)+
+          "s gain residual "+result.residualDb.toFixed(2)+" dB: "+result.reason);
+        for(const correction of result.adjustments){
+          if(!autoGainDesired.has(correction.filename))autoGainDesired.set(correction.filename,[]);
+          const base=byFile[correction.filename]?.gain
+            ?valueAt(byFile[correction.filename].gain!,section.start_seconds):1;
+          autoGainDesired.get(correction.filename)!.push({
+            sectionId:section.id,start:effectStart(section,request),end:section.end_seconds,
+            value:base*Math.pow(10,correction.changeDb/20),
+            transitionSeconds:request.transition_seconds,curve:request.curve});
+        }
+      }else{
+        const result=engine.solveSectionAutoPan(section.start_seconds,section.end_seconds,
+          panLocked,gainLocked,byFile,sources);
+        reports.push("Group "+group.name+" "+section.start_seconds.toFixed(1)+
+          "s pan "+result.beforeDb.toFixed(2)+" -> "+result.predictedDb.toFixed(2)+
+          " dB: "+result.reason);
+        for(const correction of result.adjustments){
+          if(!autoPanDesired.has(correction.filename))autoPanDesired.set(correction.filename,[]);
+          autoPanDesired.get(correction.filename)!.push({
+            sectionId:section.id,start:effectStart(section,request),end:section.end_seconds,
+            value:correction.pan,transitionSeconds:request.transition_seconds,curve:request.curve});
+        }
+      }
+    }
+    // A group may request pan without a song-wide auto-pan request.
+    for(const [filename,additions] of autoPanDesired){
+      const explicit=trialPan.filter(item=>item.source_key===filename).flatMap(item=>{
+        const section=sectionById.get(item.section_id);
+        return section?[{sectionId:section.id,start:section.start_seconds,end:section.end_seconds,
+          value:item.pan,transitionSeconds:item.transition_seconds,curve:item.curve}]:[];
+      });
+      byFile[filename]={...(byFile[filename]||{}),
+        pan:compileSectionAutomation([...explicit,...additions].sort((a,b)=>a.start-b.start),0,{min:-1,max:1})};
+    }
     for(const [filename,additions] of autoGainDesired){
       const explicit=gainTargets.filter(item=>item.source_key===filename).flatMap(item=>{
         const target=sectionById.get(item.section_id);

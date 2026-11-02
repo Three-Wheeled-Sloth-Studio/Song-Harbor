@@ -137,6 +137,6 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
                     "section_space_automation","section_eq_automation",
                     "section_dynamics_automation","section_gain_automation","section_volume_automation",
                     "section_auto_pan","section_ending","stem_time_offsets",
-                     "stem_echo_settings","stem_groups","section_group_targets"):
+                     "stem_echo_settings","section_echo_automation","stem_groups","section_group_targets"):
             updated[key]=changed[key]
     return updated

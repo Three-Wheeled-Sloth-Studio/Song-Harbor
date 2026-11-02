@@ -1,4 +1,5 @@
 import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
+import {solveGroupGain,type GroupGainResult,type GroupMember} from "./GroupAutomation";
 import {stemTimelineStart,stemPlaybackWindow} from "./StemTiming.ts";
 import {createEchoStage,configureEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage} from "./EchoDelay";
 import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
@@ -536,12 +537,13 @@ export class SharedClockAudition {
    * This is a bounded first-pass solver; final rendered analysis is authoritative.
    */
   solveSectionAutoPan(start:number,end:number,protectedSources:readonly string[],protectedGains:readonly string[],
-    curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[]}>):AutoPanResult{
+    curves:Record<string,{gain?:AutomationPoint[];pan?:AutomationPoint[]}>,onlySources?:readonly string[]):AutoPanResult{
     const stats=new Map<string,{l:number;r:number;cross:number;n:number}>();
     const fixed=new Set(protectedSources);
     const lockedGains=new Set(protectedGains);
     for(const track of this.tracks){
       const filename=track.source.filename;
+      if(onlySources&&!onlySources.includes(filename))continue;
       const level=this.renderedLevels[filename]??0;
       if(level<=0)continue;
       const buf=track.buffer,clipStart=this.timelineStart(track);
@@ -574,6 +576,40 @@ export class SharedClockAudition {
         gain:level*sectionGain,locked:fixed.has(filename),gainLocked:lockedGains.has(filename)});
     }
     return solveAutoPan(stems);
+  }
+
+  /** Dry power estimate for a flat group, offset-aware, bounded and deterministic.
+   * Existing explicit gain automation remains locked; no source media is modified.
+   */
+  solveSectionGroupGain(start:number,end:number,sources:readonly string[],lockedSources:readonly string[],
+    curves:Record<string,{gain?:AutomationPoint[]}>):GroupGainResult{
+    const locked=new Set(lockedSources);
+    const members:GroupMember[]=[];
+    for(const filename of sources){
+      const tracks=this.tracks.filter(track=>track.source.filename===filename);
+      let power=0,count=0;
+      for(const track of tracks){
+        const buf=track.buffer,offset=this.timelineStart(track);
+        const from=Math.max(0,Math.floor((start-offset)*buf.sampleRate));
+        const to=Math.min(buf.length,Math.ceil((end-offset)*buf.sampleRate));
+        if(to<=from)continue;
+        const left=buf.getChannelData(0);
+        const right=buf.numberOfChannels>1?buf.getChannelData(1):left;
+        const step=Math.max(1,Math.floor((to-from)/20000));
+        for(let i=from;i<to;i+=step){
+          const l=track.source.pan===1?0:left[i];
+          const r=track.source.pan===-1?0:track.source.pan===1?left[i]:right[i];
+          power+=l*l+r*r;count++;
+        }
+      }
+      const level=this.renderedLevels[filename]??0;
+      const baselinePower=power/Math.max(1,count)*level*level;
+      const curve=curves[filename]?.gain;
+      const relative=curve?valueAt(curve,start+(end-start)*.5):1;
+      members.push({filename,baselinePower,currentPower:baselinePower*relative*relative,
+        gainDb:20*Math.log10(Math.max(1e-8,relative)),gainLocked:locked.has(filename),active:level>0});
+    }
+    return solveGroupGain(members);
   }
 
   /** Independent non-destructive region mutes, linked to accepted replacement tracks.

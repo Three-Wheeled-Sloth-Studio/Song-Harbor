@@ -886,3 +886,13 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .track-echo-controls{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 .track-echo-controls label{display:inline-flex;align-items:center;gap:3px;font-size:11px;white-space:nowrap;color:var(--tws-color-text-muted)}
 .track-echo-controls input[type="number"]{width:58px;min-width:0;padding:2px 4px;font:12px Consolas,monospace}
+
+/* Both download entry points share one compact, scrollable export menu. */
+.song-download-options{display:grid;gap:12px;min-width:0}
+.song-download-options>section{display:grid;gap:7px;padding:9px;border:1px solid var(--tws-color-border-normal);border-radius:8px;min-width:0}
+.song-download-options>section>strong{font-size:13px}
+.song-download-options p{margin:0;font-size:12px;color:var(--tws-color-text-muted)}
+.song-download-options button{justify-self:start}
+.song-download-stems{display:flex;flex-wrap:wrap;gap:6px;min-width:0;max-height:155px;overflow:auto}
+.song-download-stems a,.song-download-options .mix-download{display:inline-block;padding:5px 9px;border:1px solid var(--tws-color-border-normal);border-radius:6px;font-size:12px;text-decoration:none}
+.song-download-stems a:hover,.song-download-options .mix-download:hover{border-color:currentColor}

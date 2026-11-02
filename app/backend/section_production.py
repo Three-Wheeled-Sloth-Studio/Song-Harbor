@@ -538,7 +538,7 @@ def materialize_pan(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for d in blocks.get(section["id"], []):
-            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan"):
+            if d["kind"] in ("reverb", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset"):
                 continue
             targets = stems.keys() if d["kind"] == "reset" and d["track"] == "all" else [d["track"]]
             for alias in targets:
@@ -560,7 +560,7 @@ def materialize_reverb(sections: list[dict[str, Any]],
     output = []
     for section in sorted(sections, key=lambda s: s["start_seconds"]):
         for directive in blocks.get(section["id"], []):
-            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan"):
+            if directive["kind"] in ("pan", "width", "space", "fade", "tail", "eq", "comp", "duck", "deess", "gain", "volume", "auto_pan", "offset"):
                 continue
             targets = list(stems) if directive["kind"] == "reset" and directive["track"] == "all" else [directive["track"]]
             for alias in targets:

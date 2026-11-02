@@ -46,7 +46,9 @@ export function solveAutoPan(stems:AutoStem[],maxPanMove=.24,maxGainDb=.35):Auto
     const error=balance(active,pans,gains);
     let movement=0;
     for(const s of panFree)movement+=1.8*((pans.get(s.filename)!-s.pan)/maxPanMove)**2;
-    for(const s of gainFree)movement+=2.8*((gains.get(s.filename)??0)/Math.max(.01,maxGainDb))**2;
+    // If every pan is protected, small gain trims are the remaining safe lever.
+    const gainPenalty=panFree.length===0?.2:2.8;
+    for(const s of gainFree)movement+=gainPenalty*((gains.get(s.filename)??0)/Math.max(.01,maxGainDb))**2;
     return error*error*3+movement;
   };
   // Deterministic coordinate descent. Pan first, then minor gain compensation.

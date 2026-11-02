@@ -73,6 +73,26 @@ def remove(project:dict[str,Any],track_id:str)->tuple[dict[str,Any],dict[str,Any
     updated["stems"]=[item for item in updated.get("stems",[]) if item.get("filename")!=filename]
     updated.get("channel_children",{}).pop(filename,None)
     updated.get("stem_time_offsets",{}).pop(filename,None)
+    removed_groups=set()
+    for directives in updated.get("section_production",{}).values():
+        for directive in directives:
+            if directive.get("kind")=="group_definition":
+                directive["members"]=[m for m in directive["members"] if m.casefold()!=alias]
+                if len(directive["members"])<2:
+                    removed_groups.add(directive["track"].casefold())
+    for directives in updated.get("section_production",{}).values():
+        directives[:]=[directive for directive in directives
+                       if not (directive.get("kind") in ("group_definition","group_auto_pan","group_auto_gain")
+                               and directive.get("track","").casefold() in removed_groups)]
+    for key in ("section_auto_pan","section_auto_gain"):
+        filtered=[]
+        for item in updated.get(key,[]):
+            if str(item.get("group") or "").casefold() in removed_groups:continue
+            item={**item}
+            for attr in ("scope_sources","source_keys","protected_sources","protected_gain_sources"):
+                if attr in item:item[attr]=[source for source in item[attr] if source!=filename]
+            filtered.append(item)
+        updated[key]=filtered
     for key,value in list(updated.items()):
         if not key.startswith("section_") or not isinstance(value,(list,dict)):continue
         groups=value.values() if isinstance(value,dict) else [value]
@@ -110,6 +130,9 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
     if old!=alias:
         for directives in updated.get("section_production",{}).values():
             for instruction in directives:
+                if instruction.get("kind")=="group_definition":
+                    instruction["members"]=[alias if member.casefold()==old.casefold() else member
+                                             for member in instruction["members"]]
                 if instruction.get("track","").casefold()==old.casefold():
                     instruction["track"]=alias
                 elif instruction.get("track","").casefold() in (old.casefold()+"-left",old.casefold()+"-right"):
@@ -130,6 +153,6 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
                     "section_reverb_automation","section_width_automation",
                     "section_space_automation","section_eq_automation",
                     "section_dynamics_automation","section_gain_automation","section_volume_automation",
-                    "section_auto_pan","section_ending","stem_time_offsets"):
+                    "section_auto_pan","section_auto_gain","section_ending","stem_time_offsets"):
             updated[key]=changed[key]
     return updated

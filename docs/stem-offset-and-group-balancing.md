@@ -15,24 +15,24 @@
 
 Future variable offsets must be implemented as clip splits/crossfades, not by jumping the playback cursor within a song.
 
-## Next feature: group-aware gain and pan balancing (design only)
+## Implemented: group-scoped gain and pan balancing
 
 ```text
-[group DrumPair]
+[Intro 0:00-0:25.045]
 {
-  Drums
-  Taiko
+  group.DrumPair:Drums,Taiko
+  Taiko.offset:150ms
 }
 [Chorus 1:13.569-1:36.195]
 {
-  DrumPair.auto.pan:center
-  DrumPair.auto.gain:0
   Drums.gain:+.75@10s:smooth
+  DrumPair.auto.pan:center@10s:smooth
+  DrumPair.auto.gain:0@10s:smooth
 }
 ```
 
-A group names stable stem aliases and defines the scope of the solver. `auto.pan:center` conserves total stereo energy balance WITHIN the group, not across unrelated stems. `auto.gain:0` preserves baseline group loudness when a member is boosted, compensating among the OTHER eligible members. Explicit pan/gain directives must remain protected; if constraints conflict, report residual imbalance rather than silently overriding user instructions. Group definitions, parser and group solver are not yet implemented.
+A group names stable stem aliases and defines the scope of the solver. `auto.pan:center` conserves total stereo energy balance WITHIN the group, not across unrelated stems. `auto.gain:0` preserves baseline group loudness when a member is boosted, compensating among the OTHER eligible members. Explicit pan/gain directives must remain protected; if constraints conflict, report residual imbalance rather than silently overriding user instructions. Group definitions, import/export and initial group-aware solvers are implemented. Loudness compensation uses section-sampled dry energy, preserves explicit gain and volume, and limits corrections to +/-4 dB. Group pan uses the existing constrained pan solver but only includes that group. Auto-processing remains an estimate, not a mastering guarantee.
 
-Initial implementation should: measure group power in short representative windows with timing offsets applied; honor explicit automation, sidechain and pan locks; offer preview and undo; limit automated corrections and expose an intelligible explanation of unlocked members. Follow with nested groups and inheritance after the basic contracts pass.
+Next improvements: group editing UI, named groups outside section blocks, precise processed-signal feedback, nested groups, automatic reinstrumentation membership, explicit per-member lock controls, and group-aware effect inheritance. Current corrections stay virtual and reversible; no source audio is rewritten.
 
 Separate echo/delay-line processor remains planned: slapback, stereo ping-pong, rhythmic repeats, filtered feedback and reliable reverb/echo tails. Do not implement echo by shifting the original stem.

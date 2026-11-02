@@ -1,7 +1,7 @@
 import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
 import {solveGroupGain,type GroupGainResult,type GroupMember} from "./GroupAutomation";
 import {stemTimelineStart,stemPlaybackWindow} from "./StemTiming.ts";
-import {createEchoStage,configureEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage} from "./EchoDelay";
+import {createEchoStage,configureEcho,scheduleSectionEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage,type EchoSectionTarget} from "./EchoDelay";
 import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
 import {scheduleAutomation, valueAt, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
@@ -54,6 +54,7 @@ export class SharedClockAudition {
   private groupPanners=new Map<string,StereoPannerNode>();
   private echoStages=new Map<string,EchoStage>();
   private echoSettings:Record<string,EchoSettings>={};
+  private echoTargets:Record<string,EchoSectionTarget[]>={};
   private widthStages=new Map<string,StereoWidthStage>();
   private eqStages=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
   private dynamicsStages=new Map<string,DynamicsStage>();
@@ -112,9 +113,24 @@ export class SharedClockAudition {
   setEchoSettings(settings:Record<string,EchoSettings>){
     for(const value of Object.values(settings))echoTailSeconds(value);
     this.echoSettings=Object.fromEntries(Object.entries(settings).map(([name,value])=>[name,{...value}]));
-    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+Math.max(this.ending.tail_seconds,
-      ...Object.values(this.echoSettings).map(echoTailSeconds),0);
+    this.recalculateEchoDuration();
     if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
+  }
+  setEchoTargets(targets:Record<string,EchoSectionTarget[]>){
+    if(JSON.stringify(this.echoTargets)===JSON.stringify(targets))return;
+    this.echoTargets=Object.fromEntries(Object.entries(targets).map(([name,rows])=>[name,rows.map(row=>({...row}))]));
+    this.recalculateEchoDuration();
+    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
+  }
+  private recalculateEchoDuration(){
+    if(!this.prepared)return;
+    const settings=[...Object.values(this.echoSettings),
+      ...Object.values(this.echoTargets).flat().map(t=>({
+        delayMs:t.delayMs,wet:t.wet,feedback:t.feedback,lowpassHz:t.lowpassHz
+      }))];
+    this.durationSeconds=this.sourceDurationSeconds+
+      Math.max(0,...Object.values(this.stemTimeOffsets))+
+      Math.max(this.ending.tail_seconds,...settings.map(echoTailSeconds),0);
   }
   get duration(){return this.durationSeconds;}
   get ready(){return this.prepared&&this.tracks.length>0&&!this.disposed;}
@@ -428,7 +444,7 @@ export class SharedClockAudition {
     if(this.ending.fade_seconds===fade_seconds&&this.ending.tail_seconds===tail_seconds&&this.ending.curve===curve)return;
     this.ending={fade_seconds,tail_seconds,curve};
     this.reverb.buffer=createRoomImpulse(this.context,tail_seconds);
-    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+Math.max(tail_seconds,...Object.values(this.echoSettings).map(echoTailSeconds),0);
+    this.recalculateEchoDuration();
     if(this.running)this.seek(this.position);
   }
   private fadePoints():AutomationPoint[]{
@@ -506,7 +522,11 @@ export class SharedClockAudition {
     const bypass=this.referenceOriginal?{pan:true,width:true,space:true,reverb:true,ending:true,eq:true,compression:true,ducking:true,deess:true}:this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
       const echo=this.echoStages.get(filename);
-      if(echo)configureEcho(echo,this.referenceOriginal?undefined:this.echoSettings[filename],at,Math.max(0,this.durationSeconds-offset));
+      if(echo){
+        const targets=this.referenceOriginal?[]:this.echoTargets[filename]||[];
+        scheduleSectionEcho(echo,targets,offset,at,this.durationSeconds,
+          this.referenceOriginal?undefined:this.echoSettings[filename]);
+      }
       const eq=this.eqStages.get(filename);
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       const dynamics=this.dynamicsStages.get(filename);
@@ -633,7 +653,7 @@ export class SharedClockAudition {
     if(JSON.stringify(this.stemTimeOffsets)===JSON.stringify(offsets))return;
     this.stemTimeOffsets={...offsets};
     if(this.prepared){
-      this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(offsets))+Math.max(this.ending.tail_seconds,...Object.values(this.echoSettings).map(echoTailSeconds),0);
+      this.recalculateEchoDuration();
       if(this.running)this.seek(this.position);
     }
   }
@@ -797,7 +817,8 @@ export class SharedClockAudition {
         bus.connect(dry);
         const echo=createEchoStage(offline,offline.destination);
         bus.connect(echo.input);
-        configureEcho(echo,this.echoSettings[track.source.filename],0,this.durationSeconds);
+        scheduleSectionEcho(echo,this.echoTargets[track.source.filename]||[],0,0,this.durationSeconds,
+          this.echoSettings[track.source.filename]);
         const send=offline.createGain();
         send.gain.value=0;
         bus.connect(send).connect(reverbDrive);

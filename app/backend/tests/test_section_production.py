@@ -288,6 +288,47 @@ class ProductionNotationTests(unittest.TestCase):
             with self.subTest(text=text),self.assertRaises(ValueError):
                 section_import.apply(project,text,"replace",20)
 
+
+    def test_group_scoped_auto_pan_and_gain_roundtrip(self):
+        files=["01 (Drums).wav","02 (Taiko).wav","03 (Vocals).wav"]
+        project={"sections":[],"files":files}
+        script=("[Intro 0:00-0:10]\n"
+                "{group.DrumPair:Drums,Taiko Taiko.offset:150ms}\n"
+                "[Verse 0:10-0:20]\n"
+                "{Drums.gain:+.75@4s:smooth DrumPair.auto.pan:center@4s:smooth "
+                "DrumPair.auto.gain:0@6s:smooth}\n")
+        result=section_import.apply(project,script,"replace",20)
+        self.assertEqual(len(result["section_auto_pan"]),1)
+        self.assertEqual(len(result["section_auto_gain"]),1)
+        pan=result["section_auto_pan"][0]
+        gain=result["section_auto_gain"][0]
+        self.assertEqual(pan["group"],"DrumPair")
+        self.assertEqual(pan["scope_sources"],files[:2])
+        self.assertEqual(gain["source_keys"],files[:2])
+        self.assertEqual(gain["protected_gain_sources"],[files[0]])
+        self.assertEqual(result["stem_time_offsets"],{files[1]:.15})
+        project.update(result)
+        exported=section_import.render_tags(project)
+        self.assertIn("group.DrumPair:Drums,Taiko",exported)
+        self.assertIn("DrumPair.auto.gain:0@6s:smooth",exported)
+        again=section_import.apply(project,exported,"replace",20)
+        self.assertEqual(again["section_auto_gain"],result["section_auto_gain"])
+
+    def test_group_definition_fails_closed_for_invalid_references(self):
+        files=["01 (Drums).wav","02 (Taiko).wav"]
+        project={"sections":[],"files":files}
+        invalid=(
+            "group.Drums:Drums,Taiko",
+            "group.DrumPair:Drums,Drums",
+            "group.DrumPair:Drums,Other",
+            "DrumPair.auto.gain:0",
+            "DrumPair.auto.pan:center",
+            "group.DrumPair:Drums,Taiko group.DrumPair:Drums,Taiko",
+        )
+        for directive in invalid:
+            with self.subTest(directive=directive),self.assertRaises(ValueError):
+                section_import.apply(project,"[Intro 0:00-0:10]\n{"+directive+"}","replace",10)
+
     def test_replace_clears_removed_instruction(self):
         project = {"sections": [], "files": FILES}
         project.update(section_import.apply(project, "[Chorus 0:00-0:10]\n{Other.pan:left.50}", "replace", 10))

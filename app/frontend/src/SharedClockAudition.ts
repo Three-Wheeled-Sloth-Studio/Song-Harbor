@@ -417,10 +417,13 @@ export class SharedClockAudition {
     if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+tail_seconds;
     if(this.running)this.seek(this.position);
   }
+  private placementEnd():number{
+    return this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets));
+  }
   private fadePoints():AutomationPoint[]{
     const {fade_seconds,curve}=this.ending;
     if(fade_seconds<=0)return [{time:0,value:1}];
-    const start=Math.max(0,this.sourceDurationSeconds-fade_seconds);
+    const start=Math.max(0,this.placementEnd()-fade_seconds);
     const points:AutomationPoint[]=[{time:0,value:1},{time:start,value:1}];
     const steps=curve==="smooth"?16:1;
     for(let i=1;i<=steps;i++){
@@ -436,9 +439,10 @@ export class SharedClockAudition {
    */
   private wetDrivePoints():AutomationPoint[]{
     if(this.ending.tail_seconds<=0)return this.fadePoints();
-    const fadeStart=Math.max(0,this.sourceDurationSeconds-Math.min(0.8,Math.max(.2,this.ending.fade_seconds)));
+    const end=this.placementEnd();
+    const fadeStart=Math.max(0,end-Math.min(0.8,Math.max(.2,this.ending.fade_seconds)));
     return [{time:0,value:1},{time:fadeStart,value:1},
-            {time:this.sourceDurationSeconds,value:0}];
+            {time:end,value:0}];
   }
   /** Audition-only effect bypass: the saved mix and offline export remain processed. */
   setEffectBypass(effects:{pan:boolean;width:boolean;space:boolean;reverb:boolean;ending:boolean;eq:boolean;compression:boolean;ducking:boolean;deess:boolean}){

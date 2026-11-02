@@ -35,7 +35,7 @@ A group names stable stem aliases and defines the scope of the solver. `auto.pan
 
 Initial implementation should: measure group power in short representative windows with timing offsets applied; honor explicit automation, sidechain and pan locks; offer preview and undo; limit automated corrections and expose an intelligible explanation of unlocked members. Follow with nested groups and inheritance after the basic contracts pass.
 
-Separate echo/delay-line processor remains planned: slapback, stereo ping-pong, rhythmic repeats, filtered feedback and reliable reverb/echo tails. Do not implement echo by shifting the original stem.
+A separate echo/delay-line processor is implemented with sectional delay, wet level, feedback and filtering; future additions include tempo-synced and stereo ping-pong echoes. Echo does not shift the original stem.
 
 
 ## Implementation slice: group-aware balancing MVP
@@ -84,23 +84,24 @@ The initial group scripting and mixing integration is now in source. Group defin
   Drums.pan:right.55@10s:smooth
   Taiko.pan:left.55@10s:smooth
   Taiko.offset:150ms
-  Taiko.echo:180ms,18,25,6500
+  Taiko.echo:180ms,18,25,6500@10s:smooth
 }
 [Chorus 0:25.045-0:55.000]
 {
   DrumPair.auto.gain:0@10s:smooth
   DrumPair.auto.pan:center@10s:smooth
   Drums.gain:+0.75@10s:smooth
+  Taiko.echo:180ms,0,25,6500@8s:smooth
 }
 ```
 
 - `group.NAME:StemA,StemB` declares a flat group once per song. Groups refer to stable parent stem aliases in the script; the backend resolves filenames for execution.
 - `NAME.auto.gain:0` requests preservation of approximate dry-stem baseline group power through bounded, unlocked-member compensation.
 - `NAME.auto.pan:center` reuses the restrained auto-pan algorithm but is limited to group members.
-- `Stem.echo:180ms,18,25,6500` is song-wide delay time, wet percentage, feedback percentage, low-pass Hz. Unlike `.offset`, this adds genuine repeats and preserves the dry source.
+- `Stem.echo:180ms,18,25,6500@5s:smooth` is a SECTIONAL echo target: delay milliseconds, wet percentage, feedback percentage, low-pass Hz, and transition. The previous settings persist until changed by another section. A wet value of 0 silences the echo. Unlike `.offset`, echo adds genuine repeats and preserves the dry source.
 - Echo is routed from each stem bus to a wet feedback loop in both live and offline render. Effects are non-destructive. Tail extension is bounded; source media is not shifted.
-- Mixer Echo toggle, delay and wet controls are available for quick audition. These are not automatically written to the song script; use an echo directive for a durable setting.
-- Backend persists `stem_groups`, `section_group_targets`, and `stem_echo_settings`; section export and subsequent reload carry these settings.
+- Mixer Echo toggle, delay and wet controls are available for quick audition of song-level fallback settings. These are not automatically written to the song script; sectional scripted targets take precedence, so edit the script to change an active scripted echo.
+- Backend persists `stem_groups`, `section_group_targets`, and `section_echo_automation`; section export and subsequent reload carry the echo directives. Legacy `stem_echo_settings` remains a fallback for previously saved projects.
 
 **QA status:** Implementation committed but not yet verified by a successful end-to-end browser/render test in this session. Automated regression tests for parsing, echo validation and group solver were added to their existing suites. Do not claim audio perceptual parity, correct group compensation on real stems, or complete CI success until observed.
 
@@ -114,4 +115,12 @@ The initial group scripting and mixing integration is now in source. Group defin
 6. Repeat with split L/R channels, solo, mute, accepted replacement masks, audio analysis, export and re-import.
 7. Verify high feedback never runs away, silence never produces NaN, and echo changes invalidate stale QC findings.
 
-**Not in this first slice:** tempo-synced echo, ping-pong/cross-channel feedback, nested groups, effect-bus routing UI, fully processed loudness optimization, per-section echo automation, permanent group UI editor. Group solver currently uses dry power estimates; rendered WAV analysis remains authoritative.
+**Not in this first slice:** tempo-synced echo, ping-pong/cross-channel feedback, nested groups, effect-bus routing UI, fully processed loudness optimization, permanent group UI editor. Sectional echo automation is now implemented after the initial song-wide design was corrected. Group solver currently uses dry power estimates; rendered WAV analysis remains authoritative.
+
+## Correction: Echo is section-scoped (2026-11-02)
+
+The initial song-wide-only implementation was incompatible with Song Harbor's section automation model. Updated import, backend storage, script roundtrip, and synchronized live/offline scheduling to allow repeated echo directives on the same stem in DIFFERENT sections. Only duplicates within the same section remain invalid. A directive without `@...` defaults to a 2-second smooth transition. Echo parameter values inherit between sections until explicitly replaced.
+
+To turn off echo gradually in a later section use `Taiko.echo:180ms,0,25,6500@8s:smooth`. To reintroduce it, use `Taiko.echo:180ms,20,30,5000@10s:smooth`. This turns down the wet output without moving the source audio. Existing `.offset` remains song-wide.
+
+**Verification:** Source changes and regression test updates committed, but live audio/export parity and passing CI were not independently verified in this session. Test echo transitions, long feedback tails, mid-song seeks, and export together with groups before release.

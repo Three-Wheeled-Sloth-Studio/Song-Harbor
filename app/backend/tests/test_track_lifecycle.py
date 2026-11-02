@@ -75,6 +75,46 @@ class TrackLifecycleTests(unittest.TestCase):
         self.assertEqual(removed["section_gain_automation"],original["section_gain_automation"])
         self.assertEqual(removed["section_pan_automation"],original["section_pan_automation"])
 
+
+    def test_rename_retains_group_membership_and_group_targets(self):
+        project=self.sample()
+        changed=section_import.apply(project,
+            "[Verse 0:00-0:10]\n"
+            "{group.Orchestra:Drums,Cello_Accent Orchestra.auto.gain:0@5s:smooth}\n"
+            "[Chorus 0:10-0:20]\n"
+            "{Cello_Accent.gain:+1@5s:smooth Orchestra.auto.pan:center@5s:smooth}\n",
+            "replace",20)
+        project.update(changed)
+        renamed=track_lifecycle.rename(project,"trk0002","CounterCello","Counter Cello")
+        exported=section_import.render_tags(renamed)
+        self.assertIn("group.Orchestra:Drums,CounterCello",exported)
+        self.assertNotIn("group.Orchestra:Drums,Cello_Accent",exported)
+        self.assertEqual(len(renamed["section_auto_gain"]),1)
+        self.assertEqual(len(renamed["section_auto_pan"]),1)
+
+    def test_remove_imported_group_member_clears_group_intents(self):
+        project=self.sample()
+        clip="trk_group (Taiko).wav"
+        project["files"].append(clip)
+        project.setdefault("stems",[]).append({"filename":clip,"gain":1,"mute":False,"solo":False})
+        project["source_tracks"].append({"track_id":"trk_group","stem_alias":"Taiko",
+            "display_name":"Taiko","working_filename":clip,"original_filename":"generated.wav",
+            "imported":True,"start_seconds":0,"duration_seconds":10})
+        changed=section_import.apply(project,
+            "[Verse 0:00-0:10]\n"
+            "{group.DrumPair:Drums,Taiko DrumPair.auto.pan:center@5s:smooth "
+            "DrumPair.auto.gain:0@5s:smooth Taiko.offset:150ms}\n"
+            "[Chorus 0:10-0:20]\n", "replace",20)
+        project.update(changed)
+        removed,_=track_lifecycle.remove(project,"trk_group")
+        text=section_import.render_tags(removed)
+        self.assertNotIn("group.DrumPair",text)
+        self.assertNotIn("DrumPair.auto.",text)
+        self.assertNotIn("Taiko.offset",text)
+        self.assertEqual(removed.get("section_auto_gain"),[])
+        self.assertFalse(any(row.get("group")=="DrumPair" for row in removed.get("section_auto_pan",[])))
+        self.assertNotIn(clip,removed.get("stem_time_offsets",{}))
+
     def test_stable_id_legacy_backfill(self):
         project={"files":FILES}
         first=track_lifecycle.ensure_identities(project)

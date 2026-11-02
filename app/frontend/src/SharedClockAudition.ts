@@ -1,7 +1,7 @@
 import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
 import {solveGroupGain,type GroupGainResult,type GroupMember} from "./GroupAutomation";
 import {stemTimelineStart,stemPlaybackWindow} from "./StemTiming.ts";
-import {createEchoStage,configureEcho,scheduleSectionEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage,type EchoSectionTarget} from "./EchoDelay";
+import {createEchoStage,scheduleSectionEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage,type EchoSectionTarget} from "./EchoDelay";
 import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
 import {scheduleAutomation, valueAt, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
@@ -112,6 +112,7 @@ export class SharedClockAudition {
   /** Per-parent-stem echo sends, separate from dry stem offsets. */
   setEchoSettings(settings:Record<string,EchoSettings>){
     for(const value of Object.values(settings))echoTailSeconds(value);
+    if(JSON.stringify(this.echoSettings)===JSON.stringify(settings))return;
     this.echoSettings=Object.fromEntries(Object.entries(settings).map(([name,value])=>[name,{...value}]));
     this.recalculateEchoDuration();
     if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);

@@ -506,7 +506,7 @@ export class SharedClockAudition {
     const bypass=this.referenceOriginal?{pan:true,width:true,space:true,reverb:true,ending:true,eq:true,compression:true,ducking:true,deess:true}:this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
       const echo=this.echoStages.get(filename);
-      if(echo)configureEcho(echo,this.referenceOriginal?undefined:this.echoSettings[filename],at);
+      if(echo)configureEcho(echo,this.referenceOriginal?undefined:this.echoSettings[filename],at,Math.max(0,this.durationSeconds-offset));
       const eq=this.eqStages.get(filename);
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       const dynamics=this.dynamicsStages.get(filename);
@@ -797,7 +797,7 @@ export class SharedClockAudition {
         bus.connect(dry);
         const echo=createEchoStage(offline,offline.destination);
         bus.connect(echo.input);
-        configureEcho(echo,this.echoSettings[track.source.filename],0);
+        configureEcho(echo,this.echoSettings[track.source.filename],0,this.durationSeconds);
         const send=offline.createGain();
         send.gain.value=0;
         bus.connect(send).connect(reverbDrive);

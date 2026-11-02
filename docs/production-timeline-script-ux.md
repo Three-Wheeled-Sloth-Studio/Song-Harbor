@@ -86,3 +86,15 @@ Every active stem or split-channel buffer is started using **the same AudioConte
 
 ### Next engineering milestone
 Replace full-buffer predecode with a native/Web Audio shared-clock chunk scheduler or AudioWorklet ring buffers so arbitrary-length songs work with bounded memory. Maintain a single timeline clock and explicit level/pan routing. Do NOT revive six independent HTMLAudioElements. Add automated null/mid-side/stereo reconstruction tests comparing export versus preview where test harness supports audio capture.
+
+
+## Unified download controls (2026-11-02)
+
+Both the right-hand Download tool icon and the lower mix-area download icon open the same Download tool window. Neither icon triggers a different kind of export. The window provides:
+- **Processed full mix:** render the 24-bit stereo mix using existing headroom and correction gates, then download the generated WAV from the same window.
+- **Individual source stems:** download any project working stem via the existing job-files endpoint. These are dry files, not effects-processed.
+- **Aligned multitrack export:** open the existing DAW handoff to prepare aligned stems in a local folder for a selected DAW.
+
+The full-mix render remains a two-stage render-then-download operation so headroom can be validated before the browser saves a file. Master trim and headroom repair remain in the mix area.
+
+QA contract: both icon entry points always lead to the same options. Do not introduce another export-specific meaning for the same down-arrow symbol. The frontend unified-download regression test guards the shared wiring. Human QA: open each icon; verify identical options; render a full mix; download an original stem; exercise aligned export; check tool-window visibility at narrow and wide widths.

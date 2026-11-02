@@ -76,7 +76,8 @@ GROUP_AUTO_TOKEN = re.compile(
 # Positive whole-stem timing shift, not an echo or feedback processor.
 # This is a project-wide static placement, authored once in section text.
 ECHO_TOKEN = re.compile(
-    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.echo:(?P<ms>\d{2,4})ms,(?P<wet>\d{1,3}),(?P<feedback>\d{1,3}),(?P<lowpass>\d{3,5})$"
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.echo:(?P<ms>\d{2,4})ms,(?P<wet>\d{1,3}),(?P<feedback>\d{1,3}),(?P<lowpass>\d{3,5})"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
 OFFSET_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.offset:(?P<ms>\d{1,3})ms$"
@@ -161,11 +162,16 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
             lowpass=int(echo.group("lowpass"))
             if not (20<=milliseconds<=2000 and 0<=wet<=100 and 0<=feedback<=80 and 200<=lowpass<=18000):
                 raise ValueError("Echo needs 20-2000ms, wet 0-100, feedback 0-80, lowpass 200-18000Hz")
+            duration=float(echo.group("seconds") or 2)
+            if not .05<=duration<=30:raise ValueError("Echo transition must be 0.05-30 seconds")
             key=canonical.casefold()+".echo"
             if key in touched:raise ValueError("Duplicate echo for this stem")
             touched.add(key)
             directives.append({"kind":"echo","track":canonical,"delay_ms":milliseconds,
-                               "wet":wet/100,"feedback":feedback/100,"lowpass_hz":lowpass})
+                               "wet":wet/100,"feedback":feedback/100,"lowpass_hz":lowpass,
+                               "transition_seconds":duration,
+                               "transition_anchor":"end" if echo.group("anchor")=="#" else "start",
+                               "curve":(echo.group("curve") or "smooth").lower()})
             continue
         offset=OFFSET_TOKEN.fullmatch(token)
         if offset:
@@ -421,7 +427,8 @@ def render_block(directives: list[dict[str, Any]]) -> str:
             rendered.append(f"{d['name']}.auto.{kind}:{target}{'#' if d.get('transition_anchor')=='end' else '@'}{d['transition_seconds']:g}s:{d['curve']}")
             continue
         if d["kind"] == "echo":
-            rendered.append(f"{d['track']}.echo:{d['delay_ms']}ms,{round(d['wet']*100)},{round(d['feedback']*100)},{d['lowpass_hz']}")
+            rendered.append(f"{d['track']}.echo:{d['delay_ms']}ms,{round(d['wet']*100)},{round(d['feedback']*100)},{d['lowpass_hz']}"+
+                            f"{'#' if d.get('transition_anchor')=='end' else '@'}{d.get('transition_seconds',2):g}s:{d.get('curve','smooth')}")
             continue
         if d["kind"] == "offset":
             rendered.append(f"{d['track']}.offset:{d['milliseconds']}ms")
@@ -842,18 +849,20 @@ def materialize_offsets(sections:list[dict[str,Any]],
 
 
 def materialize_echo(sections:list[dict[str,Any]], blocks:dict[str,list[dict[str,Any]]],
-                     files:list[str],tracks:list[dict[str,Any]]|None=None)->dict[str,dict[str,float]]:
-    """Resolve static parent-stem echo settings, authored once per song."""
+                     files:list[str],tracks:list[dict[str,Any]]|None=None)->list[dict[str,Any]]:
+    """Section-scoped echo settings; absent sections inherit the last target."""
     mapping=source_map(files,tracks)
-    output={}
-    for section in sections:
+    output=[]
+    for section in sorted(sections,key=lambda x:x["start_seconds"]):
         for item in blocks.get(section["id"],[]):
             if item["kind"]!="echo":continue
             filename=mapping.get(item["track"])
             if not filename:raise ValueError("Unknown echo stem alias")
-            if filename in output:raise ValueError("Echo settings are song-wide; declare each stem once")
-            output[filename]={"delayMs":item["delay_ms"],"wet":item["wet"],
-                              "feedback":item["feedback"],"lowpassHz":item["lowpass_hz"]}
+            output.append({"section_id":section["id"],"source_key":filename,
+                           "delayMs":item["delay_ms"],"wet":item["wet"],
+                           "feedback":item["feedback"],"lowpassHz":item["lowpass_hz"],
+                           "transition_seconds":item["transition_seconds"],
+                           "transition_anchor":item["transition_anchor"],"curve":item["curve"]})
     return output
 
 def materialize_groups(sections:list[dict[str,Any]],

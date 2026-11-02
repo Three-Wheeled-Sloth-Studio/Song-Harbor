@@ -66,6 +66,11 @@ DEESS_TOKEN = re.compile(
     r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
     r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+# Positive whole-stem timing shift, not an echo or feedback processor.
+# This is a project-wide static placement, authored once in section text.
+OFFSET_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.offset:(?P<ms>\\d{1,3})ms$"
+)
 VOLUME_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.volume:(?P<percent>\d{1,3})"
     r"(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s"
@@ -103,6 +108,20 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        offset=OFFSET_TOKEN.fullmatch(token)
+        if offset:
+            canonical=next((a for a in aliases if a.casefold()==offset.group("track").casefold()),None)
+            if not canonical or canonical.casefold().endswith(("-left","-right")):
+                raise ValueError("Timing offset must target an existing parent stem")
+            milliseconds=int(offset.group("ms"))
+            if milliseconds>500:
+                raise ValueError("Timing offset must be between 0 and 500 ms")
+            key=canonical.casefold()+".offset"
+            if key in touched:
+                raise ValueError("Duplicate timing offset for this stem")
+            touched.add(key)
+            directives.append({"kind":"offset","track":canonical,"milliseconds":milliseconds})
+            continue
         volume=VOLUME_TOKEN.fullmatch(token)
         if volume:
             canonical=next((a for a in aliases if a.casefold()==volume.group("track").casefold()),None)
@@ -334,6 +353,9 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "offset":
+            rendered.append(f"{d['track']}.offset:{d['milliseconds']}ms")
+            continue
         if d["kind"] == "original_mix":
             rendered.append(
                 f"{d['track']}.original:{int(d['percent'])}%"
@@ -726,3 +748,24 @@ def materialize_gain(sections: list[dict[str, Any]],
                                "transition_seconds":directive["transition_seconds"],
                                "curve":directive["curve"]})
     return output
+
+def materialize_offsets(sections:list[dict[str,Any]],
+                        blocks:dict[str,list[dict[str,Any]]],
+                        files:list[str], tracks:list[dict[str,Any]]|None=None)->dict[str,float]:
+    """Static non-destructive stem delays; applied across the entire song.
+    
+    An offset may be authored in any section for script convenience, but multiple
+    directives for a stem are disallowed: seamless mid-song clip shifts would
+    require splitting/crossfading the underlying audio.
+    """
+    aliases=source_map(files,tracks)
+    result={}
+    for section in sorted(sections,key=lambda entry:entry["start_seconds"]):
+        for directive in blocks.get(section["id"],[]):
+            if directive["kind"]!="offset":continue
+            filename=aliases.get(directive["track"])
+            if filename is None:raise ValueError("Unknown timing offset target")
+            if filename in result:
+                raise ValueError("Timing offset is song-wide; define each stem's offset only once")
+            result[filename]=directive["milliseconds"]/1000
+    return result

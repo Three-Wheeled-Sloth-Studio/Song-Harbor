@@ -41,6 +41,7 @@ export class SharedClockAudition {
   private dryMaster:GainNode;
   private originalPreviewBus:GainNode;
   private sourceDurationSeconds=0;
+  private stemTimeOffsets:Record<string,number>={};
   private ending={fade_seconds:0,tail_seconds:0,curve:"smooth" as "smooth"|"linear"};
   private tracks:Track[]=[];
   private acceptedDeclick:DeclickRecipe[]=[];
@@ -411,7 +412,7 @@ export class SharedClockAudition {
     if(this.ending.fade_seconds===fade_seconds&&this.ending.tail_seconds===tail_seconds&&this.ending.curve===curve)return;
     this.ending={fade_seconds,tail_seconds,curve};
     this.reverb.buffer=createRoomImpulse(this.context,tail_seconds);
-    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+tail_seconds;
+    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+tail_seconds;
     if(this.running)this.seek(this.position);
   }
   private fadePoints():AutomationPoint[]{
@@ -526,7 +527,7 @@ export class SharedClockAudition {
       const filename=track.source.filename;
       const level=this.renderedLevels[filename]??0;
       if(level<=0)continue;
-      const buf=track.buffer,clipStart=track.source.startSeconds;
+      const buf=track.buffer,clipStart=this.timelineStart(track);
       const from=Math.max(0,Math.floor((start-clipStart)*buf.sampleRate));
       const to=Math.min(buf.length,Math.ceil((end-clipStart)*buf.sampleRate));
       if(to<=from)continue;
@@ -567,6 +568,24 @@ export class SharedClockAudition {
     this.replacementMasks=masks.map(mask=>({...mask}));
     if(this.running)this.seek(this.position);
     else if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.offset);
+  }
+  /** Audio placement shift, distinct from echo: one playback of the same samples.
+   * Applies identically to split children, dry analysis, live seeks and offline export.
+   */
+  setStemTimeOffsets(offsets:Record<string,number>){
+    for(const [filename,seconds] of Object.entries(offsets)){
+      if(!Number.isFinite(seconds)||seconds<0||seconds>.5)
+        throw Error("Stem timing offset must be 0-500 ms: "+filename);
+    }
+    if(JSON.stringify(this.stemTimeOffsets)===JSON.stringify(offsets))return;
+    this.stemTimeOffsets={...offsets};
+    if(this.prepared){
+      this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(offsets))+this.ending.tail_seconds;
+      if(this.running)this.seek(this.position);
+    }
+  }
+  private timelineStart(track:Track):number{
+    return track.source.startSeconds+(this.stemTimeOffsets[track.source.filename]||0);
   }
   /** Pan the reconstructed per-stem stereo bus. Split L/R children retain native routing. */
   setAutomation(curves:Record<string,{gain?:AutomationPoint[];volume?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>,liveTrial=false){
@@ -657,12 +676,12 @@ export class SharedClockAudition {
   private async renderDryReferenceBuffer():Promise<AudioBuffer>{
     if(!this.ready)throw Error("Load audio before creating dry reference");
     const rate=this.context.sampleRate;
-    const frames=Math.ceil(this.sourceDurationSeconds*rate);
+    const frames=Math.ceil(this.durationSeconds*rate);
     if(frames<1||frames>rate*60*15)throw Error("Dry reference exceeds supported duration");
     const context=new OfflineAudioContext(2,frames,rate);
     for(const track of this.tracks){
       const level=this.renderedLevels[track.source.filename]??0;
-      if(level<=0||track.source.startSeconds>=this.sourceDurationSeconds)continue;
+      if(level<=0||this.timelineStart(track)>=this.durationSeconds)continue;
       const source=context.createBufferSource();
       source.buffer=track.rawBuffer;
       const gain=context.createGain();
@@ -670,7 +689,7 @@ export class SharedClockAudition {
       const pan=context.createStereoPanner();
       pan.pan.value=track.source.pan;
       source.connect(gain).connect(pan).connect(context.destination);
-      source.start(Math.max(0,track.source.startSeconds));
+      source.start(this.timelineStart(track));
     }
     return context.startRendering();
   }
@@ -762,7 +781,7 @@ export class SharedClockAudition {
         else childSend.gain.value=0;
         childEq[2].connect(childSend).connect(reverbDrive);
       }else childPan.connect(eqs.get(track.source.filename)![0]);
-      source.start(track.source.startSeconds);
+      source.start(this.timelineStart(track));
     }
     for(const [filename,bus] of group){
       const curve=this.automation[filename]?.pan;
@@ -819,7 +838,7 @@ export class SharedClockAudition {
       }
       this.configurePreviewNodes(startAt,offset);
       for(const {node,track} of made){
-        const clipStart=track.source.startSeconds,clipEnd=clipStart+track.buffer.duration;
+        const clipStart=this.timelineStart(track),clipEnd=clipStart+track.buffer.duration;
         if(offset>=clipEnd){node.disconnect();continue;}
         if(offset<=clipStart)node.start(startAt+clipStart-offset,0);
         else node.start(startAt,offset-clipStart);

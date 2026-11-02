@@ -327,6 +327,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
     dynamics_targets = section_production.materialize_dynamics(validated, effective, files, tracks, children)
     gain_targets = section_production.materialize_gain(validated, effective, files, tracks, children)
     volume_targets = section_production.materialize_volume(validated, production, files, tracks, children)
+    offsets = section_production.materialize_offsets(validated, production, files, tracks)
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,
@@ -335,6 +336,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "section_dynamics_automation": dynamics_targets, "section_gain_automation": gain_targets,
             "replacement_masks": masks,
             "section_volume_automation": volume_targets,
+            "stem_time_offsets": offsets,
             "section_auto_pan": auto_pan_targets,
             "section_ending": ending,
             "section_lyrics": lyrics,

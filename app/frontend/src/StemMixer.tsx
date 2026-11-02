@@ -250,6 +250,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [autoPanReports,setAutoPanReports]=useState<string[]>([]);
   const [gainTargets,setGainTargets]=useState<{section_id:string;source_key:string;gain_db:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [stemTimeOffsets,setStemTimeOffsets]=useState<Record<string,number>>({});
+  const [echoSettings,setEchoSettings]=useState<Record<string,{delayMs:number;wet:number;feedback:number;lowpassHz:number}>>({});
   const [volumeTargets,setVolumeTargets]=useState<{section_id:string;source_key:string;volume:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [dynamicsTargets,setDynamicsTargets]=useState<DynamicsTarget[]>([]);
   const [spaceTargets,setSpaceTargets]=useState<{section_id:string;source_key:string;amount:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"linear"|"smooth"}[]>([]);
@@ -612,6 +613,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     // Auto-pan is a section-scoped analysis request, never a continuous live servo.
     // Explicit/inherited pan targets supplied by the importer remain locked.
     engine.setStemTimeOffsets(stemTimeOffsets);
+    engine.setEchoSettings(echoSettings);
     const reports:string[]=[];
     const autoPanDesired=new Map<string,{sectionId:string;start:number;end:number;value:number;transitionSeconds:number;curve:"smooth"|"linear"}[]>();
     const autoGainDesired=new Map<string,{sectionId:string;start:number;end:number;value:number;transitionSeconds:number;curve:"smooth"|"linear"}[]>();
@@ -667,14 +669,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,replacementMasks,correction,sectionPreviewActive,sectionPreview]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,echoSettings,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,replacementMasks,correction,sectionPreviewActive,sectionPreview]);
 
   // Retain the previous findings after a mix change as a labelled snapshot.
   // Old scan results must not be presented as analysis of the new settings.
   useEffect(()=>{
     analysisRevision.current++;
     setCleanupStale(true);
-  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
+  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,echoSettings,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -1215,6 +1217,22 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <input type="range" min="0" max="100" step="1" value={s.gain}
           aria-label={s.name + " volume"} onChange={e => update(s.filename, {gain: Number(e.target.value)})} />
         <span className="track-percent">{s.gain}%</span>
+        <button type="button" className={"track-toggle"+(echoSettings[s.filename]?" is-solo":"")}
+          aria-label={"Toggle echo for "+s.name} aria-pressed={Boolean(echoSettings[s.filename])}
+          title={"Echo for "+s.name} onClick={()=>setEchoSettings(current=>{
+            const next={...current};
+            if(next[s.filename])delete next[s.filename];
+            else next[s.filename]={delayMs:180,wet:.18,feedback:.25,lowpassHz:6500};
+            setMixUrl(null);return next;
+          })}>Echo</button>
+        {echoSettings[s.filename]&&<span className="track-echo-controls">
+          <label title="Echo delay, milliseconds">ms <input type="number" min="20" max="2000" step="10"
+            aria-label={s.name+" echo delay ms"} value={echoSettings[s.filename].delayMs}
+            onChange={e=>{const n=Number(e.target.value);if(n>=20&&n<=2000)setEchoSettings(old=>({...old,[s.filename]:{...old[s.filename],delayMs:n}}));}} /></label>
+          <label title="Echo wet percent">wet <input type="number" min="0" max="100" step="5"
+            aria-label={s.name+" echo wet percent"} value={Math.round(echoSettings[s.filename].wet*100)}
+            onChange={e=>{const n=Number(e.target.value);if(n>=0&&n<=100)setEchoSettings(old=>({...old,[s.filename]:{...old[s.filename],wet:n/100}}));}} /></label>
+        </span>}
         {channels[s.filename]&&<button type="button" className="derived-route-toggle"
           disabled={channelBusy} onClick={()=>{void toggleChannel(s.filename);}}
           title="Switch between stereo original and left/right derived children">

@@ -318,7 +318,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
     # Keep authored macro intents in section_production for roundtrip.
     # Resolve deterministic effect targets only while materializing automation.
     echo_settings = section_production.materialize_echo(validated, production, files, tracks)
-    effect_blocks={key:[item for item in values if item.get("kind")!="echo"]
+    group_settings = section_production.materialize_groups(validated, production, files, tracks)
+    effect_blocks={key:[item for item in values if item.get("kind") not in ("echo","group_definition","group_auto_gain","group_auto_pan")]
                    for key,values in production.items()}
     effective = section_production.expand_evolution(
         section_production.expand_broadcast(effect_blocks, parents), parents, aliases)
@@ -341,6 +342,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "section_volume_automation": volume_targets,
             "stem_time_offsets": offsets,
             "stem_echo_settings": echo_settings,
+            "stem_groups": group_settings["groups"],
+            "section_group_targets": group_settings["targets"],
             "section_auto_pan": auto_pan_targets,
             "section_ending": ending,
             "section_lyrics": lyrics,

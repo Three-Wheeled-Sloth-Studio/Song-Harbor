@@ -72,6 +72,7 @@ def remove(project:dict[str,Any],track_id:str)->tuple[dict[str,Any],dict[str,Any
     updated["files"]=[item for item in updated.get("files",[]) if item!=filename]
     updated["stems"]=[item for item in updated.get("stems",[]) if item.get("filename")!=filename]
     updated.get("channel_children",{}).pop(filename,None)
+    updated.get("stem_time_offsets",{}).pop(filename,None)
     for key,value in list(updated.items()):
         if not key.startswith("section_") or not isinstance(value,(list,dict)):continue
         groups=value.values() if isinstance(value,dict) else [value]
@@ -129,6 +130,6 @@ def rename(project:dict[str,Any],track_id:str,alias:str,
                     "section_reverb_automation","section_width_automation",
                     "section_space_automation","section_eq_automation",
                     "section_dynamics_automation","section_gain_automation","section_volume_automation",
-                    "section_auto_pan","section_ending"):
+                    "section_auto_pan","section_ending","stem_time_offsets"):
             updated[key]=changed[key]
     return updated

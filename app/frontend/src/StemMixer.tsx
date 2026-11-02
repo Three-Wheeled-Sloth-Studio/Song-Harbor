@@ -611,6 +611,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
     // Auto-pan is a section-scoped analysis request, never a continuous live servo.
     // Explicit/inherited pan targets supplied by the importer remain locked.
+    engine.setStemTimeOffsets(stemTimeOffsets);
     const reports:string[]=[];
     const autoPanDesired=new Map<string,{sectionId:string;start:number;end:number;value:number;transitionSeconds:number;curve:"smooth"|"linear"}[]>();
     const autoGainDesired=new Map<string,{sectionId:string;start:number;end:number;value:number;transitionSeconds:number;curve:"smooth"|"linear"}[]>();
@@ -663,7 +664,6 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }
     setAutoPanReports(previous=>previous.join("|")===reports.join("|")?previous:reports);
     engine.setReplacementMasks(replacementMasks);
-    engine.setStemTimeOffsets(stemTimeOffsets);
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);

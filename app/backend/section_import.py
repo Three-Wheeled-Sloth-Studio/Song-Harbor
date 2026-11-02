@@ -317,7 +317,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
     auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
     # Keep authored macro intents in section_production for roundtrip.
     # Resolve deterministic effect targets only while materializing automation.
-    echo_settings = section_production.materialize_echo(validated, production, files, tracks)
+    echo_targets = section_production.materialize_echo(validated, production, files, tracks)
     group_settings = section_production.materialize_groups(validated, production, files, tracks)
     effect_blocks={key:[item for item in values if item.get("kind") not in ("echo","group_definition","group_auto_gain","group_auto_pan")]
                    for key,values in production.items()}
@@ -341,7 +341,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "replacement_masks": masks,
             "section_volume_automation": volume_targets,
             "stem_time_offsets": offsets,
-            "stem_echo_settings": echo_settings,
+            "stem_echo_settings": {},
+            "section_echo_automation": echo_targets,
             "stem_groups": group_settings["groups"],
             "section_group_targets": group_settings["targets"],
             "section_auto_pan": auto_pan_targets,

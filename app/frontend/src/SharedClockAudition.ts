@@ -1,5 +1,6 @@
 import {solveAutoPan, type AutoPanResult, type AutoStem} from "./AutoPan";
 import {stemTimelineStart,stemPlaybackWindow} from "./StemTiming.ts";
+import {createEchoStage,configureEcho,disconnectEcho,echoTailSeconds,type EchoSettings,type EchoStage} from "./EchoDelay";
 import {replacementCurve, type ReplacementMask} from "./ReplacementMasks";
 import {scheduleAutomation, valueAt, type AutomationPoint} from "./SectionAutomation";
 import {createStereoWidthStage,scheduleStereoWidth,type StereoWidthStage} from "./StereoWidth";
@@ -50,6 +51,8 @@ export class SharedClockAudition {
   private previewDeclickEnabled=false;
   private repairBuffers=new Map<string,AudioBuffer>();
   private groupPanners=new Map<string,StereoPannerNode>();
+  private echoStages=new Map<string,EchoStage>();
+  private echoSettings:Record<string,EchoSettings>={};
   private widthStages=new Map<string,StereoWidthStage>();
   private eqStages=new Map<string,[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode]>();
   private dynamicsStages=new Map<string,DynamicsStage>();
@@ -103,6 +106,14 @@ export class SharedClockAudition {
     this.reverb.connect(this.originalPreviewBus);
     this.reverbDrive=this.context.createGain();
     this.reverbDrive.connect(this.reverb);
+  }
+  /** Per-parent-stem echo sends, separate from dry stem offsets. */
+  setEchoSettings(settings:Record<string,EchoSettings>){
+    for(const value of Object.values(settings))echoTailSeconds(value);
+    this.echoSettings=Object.fromEntries(Object.entries(settings).map(([name,value])=>[name,{...value}]));
+    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(this.ending.tail_seconds,
+      ...Object.values(this.echoSettings).map(echoTailSeconds),0);
+    if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
   }
   get duration(){return this.durationSeconds;}
   get ready(){return this.prepared&&this.tracks.length>0&&!this.disposed;}
@@ -159,6 +170,9 @@ export class SharedClockAudition {
           this.spaceStages.set(src.filename,space);
           this.widthStages.set(src.filename,stage);
           bus.connect(this.dryMaster);
+          const echo=createEchoStage(this.context,this.originalPreviewBus);
+          bus.connect(echo.input);
+          this.echoStages.set(src.filename,echo);
           const send=this.context.createGain();
           send.gain.value=0;
           bus.connect(send).connect(this.reverbDrive);
@@ -490,6 +504,8 @@ export class SharedClockAudition {
     }
     const bypass=this.referenceOriginal?{pan:true,width:true,space:true,reverb:true,ending:true,eq:true,compression:true,ducking:true,deess:true}:this.bypassEffects;
     for(const [filename,bus] of this.groupPanners){
+      const echo=this.echoStages.get(filename);
+      if(echo)configureEcho(echo,this.referenceOriginal?undefined:this.echoSettings[filename],at);
       const eq=this.eqStages.get(filename);
       if(eq)scheduleEq(eq,this.automation[filename]?.eq||{},offset,at,bypass.eq);
       const dynamics=this.dynamicsStages.get(filename);
@@ -743,6 +759,9 @@ export class SharedClockAudition {
         spaces.set(track.source.filename,space);
         widths.set(track.source.filename,stage);
         bus.connect(dry);
+        const echo=createEchoStage(offline,offline.destination);
+        bus.connect(echo.input);
+        configureEcho(echo,this.echoSettings[track.source.filename],0);
         const send=offline.createGain();
         send.gain.value=0;
         bus.connect(send).connect(reverbDrive);
@@ -894,6 +913,8 @@ export class SharedClockAudition {
       track.panner.disconnect();track.childEq?.forEach(eq=>eq.disconnect());
     }
     for(const bus of this.groupPanners.values())bus.disconnect();
+    for(const stage of this.echoStages.values())disconnectEcho(stage);
+    this.echoStages.clear();
     for(const send of this.reverbSends.values())send.disconnect();
     for(const stage of this.widthStages.values()){
       stage.input.disconnect();stage.output.disconnect();

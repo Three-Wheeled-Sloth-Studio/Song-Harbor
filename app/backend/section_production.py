@@ -66,6 +66,13 @@ DEESS_TOKEN = re.compile(
     r"(?P<threshold>-\d+(?:\.\d{1,2})?),(?P<reduction>\d+(?:\.\d{1,2})?)"
     r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
 )
+GROUP_DEF_TOKEN = re.compile(
+    r"(?i)^group\.(?P<name>[A-Za-z][A-Za-z0-9_-]*)\:(?P<members>[A-Za-z][A-Za-z0-9_-]*(?:,[A-Za-z][A-Za-z0-9_-]*)+)$"
+)
+GROUP_AUTO_TOKEN = re.compile(
+    r"(?i)^(?P<name>[A-Za-z][A-Za-z0-9_-]*)\.auto\.(?P<kind>gain|pan)\:(?P<value>0|center)"
+    r"(?:(?P<anchor>[@#])(?P<seconds>\d+(?:\.\d{1,3})?)s(?::(?P<curve>smooth|linear))?)?$"
+)
 # Positive whole-stem timing shift, not an echo or feedback processor.
 # This is a project-wide static placement, authored once in section text.
 ECHO_TOKEN = re.compile(
@@ -111,6 +118,38 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        group=GROUP_DEF_TOKEN.fullmatch(token)
+        if group:
+            name=group.group("name")
+            members=group.group("members").split(",")
+            parents={a.casefold():a for a in aliases if not a.casefold().endswith(("-left","-right"))}
+            if name.casefold() in (a.casefold() for a in aliases) or name.casefold()=="all":
+                raise ValueError("Group name conflicts with a stem alias")
+            canonical=[parents.get(member.casefold()) for member in members]
+            if any(member is None for member in canonical) or len(set(canonical))!=len(canonical):
+                raise ValueError("Group must contain distinct existing parent stems")
+            key="group."+name.casefold()
+            if key in touched:raise ValueError("Duplicate group definition")
+            touched.add(key)
+            directives.append({"kind":"group_definition","name":name,"members":canonical})
+            continue
+        group_auto=GROUP_AUTO_TOKEN.fullmatch(token)
+        if group_auto:
+            kind=group_auto.group("kind").lower()
+            value=group_auto.group("value").lower()
+            if value!=("0" if kind=="gain" else "center"):
+                raise ValueError("Group gain target must be 0 and pan target must be center")
+            duration=float(group_auto.group("seconds") or 10)
+            if not .05<=duration<=30:raise ValueError("Group transition must be 0.05-30 seconds")
+            name=group_auto.group("name")
+            key=name.casefold()+".auto."+kind
+            if key in touched:raise ValueError("Duplicate group automation in section")
+            touched.add(key)
+            directives.append({"kind":"group_auto_"+kind,"name":name,
+                               "transition_seconds":duration,
+                               "transition_anchor":"end" if group_auto.group("anchor")=="#" else "start",
+                               "curve":(group_auto.group("curve") or "smooth").lower()})
+            continue
         echo=ECHO_TOKEN.fullmatch(token)
         if echo:
             canonical=next((a for a in aliases if a.casefold()==echo.group("track").casefold()),None)
@@ -373,6 +412,14 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "group_definition":
+            rendered.append(f"group.{d['name']}:{','.join(d['members'])}")
+            continue
+        if d["kind"] in ("group_auto_gain","group_auto_pan"):
+            kind=d["kind"].removeprefix("group_auto_")
+            target="0" if kind=="gain" else "center"
+            rendered.append(f"{d['name']}.auto.{kind}:{target}{'#' if d.get('transition_anchor')=='end' else '@'}{d['transition_seconds']:g}s:{d['curve']}")
+            continue
         if d["kind"] == "echo":
             rendered.append(f"{d['track']}.echo:{d['delay_ms']}ms,{round(d['wet']*100)},{round(d['feedback']*100)},{d['lowpass_hz']}")
             continue
@@ -808,3 +855,30 @@ def materialize_echo(sections:list[dict[str,Any]], blocks:dict[str,list[dict[str
             output[filename]={"delayMs":item["delay_ms"],"wet":item["wet"],
                               "feedback":item["feedback"],"lowpassHz":item["lowpass_hz"]}
     return output
+
+def materialize_groups(sections:list[dict[str,Any]],
+                       blocks:dict[str,list[dict[str,Any]]],
+                       files:list[str],tracks:list[dict[str,Any]]|None=None)->dict[str,Any]:
+    """Static flat group membership and section group balancing requests."""
+    stems=source_map(files,tracks)
+    groups={}
+    requests=[]
+    for section in sorted(sections,key=lambda x:x["start_seconds"]):
+        for item in blocks.get(section["id"],[]):
+            if item["kind"]=="group_definition":
+                name=item["name"]
+                key=name.casefold()
+                if key in groups:raise ValueError("Group defined more than once")
+                groups[key]={"name":name,"sources":[stems[a] for a in item["members"]]}
+            elif item["kind"] in ("group_auto_gain","group_auto_pan"):
+                requests.append({"section_id":section["id"],"name":item["name"],
+                                 "dimension":item["kind"].removeprefix("group_auto_"),
+                                 "transition_seconds":item["transition_seconds"],
+                                 "transition_anchor":item["transition_anchor"],
+                                 "curve":item["curve"]})
+    for request in requests:
+        match=groups.get(request["name"].casefold())
+        if not match:raise ValueError("Unknown group automation target: "+request["name"])
+        request["sources"]=match["sources"]
+        request["name"]=match["name"]
+    return {"groups":list(groups.values()),"targets":requests}

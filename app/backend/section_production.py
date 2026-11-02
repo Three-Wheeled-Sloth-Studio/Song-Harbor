@@ -69,7 +69,7 @@ DEESS_TOKEN = re.compile(
 # Positive whole-stem timing shift, not an echo or feedback processor.
 # This is a project-wide static placement, authored once in section text.
 ECHO_TOKEN = re.compile(
-    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.echo:(?P<ms>\\d{2,4})ms,(?P<wet>\\d{1,3}),(?P<feedback>\\d{1,3}),(?P<lowpass>\\d{3,5})$"
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.echo:(?P<ms>\d{2,4})ms,(?P<wet>\d{1,3}),(?P<feedback>\d{1,3}),(?P<lowpass>\d{3,5})$"
 )
 OFFSET_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.offset:(?P<ms>\d{1,3})ms$"

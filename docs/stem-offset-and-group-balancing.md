@@ -124,3 +124,20 @@ The initial song-wide-only implementation was incompatible with Song Harbor's se
 To turn off echo gradually in a later section use `Taiko.echo:180ms,0,25,6500@8s:smooth`. To reintroduce it, use `Taiko.echo:180ms,20,30,5000@10s:smooth`. This turns down the wet output without moving the source audio. Existing `.offset` remains song-wide.
 
 **Verification:** Source changes and regression test updates committed, but live audio/export parity and passing CI were not independently verified in this session. Test echo transitions, long feedback tails, mid-song seeks, and export together with groups before release.
+
+## Sectional echo stabilization slice (2026-11-02, afternoon)
+
+Code updates:
+- End-of-song echo fade now samples the actual scheduled wet automation at fade start. This prevents a final wet-level jump when a long, end-anchored transition is still underway.
+- The echo engine skips redundant scheduling when unchanged song-level fallback settings are supplied.
+- Added deterministic scheduling regression cases for seeking halfway through a wet-zero fade, and for fading the actual in-progress wet value at the render boundary.
+- Mixer explicitly identifies stems with script-controlled echo and disables their fallback Echo toggle to prevent misleading controls.
+- Changing sectional echo targets invalidates the previous WAV export URL, forcing a new render.
+
+Expected semantics:
+- `Taiko.echo:180ms,18,25,6500@10s:smooth` sets an inherited echo target beginning at that section's start.
+- `Taiko.echo:180ms,0,25,6500@8s:smooth` fades its return to zero over 8 seconds; dry taiko stays present.
+- Re-enabling with a subsequent directive ramps wet back up. Offset remains an independent, song-wide timing operation.
+- No automatic adjustment to existing user scripts. Real-world audio A/B and group+echo listening QA remain to be performed together.
+
+Verification limitation: GitHub connector writes succeeded. A local npm/TypeScript build and waveform-based listening/export comparison could not be executed from this environment. Do not treat the committed regression tests as passing until the CI run or local Song Harbor launcher confirms them.

@@ -63,3 +63,11 @@ Scope: flat named groups only, section-scoped automation, reversible derived gai
 ### Follow-on effect processor (separate from timing offsets)
 
 Add a true wet/dry echo bus with milliseconds and beat-synced time, feedback, low/high-pass feedback filtering, stereo ping-pong, and tail management. Echo repeats must not shift or double the dry source. Test feedback stability, zero feedback, seek, end-of-song tails, and offline render parity. Implement only after the group MVP is validated.
+
+## Implementation status (2026-11-02)
+
+- Pure group gain compensation and group-scoped pan solver adapter added in `app/frontend/src/GroupAutomation.ts`. This module is not yet connected to section scripts or rendering.
+- Unit fixtures added in `app/frontend/tests/group-automation.test.mjs`, and included in frontend CI workflow.
+- Outstanding for user-visible behavior: parser/group storage, offset-aware audio measurement, section-to-solver orchestration, derived automation scheduling, preview/undo, rendered-output validation and end-to-end testing.
+- The gain solver accepts *linear RMS power estimates*, not amplitudes or LUFS. Explicitly boosted stems must be marked gainLocked so their authored gains cannot be overwritten; unrelated stems must never enter the group list.
+- Do not advertise group directives as supported before full parser, UI and audio parity land. This is an implementation foundation only.

@@ -46,9 +46,10 @@ test("silent or absent stems do not introduce non-finite corrections",()=>{
 });
 
 test("group solver can rebalance by small gain changes without moving protected pans",()=>{
-  const right={...stem("primary",1,1,true),pan:.65,gainLocked:true};
+  const right={...stem("primary",3,3,true),pan:.65,gainLocked:true};
   const left={...stem("taiko",1,1,true),pan:-.65,gainLocked:false};
   const result=solveAutoPan([right,left]);
+  assert.ok(result.adjustments.length>0);
   assert.ok(result.adjustments.every(item=>item.pan===-0.65));
   assert.ok(result.adjustments.every(item=>item.filename==="taiko"));
   assert.ok(result.adjustments.every(item=>Math.abs(item.gainDb)<=.351));

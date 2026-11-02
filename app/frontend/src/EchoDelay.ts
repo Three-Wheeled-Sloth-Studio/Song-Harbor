@@ -1,4 +1,4 @@
-import {compileSectionAutomation,scheduleAutomation,type SectionTarget} from "./SectionAutomation";
+import {compileSectionAutomation,scheduleAutomation,valueAt,type SectionTarget,type AutomationPoint} from "./SectionAutomation";
 /** Non-destructive echo send, separate from whole-stem timeline offset.
  * Dry source remains untouched. Feedback is strictly bounded for stability.
  */
@@ -70,6 +70,7 @@ export function scheduleSectionEcho(
 ):void{
  const base=fallback?validateEcho(fallback):DEFAULT_ECHO;
  const sorted=[...targets].sort((a,b)=>a.start-b.start);
+ let wetCurve:AutomationPoint[]=[];
  const dimensions=[
    {param:stage.delay.delayTime,key:"delayMs" as const,initial:base.delayMs,low:20,high:2000,scale:.001},
    {param:stage.wet.gain,key:"wet" as const,initial:base.wet,low:0,high:1,scale:1},
@@ -82,17 +83,22 @@ export function scheduleSectionEcho(
      sectionId:t.sectionId,start:t.start,end:t.end,value:t[entry.key],
      transitionSeconds:t.transitionSeconds,curve:t.curve
    } satisfies SectionTarget)),entry.initial,{min:entry.low,max:entry.high});
-   scheduleAutomation(entry.param,points.map(p=>({time:p.time,value:p.value*entry.scale})),offset,at);
+   const scaled=points.map(p=>({time:p.time,value:p.value*entry.scale}));
+   if(entry.key==="wet")wetCurve=scaled;
+   scheduleAutomation(entry.param,scaled,offset,at);
  }
- // Ramp echo return down at the end of the rendered buffer.
+ // Fade from the *actual automated* wet value at the tail boundary.
+ // Do not jump to the final target: its ramp may be incomplete, especially
+ // when an end-anchored section transition extends near the song end.
  if(duration>offset){
    const fade=Math.min(.3,duration-offset);
    const finalTime=at+duration-offset;
+   const fadeStartSong=Math.max(offset,duration-fade);
+   const fadeStartContext=at+fadeStartSong-offset;
    const wet=stage.wet.gain;
-   // The final target's wet value is the sustained level after the final ramp.
-   const last=sorted[sorted.length-1];
-   const lastWet=last?last.wet:base.wet;
-   wet.setValueAtTime(lastWet,Math.max(at,finalTime-fade));
+   const wetAtFade=valueAt(wetCurve,fadeStartSong);
+   wet.cancelScheduledValues(fadeStartContext);
+   wet.setValueAtTime(wetAtFade,fadeStartContext);
    wet.linearRampToValueAtTime(0,finalTime);
  }
 }

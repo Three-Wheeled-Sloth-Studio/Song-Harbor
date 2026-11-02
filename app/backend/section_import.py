@@ -317,8 +317,11 @@ def apply(project: dict[str, Any], content: str, mode: str,
     auto_pan_targets = section_production.materialize_auto_pan(validated, production, files, tracks, children)
     # Keep authored macro intents in section_production for roundtrip.
     # Resolve deterministic effect targets only while materializing automation.
+    echo_settings = section_production.materialize_echo(validated, production, files, tracks)
+    effect_blocks={key:[item for item in values if item.get("kind")!="echo"]
+                   for key,values in production.items()}
     effective = section_production.expand_evolution(
-        section_production.expand_broadcast(production, parents), parents, aliases)
+        section_production.expand_broadcast(effect_blocks, parents), parents, aliases)
     pan_targets = section_production.materialize_pan(validated, effective, files, tracks, children)
     reverb_targets = section_production.materialize_reverb(validated, effective, files, tracks, children)
     width_targets = section_production.materialize_width(validated, effective, files, tracks, children)
@@ -326,8 +329,8 @@ def apply(project: dict[str, Any], content: str, mode: str,
     eq_targets = section_production.materialize_eq(validated, effective, files, tracks, children)
     dynamics_targets = section_production.materialize_dynamics(validated, effective, files, tracks, children)
     gain_targets = section_production.materialize_gain(validated, effective, files, tracks, children)
-    volume_targets = section_production.materialize_volume(validated, production, files, tracks, children)
-    offsets = section_production.materialize_offsets(validated, production, files, tracks)
+    volume_targets = section_production.materialize_volume(validated, effect_blocks, files, tracks, children)
+    offsets = section_production.materialize_offsets(validated, effect_blocks, files, tracks)
     ending = section_production.materialize_ending(validated, production)
     return {"sections": validated, "section_spatial_proposals": proposals,
             "section_production": production, "section_pan_automation": pan_targets,
@@ -337,6 +340,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
             "replacement_masks": masks,
             "section_volume_automation": volume_targets,
             "stem_time_offsets": offsets,
+            "stem_echo_settings": echo_settings,
             "section_auto_pan": auto_pan_targets,
             "section_ending": ending,
             "section_lyrics": lyrics,

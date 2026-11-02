@@ -56,3 +56,31 @@ test("section changes inherit previous echo and wet zero fades it out",()=>{
   assert.ok(current[1]>=0&&current[1]<.18);
   assert.equal(current[2],100);
 });
+
+test("final echo fade uses the automated wet level, never an unfinished future target",()=>{
+  const stage={delay:{delayTime:fakeParam()},feedback:{gain:fakeParam()},
+    filter:{frequency:fakeParam()},wet:{gain:fakeParam()}};
+  // End-anchored target ramps from 0 to 100% for 10s. Rendering ends
+  // mid-ramp; jumping to the target wet value creates a prominent click.
+  const targets=[{sectionId:"outro",start:12,end:30,delayMs:350,wet:1,
+    feedback:.4,lowpassHz:4500,transitionSeconds:10,curve:"linear"}];
+  scheduleSectionEcho(stage,targets,0,10,17);
+  const wet=stage.wet.gain.calls;
+  const fadeSet=wet.filter(row=>row[0]==="set").at(-1);
+  assert.ok(fadeSet[1]>0&&fadeSet[1]<.6,
+    "tail fade must start at interpolated wet value rather than full target");
+  assert.ok(Math.abs(fadeSet[2]-26.7)<.00001);
+  assert.deepEqual(wet.at(-1),["ramp",0,27]);
+});
+test("a seek inside a wet-zero transition retains its current ramp position",()=>{
+  const stage={delay:{delayTime:fakeParam()},feedback:{gain:fakeParam()},
+    filter:{frequency:fakeParam()},wet:{gain:fakeParam()}};
+  const targets=[
+    {sectionId:"a",start:0,end:10,delayMs:180,wet:.5,feedback:.25,lowpassHz:6500,transitionSeconds:1,curve:"linear"},
+    {sectionId:"b",start:10,end:20,delayMs:180,wet:0,feedback:.25,lowpassHz:6500,transitionSeconds:8,curve:"linear"}
+  ];
+  scheduleSectionEcho(stage,targets,14,100,24);
+  const initial=stage.wet.gain.calls.find(row=>row[0]==="set");
+  assert.ok(Math.abs(initial[1]-.25)<.00001);
+  assert.equal(initial[2],100);
+});

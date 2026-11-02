@@ -1801,6 +1801,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
     record["section_volume_automation"] = changed["section_volume_automation"]
     record["stem_time_offsets"] = changed["stem_time_offsets"]
     record["stem_echo_settings"] = changed["stem_echo_settings"]
+    record["section_echo_automation"] = changed["section_echo_automation"]
     record["stem_groups"] = changed["stem_groups"]
     record["section_group_targets"] = changed["section_group_targets"]
     record["replacement_masks"] = changed["replacement_masks"]
@@ -1822,6 +1823,7 @@ def import_song_sections(ident: str, request: Request, body: SectionImportReques
             "volume_targets": changed["section_volume_automation"],
             "stem_time_offsets": changed["stem_time_offsets"],
             "stem_echo_settings": changed["stem_echo_settings"],
+            "echo_targets": changed["section_echo_automation"],
             "stem_groups": changed["stem_groups"],
             "section_group_targets": changed["section_group_targets"],
             "replacement_masks": changed["replacement_masks"],
@@ -1865,6 +1867,7 @@ def export_song_sections(ident: str) -> dict[str, Any]:
             "volume_targets": record.get("section_volume_automation", []),
             "stem_time_offsets": record.get("stem_time_offsets", {}),
             "stem_echo_settings": record.get("stem_echo_settings", {}),
+            "echo_targets": record.get("section_echo_automation", []),
             "stem_groups": record.get("stem_groups", []),
             "section_group_targets": record.get("section_group_targets", []),
             "replacement_masks": record.get("replacement_masks", []),

@@ -1134,7 +1134,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       renderedUrl.current=URL.createObjectURL(blob);
       setMixUrl(renderedUrl.current);
       setMixBytes(blob.size);
-      setNotice("Mix rendered without clipping. Use Download WAV below to save it to your browser's configured download location.");
+      setNotice("Mix ready. Use Download full mix WAV in the Download tool to save it.");
     }catch(e){
       if(e instanceof MixHeadroomError){
         setHeadroomIssue({peakDbfs:e.measuredPeakDbfs,additionalTrimDb:e.recommendedAdditionalTrimDb});
@@ -1584,17 +1584,44 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <ChannelSplitter jobId={jobId} files={files} onMissingFfmpeg={onMissingFfmpeg}
             onCompleted={()=>{void refreshChannels();}} />
         </>}
-        {tool==="download"&&<div className="song-tool-handoff">
-          <button type="button" onClick={()=>setDawOpen(true)}>Download tracks…</button>
+        {tool==="download"&&<div className="song-tool-handoff song-download-options" aria-label="Download and export options">
+          <section>
+            <strong>Processed full mix</strong>
+            <p>Render current section automation and effects as a 24-bit stereo WAV.</p>
+            <button type="button" disabled={exporting||Boolean(correction)||sectionPreviewActive}
+              onClick={()=>{void exportMix();}}>
+              {exporting?"Rendering WAV…":mixUrl?"Re-render full mix":"Render full mix WAV"}
+            </button>
+            {mixUrl&&<a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav"
+              title="Save processed full mix WAV">Download full mix WAV</a>}
+            {exporting?<Status tone="info">Rendering mix</Status>:mixUrl?<Status tone="success">Mix ready</Status>:null}
+            {headroomIssue&&<p role="alert">Mix needs output headroom. Use the master output trim
+              and headroom fix below, then render again.</p>}
+          </section>
+          <section>
+            <strong>Individual source stems</strong>
+            <p>Download original working stem files individually, without Song Harbor effects.</p>
+            <div className="song-download-stems">
+              {files.map(filename=><a key={filename}
+                href={"/api/jobs/"+encodeURIComponent(jobId)+"/files/"+encodeURIComponent(filename)}
+                download={filename} title={"Download source stem "+filename}>
+                {trackAliases?.[filename]||labelOf(filename)} WAV
+              </a>)}
+            </div>
+          </section>
+          <section>
+            <strong>Aligned multitrack export</strong>
+            <p>Prepare all stems in a folder for editing in an external DAW.</p>
+            <button type="button" onClick={()=>setDawOpen(true)}>Export aligned tracks…</button>
+          </section>
         </div>}
 
       </ToolWindow>)}
       <div className="song-production-exports">
     <div className="mix-footer">
       <div className="mix-actions">
-        <IconButton icon="⇩" label={exporting ? "Rendering mix WAV" : "Export mix WAV"}
-          disabled={exporting||Boolean(correction)||sectionPreviewActive} onClick={()=>{void exportMix();}}/>
-        {mixUrl && <a className="mix-download" href={mixUrl} download="Song Harbor Mix.wav" title="Download mix WAV">Download WAV</a>}
+        <IconButton icon="⇩" label="Download options"
+          onClick={()=>setOpenTools(existing=>existing.includes("download")?existing:[...existing,"download"])}/>
       </div>
       {exporting ? <Status tone="info">Export in progress</Status> : mixUrl ? <Status tone="success">Mix ready to download</Status> : null}
       <div className="mix-master-headroom">
@@ -1613,7 +1640,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onClick={applyHeadroomFix}>Apply safe output trim and re-render</button>
         <button type="button" disabled={exporting} onClick={()=>setHeadroomIssue(null)}>Review master trim manually</button>
       </section>}
-      {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Click Download WAV to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>}
+      {mixUrl&&<small>24-bit stereo WAV · {mixBytes===null?"":(mixBytes/1048576).toFixed(1)+" MB"} · Destination: your browser's Downloads setting. Open Download options to save; browser downloads cannot reveal their actual destination to Song Harbor.</small>}
     </div>
 
       </div>

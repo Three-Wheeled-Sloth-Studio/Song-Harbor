@@ -68,6 +68,9 @@ DEESS_TOKEN = re.compile(
 )
 # Positive whole-stem timing shift, not an echo or feedback processor.
 # This is a project-wide static placement, authored once in section text.
+ECHO_TOKEN = re.compile(
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\\.echo:(?P<ms>\\d{2,4})ms,(?P<wet>\\d{1,3}),(?P<feedback>\\d{1,3}),(?P<lowpass>\\d{3,5})$"
+)
 OFFSET_TOKEN = re.compile(
     r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.offset:(?P<ms>\d{1,3})ms$"
 )
@@ -108,6 +111,23 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
     directives = []
     touched = set()
     for token in tokens:
+        echo=ECHO_TOKEN.fullmatch(token)
+        if echo:
+            canonical=next((a for a in aliases if a.casefold()==echo.group("track").casefold()),None)
+            if not canonical or canonical.casefold().endswith(("-left","-right")):
+                raise ValueError("Echo must target an existing parent stem")
+            milliseconds=int(echo.group("ms"))
+            wet=int(echo.group("wet"))
+            feedback=int(echo.group("feedback"))
+            lowpass=int(echo.group("lowpass"))
+            if not (20<=milliseconds<=2000 and 0<=wet<=100 and 0<=feedback<=80 and 200<=lowpass<=18000):
+                raise ValueError("Echo needs 20-2000ms, wet 0-100, feedback 0-80, lowpass 200-18000Hz")
+            key=canonical.casefold()+".echo"
+            if key in touched:raise ValueError("Duplicate echo for this stem")
+            touched.add(key)
+            directives.append({"kind":"echo","track":canonical,"delay_ms":milliseconds,
+                               "wet":wet/100,"feedback":feedback/100,"lowpass_hz":lowpass})
+            continue
         offset=OFFSET_TOKEN.fullmatch(token)
         if offset:
             canonical=next((a for a in aliases if a.casefold()==offset.group("track").casefold()),None)
@@ -353,6 +373,9 @@ def parse_block(text: str, aliases:tuple[str,...]=ALIASES) -> list[dict[str, Any
 def render_block(directives: list[dict[str, Any]]) -> str:
     rendered = []
     for d in directives:
+        if d["kind"] == "echo":
+            rendered.append(f"{d['track']}.echo:{d['delay_ms']}ms,{round(d['wet']*100)},{round(d['feedback']*100)},{d['lowpass_hz']}")
+            continue
         if d["kind"] == "offset":
             rendered.append(f"{d['track']}.offset:{d['milliseconds']}ms")
             continue
@@ -769,3 +792,19 @@ def materialize_offsets(sections:list[dict[str,Any]],
                 raise ValueError("Timing offset is song-wide; define each stem's offset only once")
             result[filename]=directive["milliseconds"]/1000
     return result
+
+
+def materialize_echo(sections:list[dict[str,Any]], blocks:dict[str,list[dict[str,Any]]],
+                     files:list[str],tracks:list[dict[str,Any]]|None=None)->dict[str,dict[str,float]]:
+    """Resolve static parent-stem echo settings, authored once per song."""
+    mapping=source_map(files,tracks)
+    output={}
+    for section in sections:
+        for item in blocks.get(section["id"],[]):
+            if item["kind"]!="echo":continue
+            filename=mapping.get(item["track"])
+            if not filename:raise ValueError("Unknown echo stem alias")
+            if filename in output:raise ValueError("Echo settings are song-wide; declare each stem once")
+            output[filename]={"delayMs":item["delay_ms"],"wet":item["wet"],
+                              "feedback":item["feedback"],"lowpassHz":item["lowpass_hz"]}
+    return output

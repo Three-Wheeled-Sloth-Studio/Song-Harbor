@@ -111,7 +111,7 @@ export class SharedClockAudition {
   setEchoSettings(settings:Record<string,EchoSettings>){
     for(const value of Object.values(settings))echoTailSeconds(value);
     this.echoSettings=Object.fromEntries(Object.entries(settings).map(([name,value])=>[name,{...value}]));
-    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(this.ending.tail_seconds,
+    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+Math.max(this.ending.tail_seconds,
       ...Object.values(this.echoSettings).map(echoTailSeconds),0);
     if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
   }
@@ -427,7 +427,7 @@ export class SharedClockAudition {
     if(this.ending.fade_seconds===fade_seconds&&this.ending.tail_seconds===tail_seconds&&this.ending.curve===curve)return;
     this.ending={fade_seconds,tail_seconds,curve};
     this.reverb.buffer=createRoomImpulse(this.context,tail_seconds);
-    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+tail_seconds;
+    if(this.prepared)this.durationSeconds=this.sourceDurationSeconds+Math.max(0,...Object.values(this.stemTimeOffsets))+Math.max(tail_seconds,...Object.values(this.echoSettings).map(echoTailSeconds),0);
     if(this.running)this.seek(this.position);
   }
   private fadePoints():AutomationPoint[]{

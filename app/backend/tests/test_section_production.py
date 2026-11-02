@@ -31,24 +31,27 @@ class ProductionNotationTests(unittest.TestCase):
             section_import.apply({"sections":[],"files":FILES},
                 script.replace("group.DrumPair:Drums,Bass","group.DrumPair:Drums,Drums"),"replace",20)
 
-    def test_echo_songwide_roundtrip_and_bounds(self):
+    def test_echo_section_transitions_roundtrip_and_bounds(self):
         project={"sections":[],"files":FILES}
-        script=("[Verse 0:00-0:10]\\n"
-                "{Drums.echo:180ms,18,25,6500 Drums.offset:150ms}\\n"
-                "[Chorus 0:10-0:20]\\n")
+        script=("[Verse 0:00-0:10]\n"
+                "{Drums.echo:180ms,18,25,6500@4s:smooth Drums.offset:150ms}\n"
+                "[Chorus 0:10-0:20]\n"
+                "{Drums.echo:180ms,0,25,6500@3s:smooth}\n")
         changed=section_import.apply(project,script,"replace",20)
-        self.assertEqual(changed["stem_echo_settings"][FILES[1]],
-                         {"delayMs":180,"wet":.18,"feedback":.25,"lowpassHz":6500})
+        targets=changed["section_echo_automation"]
+        self.assertEqual(len(targets),2)
+        self.assertEqual([t["wet"] for t in targets],[.18,0])
+        self.assertEqual([t["transition_seconds"] for t in targets],[4,3])
+        self.assertEqual(targets[0]["source_key"],FILES[1])
         project.update(changed)
         rendered=section_import.render_tags(project)
-        self.assertIn("Drums.echo:180ms,18,25,6500",rendered)
-        self.assertEqual(section_import.apply(project,rendered,"replace",20)["stem_echo_settings"],
-                         changed["stem_echo_settings"])
+        self.assertIn("Drums.echo:180ms,0,25,6500@3s:smooth",rendered)
+        self.assertEqual(section_import.apply(project,rendered,"replace",20)["section_echo_automation"],targets)
         with self.assertRaisesRegex(ValueError,"Echo needs"):
             section_import.apply(project,script.replace("180ms,18,25","180ms,18,95"),"replace",20)
-        with self.assertRaisesRegex(ValueError,"song-wide"):
-            section_import.apply(project,script.replace("[Chorus 0:10-0:20]\\n",
-                "[Chorus 0:10-0:20]\\n{Drums.echo:180ms,18,25,6500}\\n"),"replace",20)
+        with self.assertRaisesRegex(ValueError,"Duplicate echo"):
+            section_import.apply(project,script.replace("Drums.offset:150ms",
+                "Drums.echo:180ms,10,25,6500 Drums.offset:150ms"),"replace",20)
 
     def test_replacement_mixes_are_visible_editable_and_do_not_override_gain_script(self):
         files=["01 (Bass).wav","02 (Drums).wav",

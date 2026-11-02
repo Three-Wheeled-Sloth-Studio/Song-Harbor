@@ -8,6 +8,25 @@ import section_production
 FILES = [f"song ({name}).wav" for name in section_production.ALIASES]
 
 class ProductionNotationTests(unittest.TestCase):
+    def test_echo_songwide_roundtrip_and_bounds(self):
+        project={"sections":[],"files":FILES}
+        script=("[Verse 0:00-0:10]\\n"
+                "{Drums.echo:180ms,18,25,6500 Drums.offset:150ms}\\n"
+                "[Chorus 0:10-0:20]\\n")
+        changed=section_import.apply(project,script,"replace",20)
+        self.assertEqual(changed["stem_echo_settings"][FILES[1]],
+                         {"delayMs":180,"wet":.18,"feedback":.25,"lowpassHz":6500})
+        project.update(changed)
+        rendered=section_import.render_tags(project)
+        self.assertIn("Drums.echo:180ms,18,25,6500",rendered)
+        self.assertEqual(section_import.apply(project,rendered,"replace",20)["stem_echo_settings"],
+                         changed["stem_echo_settings"])
+        with self.assertRaisesRegex(ValueError,"Echo needs"):
+            section_import.apply(project,script.replace("180ms,18,25","180ms,18,95"),"replace",20)
+        with self.assertRaisesRegex(ValueError,"song-wide"):
+            section_import.apply(project,script.replace("[Chorus 0:10-0:20]\\n",
+                "[Chorus 0:10-0:20]\\n{Drums.echo:180ms,18,25,6500}\\n"),"replace",20)
+
     def test_replacement_mixes_are_visible_editable_and_do_not_override_gain_script(self):
         files=["01 (Bass).wav","02 (Drums).wav",
                "trk_a (CelloA).wav","trk_b (CelloB).wav"]

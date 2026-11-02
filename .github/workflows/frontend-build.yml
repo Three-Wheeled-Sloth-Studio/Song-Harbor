@@ -28,6 +28,7 @@ jobs:
       - name: Run maintained frontend regression suite
         run: |
           node --experimental-strip-types --test \
+            app/frontend/tests/group-gain.test.mjs \
             app/frontend/tests/stem-timing.test.mjs \
             app/frontend/tests/finding-review.test.mjs \
             app/frontend/tests/section-end-anchor.test.mjs \

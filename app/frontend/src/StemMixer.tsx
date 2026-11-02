@@ -34,6 +34,7 @@ type SectionPreview =
   |{kind:"space";targets:SavedSpaceTarget[]}
   |{kind:"eq";targets:SavedEqTarget[]}
   |{kind:"deess";targets:typeof EMPTY_DYNAMICS_TARGETS};
+type GroupGainTarget={section_id:string;group:string;source_keys:string[];protected_gain_sources:string[];target_db:0;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 type DynamicsTarget={section_id:string;source_key:string;kind:"comp"|"duck"|"deess";threshold_db:number;ratio:number;depth_db:number;frequency?:number;q?:number;max_reduction_db?:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 const EMPTY_DYNAMICS_TARGETS:DynamicsTarget[]=[];
 type Stem = { filename: string; name: string; gain: number; mute: boolean; solo: boolean };
@@ -246,7 +247,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [reverbTargets,setReverbTargets]=useState<SavedReverbTarget[]>([]);
   const [widthTargets,setWidthTargets]=useState<SavedWidthTarget[]>([]);
   const [eqTargets,setEqTargets]=useState<SavedEqTarget[]>([]);
-  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";protected_sources:string[];protected_gain_sources?:string[];transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
+  const [autoPanTargets,setAutoPanTargets]=useState<{section_id:string;target:"center";group?:string|null;scope_sources?:string[];protected_sources:string[];protected_gain_sources?:string[];transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
+  const [groupGainTargets,setGroupGainTargets]=useState<GroupGainTarget[]>([]);
   const [autoPanReports,setAutoPanReports]=useState<string[]>([]);
   const [gainTargets,setGainTargets]=useState<{section_id:string;source_key:string;gain_db:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"}[]>([]);
   const [stemTimeOffsets,setStemTimeOffsets]=useState<Record<string,number>>({});
@@ -351,13 +353,13 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     void fetch("/api/projects/"+jobId+"/sections/export")
       .then(async response=>{
         if(!response.ok)throw Error("Could not load pan automation");
-        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];space_targets:typeof spaceTargets;eq_targets:SavedEqTarget[];gain_targets:typeof gainTargets;volume_targets:typeof volumeTargets;stem_time_offsets:Record<string,number>;auto_pan_targets:typeof autoPanTargets;dynamics_targets:typeof dynamicsTargets;ending:typeof ending}>;
+        return response.json() as Promise<{reverb_targets:typeof reverbTargets;width_targets:SavedWidthTarget[];space_targets:typeof spaceTargets;eq_targets:SavedEqTarget[];gain_targets:typeof gainTargets;volume_targets:typeof volumeTargets;stem_time_offsets:Record<string,number>;auto_pan_targets:typeof autoPanTargets;group_gain_targets:GroupGainTarget[];dynamics_targets:typeof dynamicsTargets;ending:typeof ending}>;
       })
       .then(async data=>{
         const panResponse=await fetch("/api/projects/"+jobId+"/section-pan");
         if(!panResponse.ok)throw Error("Could not load pan automation");
         const panData=await panResponse.json() as {targets:SavedPanTarget[]};
-        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);setEqTargets(data.eq_targets||[]);setGainTargets(data.gain_targets||[]);setVolumeTargets(data.volume_targets||[]);setStemTimeOffsets(data.stem_time_offsets||{});setAutoPanTargets(data.auto_pan_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
+        if(!cancelled){setPanTargets(panData.targets||[]);setReverbTargets(data.reverb_targets||[]);setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);setEqTargets(data.eq_targets||[]);setGainTargets(data.gain_targets||[]);setVolumeTargets(data.volume_targets||[]);setStemTimeOffsets(data.stem_time_offsets||{});setAutoPanTargets(data.auto_pan_targets||[]);setGroupGainTargets(data.group_gain_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);setEnding(data.ending||{fade_seconds:0,tail_seconds:0,curve:"smooth"});setPanLoaded(true);}
       })
       .catch(e=>{if(!cancelled)setError(e instanceof Error?e.message:String(e));});
     return ()=>{cancelled=true;};
@@ -622,8 +624,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if(!section)continue;
       // As automatic edits are added, downstream sections inherit them naturally.
       const result=engine.solveSectionAutoPan(section.start_seconds,section.end_seconds,
-        request.protected_sources,request.protected_gain_sources||[],byFile);
-      reports.push(section.kind+" "+section.start_seconds.toFixed(1)+"s: "+
+        request.protected_sources,request.protected_gain_sources||[],byFile,request.scope_sources);
+      reports.push((request.group||"Mix")+" "+section.kind+" "+section.start_seconds.toFixed(1)+"s: "+
         result.beforeDb.toFixed(2)+" dB -> "+result.predictedDb.toFixed(2)+
         " dB predicted; "+result.reason);
       for(const correction of result.adjustments){
@@ -652,6 +654,29 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           pan:compileSectionAutomation(merged,0,{min:-1,max:1})};
       }
     }
+    // Preserve group energy against untreated member stems, without changing locked members.
+    const gainOrdered=[...groupGainTargets].sort((a,b)=>
+      (sectionById.get(a.section_id)?.start_seconds??0)-(sectionById.get(b.section_id)?.start_seconds??0));
+    for(const request of gainOrdered){
+      const section=sectionById.get(request.section_id);
+      if(!section)continue;
+      const outcome=engine.solveSectionGroupGain(section.start_seconds,section.end_seconds,
+        request.source_keys,request.protected_gain_sources,byFile);
+      reports.push(request.group+" "+section.kind+" "+section.start_seconds.toFixed(1)+
+        "s loudness: "+outcome.beforeDb.toFixed(2)+" dB -> "+
+        outcome.predictedDb.toFixed(2)+" dB; "+outcome.reason);
+      for(const correction of outcome.adjustments){
+        const filename=correction.filename;
+        if(!autoGainDesired.has(filename))autoGainDesired.set(filename,[]);
+        const prior=autoGainDesired.get(filename)!.filter(item=>item.sectionId===section.id).at(-1);
+        const base=prior?.value??(byFile[filename]?.gain?
+          valueAt(byFile[filename].gain!,section.start_seconds):1);
+        autoGainDesired.get(filename)!.push({
+          sectionId:section.id,start:effectStart(section,request),end:section.end_seconds,
+          value:base*Math.pow(10,correction.gainDb/20),
+          transitionSeconds:request.transition_seconds,curve:request.curve});
+      }
+    }
     for(const [filename,additions] of autoGainDesired){
       const explicit=gainTargets.filter(item=>item.source_key===filename).flatMap(item=>{
         const target=sectionById.get(item.section_id);
@@ -667,14 +692,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     engine.setAutomation(byFile,Boolean(correction||sectionPreviewActive));
     engine.setEnding(ending);
     setDuration(engine.duration);
-  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,replacementMasks,correction,sectionPreviewActive,sectionPreview]);
+  },[audioReady,panLoaded,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,groupGainTargets,dynamicsTargets,ending,timelineSections,files,channels,stems,replacementMasks,correction,sectionPreviewActive,sectionPreview]);
 
   // Retain the previous findings after a mix change as a labelled snapshot.
   // Old scan results must not be presented as analysis of the new settings.
   useEffect(()=>{
     analysisRevision.current++;
     setCleanupStale(true);
-  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
+  },[stems,masterTrimDb,panTargets,reverbTargets,widthTargets,spaceTargets,eqTargets,gainTargets,volumeTargets,stemTimeOffsets,autoPanTargets,groupGainTargets,dynamicsTargets,ending,channels,timelineSections,bypassed]);
 
   // Monitoring volume never changes the rendered mix; only stem edits invalidate it.
   useEffect(() => { setMixUrl(null); }, [stems]);
@@ -1001,14 +1026,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       });
       const data=await result.json() as {detail?:string;sections?:SongSection[];pan_targets?:SavedPanTarget[];
         reverb_targets?:SavedReverbTarget[];width_targets?:SavedWidthTarget[];space_targets?:typeof spaceTargets;
-        eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;gain_targets?:typeof gainTargets;volume_targets?:typeof volumeTargets;stem_time_offsets?:Record<string,number>;auto_pan_targets?:typeof autoPanTargets;ending?:typeof ending};
+        eq_targets?:SavedEqTarget[];dynamics_targets?:typeof dynamicsTargets;gain_targets?:typeof gainTargets;volume_targets?:typeof volumeTargets;stem_time_offsets?:Record<string,number>;auto_pan_targets?:typeof autoPanTargets;group_gain_targets?:GroupGainTarget[];ending?:typeof ending};
       if(!result.ok||!data.sections)throw Error(data.detail||"Could not save dynamics correction");
       markFindingReviewed(findingReviewKey(trial.finding));
       setCorrection(null);
       setExternalSections(data.sections);setTimelineSections(data.sections);
       setPanTargets(data.pan_targets||[]);setReverbTargets(data.reverb_targets||[]);
       setWidthTargets(data.width_targets||[]);setSpaceTargets(data.space_targets||[]);
-      setEqTargets(data.eq_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);setGainTargets(data.gain_targets||[]);setStemTimeOffsets(data.stem_time_offsets||{});setAutoPanTargets(data.auto_pan_targets||[]);
+      setEqTargets(data.eq_targets||[]);setDynamicsTargets(data.dynamics_targets||[]);setGainTargets(data.gain_targets||[]);setStemTimeOffsets(data.stem_time_offsets||{});setAutoPanTargets(data.auto_pan_targets||[]);setGroupGainTargets(data.group_gain_targets||[]);
       if(data.ending)setEnding(data.ending);
       setScriptRevision(v=>v+1);setMixUrl(null);
       setNotice("Accepted "+trial.kind+" correction in section script; export uses the saved mix.");
@@ -1302,7 +1327,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         {tool==="songText"&&<>
         <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
-          onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,volume,auto,finish,replacements,offsets)=>{
+          onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,volume,auto,finish,replacements,offsets,groupGains)=>{
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
@@ -1314,6 +1339,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             setStemTimeOffsets(offsets);
             setReplacementMasks(replacements);
             setAutoPanTargets(auto);
+            setGroupGainTargets(groupGains);
             setMixUrl(null);
             setEnding(finish);
             setExternalSections(items);setTimelineSections(items);

@@ -1,3 +1,4 @@
+import {compileSectionAutomation,scheduleAutomation,type SectionTarget} from "./SectionAutomation";
 /** Non-destructive echo send, separate from whole-stem timeline offset.
  * Dry source remains untouched. Feedback is strictly bounded for stability.
  */
@@ -54,4 +55,44 @@ export function configureEcho(stage:EchoStage,echo:EchoSettings|undefined,time:n
 }
 export function disconnectEcho(stage:EchoStage):void{
   for(const node of Object.values(stage))node.disconnect();
+}
+
+/** Song-timeline echo changes. Previous values persist between sections.
+ * Never changes the dry audio path, including when wet is set to zero.
+ */
+export type EchoSectionTarget={
+  sectionId:string;start:number;end:number;transitionSeconds:number;
+  curve:"smooth"|"linear";delayMs:number;wet:number;feedback:number;lowpassHz:number;
+};
+export function scheduleSectionEcho(
+ stage:EchoStage,targets:EchoSectionTarget[],offset:number,at:number,
+ duration:number,fallback?:EchoSettings
+):void{
+ const base=fallback?validateEcho(fallback):DEFAULT_ECHO;
+ const sorted=[...targets].sort((a,b)=>a.start-b.start);
+ const dimensions=[
+   {param:stage.delay.delayTime,key:"delayMs" as const,initial:base.delayMs,low:20,high:2000,scale:.001},
+   {param:stage.wet.gain,key:"wet" as const,initial:base.wet,low:0,high:1,scale:1},
+   {param:stage.feedback.gain,key:"feedback" as const,initial:base.feedback,low:0,high:.8,scale:1},
+   {param:stage.filter.frequency,key:"lowpassHz" as const,initial:base.lowpassHz,low:200,high:18000,scale:1}
+ ];
+ for(const target of sorted)validateEcho(target);
+ for(const entry of dimensions){
+   const points=compileSectionAutomation(sorted.map(t=>({
+     sectionId:t.sectionId,start:t.start,end:t.end,value:t[entry.key],
+     transitionSeconds:t.transitionSeconds,curve:t.curve
+   } satisfies SectionTarget)),entry.initial,{min:entry.low,max:entry.high});
+   scheduleAutomation(entry.param,points.map(p=>({time:p.time,value:p.value*entry.scale})),offset,at);
+ }
+ // Ramp echo return down at the end of the rendered buffer.
+ if(duration>offset){
+   const fade=Math.min(.3,duration-offset);
+   const finalTime=at+duration-offset;
+   const wet=stage.wet.gain;
+   // The final target's wet value is the sustained level after the final ramp.
+   const last=sorted[sorted.length-1];
+   const lastWet=last?last.wet:base.wet;
+   wet.setValueAtTime(lastWet,Math.max(at,finalTime-fade));
+   wet.linearRampToValueAtTime(0,finalTime);
+ }
 }

@@ -881,3 +881,8 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-midi-accept>button{flex:0 0 auto}
 .song-candidate-accept{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .song-ace-preview-line .song-original-mix{flex:1 1 150px}
+
+/* Compact per-stem echo controls; shown only when echo is active. */
+.track-echo-controls{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.track-echo-controls label{display:inline-flex;align-items:center;gap:3px;font-size:11px;white-space:nowrap;color:var(--tws-color-text-muted)}
+.track-echo-controls input[type="number"]{width:58px;min-width:0;padding:2px 4px;font:12px Consolas,monospace}

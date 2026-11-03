@@ -4,7 +4,7 @@ import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Note={pitch:number;start:number;end:number;velocity:number};
-type Candidate={candidate_id:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
+type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
 type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
@@ -145,8 +145,15 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    if(!candidate||busy)return;
    setBusy(true);setError("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
-     const data=await req<Candidate>(base+"/"+candidate.candidate_id+"/render",{
-       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes,instrument_id:instrument,pack_id:instrumentPack})});
+     const url=candidate.arrangement_id?
+       "/api/projects/"+jobId+"/midi-arrangements/"+candidate.arrangement_id+"/render":
+       base+"/"+candidate.candidate_id+"/render";
+     if(candidate.arrangement_id&&chosenInstrument?.engine!=="sf2")throw Error("Select an SF2 instrument for polyphonic rendering.");
+     const body=candidate.arrangement_id?
+       {revision:candidate.arrangement_revision,instrument_id:instrument,pack_id:instrumentPack}:
+       {notes,instrument_id:instrument,pack_id:instrumentPack};
+     const data=await req<Candidate>(url,{
+       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
      setCandidate(data);setNotes(data.notes);setPreviewReady(true);
      setMessage("Preview rendered.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
@@ -189,17 +196,18 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
  }
  async function useArrangement(asset:Arrangement){
-   const linked=asset.source.candidate_id;
-   if(!linked){throw Error("This arrangement predates candidate linkage; it remains editable but cannot render through the original transcription.");}
-   const source=await req<Candidate>(base+"/"+linked);
-   if(source.source_track_id!==asset.source.track_id||asset.source.track_id!==trackId)throw Error("Arrangement source differs from selected stem.");
-   if(Math.abs(source.start_seconds*48000-asset.source.start_sample)>2||Math.abs(source.duration_seconds*48000-asset.duration_samples)>2)
-     throw Error("Arrangement region no longer matches its transcription source.");
-   const converted=asset.notes.map(n=>({pitch:n.pitch,start:Number((n.start_sample/48000).toFixed(3)),
-       end:Number((n.end_sample/48000).toFixed(3)),velocity:n.velocity}));
-   setCandidate(source);setNotes(converted);setNotePage(0);setArrangementId(asset.asset_id);
-   setPreviewReady(false);engine?.clearCandidatePreview();
-   setMessage("Arrangement loaded. Render an instrument candidate to audition. Edits in the note list are not saved to the arrangement until you save a new asset.");
+   if(asset.source.track_id!==trackId)throw Error("Arrangement belongs to a different stem.");
+   if(busy)return;
+   setBusy(true);setError("");setPreviewReady(false);engine?.clearCandidatePreview();
+   try{
+     if(chosenInstrument?.engine!=="sf2")throw Error("Select an SF2 instrument to render a polyphonic arrangement.");
+     const data=await req<Candidate>("/api/projects/"+jobId+"/midi-arrangements/"+asset.asset_id+"/render",{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({revision:asset.revision,instrument_id:instrument,pack_id:instrumentPack})});
+     setCandidate(data);setNotes(data.notes);setNotePage(0);setArrangementId(asset.asset_id);
+     setPreviewReady(true);
+     setMessage("Polyphonic candidate rendered from saved arrangement r"+asset.revision+". Original stem unchanged.");
+   }finally{setBusy(false);}
  }
  async function saveArrangement(){
    if(!candidate||busy)return;
@@ -282,7 +290,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        </div>
      </div>
      <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} onUse={useArrangement} onError={onError}/>
-     {candidate&&<>
+     {candidate&&!candidate.arrangement_id&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>
          <button type="button" title="Revert note edits" disabled={busy} onClick={revert}>↺</button>
@@ -306,6 +314,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            </div>;})}
          </div>
        </details>
+     </>}
+     {candidate&&<>
        <div className="song-midi-render">
          <div className="song-instrument-selectors">
            <label title="Choose instrument">Instrument <select aria-label="Instrument" value={instrumentPack+"::"+instrument} onChange={e=>{const [pack,id]=e.target.value.split("::");chooseInstrument(pack,id);}}>{available.map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{preferred(x)>=0?"★ ":""}{x.name}{packFilter==="all"?" · "+(catalogue.packs.find(p=>p.id===x.pack_id)?.name||x.pack_id):""}</option>)}</select></label>

@@ -67,6 +67,7 @@ def render_sfz(
         "--midi", str(midi), "--wav", str(output),
         "--samplerate", str(sample_rate),
     ]
+    completed = False
     try:
         result = subprocess.run(
             command, shell=False, capture_output=True, text=True,
@@ -82,6 +83,7 @@ def render_sfz(
                 raise SFZRenderError("Renderer output is not 48-kHz stereo WAV")
             if audio.getnframes() <= 0 or audio.getsampwidth() not in (2, 3, 4):
                 raise SFZRenderError("Renderer output has invalid PCM format or duration")
+        completed = True
         return output
     except subprocess.TimeoutExpired as exc:
         raise SFZRenderError("SFZ renderer timed out") from exc
@@ -90,14 +92,5 @@ def render_sfz(
     finally:
         # Failed or incomplete output is never treated as a candidate.
         # Successful output is retained for the caller's separate review.
-        if output.exists():
-            try:
-                with wave.open(str(output), "rb") as audio:
-                    valid = (audio.getframerate() == sample_rate and
-                             audio.getnchannels() == 2 and
-                             audio.getnframes() > 0 and
-                             audio.getsampwidth() in (2, 3, 4))
-            except (OSError, EOFError, wave.Error):
-                valid = False
-            if not valid:
-                output.unlink(missing_ok=True)
+        if not completed:
+            output.unlink(missing_ok=True)

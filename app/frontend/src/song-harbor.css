@@ -912,3 +912,8 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-scroller:focus-visible{outline:2px solid var(--tws-color-action-primary)}
 .song-roll-scroller svg{display:block;touch-action:none;user-select:none}
 .song-piano-roll>small{color:var(--tws-color-text-muted);font-size:11px;line-height:1.4}
+
+/* Renderer prerequisites stay actionable at point of use. */
+.song-midi-fluid-setup{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--tws-color-text-muted)}
+.song-midi-fluid-setup button,.song-midi-error button{font-size:11px;min-height:26px;padding:3px 7px}
+.song-midi-error{display:flex;align-items:center;gap:8px;flex-wrap:wrap}

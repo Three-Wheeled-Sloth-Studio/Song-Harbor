@@ -39,6 +39,7 @@ import stem_import
 import track_lifecycle
 import declick_recipes
 import midi_arrangements
+import polyphonic_midi
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1124,6 +1125,61 @@ def arrangement_from_candidate(ident:str,request:Request,
         return asset
     except (ValueError,KeyError,TypeError,OSError) as exc:
         raise HTTPException(400,str(exc)) from exc
+
+class PolyphonicRenderRequest(BaseModel):
+    revision: int = Field(ge=0)
+    pack_id: str = Field(min_length=1,max_length=80)
+    instrument_id: str = Field(min_length=1,max_length=120)
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/render")
+def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
+                                  body:PolyphonicRenderRequest)->dict[str,Any]:
+    """Render an immutable saved revision through the existing FluidSynth engine.
+
+    A new candidate is created for each render, leaving the score untouched.
+    The regular candidate audition and track-acceptance flow is reused.
+    """
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        project_root=DATA_ROOT/"jobs"/ident
+        asset=midi_arrangements.read(project_root,asset_id)
+        if asset["revision"]!=body.revision:
+            raise HTTPException(409,"Saved MIDI arrangement has changed; reopen its latest revision")
+        selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
+        if selected["engine"]!="sf2":
+            raise HTTPException(400,"Polyphonic arrangement rendering currently requires an SF2 instrument")
+        duration=asset["duration_samples"]/midi_arrangements.RATE
+        if not .1<=duration<=bass_midi.MAX_REGION_SECONDS:
+            raise HTTPException(400,"Arrangement render must be 0.1 to 600 seconds")
+        midi=polyphonic_midi.to_midi(asset,selected["program"],selected["bank"])
+        candidate_id=uuid.uuid4().hex
+        folder=bass_midi.candidate_folder(project_root,candidate_id)
+        folder.mkdir(parents=True,exist_ok=False)
+        try:
+            instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
+                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
+            (folder/"notes.mid").write_bytes(midi)
+            notes=[{"pitch":n["pitch"],"start":round(n["start_sample"]/48000,3),
+                    "end":round(n["end_sample"]/48000,3),"velocity":n["velocity"]}
+                   for n in asset["notes"]]
+            record={"candidate_id":candidate_id,"source_track_id":asset["source"]["track_id"],
+                "start_seconds":asset["source"]["start_sample"]/48000,
+                "duration_seconds":duration,"notes":notes,"original_notes":notes,
+                "arrangement_id":asset_id,"arrangement_revision":body.revision,
+                "render_kind":"sf2_polyphonic_preview","rendered":True,
+                "instrument":selected["id"],"pack_id":selected["pack_id"],
+                "method":"Saved polyphonic MIDI arrangement"}
+            bass_midi.write_json(folder/"candidate.json",record)
+            return record
+        except Exception:
+            shutil.rmtree(folder,ignore_errors=True)
+            raise
+    except HTTPException:
+        raise
+    except (ValueError,OSError,KeyError,TypeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
 
 @app.get("/api/projects/{ident}/midi-arrangements/{asset_id}")
 def get_midi_arrangement(ident:str,asset_id:str)->dict[str,Any]:

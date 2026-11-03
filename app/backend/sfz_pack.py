@@ -104,7 +104,11 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
         digest = hashlib.sha256()
         for path in sorted(p for p in destination.rglob("*") if p.is_file()):
             digest.update(path.relative_to(destination).as_posix().encode("utf-8"))
-            digest.update(hashlib.sha256(path.read_bytes()).digest())
+            content_hash = hashlib.sha256()
+            with path.open("rb") as source:
+                while chunk := source.read(1024 * 1024):
+                    content_hash.update(chunk)
+            digest.update(content_hash.digest())
         manifest = {"schema_version": 1, "id": identifier, "name": name.strip()[:100] or "SFZ pack",
                     "engine": "sfz", "source": "user-installed",
                     "sha256": digest.hexdigest(), "instruments": manifest_instruments}

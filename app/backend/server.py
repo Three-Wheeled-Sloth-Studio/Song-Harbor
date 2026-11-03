@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import math
 import sys
+import zipfile
 import threading
 import time
 import uuid
@@ -40,6 +41,8 @@ import track_lifecycle
 import declick_recipes
 import midi_arrangements
 import polyphonic_midi
+import sfz_pack
+import sfz_render_adapter
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1032,6 +1035,36 @@ async def install_instrument_soundfont(request:Request,
         if staged is not None:staged.unlink(missing_ok=True)
 
 
+@app.post("/api/instruments/sfz")
+async def install_instrument_sfz(request:Request,
+                                 file:UploadFile=File(...),
+                                 pack_name:str=Form("Imported SFZ pack"))->dict[str,Any]:
+    """Explicit user-uploaded self-contained ZIP; never extract arbitrary paths."""
+    require_local_origin(request)
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(400,"Choose a self-contained SFZ ZIP archive")
+    if not 1<=len(pack_name.strip())<=100:
+        raise HTTPException(400,"Pack name must be 1-100 characters")
+    import tempfile
+    root=instrument_library.pack_root(DATA_ROOT)
+    root.mkdir(parents=True,exist_ok=True)
+    staged=None
+    try:
+        with tempfile.NamedTemporaryFile(dir=root,suffix=".zip",delete=False) as tmp:
+            staged=Path(tmp.name)
+            received=0
+            while chunk:=await file.read(1024*1024):
+                received+=len(chunk)
+                if received>sfz_pack.MAX_ARCHIVE_BYTES:
+                    raise ValueError("SFZ archive exceeds upload limit")
+                tmp.write(chunk)
+        return sfz_pack.install_zip(DATA_ROOT,staged,pack_name.strip())
+    except (ValueError,OSError,zipfile.BadZipFile,UnicodeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+    finally:
+        if staged is not None:staged.unlink(missing_ok=True)
+
+
 class BassMidiAnalyzeRequest(BaseModel):
     track_id: str = Field(min_length=1,max_length=80)
     start_seconds: float = Field(ge=0)
@@ -1147,8 +1180,8 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         if asset["revision"]!=body.revision:
             raise HTTPException(409,"Saved MIDI arrangement has changed; reopen its latest revision")
         selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
-        if selected["engine"]!="sf2":
-            raise HTTPException(400,"Polyphonic arrangement rendering currently requires an SF2 instrument")
+        if selected["engine"] not in ("sf2","sfz"):
+            raise HTTPException(400,"Select an installed SF2 or SFZ instrument for arrangement rendering")
         duration=asset["duration_samples"]/midi_arrangements.RATE
         if not .1<=duration<=bass_midi.MAX_REGION_SECONDS:
             raise HTTPException(400,"Arrangement render must be 0.1 to 600 seconds")
@@ -1157,8 +1190,29 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         folder=bass_midi.candidate_folder(project_root,candidate_id)
         folder.mkdir(parents=True,exist_ok=False)
         try:
-            instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
-                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
+            if selected["engine"]=="sf2":
+                instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
+                    folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
+            else:
+                import tempfile
+                with tempfile.TemporaryDirectory(prefix="sh-sfz-",dir=folder) as tmp:
+                    scratch=Path(tmp)
+                    note_file=scratch/"notes.mid"
+                    note_file.write_bytes(midi)
+                    raw=scratch/"render.wav"
+                    sfz_render_adapter.render_sfz(note_file,font,raw,
+                        timeout_seconds=min(360,max(30,int(duration*2))))
+                    aligned=scratch/"aligned.wav"
+                    converted=subprocess.run([
+                        dependency_tool("ffmpeg"),"-hide_banner","-loglevel","error",
+                        "-nostdin","-y","-i",str(raw),
+                        "-af",f"apad,atrim=duration={duration:.3f}",
+                        "-ar","48000","-ac","2","-c:a","pcm_s16le",str(aligned)
+                    ],capture_output=True,text=True,timeout=180,
+                      creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+                    if converted.returncode or not aligned.is_file() or aligned.stat().st_size<44:
+                        raise ValueError("Could not align SFZ render to MIDI arrangement region")
+                    os.replace(aligned,folder/"bowed-preview.wav")
             (folder/"notes.mid").write_bytes(midi)
             notes=[{"pitch":n["pitch"],"start":round(n["start_sample"]/48000,3),
                     "end":round(n["end_sample"]/48000,3),"velocity":n["velocity"]}
@@ -1167,8 +1221,9 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
                 "start_seconds":asset["source"]["start_sample"]/48000,
                 "duration_seconds":duration,"notes":notes,"original_notes":notes,
                 "arrangement_id":asset_id,"arrangement_revision":body.revision,
-                "render_kind":"sf2_polyphonic_preview","rendered":True,
+                "render_kind":selected["engine"]+"_polyphonic_preview","rendered":True,
                 "instrument":selected["id"],"pack_id":selected["pack_id"],
+                "instrument_sha256":instrument_library.hash_file(font),
                 "method":"Saved polyphonic MIDI arrangement"}
             bass_midi.write_json(folder/"candidate.json",record)
             return record
@@ -1177,7 +1232,7 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
             raise
     except HTTPException:
         raise
-    except (ValueError,OSError,KeyError,TypeError) as exc:
+    except (ValueError,OSError,KeyError,TypeError,subprocess.TimeoutExpired,sfz_render_adapter.SFZRenderError) as exc:
         raise HTTPException(400,str(exc)) from exc
 
 

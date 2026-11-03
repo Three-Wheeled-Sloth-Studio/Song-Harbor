@@ -179,6 +179,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
     <button type="button" onClick={()=>{if(asset&&window.confirm("Revert all unsaved MIDI edits?"))open(asset);}} disabled={!dirty||busy} title="Discard unsaved edits and restore saved revision">Revert</button>
     <button type="button" onClick={duplicateSelected} disabled={!selectedIds.length||busy} title="Duplicate selected notes">Duplicate</button>
     <button type="button" onClick={removeSelected} disabled={!selectedIds.length||busy} title="Delete selected notes">Delete</button>
+    <button type="button" onClick={()=>{setSelectedIds(notes.map(n=>n.id));setSelected(notes[0]?.id||"");scrollerRef.current?.focus();}} disabled={!notes.length||busy} title="Select every note in arrangement">All</button>
+    <button type="button" onClick={()=>{setSelectedIds([]);setSelected("");}} disabled={!selectedIds.length||busy} title="Clear note selection">Clear</button>
     <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes">Copy</button>
     <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement">Paste</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy}>Save{dirty?" *":""}</button>
@@ -189,10 +191,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
      <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap</label>
      <label>Grid <select value={gridMs} onChange={e=>setGridMs(Number(e.target.value))}><option value={125}>125 ms</option><option value={250}>250 ms</option><option value={500}>500 ms</option></select></label>
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
-     {active&&<label>Velocity <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127)edit(notesRef.current.map(n=>n.id===active.id?{...n,velocity}:n));}}/></label>}
+     {active&&<label>{selectedIds.length>1?"Selection velocity":"Velocity"} <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127){const ids=new Set(selectedIds);edit(notesRef.current.map(n=>ids.has(n.id)?{...n,velocity}:n));}}}/></label>}
+     <span>{selectedIds.length} selected</span>
     </div>
     <div className="song-roll-scroller" ref={scrollerRef} tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
      onKeyDown={e=>{if(e.target!==e.currentTarget)return;
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="a"){e.preventDefault();setSelectedIds(notes.map(n=>n.id));setSelected(notes[0]?.id||"");}
+      if(e.key==="Escape"){e.preventDefault();setSelectedIds([]);setSelected("");}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();if(e.shiftKey)redo();else undo();}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();redo();}
       if((e.key==="Delete"||e.key==="Backspace")&&selectedIds.length){e.preventDefault();removeSelected();}
@@ -217,7 +222,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
       </g>;})}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
    {message&&<small role="status">{message}</small>}

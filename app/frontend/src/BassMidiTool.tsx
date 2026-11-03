@@ -289,6 +289,16 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <button type="button" disabled={!trackId||!inBounds||busy} title="Transcribe selected range on CPU" onClick={()=>void analyze()}>{busy?"…":"♮ Extract"}</button>
        </div>
      </div>
+         <div className="song-instrument-selectors">
+           <label title="Choose instrument">Instrument <select aria-label="Instrument" value={instrumentPack+"::"+instrument} onChange={e=>{const [pack,id]=e.target.value.split("::");chooseInstrument(pack,id);}}>{available.map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{preferred(x)>=0?"★ ":""}{x.name}{packFilter==="all"?" · "+(catalogue.packs.find(p=>p.id===x.pack_id)?.name||x.pack_id):""}</option>)}</select></label>
+           <label title="Filter instruments by pack">Pack <select aria-label="Instrument pack" value={packFilter} onChange={e=>{const filter=e.target.value;setPackFilter(filter);const options=catalogue.instruments.filter(x=>filter==="all"||x.pack_id===filter);if(!options.some(x=>x.id===instrument&&x.pack_id===instrumentPack)){const first=options[0];if(first)chooseInstrument(first.pack_id,first.id);}}}><option value="all">All packs</option>{catalogue.packs.map(pack=><option key={pack.id} value={pack.id}>{pack.name}</option>)}</select></label>
+         </div>
+         <div className="song-instrument-import">
+           {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
+           <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
+           {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
+           <small title="Current source pack">{selectedPackName}</small>
+         </div>
      <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} onUse={useArrangement} onError={onError}/>
      {candidate&&!candidate.arrangement_id&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
@@ -317,16 +327,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </>}
      {candidate&&<>
        <div className="song-midi-render">
-         <div className="song-instrument-selectors">
-           <label title="Choose instrument">Instrument <select aria-label="Instrument" value={instrumentPack+"::"+instrument} onChange={e=>{const [pack,id]=e.target.value.split("::");chooseInstrument(pack,id);}}>{available.map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{preferred(x)>=0?"★ ":""}{x.name}{packFilter==="all"?" · "+(catalogue.packs.find(p=>p.id===x.pack_id)?.name||x.pack_id):""}</option>)}</select></label>
-           <label title="Filter instruments by pack">Pack <select aria-label="Instrument pack" value={packFilter} onChange={e=>{const filter=e.target.value;setPackFilter(filter);const options=catalogue.instruments.filter(x=>filter==="all"||x.pack_id===filter);if(!options.some(x=>x.id===instrument&&x.pack_id===instrumentPack)){const first=options[0];if(first)chooseInstrument(first.pack_id,first.id);}}}><option value="all">All packs</option>{catalogue.packs.map(pack=><option key={pack.id} value={pack.id}>{pack.name}</option>)}</select></label>
-         </div>
-         <div className="song-instrument-import">
-           {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
-           <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
-           {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
-           <small title="Current source pack">{selectedPackName}</small>
-         </div>
          <div className="song-midi-controls">
            <button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>

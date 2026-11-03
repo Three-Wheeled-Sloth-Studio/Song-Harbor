@@ -38,6 +38,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [candidate,setCandidate]=useState<Candidate|null>(null);
  const [arrangementId,setArrangementId]=useState("");
  const [rollDirty,setRollDirty]=useState(false);
+ useEffect(()=>{if(rollDirty){setPreviewReady(false);engine?.clearCandidatePreview();}},[rollDirty,engine]);
  const [notes,setNotes]=useState<Note[]>([]);
  const [notePage,setNotePage]=useState(0);
  const [busy,setBusy]=useState(false);

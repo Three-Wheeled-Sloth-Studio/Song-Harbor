@@ -6,7 +6,6 @@ This intentionally supports self-contained SFZ and sample files only.
 from __future__ import annotations
 import hashlib
 import json
-import os
 import re
 import shutil
 import stat
@@ -89,15 +88,18 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
         manifest_instruments = []
         for index, definition in enumerate(definitions):
             text = definition.read_text(encoding="utf-8-sig")
-            if UNSAFE_SFZ.search(text) or ".." in text:
+            if UNSAFE_SFZ.search(text) or ".." in text or re.search(r"(?im)(?:^|\\s)default_path\\s*=",text):
                 raise ValueError("SFZ definition uses external paths or unsupported preprocessing")
             # Permit references to samples inside the imported archive only. No shell or plugin scripts.
             for found in SAMPLE_REF.finditer(text):
                 sample = found.group(1).strip().strip('"').replace("\\", "/")
                 if not sample or sample.startswith("/") or re.match(r"^[A-Za-z]:", sample):
                     raise ValueError("Unsafe SFZ sample reference")
-                if any(part == ".." for part in PurePosixPath(sample).parts):
+                if any(part in ("..", ".") for part in PurePosixPath(sample).parts):
                     raise ValueError("SFZ sample reference escapes pack")
+                sample_file=(definition.parent/sample).resolve()
+                if not sample_file.is_relative_to(destination.resolve()) or not sample_file.is_file():
+                    raise ValueError("SFZ references a missing or external sample: "+sample[:120])
             relative = definition.relative_to(destination).as_posix()
             manifest_instruments.append({"id": f"sfz-{index}", "name": definition.stem[:100],
                                          "sfz_path": relative, "program": 0, "bank": 0})

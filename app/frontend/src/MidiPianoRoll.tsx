@@ -5,7 +5,7 @@ export type RollNote={id:string;start_sample:number;end_sample:number;pitch:numb
 export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[]};
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
-type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, PX_PER_SECOND=65, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -27,7 +27,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onUse,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChange,onUse,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -43,6 +43,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onUse,onErro
  const drag=useRef<{id:string;mode:"move"|"resize";originX:number;original:RollNote}|null>(null);
  const notesRef=useRef(notes);notesRef.current=notes;
  const dirty=asset!==null&&diffNotes(asset.notes,notes).length>0;
+ useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
+ useEffect(()=>{
+  if(!dirty)return;
+  const guard=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+  window.addEventListener("beforeunload",guard);
+  return()=>window.removeEventListener("beforeunload",guard);
+ },[dirty]);
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
  const width=asset?Math.max(540,KEY_WIDTH+asset.duration_samples/RATE*PX_PER_SECOND+18):540;
  const height=(PITCH_HIGH-PITCH_LOW+1)*ROW;

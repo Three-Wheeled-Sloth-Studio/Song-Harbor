@@ -1,4 +1,5 @@
 import {useEffect,useState} from "react";
+import {MidiPianoRoll,type Arrangement} from "./MidiPianoRoll";
 import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
@@ -182,6 +183,19 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      onInserted(data);
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
  }
+ async function useArrangement(asset:Arrangement){
+   const linked=asset.source.candidate_id;
+   if(!linked){throw Error("This arrangement predates candidate linkage; it remains editable but cannot render through the original transcription.");}
+   const source=await req<Candidate>(base+"/"+linked);
+   if(source.source_track_id!==asset.source.track_id||asset.source.track_id!==trackId)throw Error("Arrangement source differs from selected stem.");
+   if(Math.abs(source.start_seconds*48000-asset.source.start_sample)>2||Math.abs(source.duration_seconds*48000-asset.duration_samples)>2)
+     throw Error("Arrangement region no longer matches its transcription source.");
+   const converted=asset.notes.map(n=>({pitch:n.pitch,start:Number((n.start_sample/48000).toFixed(3)),
+       end:Number((n.end_sample/48000).toFixed(3)),velocity:n.velocity}));
+   setCandidate(source);setNotes(converted);setNotePage(0);setArrangementId(asset.asset_id);
+   setPreviewReady(false);engine?.clearCandidatePreview();
+   setMessage("Arrangement loaded. Render an instrument candidate to audition. Edits in the note list are not saved to the arrangement until you save a new asset.");
+ }
  async function saveArrangement(){
    if(!candidate||busy)return;
    setBusy(true);setError("");
@@ -262,6 +276,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <button type="button" disabled={!trackId||!inBounds||busy} title="Transcribe selected range on CPU" onClick={()=>void analyze()}>{busy?"…":"♮ Extract"}</button>
        </div>
      </div>
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} onUse={useArrangement} onError={onError}/>
      {candidate&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>

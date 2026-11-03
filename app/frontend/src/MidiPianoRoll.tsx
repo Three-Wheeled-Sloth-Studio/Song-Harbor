@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import type {PointerEvent as ReactPointerEvent} from "react";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
 export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[]};
@@ -6,7 +7,7 @@ type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type Props={jobId:string;sourceTrackId:string;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, PX_PER_SECOND=65, MIN_NOTE=.06*RATE;
-const PITCH_LOW=28,PITCH_HIGH=84;
+const PITCH_LOW=28,PITCH_HIGH=76;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const pitchLabel=(p:number)=>pitchNames[p%12]+(Math.floor(p/12)-1);
 const clone=(n:RollNote[])=>n.map(x=>({...x}));
@@ -71,7 +72,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
   if(end-start<MIN_NOTE)return;
   const note:RollNote={id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:Math.round(end),pitch,velocity:85,channel:0};
   edit([...notesRef.current,note]);setSelected(note.id);}
- function startDrag(event:React.PointerEvent<SVGRectElement>,note:RollNote,mode:"move"|"resize"){
+ function startDrag(event:ReactPointerEvent<SVGRectElement>,note:RollNote,mode:"move"|"resize"){
   event.stopPropagation();event.currentTarget.setPointerCapture(event.pointerId);
   drag.current={id:note.id,mode,originX:event.clientX,original:{...note}};
   setSelected(note.id);
@@ -98,7 +99,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
     {asset&&<><button type="button" onClick={undo} disabled={!history.length||busy} title="Undo note edit">Undo</button>
     <button type="button" onClick={redo} disabled={!future.length||busy} title="Redo note edit">Redo</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy}>Save{dirty?" *":""}</button>
-    <button type="button" onClick={()=>void onUse(asset)} disabled={dirty||busy} title="Load this saved arrangement into instrument rendering">Use in MIDI tool</button></>}
+    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Load this saved arrangement into instrument rendering">Use in MIDI tool</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
@@ -117,7 +118,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
        <rect x={0} y={i*ROW} width={KEY_WIDTH} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#8897a7":"#e2e7eb"} />
        <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{pitchLabel(p)}</text>
-       <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const local=e.clientX-(box?.left||0)+e.currentTarget.ownerSVGElement!.parentElement!.scrollLeft;addAt(local,p);}}/>
+       <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const local=e.clientX-(box?.left||0);addAt(local,p);}}/>
       </g>;})}
       {Array.from({length:Math.ceil((width-KEY_WIDTH)/(PX_PER_SECOND*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*PX_PER_SECOND*.5} y1={0} x2={KEY_WIDTH+i*PX_PER_SECOND*.5} y2={height} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
       {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>PITCH_HIGH)return null;return <g key={note.id}>
@@ -126,7 +127,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
       </g>;})}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Delete selected note with keyboard. Snap is off by default. {notes.length} notes, {asset.duration_samples/RATE}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Delete selected note with keyboard. Snap is off by default. Polyphonic notes can be saved, but the current monophonic renderer cannot yet render overlapping notes. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Rendering remains a separate operation.</small>}
    {message&&<small role="status">{message}</small>}

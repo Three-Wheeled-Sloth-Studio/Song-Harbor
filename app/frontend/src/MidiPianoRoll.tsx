@@ -35,6 +35,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
  const [history,setHistory]=useState<RollNote[][]>([]);
  const [future,setFuture]=useState<RollNote[][]>([]);
  const [selected,setSelected]=useState("");
+ const scrollerRef=useRef<HTMLDivElement|null>(null);
  const [snap,setSnap]=useState(false);
  const [gridMs,setGridMs]=useState(250);
  const [busy,setBusy]=useState(false);
@@ -67,15 +68,31 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
    body:JSON.stringify({base_revision:asset.revision,operations})});
    open(saved);setMessage("Arrangement saved, revision "+saved.revision+".");void refresh();
   }catch(error){onError(String(error));}finally{setBusy(false);}}
+ function removeSelected(){if(!selected||busy)return;edit(notesRef.current.filter(n=>n.id!==selected));setSelected("");}
+ function duplicateSelected(){
+  if(!asset||!active||busy)return;
+  const length=active.end_sample-active.start_sample;
+  const start=Math.min(asset.duration_samples-length,active.end_sample);
+  if(start<0)return;
+  const copy={...active,id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:start+length};
+  edit([...notesRef.current,copy]);setSelected(copy.id);
+ }
+ function nudgeSelected(pitchDelta:number,timeDelta:number){
+  if(!asset||!active||busy)return;
+  const length=active.end_sample-active.start_sample;
+  const pitch=Math.max(0,Math.min(127,active.pitch+pitchDelta));
+  const start=Math.max(0,Math.min(asset.duration_samples-length,active.start_sample+timeDelta));
+  edit(notesRef.current.map(n=>n.id===active.id?{...n,pitch,start_sample:start,end_sample:start+length}:n));
+ }
  function addAt(x:number,pitch:number){if(!asset)return;
   const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*.5);
   if(end-start<MIN_NOTE)return;
   const note:RollNote={id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:Math.round(end),pitch,velocity:85,channel:0};
-  edit([...notesRef.current,note]);setSelected(note.id);}
+  edit([...notesRef.current,note]);setSelected(note.id);scrollerRef.current?.focus();}
  function startDrag(event:ReactPointerEvent<SVGRectElement>,note:RollNote,mode:"move"|"resize"){
   event.stopPropagation();event.currentTarget.setPointerCapture(event.pointerId);
   drag.current={id:note.id,mode,originX:event.clientX,original:{...note}};
-  setSelected(note.id);
+  setSelected(note.id);scrollerRef.current?.focus();
   setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);
  }
  function moveDrag(event:React.PointerEvent<SVGRectElement>){
@@ -101,6 +118,9 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
     <button type="button" onClick={()=>void refresh()} title="Refresh saved arrangements" disabled={busy}>Refresh</button>
     {asset&&<><button type="button" onClick={undo} disabled={!history.length||busy} title="Undo note edit">Undo</button>
     <button type="button" onClick={redo} disabled={!future.length||busy} title="Redo note edit">Redo</button>
+    <button type="button" onClick={()=>{if(asset&&window.confirm("Revert all unsaved MIDI edits?"))open(asset);}} disabled={!dirty||busy} title="Discard unsaved edits and restore saved revision">Revert</button>
+    <button type="button" onClick={duplicateSelected} disabled={!selected||busy} title="Duplicate selected note after its end">Duplicate</button>
+    <button type="button" onClick={removeSelected} disabled={!selected||busy} title="Delete selected note">Delete</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy}>Save{dirty?" *":""}</button>
     <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Render saved arrangement with selected instrument pack">Render arrangement</button></>}
    </div>
@@ -111,11 +131,16 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
      {active&&<label>Velocity <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127)edit(notesRef.current.map(n=>n.id===active.id?{...n,velocity}:n));}}/></label>}
     </div>
-    <div className="song-roll-scroller" tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
+    <div className="song-roll-scroller" ref={scrollerRef} tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
      onKeyDown={e=>{if(e.target!==e.currentTarget)return;
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();if(e.shiftKey)redo();else undo();}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();redo();}
-      if((e.key==="Delete"||e.key==="Backspace")&&selected){e.preventDefault();edit(notesRef.current.filter(n=>n.id!==selected));setSelected("");}}}>
+      if((e.key==="Delete"||e.key==="Backspace")&&selected){e.preventDefault();removeSelected();}
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="d"&&selected){e.preventDefault();duplicateSelected();}
+      if(selected&&["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)){
+       e.preventDefault();const step=Math.round(RATE*gridMs/1000);
+       nudgeSelected(e.key==="ArrowUp"?1:e.key==="ArrowDown"?-1:0,e.key==="ArrowRight"?step:e.key==="ArrowLeft"?-step:0);
+      }}}>
      <svg width={width} height={height} role="img" aria-label="Editable piano roll">
       {Array.from({length:PITCH_HIGH-PITCH_LOW+1},(_,i)=>{const p=PITCH_HIGH-i;return <g key={p}>
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
@@ -130,7 +155,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
       </g>;})}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Delete selected note with keyboard. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Arrow keys nudge the selected note (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
    {message&&<small role="status">{message}</small>}

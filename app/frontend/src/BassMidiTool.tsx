@@ -249,7 +249,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    <div className="song-stem-hub-header">
      <label className="song-stem-hub-source" title="Active stem">
        <span className="sr-only">Stem</span>
-       <select aria-label="Stem" value={trackId} onChange={e=>{setTrackId(e.target.value);setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>
+       <select aria-label="Stem" value={trackId} onChange={e=>{setTrackId(e.target.value);setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>
          {trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.display_name}</option>)}
        </select>
      </label>

@@ -142,6 +142,53 @@ Branch: **dev only**. Prior user confirmed clean update loop for the previous sl
 - Backend SFZ and Deshimmer work remains adapter/preflight only, not integrated audio processing.
 
 ---
+## TIMEOUT RECOVERY: SFZ integration in progress (2026-11-03, evening)
+
+**Purpose of this checkpoint:** The previous assistant message delivery timed out while development was underway. These changes were already committed before the interruption. This section records the actual stopping point and prevents duplicate work or overstated QA.
+
+**Working branch: `dev` ONLY. Do not modify or promote `main`.** The user reported the *prior* update loop was clean, not that the new SFZ implementation passed a build or an audio audition. Locked tracks, mixes, and source stems must remain immutable.
+
+### Committed in this interrupted slice, sequentially
+- `2bf5bd5`: new `app/backend/sfz_pack.py`, initial bounded importer for user-provided self-contained SFZ ZIP archives.
+- `fc05ee1`: streaming hashing instead of loading complete sample files for the pack fingerprint.
+- `aec09a3`: SFZ engine/pack/instrument enumeration and individual SFZ path resolution in `instrument_library.py`.
+- `f39bdca`: `server.py` adds `POST /api/instruments/sfz`; branches the existing saved-revision `POST /api/projects/{ident}/midi-arrangements/{asset_id}/render` to sfizz for SFZ instruments, retains SF2 branch, aligns to 48-kHz stereo PCM candidate, records instrument hash, and retains the current candidate A/B/add-stem workflow. This is a source implementation **not verified by end-to-end execution**.
+- `cddeae4`: importer checks relative sample references for missing/external files.
+- `a2ab811`: `BassMidiTool.tsx` adds local SFZ ZIP import picker, SFZ instrument selection, and saved-arrangement render path; error/help text notes `SONG_HARBOR_SFIZZ_RENDER`.
+- `877954f`: new `app/backend/tests/test_sfz_pack.py`, unit tests for simple local package, registry resolution, traversal, unresolved samples, unsafe include, duplicate names.
+- `ddbefaf`: tightened SFZ sample-opcode parsing to stop at a subsequent attribute on one line and rejected `default_path` in the intentionally narrow v1 importer.
+
+### Source inspection at recovery
+The `dev` GitHub reads confirmed:
+- `server.py` contains the SFZ import route and calls `sfz_render_adapter.render_sfz` in the saved-arrangement renderer.
+- `BassMidiTool.tsx` contains the SFZ ZIP import control and renders saved arrangements with SF2 or SFZ instruments.
+- `instrument_library.py` lists and resolves SFZ manifest entries.
+- `sfz_pack.py` contains archive/path checks and a content fingerprint.
+- The prior `app/backend/sfz_render_adapter.py` remains as the sandboxed subprocess wrapper; it expects an installed offline `sfizz_render` executable.
+- **No verification has been recorded for Python syntax, imports, unit tests, TypeScript/Vite build, Windows startup, actual ZIP import, actual sfizz execution, audio quality, or audition/export parity.** No commit-status checks reported on earlier development commits. Do not call these completed QA.
+
+### Known gaps, likely fixes, and cautions before QA
+1. **Run the new tests first** from `app/backend` (e.g., `python -m unittest discover -s tests -p 'test_sfz*.py' -v`). Then run `cd app/frontend && npm run build`, backend regression suite, and the Windows dev launcher. The tests were committed but not executed remotely.
+2. Inspect `sfz_pack.py` sample parsing/metadata carefully with real sfizz-compatible packs. Current importer **deliberately rejects** external includes, preprocessing, `default_path`, and non-relative sample links, so many full instrument packs may fail with a clear error. Archive extraction is bounded by ZIP metadata but requires further adversarial tests for actual expanded-byte limits, symlinks, spoofed ZIP entries, duplicate directories, and malformed encoding. The importer has *not* been proven safe for arbitrary untrusted archives.
+3. **Critical usability gap:** the previous attempt to locate the Settings > Components React source ended with an unsuccessful lookup of `app/frontend/src/App.tsx` (404). A configured-path action for sfizz in Settings has **not** been implemented. The current UI only shows the environment variable `SONG_HARBOR_SFIZZ_RENDER`; do not mark contextual setup complete.
+4. `sfizz_render` binary/version handshake and compatibility with published executable flag syntax need Windows validation. No engine install/download or sample assets were added. Original sfizz upstream archival status should be considered before selecting a pinned runtime.
+5. The API currently creates output through existing candidate logic; verify exact output frame count, tail handling, sample alignment, non-finite/clipped output, candidate provenance (full pack hash, not merely SFZ-definition hash), preview/accept/reopen/export parity, and graceful missing-executable errors before shipping.
+6. Investigate the **saved-arrangement render vs legacy candidate render** distinction: SFZ is only connected to the saved-arrangement route. Avoid accidentally rendering a stale or unsaved note list. Verify no accidental autoplay.
+7. Code in `server.py` relies on the existing ffmpeg dependency for output alignment; make sure an actual install and missing-dependency path are tested.
+8. SFZ importer current format is narrow: uploaded **ZIP** with `.sfz` and relative sample files. A raw `.sfz` file alone is not a supported import. Karoryfer cello/Growlybass and VSCO 2 remain **unverified** for import, render, license and sound. No samples or licenses were redistributed.
+9. Deshimmer was **not changed** in the interrupted slice. Only the previously committed Python capability handshake exists; no processing/preview/accept UI yet.
+10. The preceding MIDI piano roll editor (group editing, zoom, velocity lane) was not changed in this interrupted SFZ slice. User's "update is clean" is not proof of a comprehensive MIDI QA pass.
+
+### Resume from this exact point
+1. Pull and inspect current `dev` (latest code commit before this handoff was `ddbefafe219cffcecfb900d9d6467c0928022fe7`; check for newer dev commits). Validate Python syntax/tests + frontend build before expanding functionality.
+2. Find actual Settings > Components source files (do not assume `App.tsx`) and add a contextual, verified sfizz executable selector/path, consistent with FluidSynth.
+3. Fix any SFZ ZIP parser/import issues found by fixtures, then run import plus first actual 48-kHz MIDI-to-WAV on Windows with a small legal/sample-based instrument. Do not assume full Karoryfer/VSCO compatibility.
+4. Exercise the saved MIDI arrangement > selected SFZ > candidate A/B > reversible Add stem > reload > export path, comparing timing, original source hash and sound.
+5. Keep SFZ and Deshimmer progress separate. Only after SFZ gate, continue Deshimmer worker with a pinned external API and non-destructive preview.
+6. Continue recording every actual test outcome and incremental `dev` commit. Never report a feature as tested just because it compiles or the app reloads.
+
+---
+
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

@@ -80,11 +80,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
  }
  function moveDrag(event:React.PointerEvent<SVGRectElement>){
   const d=drag.current;if(!d||!asset)return;
-  const delta=q((event.clientX-d.originX)/PX_PER_SECOND*RATE);
+  const svg=event.currentTarget.ownerSVGElement;const bounds=svg?.getBoundingClientRect();
+  const scale=bounds?width/bounds.width:1;
+  const delta=Math.round((event.clientX-d.originX)*scale/PX_PER_SECOND*RATE);
+  const quantize=(value:number)=>snap?q(value):Math.round(value);
   const n=d.original;
   let start=n.start_sample,end=n.end_sample;
-  if(d.mode==="move"){start=Math.max(0,Math.min(asset.duration_samples-(end-start),n.start_sample+delta));end=start+(n.end_sample-n.start_sample);}
-  else end=Math.max(start+MIN_NOTE,Math.min(asset.duration_samples,n.end_sample+delta));
+  if(d.mode==="move"){start=Math.max(0,Math.min(asset.duration_samples-(end-start),quantize(n.start_sample+delta)));end=start+(n.end_sample-n.start_sample);}
+  else end=Math.max(start+MIN_NOTE,Math.min(asset.duration_samples,quantize(n.end_sample+delta)));
   edit(notesRef.current.map(note=>note.id===d.id?{...note,start_sample:Math.round(start),end_sample:Math.round(end)}:note),false);
  }
  const active=notes.find(n=>n.id===selected);
@@ -118,7 +121,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
        <rect x={0} y={i*ROW} width={KEY_WIDTH} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#8897a7":"#e2e7eb"} />
        <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{pitchLabel(p)}</text>
-       <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const local=e.clientX-(box?.left||0);addAt(local,p);}}/>
+       <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
       </g>;})}
       {Array.from({length:Math.ceil((width-KEY_WIDTH)/(PX_PER_SECOND*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*PX_PER_SECOND*.5} y1={0} x2={KEY_WIDTH+i*PX_PER_SECOND*.5} y2={height} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
       {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>PITCH_HIGH)return null;return <g key={note.id}>

@@ -38,6 +38,7 @@ import library
 import stem_import
 import track_lifecycle
 import declick_recipes
+import midi_arrangements
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1092,6 +1093,59 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
         return out
     except (ValueError,OSError,subprocess.TimeoutExpired) as exc:
         raise HTTPException(400,str(exc)) from exc
+
+
+class MidiArrangementFromCandidateRequest(BaseModel):
+    candidate_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+
+class MidiArrangementEditRequest(BaseModel):
+    base_revision: int = Field(ge=0)
+    operations: list[dict[str,Any]] = Field(min_length=1,max_length=2000)
+
+@app.get("/api/projects/{ident}/midi-arrangements")
+def list_midi_arrangements(ident:str)->dict[str,Any]:
+    _ace_project(ident)
+    return {"arrangements":midi_arrangements.list_assets(DATA_ROOT/"jobs"/ident)}
+
+@app.post("/api/projects/{ident}/midi-arrangements/from-candidate")
+def arrangement_from_candidate(ident:str,request:Request,
+                               body:MidiArrangementFromCandidateRequest)->dict[str,Any]:
+    """Freeze edited transcription notes independently of instrument render."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        candidate=bass_midi.read_json(DATA_ROOT/"jobs"/ident,body.candidate_id)
+        asset=midi_arrangements.create(
+            candidate["source_track_id"],float(candidate["start_seconds"]),
+            float(candidate["duration_seconds"]),candidate["notes"],
+            str(candidate.get("method","stem transcription")))
+        midi_arrangements.save(DATA_ROOT/"jobs"/ident,asset)
+        return asset
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+@app.get("/api/projects/{ident}/midi-arrangements/{asset_id}")
+def get_midi_arrangement(ident:str,asset_id:str)->dict[str,Any]:
+    _ace_project(ident)
+    try:return midi_arrangements.read(DATA_ROOT/"jobs"/ident,asset_id)
+    except (ValueError,OSError,KeyError,TypeError) as exc:
+        raise HTTPException(404,str(exc)) from exc
+
+@app.patch("/api/projects/{ident}/midi-arrangements/{asset_id}")
+def edit_midi_arrangement(ident:str,asset_id:str,request:Request,
+                          body:MidiArrangementEditRequest)->dict[str,Any]:
+    """Revision-checked atomic patch. Useful for humans and future LLM proposals."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        with lock:
+            root=DATA_ROOT/"jobs"/ident
+            current=midi_arrangements.read(root,asset_id)
+            updated=midi_arrangements.apply_patch(current,body.base_revision,body.operations)
+            midi_arrangements.save(root,updated)
+        return updated
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(409,str(exc)) from exc
 
 
 @app.get("/api/projects/{ident}/bass-midi/{candidate_id}")

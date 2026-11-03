@@ -6,7 +6,7 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
-const RATE=48000, ROW=17, KEY_WIDTH=43, PX_PER_SECOND=65, MIN_NOTE=.06*RATE;
+const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const pitchLabel=(p:number)=>pitchNames[p%12]+(Math.floor(p/12)-1);
@@ -40,6 +40,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  const scrollerRef=useRef<HTMLDivElement|null>(null);
  const [snap,setSnap]=useState(false);
  const [gridMs,setGridMs]=useState(250);
+ const [pixelsPerSecond,setPixelsPerSecond]=useState(65);
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
  const drag=useRef<{id:string;mode:"move"|"resize";originX:number;original:RollNote;group:RollNote[]}|null>(null);
@@ -53,11 +54,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
   return()=>window.removeEventListener("beforeunload",guard);
  },[dirty]);
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
- const width=asset?Math.max(540,KEY_WIDTH+asset.duration_samples/RATE*PX_PER_SECOND+18):540;
+ const width=asset?Math.max(540,KEY_WIDTH+asset.duration_samples/RATE*pixelsPerSecond+18):540;
  const height=(PITCH_HIGH-PITCH_LOW+1)*ROW;
  const q=(sample:number)=>snap?Math.round(sample/(RATE*gridMs/1000))*(RATE*gridMs/1000):Math.round(sample);
- const toX=(sample:number)=>KEY_WIDTH+sample/RATE*PX_PER_SECOND;
- const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-KEY_WIDTH)/PX_PER_SECOND*RATE)));
+ const toX=(sample:number)=>KEY_WIDTH+sample/RATE*pixelsPerSecond;
+ const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-KEY_WIDTH)/pixelsPerSecond*RATE)));
  const toY=(pitch:number)=>(PITCH_HIGH-pitch)*ROW;
  function edit(updated:RollNote[],record=true){
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
@@ -148,7 +149,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
   const d=drag.current;if(!d||!asset)return;
   const svg=event.currentTarget.ownerSVGElement;const bounds=svg?.getBoundingClientRect();
   const scale=bounds?width/bounds.width:1;
-  const delta=Math.round((event.clientX-d.originX)*scale/PX_PER_SECOND*RATE);
+  const delta=Math.round((event.clientX-d.originX)*scale/pixelsPerSecond*RATE);
   const quantize=(value:number)=>snap?q(value):Math.round(value);
   const n=d.original;
   if(d.mode==="move"){
@@ -190,6 +191,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
     <div className="song-roll-toolbar song-roll-options">
      <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap</label>
      <label>Grid <select value={gridMs} onChange={e=>setGridMs(Number(e.target.value))}><option value={125}>125 ms</option><option value={250}>250 ms</option><option value={500}>500 ms</option></select></label>
+     <label>Zoom <select aria-label="Piano roll horizontal zoom" value={pixelsPerSecond} onChange={e=>{const next=Number(e.target.value);const scroller=scrollerRef.current;const center=scroller?(scroller.scrollLeft+scroller.clientWidth/2-KEY_WIDTH)/pixelsPerSecond:0;setPixelsPerSecond(next);if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=Math.max(0,KEY_WIDTH+center*next-scroller.clientWidth/2);});}}><option value={24}>Overview</option><option value={65}>Normal</option><option value={130}>Close</option><option value={260}>Detail</option></select></label>
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
      {active&&<label>{selectedIds.length>1?"Selection velocity":"Velocity"} <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127){const ids=new Set(selectedIds);edit(notesRef.current.map(n=>ids.has(n.id)?{...n,velocity}:n));}}}/></label>}
      <span>{selectedIds.length} selected</span>
@@ -215,7 +217,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
        <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{pitchLabel(p)}</text>
        <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
       </g>;})}
-      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(PX_PER_SECOND*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*PX_PER_SECOND*.5} y1={0} x2={KEY_WIDTH+i*PX_PER_SECOND*.5} y2={height} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
+      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*pixelsPerSecond*.5} y1={0} x2={KEY_WIDTH+i*pixelsPerSecond*.5} y2={height} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
       {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>PITCH_HIGH)return null;return <g key={note.id}>
        <rect x={x} y={y+2} width={w} height={ROW-4} rx={2} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"} stroke="#d6eee7" strokeWidth={1} onPointerDown={e=>startDrag(e,note,"move")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
        <rect x={x+Math.max(0,w-6)} y={y+2} width={Math.min(6,w)} height={ROW-4} fill="#467f82" onPointerDown={e=>startDrag(e,note,"resize")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>

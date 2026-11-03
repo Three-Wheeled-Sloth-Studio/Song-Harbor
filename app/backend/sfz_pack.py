@@ -19,7 +19,7 @@ MAX_FILES = 12000
 MAX_SFZ_BYTES = 2 * 1024 * 1024
 EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
 UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b|(?:^|\s)(?:sample|default_path)\s*=\s*(?:[A-Za-z]:|/|\\\\|\\)")
-SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*([^\r\n]+)")
+SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 
 
 def safe_member(name: str) -> PurePosixPath:
@@ -88,7 +88,7 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
         manifest_instruments = []
         for index, definition in enumerate(definitions):
             text = definition.read_text(encoding="utf-8-sig")
-            if UNSAFE_SFZ.search(text) or ".." in text or re.search(r"(?im)(?:^|\\s)default_path\\s*=",text):
+            if UNSAFE_SFZ.search(text) or ".." in text or re.search(r"(?im)(?:^|\s)default_path\s*=",text):
                 raise ValueError("SFZ definition uses external paths or unsupported preprocessing")
             # Permit references to samples inside the imported archive only. No shell or plugin scripts.
             for found in SAMPLE_REF.finditer(text):

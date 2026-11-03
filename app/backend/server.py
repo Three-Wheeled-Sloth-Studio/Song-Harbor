@@ -1119,6 +1119,7 @@ def arrangement_from_candidate(ident:str,request:Request,
             candidate["source_track_id"],float(candidate["start_seconds"]),
             float(candidate["duration_seconds"]),candidate["notes"],
             str(candidate.get("method","stem transcription")))
+        asset["source"]["candidate_id"]=body.candidate_id
         midi_arrangements.save(DATA_ROOT/"jobs"/ident,asset)
         return asset
     except (ValueError,KeyError,TypeError,OSError) as exc:

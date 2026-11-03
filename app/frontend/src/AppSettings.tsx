@@ -7,8 +7,9 @@ type Working = {active_directory:string;configured_directory:string;default_dire
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
-export function AppSettings({open,onOpenChange,health,onReady}:{
+export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
+  focus?:"fluidsynth"|null;
 }) {
   const [data,setData]=useState<Working|null>(null);
   const [path,setPath]=useState("");
@@ -22,14 +23,14 @@ export function AppSettings({open,onOpenChange,health,onReady}:{
 
   useEffect(()=>{
     if(!open)return;
-    setError("");setNotice("");setShowTools(false);
+    setError("");setNotice("");setShowTools(focus==="fluidsynth");
     void fetch("/api/settings/working-files").then(async r=>{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
-  },[open]);
+  },[open,focus]);
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
     try{await operation();}catch(e){setError(e instanceof Error?e.message:String(e));}

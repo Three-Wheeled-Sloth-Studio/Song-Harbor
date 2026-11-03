@@ -5,7 +5,7 @@ export type RollNote={id:string;start_sample:number;end_sample:number;pitch:numb
 export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[]};
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
-type Props={jobId:string;sourceTrackId:string;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, PX_PER_SECOND=65, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -27,7 +27,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onUse,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -58,7 +58,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
  function open(value:Arrangement){setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setMessage("");}
  async function refresh(){try{const found=await request<{arrangements:Summary[]}>(root);setListing(found.arrangements);}catch(error){onError(String(error));}}
- useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);void refresh();},[jobId,sourceTrackId]);
+ useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);setSelected("");void refresh();},[jobId,sourceTrackId]);
+ useEffect(()=>{if(!requestedAssetId)return;
+  let live=true;void request<Arrangement>(root+"/"+requestedAssetId).then(value=>{
+   if(live&&value.source.track_id===sourceTrackId)open(value);
+  }).catch(error=>{if(live)onError(String(error));});
+  return()=>{live=false;};
+ },[jobId,sourceTrackId,requestedAssetId]);
  async function load(id:string){if(dirty&&!window.confirm("Discard unsaved MIDI edits?"))return;
   setBusy(true);try{open(await request<Arrangement>(root+"/"+id));}catch(error){onError(String(error));}finally{setBusy(false);}}
  async function save(){if(!asset||busy)return;const operations=diffNotes(asset.notes,notes);

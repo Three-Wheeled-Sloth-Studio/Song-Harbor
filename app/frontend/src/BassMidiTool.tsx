@@ -37,6 +37,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [customDuration,setCustomDuration]=useState(20);
  const [candidate,setCandidate]=useState<Candidate|null>(null);
  const [arrangementId,setArrangementId]=useState("");
+ const [rollDirty,setRollDirty]=useState(false);
  const [notes,setNotes]=useState<Note[]>([]);
  const [notePage,setNotePage]=useState(0);
  const [busy,setBusy]=useState(false);
@@ -249,7 +250,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    <div className="song-stem-hub-header">
      <label className="song-stem-hub-source" title="Active stem">
        <span className="sr-only">Stem</span>
-       <select aria-label="Stem" value={trackId} onChange={e=>{setTrackId(e.target.value);setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>
+       <select aria-label="Stem" value={trackId} onChange={e=>{if(rollDirty&&!window.confirm("Discard unsaved MIDI arrangement edits before switching stems?"))return;setRollDirty(false);setTrackId(e.target.value);setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>
          {trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.display_name}</option>)}
        </select>
      </label>
@@ -299,7 +300,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>
-     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId} onUse={useArrangement} onError={onError}/>
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId} onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>
      {candidate&&!candidate.arrangement_id&&!arrangementId&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>

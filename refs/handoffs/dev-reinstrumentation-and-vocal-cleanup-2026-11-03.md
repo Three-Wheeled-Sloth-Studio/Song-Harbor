@@ -113,6 +113,25 @@ This session had GitHub repository access but no working container network check
 
 ---
 
+## Continuation: multi-note editing slice (2026-11-03)
+Branch remains **dev only**. No main promotion or production audio changes.
+
+- `90c56e6`: added Shift-click multi-note selection, group dragging, group nudging, copy/paste, group duplicate/delete using existing atomic arrangement patches. Clipboard is in-memory, not browser-global.
+- `62fe3d7`: Select All, Clear, Ctrl+A/Escape and batch velocity edits.
+- `0c62e28`: backend regression added for atomic 3-note patch, stable note IDs, persistence and rejected invalid batch.
+- `6820f47`: invalidates MIDI candidate audition when the score becomes dirty, to prevent accidental playback of stale renders.
+- Existing arrangement Save remains explicit and revision-guarded, with rendering disabled for dirty scores; note edits do not overwrite original stems.
+- QA **not passed**: React/TypeScript build, Windows pointer gestures, group drag constraints, copy/paste, undo/redo, save/reopen, audio preview, exported WAV, and SFZ/Deshimmer sample processing still require execution. The GitHub connector supports repository edits, but this session's shell cannot resolve github.com to clone the dev tree.
+- Design caveats: multi-selection is Shift-click rather than rectangle/lasso; clipboard paste places a phrase after its original end (or clips to score end), not yet a clicked playhead. Velocity is a numeric batch field, not a lane. No quantization or tempo-map conversion was introduced. Keep these limitations visible rather than imply complete piano roll.
+- SFZ command syntax verified against official sfizz build docs and `sfizz_render` manual: `--sfz`, `--midi`, `--wav`, `--samplerate`. Windows binary/package and sample-bank audio QA remain pending.
+
+### Next concrete QA gate
+1. `cd app/frontend && npm run build` and `python -m unittest app.backend.tests.test_midi_arrangements app.backend.tests.test_sfz_render_adapter app.backend.tests.test_deshimmer_adapter` (adjust Python working directory/import paths if needed).
+2. Use dev GUI on an arrangement with overlapping notes. Shift-select several notes; move/transpose; group velocity; copy/paste; Undo/Redo; Save; refresh; reopen; Render; compare output.
+3. Verify a dirty score clears an existing rendered preview and source stems remain bit-identical.
+4. Only then add velocity lane/zoom, SFZ candidate flow and bounded Deshimmer worker with real fixture validation.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

@@ -51,6 +51,37 @@ class ArrangementTests(unittest.TestCase):
         bad={**asset,"notes":[{**asset["notes"][0],"pitch":44.0}]}
         with self.assertRaises(ValueError):midi.validate(bad)
         with self.assertRaises(ValueError):midi.apply_patch(asset,0,[{"op":"execute","code":"bad"}])
+    def test_group_edit_persists_ids_and_remains_atomic(self):
+        original = self.sample()
+        first, second = original["notes"]
+        third_id = uuid.uuid4().hex
+        new_note = {"id": third_id, "start_sample": 4000, "end_sample": 9600,
+                    "pitch": 60, "velocity": 72, "channel": 0}
+        operations = [
+            {"op": "update", "id": first["id"],
+             "changes": {"start_sample": first["start_sample"] + 2400,
+                         "end_sample": first["end_sample"] + 2400}},
+            {"op": "update", "id": second["id"],
+             "changes": {"velocity": 97}},
+            {"op": "add", "note": new_note},
+        ]
+        saved = midi.apply_patch(original, 0, operations)
+        self.assertEqual(saved["revision"], 1)
+        self.assertEqual(len(saved["notes"]), 3)
+        self.assertEqual({n["id"] for n in saved["notes"]},
+                         {first["id"], second["id"], third_id})
+        self.assertEqual(original["revision"], 0)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            midi.save(root, saved)
+            self.assertEqual(midi.read(root, saved["asset_id"]), saved)
+        invalid = operations + [{"op": "update", "id": second["id"],
+                                 "changes": {"velocity": 0}}]
+        with self.assertRaises(ValueError):
+            midi.apply_patch(original, 0, invalid)
+        self.assertEqual(original["notes"][0], first)
+        self.assertEqual(original["notes"][1], second)
+
     def test_no_implicit_quantization(self):
         asset=midi.create("drums",0,3,[{"start":.137,"end":.291,"pitch":38}])
         self.assertEqual(asset["notes"][0]["start_sample"],6576)

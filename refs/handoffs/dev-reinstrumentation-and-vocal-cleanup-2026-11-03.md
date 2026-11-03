@@ -132,6 +132,16 @@ Branch remains **dev only**. No main promotion or production audio changes.
 4. Only then add velocity lane/zoom, SFZ candidate flow and bounded Deshimmer worker with real fixture validation.
 
 ---
+## Continuation: piano-roll zoom and velocity editing (2026-11-03)
+Branch: **dev only**. Prior user confirmed clean update loop for the previous slice, not this newly committed code.
+
+- `e3661d7`: horizontal zoom presets (24, 65, 130, 260 pixels per second); preserves approximate viewport center when switching zoom, does not change note sample timestamps.
+- `99c79ad`: aligned SVG velocity lane under piano-roll note grid. Dragging a velocity bar edits its note, or all currently selected notes if the dragged bar belongs to the group. Undo state captured once per drag, edited value clamped to MIDI 1-127. The existing numeric velocity edit remains.
+- Pure source inspection confirmed old fixed PX_PER_SECOND references removed and the piano grid lines end before the lane. **Not a TypeScript build or interaction pass**.
+- Open QA: zoom center preservation while scrolling at several window sizes; note hit targets at Overview; velocity lane accessibility and dense-overlap bar usability; undo/redo of a drag gesture; save/reopen/revision conflict; no preview autoplay or source mutation.
+- Backend SFZ and Deshimmer work remains adapter/preflight only, not integrated audio processing.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

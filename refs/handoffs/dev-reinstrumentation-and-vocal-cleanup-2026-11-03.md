@@ -92,7 +92,8 @@ No changes to main or locked release assets. Latest handoff source SHA before up
 - `354851e`: piano roll optionally loads the persisted arrangement created by Save arrangement.
 - `19d1acc`: legacy candidate editor yields to saved arrangement path after Save; use saved revision for subsequent render, not legacy note state.
 - `e0ba6b6`: switching selected stem clears source-specific arrangement selection.
-- Still incomplete: multi-select, clipboard, velocity lane, real tempo map, Save As, zoom/loop, revision collision recovery, keyboard accessibility QA. Source change from another parent-render route or job switch may still discard unsaved edits; guard this before describing the editor as finished.
+- `594a3df`, `4a23b34`: track dirty arrangement state, guard browser unload, and confirm before a user changes stems.
+- Still incomplete: multi-select, clipboard, velocity lane, real tempo map, Save As, zoom/loop, revision collision recovery, keyboard accessibility QA. Automatic source changes from parent state/job transitions still need dedicated QA for unsaved work; do not describe the editor as finished.
 - Test status: code committed; TypeScript/Vite build, interaction testing, backend suite, Windows audio and persistence **not executed** in this continuation.
 
 ### B: SFZ discovery and isolated adapter

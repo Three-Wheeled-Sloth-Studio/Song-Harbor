@@ -104,6 +104,21 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage("Imported "+response.instruments+" instruments.");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
+ async function installSfzPack(file:File|undefined){
+   if(!file||installingPack)return;
+   setInstallingPack(true);setError("");setMessage("");
+   try{
+     const form=new FormData();
+     form.append("file",file);
+     form.append("pack_name",file.name.replace(/\\.zip$/i,""));
+     const installed=await req<{pack_id:string;instruments:number}>("/api/instruments/sfz",{method:"POST",body:form});
+     const data=await req<InstrumentCatalogue>("/api/instruments");
+     setCatalogue(data);setPackFilter(installed.pack_id);
+     const first=data.instruments.find(x=>x.pack_id===installed.pack_id);
+     if(first)chooseInstrument(first.pack_id,first.id);
+     setMessage("Imported "+installed.instruments+" SFZ instruments. Render saved arrangement to audition.");
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+ }
  async function installStarter(starter:Starter){
    if(installingPack)return;
    setInstallingPack(true);setMessage("");setError("");
@@ -150,7 +165,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      const url=candidate.arrangement_id?
        "/api/projects/"+jobId+"/midi-arrangements/"+candidate.arrangement_id+"/render":
        base+"/"+candidate.candidate_id+"/render";
-     if(candidate.arrangement_id&&chosenInstrument?.engine!=="sf2")throw Error("Select an SF2 instrument for polyphonic rendering.");
+     if(candidate.arrangement_id&&!["sf2","sfz"].includes(chosenInstrument?.engine||""))throw Error("Select an SF2 or SFZ instrument for polyphonic rendering.");
      const body=candidate.arrangement_id?
        {revision:candidate.arrangement_revision,instrument_id:instrument,pack_id:instrumentPack}:
        {notes,instrument_id:instrument,pack_id:instrumentPack};
@@ -202,7 +217,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    if(busy)return;
    setBusy(true);setError("");setPreviewReady(false);engine?.clearCandidatePreview();
    try{
-     if(chosenInstrument?.engine!=="sf2")throw Error("Select an SF2 instrument to render a polyphonic arrangement.");
+     if(!["sf2","sfz"].includes(chosenInstrument?.engine||""))throw Error("Select an SF2 or SFZ instrument to render a polyphonic arrangement.");
      const data=await req<Candidate>("/api/projects/"+jobId+"/midi-arrangements/"+asset.asset_id+"/render",{
        method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({revision:asset.revision,instrument_id:instrument,pack_id:instrumentPack})});
@@ -298,6 +313,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <div className="song-instrument-import">
            {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
            <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
+           <label title="Install a self-contained ZIP with SFZ definitions and their samples">＋ SFZ<input type="file" accept=".zip" disabled={installingPack} aria-label="Import SFZ ZIP instrument pack" onChange={e=>{void installSfzPack(e.target.files?.[0]);e.target.value="";}}/></label>
+           {chosenInstrument?.engine==="sfz"&&<small title="Requires separately installed sfizz_render executable">SFZ render requires sfizz_render (SONG_HARBOR_SFIZZ_RENDER)</small>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>

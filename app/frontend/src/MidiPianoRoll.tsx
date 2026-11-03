@@ -99,7 +99,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
     {asset&&<><button type="button" onClick={undo} disabled={!history.length||busy} title="Undo note edit">Undo</button>
     <button type="button" onClick={redo} disabled={!future.length||busy} title="Redo note edit">Redo</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy}>Save{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Load this saved arrangement into instrument rendering">Use in MIDI tool</button></>}
+    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Render saved arrangement with selected instrument pack">Render arrangement</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
@@ -127,9 +127,9 @@ export function MidiPianoRoll({jobId,sourceTrackId,onUse,onError}:Props){
       </g>;})}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Delete selected note with keyboard. Snap is off by default. Polyphonic notes can be saved, but the current monophonic renderer cannot yet render overlapping notes. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Delete selected note with keyboard. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
-   {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Rendering remains a separate operation.</small>}
+   {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
    {message&&<small role="status">{message}</small>}
   </section>;
 }

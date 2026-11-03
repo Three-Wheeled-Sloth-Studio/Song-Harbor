@@ -60,6 +60,7 @@ function App() {
   const [project, setProject] = useState<SongProject | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState<"fluidsynth"|null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const pendingSeparation = useRef(false);
   const pendingMixRetry = useRef<(() => void) | null>(null);
@@ -275,7 +276,7 @@ function App() {
       </div>
     </header>
     <HelpDialog open={helpOpen} onOpenChange={setHelpOpen}/>
-    <AppSettings open={settingsOpen} onOpenChange={setSettingsOpen} health={health} onReady={next => setHealth(next)} />
+    <AppSettings open={settingsOpen} focus={settingsFocus} onOpenChange={value=>{setSettingsOpen(value);if(!value)setSettingsFocus(null);}} health={health} onReady={next => setHealth(next)} />
     <FfmpegSetup open={setupOpen} onOpenChange={next => { setSetupOpen(next); if (!next) { pendingSeparation.current = false; pendingMixRetry.current = null; } }} onReady={completedSetup} />
     {view === "library" ? <LibraryHome onOpenSong={ident => {void openSongById(ident);}}
       onImport={() => {setFile(null);setJob(null);setProject(null);setView("song");}}/> : <main className={"workspace"+(job?" workspace--song-session":"")}>
@@ -382,7 +383,7 @@ function App() {
           </div>
           {running && <div className="progress-indeterminate" aria-label="Separation in progress"><span/></div>}
           {finished && job && <>
-            <StemMixer key={job.id+":"+(project?.source_tracks||[]).map(t=>t.stem_alias+":"+(t.start_seconds||0)).join("|")} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,(t.display_name||t.original_filename.replace(/\.[^.]+$/,""))])):undefined} trackAliases={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.stem_alias])):undefined} trackDetails={project?.id===job.id ? project.source_tracks:undefined} initialReplacements={project?.id===job.id ? project.replacement_masks:undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onTrackRenamed={updated=>setProject(updated as SongProject)} onTrackAdded={(updated,latestJob)=>{setProject(updated as SongProject);setJob(latestJob as Job);}} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} />
+            <StemMixer key={job.id+":"+(project?.source_tracks||[]).map(t=>t.stem_alias+":"+(t.start_seconds||0)).join("|")} jobId={job.id} files={job.files} expectedDuration={job.source_duration_seconds ?? undefined} initialTitle={project?.id === job.id ? project.title : job.filename.replace(/\.[^.]+$/, "")} savedStems={project?.id === job.id ? project.stems : undefined} trackLabels={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,(t.display_name||t.original_filename.replace(/\.[^.]+$/,""))])):undefined} trackAliases={project?.id===job.id ? Object.fromEntries((project.source_tracks||[]).map(t=>[t.working_filename,t.stem_alias])):undefined} trackDetails={project?.id===job.id ? project.source_tracks:undefined} initialReplacements={project?.id===job.id ? project.replacement_masks:undefined} initialSections={project?.id === job.id ? project.sections : undefined} onSaved={() => { void refreshSongs(); }} onTrackRenamed={updated=>setProject(updated as SongProject)} onTrackAdded={(updated,latestJob)=>{setProject(updated as SongProject);setJob(latestJob as Job);}} onMissingFfmpeg={retry => { pendingMixRetry.current = retry; setSetupOpen(true); }} onConfigureFluidSynth={()=>{setSettingsFocus("fluidsynth");setSettingsOpen(true);}} settingsOpen={settingsOpen} />
             <details className="stem-download-details"><summary>Individual stem files</summary>
               <div className="stems">
                 {job.files.map(name => <div className="stem" key={name}>

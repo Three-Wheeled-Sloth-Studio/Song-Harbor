@@ -222,7 +222,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        body:JSON.stringify({candidate_id:candidate.candidate_id})});
      setCandidate(saved);setNotes(saved.notes);setArrangementId(asset.asset_id);
      setPreviewReady(false);engine?.clearCandidatePreview();
-     setMessage("Editable MIDI arrangement saved independently of audio rendering.");
+     setMessage("Arrangement saved. Edit notes in the piano roll; render only the saved revision.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
  async function midi(){
@@ -299,8 +299,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>
-     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} onUse={useArrangement} onError={onError}/>
-     {candidate&&!candidate.arrangement_id&&<>
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId} onUse={useArrangement} onError={onError}/>
+     {candidate&&!candidate.arrangement_id&&!arrangementId&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>
          <button type="button" title="Revert note edits" disabled={busy} onClick={revert}>↺</button>
@@ -328,7 +328,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      {candidate&&<>
        <div className="song-midi-render">
          <div className="song-midi-controls">
-           <button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>
+           {arrangementId?<small title="Render the saved arrangement above to ensure the versioned MIDI notes are authoritative">Render via arrangement above</small>:<button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>}
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
            <button type="button" title="Audition in song" disabled={!previewReady||busy} onClick={()=>void audition(false)}>◉ A/B</button>
            <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);engine?.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",value);}}/><output>{originalGain}%</output></label>

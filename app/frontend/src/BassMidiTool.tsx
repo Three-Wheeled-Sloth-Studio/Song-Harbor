@@ -332,6 +332,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </>}
    </>}
    {message&&<small role="status" className="song-midi-status">{message}</small>}
-   {error&&<small role="alert" className="song-midi-error">{error}</small>}
+   {error&&<div role="alert" className="song-midi-error">{error}{/fluidsynth/i.test(error)&&<button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth}>Configure FluidSynth</button>}</div>}
  </div>;
 }

@@ -896,3 +896,19 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-download-stems{display:flex;flex-wrap:wrap;gap:6px;min-width:0;max-height:155px;overflow:auto}
 .song-download-stems a,.song-download-options .mix-download{display:inline-block;padding:5px 9px;border:1px solid var(--tws-color-border-normal);border-radius:6px;font-size:12px;text-decoration:none}
 .song-download-stems a:hover,.song-download-options .mix-download:hover{border-color:currentColor}
+
+
+/* Dev piano roll: use existing resizable Stem Tools; wide grid scrolls inside, never stretches tool window. */
+.song-piano-roll{display:grid;gap:7px;min-width:0;padding:8px 0;border-top:1px solid var(--tws-color-border-normal)}
+.song-roll-toolbar{display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;font-size:11px}
+.song-roll-toolbar strong{font-size:12px}
+.song-roll-toolbar select{min-width:0;max-width:190px;flex:1 1 135px}
+.song-roll-toolbar button{font-size:11px;padding:4px 7px}
+.song-roll-options{color:var(--tws-color-text-muted)}
+.song-roll-options label{display:inline-flex;gap:5px;align-items:center}
+.song-roll-options input[type="number"]{width:54px}
+.song-roll-options select{flex:0 0 auto;max-width:95px}
+.song-roll-scroller{width:100%;max-width:100%;max-height:340px;min-height:160px;overflow:auto;overscroll-behavior:contain;border:1px solid var(--tws-color-border-normal);border-radius:6px;background:#27323e;resize:vertical}
+.song-roll-scroller:focus-visible{outline:2px solid var(--tws-color-action-primary)}
+.song-roll-scroller svg{display:block;touch-action:none;user-select:none}
+.song-piano-roll>small{color:var(--tws-color-text-muted);font-size:11px;line-height:1.4}

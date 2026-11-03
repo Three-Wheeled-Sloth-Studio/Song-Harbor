@@ -97,19 +97,26 @@ def catalogue(runtime:Path)->dict[str,list[dict]]:
             if not manifest.is_file():continue
             try:
                 doc=json.loads(manifest.read_text(encoding="utf-8"))
-                if doc.get("id")!=folder.name or doc.get("engine")!="sf2":continue
-                sf2=folder/"bank.sf2"
-                if not sf2.is_file() or sf2.stat().st_size>SOUNDFONT_LIMIT:continue
+                if doc.get("id")!=folder.name or doc.get("engine") not in ("sf2","sfz"):continue
+                engine=doc["engine"]
+                if engine=="sf2":
+                    sf2=folder/"bank.sf2"
+                    if not sf2.is_file() or sf2.stat().st_size>SOUNDFONT_LIMIT:continue
                 entries=doc.get("instruments",[])
                 if not isinstance(entries,list) or len(entries)>4096:continue
                 packs.append({"id":folder.name,"name":_safe_label(str(doc.get("name","SoundFont"))),
-                              "engine":"sf2","source":"user-installed"})
+                              "engine":engine,"source":"user-installed"})
                 for row in entries:
                     if not isinstance(row,dict):continue
                     program,bank=row.get("program"),row.get("bank")
                     if type(program)!=int or not 0<=program<=127 or type(bank)!=int or not 0<=bank<=16383:continue
+                    if engine=="sfz":
+                        rel=row.get("sfz_path")
+                        if not isinstance(rel,str) or not rel.endswith(".sfz"):continue
+                        candidate=(folder/rel).resolve()
+                        if not candidate.is_file() or not candidate.is_relative_to(folder.resolve()):continue
                     instruments.append({"id":str(row.get("id","")),"name":_safe_label(str(row.get("name","Instrument"))),
-                                        "pack_id":folder.name,"engine":"sf2","program":program,"bank":bank})
+                                        "pack_id":folder.name,"engine":engine,"program":program,"bank":bank})
             except (OSError,ValueError,TypeError):continue
     return {"packs":packs,"instruments":instruments}
 
@@ -117,8 +124,18 @@ def resolve_instrument(runtime:Path,pack_id:str,instrument_id:str)->tuple[dict,P
     data=catalogue(runtime)
     found=next((i for i in data["instruments"] if i["pack_id"]==pack_id and i["id"]==instrument_id),None)
     if not found:raise ValueError("Instrument is not installed in the selected pack")
-    path=None if found["engine"]=="synthetic" else pack_root(runtime)/pack_id/"bank.sf2"
-    return found,path
+    if found["engine"]=="synthetic":return found,None
+    if found["engine"]=="sf2":return found,pack_root(runtime)/pack_id/"bank.sf2"
+    if found["engine"]=="sfz":
+        folder=pack_root(runtime)/pack_id
+        manifest=json.loads((folder/"manifest.json").read_text(encoding="utf-8"))
+        row=next((entry for entry in manifest.get("instruments",[]) if entry.get("id")==instrument_id),None)
+        if not row:raise ValueError("SFZ instrument not found in pack manifest")
+        target=(folder/str(row["sfz_path"])).resolve()
+        if not target.is_file() or not target.is_relative_to(folder.resolve()):
+            raise ValueError("SFZ definition is missing or unsafe")
+        return found,target
+    raise ValueError("Unsupported instrument engine")
 
 def hash_file(path:Path)->str:
     digest=hashlib.sha256()

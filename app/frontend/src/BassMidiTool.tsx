@@ -34,6 +34,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [customStart,setCustomStart]=useState(0);
  const [customDuration,setCustomDuration]=useState(20);
  const [candidate,setCandidate]=useState<Candidate|null>(null);
+ const [arrangementId,setArrangementId]=useState("");
  const [notes,setNotes]=useState<Note[]>([]);
  const [notePage,setNotePage]=useState(0);
  const [busy,setBusy]=useState(false);
@@ -117,7 +118,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
  function clearCandidate(){
-   setCandidate(null);setNotes([]);setPreviewReady(false);setMessage("");setError("");
+   setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);setMessage("");setError("");
    engine?.clearCandidatePreview();
  }
  function edited(index:number,patch:Partial<Note>){
@@ -126,7 +127,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  function revert(){setNotes(candidate?.original_notes.map(n=>({...n}))||[]);setPreviewReady(false);engine?.clearCandidatePreview();setMessage("Notes restored.");}
  async function analyze(){
    if(!trackId||!inBounds||busy)return;
-   setBusy(true);setError("");setMessage("");engine?.clearCandidatePreview();setPreviewReady(false);
+   setBusy(true);setError("");setMessage("");setArrangementId("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
@@ -180,6 +181,22 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage("New track added. Source preserved; remove the imported track to undo.");
      onInserted(data);
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
+ }
+ async function saveArrangement(){
+   if(!candidate||busy)return;
+   setBusy(true);setError("");
+   try{
+     // Persist current note edits first, never infer notes from an old render.
+     const saved=await req<Candidate>(base+"/"+candidate.candidate_id+"/notes",{
+       method:"PUT",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({notes,instrument_id:instrument,pack_id:instrumentPack})});
+     const asset=await req<{asset_id:string;revision:number}>("/api/projects/"+jobId+"/midi-arrangements/from-candidate",{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({candidate_id:candidate.candidate_id})});
+     setCandidate(saved);setNotes(saved.notes);setArrangementId(asset.asset_id);
+     setPreviewReady(false);engine?.clearCandidatePreview();
+     setMessage("Editable MIDI arrangement saved independently of audio rendering.");
+   }catch(e){setError(String(e));}finally{setBusy(false);}
  }
  async function midi(){
    if(!candidate||busy)return;
@@ -252,7 +269,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <button type="button" title="Transpose octave down" disabled={busy} onClick={()=>transpose(-12)}>−12</button>
          <button type="button" title="Transpose octave up" disabled={busy} onClick={()=>transpose(12)}>+12</button>
          <button type="button" title="Add note" disabled={busy} onClick={addNote}>＋</button>
+         <button type="button" title="Save editable arrangement in project (independent of rendered audio)" disabled={busy} onClick={()=>void saveArrangement()}>Save arrangement</button>
          <button type="button" title="Save edited MIDI and export .mid" disabled={busy} onClick={()=>void midi()}>⇩ MIDI</button>
+         {arrangementId&&<small title={"Persistent MIDI arrangement "+arrangementId}>Saved asset · {arrangementId.slice(0,8)}</small>}
        </div>
        <details className="song-midi-edit-details">
          <summary>Notes · {notes.length} <span className="timecode">{clock(candidate.start_seconds)}–{clock(candidate.start_seconds+candidate.duration_seconds)}</span></summary>

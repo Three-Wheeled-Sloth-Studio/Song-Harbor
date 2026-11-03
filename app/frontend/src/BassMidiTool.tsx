@@ -20,12 +20,13 @@ type Props={jobId:string;sections:SongSection[];songDuration:number;position:num
  stemControls:{filename:string;trackId?:string;gain:number;mute:boolean;solo:boolean;name:string}[];
  onStemMix:(filename:string,changes:{gain?:number;mute?:boolean;solo?:boolean})=>void;
  playing:boolean;onSeek:(seconds:number)=>void;onPlay:()=>Promise<void>;onPause:()=>void;
- onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void};
+ onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void;
+ onConfigureFluidSynth?:()=>void;settingsOpen?:boolean};
 function clock(seconds:number){const ms=Math.max(0,Math.round(seconds*1000));return Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");}
 const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Stem MIDI operation failed");return data;}
-export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError}:Props){
+export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,settingsOpen}:Props){
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
  const [functionMode,setFunctionMode]=useState<"mix"|"midi">("mix");
@@ -81,6 +82,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
 
  useEffect(()=>{let live=true;void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(e=>{if(live)setError(String(e));});void req<{starters:Starter[]}>("/api/instruments/starters").then(data=>{if(live)setStarters(data.starters);}).catch(()=>{});return()=>{live=false;};},[jobId]);
+ useEffect(()=>{if(settingsOpen)return;let live=true;
+   void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(()=>{});
+   return()=>{live=false;};
+ },[settingsOpen,jobId]);
  async function installPack(file:File|undefined){
    if(!file||installingPack)return;
    setInstallingPack(true);setError("");setMessage("");
@@ -309,7 +314,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <div className="song-instrument-import">
            {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
            <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
-           {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<small role="status" title="Install FluidSynth and configure SONG_HARBOR_FLUIDSYNTH or put it on PATH">FluidSynth required for SF2 render</small>}
+           {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>
          <div className="song-midi-controls">

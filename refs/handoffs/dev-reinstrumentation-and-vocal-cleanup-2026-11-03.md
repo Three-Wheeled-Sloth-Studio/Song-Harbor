@@ -80,6 +80,38 @@ C4 QA:
 4. Later: drum-focused extraction, articulation lanes/CC, polyphonic transcription, LLM patch review and optional local optimizer only after base workflows are validated.
 Stage each meaningful slice with a repo commit on `dev` and update this handoff with actual test results. No main promotion without explicit user approval.
 
+## Continuation 2026-11-03: incremental dev-only commits
+
+Source inspection and GitHub commits completed; **not** a local Windows or CI test pass.
+No changes to main or locked release assets. Latest handoff source SHA before update:
+`f328b607b9011dc2aa08407636bcd119f5009677`.
+
+### A: MIDI editor
+- `1de2d42`: corrected drag snap to quantize absolute positions and adjusted pointer geometry for scaled SVG.
+- `0fcd413`: keyboard single-note nudge (arrows), Ctrl+D duplicate, delete, explicit Revert, focus editor after note selection.
+- `354851e`: piano roll optionally loads the persisted arrangement created by Save arrangement.
+- `19d1acc`: legacy candidate editor yields to saved arrangement path after Save; use saved revision for subsequent render, not legacy note state.
+- `e0ba6b6`: switching selected stem clears source-specific arrangement selection.
+- Still incomplete: multi-select, clipboard, velocity lane, real tempo map, Save As, zoom/loop, revision collision recovery, keyboard accessibility QA. Source change from another parent-render route or job switch may still discard unsaved edits; guard this before describing the editor as finished.
+- Test status: code committed; TypeScript/Vite build, interaction testing, backend suite, Windows audio and persistence **not executed** in this continuation.
+
+### B: SFZ discovery and isolated adapter
+- `130020e`, `07b073f`: `app/backend/sfz_render_adapter.py` supports configured offline `sfizz_render` with MIDI+SFZ file paths, 48 kHz stereo WAV validation, no overwrite, bounded timeout, failure cleanup. Not yet connected to pack registry, render endpoint, settings, preview or acceptance.
+- `a7b15c0`: mocked unit tests added; not executed.
+- Independently confirmed documented CLI: `sfizz_render --sfz FILE --midi FILE --wav FILE --samplerate 48000` (https://www.sfz.tools/sfizz/development/build/ and https://man.archlinux.org/man/sfizz_render.1.en). The original sfztools/sfizz repository was archived June 2026; treat as pinned dependency, do not assume ongoing upstream support.
+- Pending: explicit pack import/path/sample validation, version pin and binary probe, safe isolated candidate storage, API wiring, local install QA, license review, real sample render.
+
+### C: Deshimmer preflight only
+- `dfd09f5`: `app/backend/deshimmer_adapter.py` probes a configured Python executable for callable `deshimmer.api.process_audio` via bounded subprocess, no Gradio import or audio processing.
+- `f328b60`: mocked handshake tests added; not executed.
+- It does not verify a specific Deshimmer upstream commit or function arguments, and does not yet include processing, Sound Cleanup UI, jobs, previews, acceptance or export parity.
+- Next: confirm actual installed API signature/return payload and version, then implement server-owned audio worker with bounded temp jobs and validated output, before any browser action.
+
+### Validation gate
+This session had GitHub repository access but no working container network checkout; a direct `git ls-remote` failed DNS resolution. No build/tests/audio verification can be claimed. Run backend unit tests and frontend build on the configured dev machine before accepting. One practical spot check is to save an extracted arrangement, confirm the legacy editor disappears, edit/Save/reopen and render from the new piano roll while checking original audio is unchanged.
+
+---
+
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

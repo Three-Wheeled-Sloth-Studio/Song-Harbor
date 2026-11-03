@@ -7,7 +7,7 @@ type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
-const PITCH_LOW=28,PITCH_HIGH=76;
+const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const pitchLabel=(p:number)=>pitchNames[p%12]+(Math.floor(p/12)-1);
 const clone=(n:RollNote[])=>n.map(x=>({...x}));
@@ -44,6 +44,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState("");
  const drag=useRef<{id:string;mode:"move"|"resize";originX:number;original:RollNote;group:RollNote[]}|null>(null);
+ const velocityDrag=useRef<{ids:string[]}|null>(null);
  const notesRef=useRef(notes);notesRef.current=notes;
  const dirty=asset!==null&&diffNotes(asset.notes,notes).length>0;
  useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
@@ -55,7 +56,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  },[dirty]);
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
  const width=asset?Math.max(540,KEY_WIDTH+asset.duration_samples/RATE*pixelsPerSecond+18):540;
- const height=(PITCH_HIGH-PITCH_LOW+1)*ROW;
+ const rollHeight=(PITCH_HIGH-PITCH_LOW+1)*ROW;
+ const height=rollHeight+VELOCITY_HEIGHT;
  const q=(sample:number)=>snap?Math.round(sample/(RATE*gridMs/1000))*(RATE*gridMs/1000):Math.round(sample);
  const toX=(sample:number)=>KEY_WIDTH+sample/RATE*pixelsPerSecond;
  const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-KEY_WIDTH)/pixelsPerSecond*RATE)));
@@ -166,6 +168,30 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
    edit(notesRef.current.map(note=>note.id===d.id?{...note,end_sample:Math.round(end)}:note),false);
   }
  }
+ function velocityAt(event:ReactPointerEvent<SVGRectElement>){
+  const bounds=event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+  const scale=bounds?height/bounds.height:1;
+  const y=(event.clientY-(bounds?.top||0))*scale;
+  return Math.max(1,Math.min(127,Math.round((rollHeight+VELOCITY_HEIGHT-8-y)/(VELOCITY_HEIGHT-18)*127)));
+ }
+ function startVelocity(event:ReactPointerEvent<SVGRectElement>,note:RollNote){
+  event.stopPropagation();
+  if(busy)return;
+  const ids=selectedIds.includes(note.id)?selectedIds:[note.id];
+  if(!selectedIds.includes(note.id))selectOne(note.id);
+  event.currentTarget.setPointerCapture(event.pointerId);
+  velocityDrag.current={ids};
+  setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);
+  setVelocity(event,ids);
+ }
+ function setVelocity(event:ReactPointerEvent<SVGRectElement>,ids:string[]){
+  const value=velocityAt(event);
+  const chosen=new Set(ids);
+  edit(notesRef.current.map(note=>chosen.has(note.id)?{...note,velocity:value}:note),false);
+ }
+ function moveVelocity(event:ReactPointerEvent<SVGRectElement>){
+  if(velocityDrag.current)setVelocity(event,velocityDrag.current.ids);
+ }
  const active=notes.find(n=>n.id===selected);
  return <section className="song-piano-roll" aria-label="Editable MIDI arrangement">
    <div className="song-roll-toolbar">
@@ -217,14 +243,26 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
        <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{pitchLabel(p)}</text>
        <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
       </g>;})}
-      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*pixelsPerSecond*.5} y1={0} x2={KEY_WIDTH+i*pixelsPerSecond*.5} y2={height} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
+      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*pixelsPerSecond*.5} y1={0} x2={KEY_WIDTH+i*pixelsPerSecond*.5} y2={rollHeight} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
       {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>PITCH_HIGH)return null;return <g key={note.id}>
        <rect x={x} y={y+2} width={w} height={ROW-4} rx={2} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"} stroke="#d6eee7" strokeWidth={1} onPointerDown={e=>startDrag(e,note,"move")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
        <rect x={x+Math.max(0,w-6)} y={y+2} width={Math.min(6,w)} height={ROW-4} fill="#467f82" onPointerDown={e=>startDrag(e,note,"resize")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
       </g>;})}
+      <rect x={0} y={rollHeight} width={width} height={VELOCITY_HEIGHT} fill="#192633" stroke="#536171" strokeWidth={1}/>
+      <text x={4} y={rollHeight+14} fill="#e2e7eb" fontSize={11}>Velocity</text>
+      {[32,64,96,127].map(v=><line key={v} x1={KEY_WIDTH} x2={width} y1={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} y2={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} stroke="#8196a5" strokeOpacity={.25} pointerEvents="none"/>)}
+      {notes.map(note=>{
+       const x=toX(note.start_sample), barWidth=Math.max(5,Math.min(12,toX(note.end_sample)-x));
+       const heightValue=note.velocity/127*(VELOCITY_HEIGHT-18);
+       return <rect key={"velocity-"+note.id} x={x} y={rollHeight+VELOCITY_HEIGHT-8-heightValue}
+        width={barWidth} height={Math.max(2,heightValue)} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"}
+        stroke="#d6eee7" strokeWidth={.5} aria-label={"Velocity "+note.velocity+" for "+pitchLabel(note.pitch)}
+        onPointerDown={e=>startVelocity(e,note)} onPointerMove={moveVelocity}
+        onPointerUp={()=>{velocityDrag.current=null;}} onLostPointerCapture={()=>{velocityDrag.current=null;}}/>;
+      })}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
    {message&&<small role="status">{message}</small>}

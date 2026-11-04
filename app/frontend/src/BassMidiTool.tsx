@@ -4,7 +4,8 @@ import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Note={pitch:number;start:number;end:number;velocity:number};
-type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
+export type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
+export type MidiRenderSession={jobId:string;sourceTrackId:string;candidates:Candidate[];index:number;acceptedSectionIds:string[]};
 type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
@@ -22,12 +23,13 @@ type Props={jobId:string;sections:SongSection[];songDuration:number;position:num
  onStemMix:(filename:string,changes:{gain?:number;mute?:boolean;solo?:boolean})=>void;
  playing:boolean;onSeek:(seconds:number)=>void;onPlay:()=>Promise<void>;onPause:()=>void;
  onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void;
- onConfigureFluidSynth?:()=>void;onConfigureSfizz?:()=>void;settingsOpen?:boolean};
+ onConfigureFluidSynth?:()=>void;onConfigureSfizz?:()=>void;settingsOpen?:boolean;
+ midiSession?:MidiRenderSession|null;onMidiSessionChange?:(value:MidiRenderSession|null)=>void;};
 function clock(seconds:number){const ms=Math.max(0,Math.round(seconds*1000));return Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");}
 const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Stem MIDI operation failed");return data;}
-export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,onConfigureSfizz,settingsOpen}:Props){
+export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,onConfigureSfizz,settingsOpen,midiSession,onMidiSessionChange}:Props){
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
  const [functionMode,setFunctionMode]=useState<"mix"|"midi">("mix");
@@ -36,10 +38,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [toId,setToId]=useState("");
  const [customStart,setCustomStart]=useState(0);
  const [customDuration,setCustomDuration]=useState(20);
- const [candidate,setCandidate]=useState<Candidate|null>(null);
- const [sectionQueue,setSectionQueue]=useState<Candidate[]>([]);
- const [sectionIndex,setSectionIndex]=useState(0);
- const [acceptedSectionIds,setAcceptedSectionIds]=useState<string[]>([]);
+ const persisted=midiSession?.jobId===jobId?midiSession:null;
+ const [candidate,setCandidate]=useState<Candidate|null>(persisted?.candidates[persisted.index]||null);
+ const [sectionQueue,setSectionQueue]=useState<Candidate[]>(persisted?.candidates||[]);
+ const [sectionIndex,setSectionIndex]=useState(persisted?.index||0);
+ const [acceptedSectionIds,setAcceptedSectionIds]=useState<string[]>(persisted?.acceptedSectionIds||[]);
  const [arrangementId,setArrangementId]=useState("");
  const [rollDirty,setRollDirty]=useState(false);
  useEffect(()=>{if(rollDirty){setPreviewReady(false);engine?.clearCandidatePreview();}},[rollDirty,engine]);
@@ -81,10 +84,19 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const clipEnd=clipStart+(selectedTrack?.duration_seconds||songDuration);
  const inBounds=Number.isFinite(start)&&Number.isFinite(duration)&&start>=0&&duration>=.5&&duration<=600&&end<=songDuration+.005&&start>=clipStart-.005&&end<=clipEnd+.005;
  const base="/api/projects/"+jobId+"/bass-midi";
- useEffect(()=>{let live=true;setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();
+ useEffect(()=>{let live=true;
+   const previous=midiSession?.jobId===jobId?midiSession:null;
+   setCandidate(previous?.candidates[previous.index]||null);
+   setNotes(previous?.candidates[previous.index]?.notes||[]);
+   setSectionQueue(previous?.candidates||[]);
+   setSectionIndex(previous?.index||0);
+   setAcceptedSectionIds(previous?.acceptedSectionIds||[]);
+   setPreviewReady(Boolean(previous?.candidates[previous.index]));
+   engine?.clearCandidatePreview();
    void req<{tracks:Track[]}>("/api/projects/"+jobId+"/tracks").then(data=>{
    if(!live)return;setTrackRows(data.tracks);
-   setTrackId(current=>data.tracks.some(t=>t.track_id===selectedTrackId)?selectedTrackId!:
+   setTrackId(current=>previous&&data.tracks.some(t=>t.track_id===previous.sourceTrackId)?previous.sourceTrackId:
+      data.tracks.some(t=>t.track_id===selectedTrackId)?selectedTrackId!:
       data.tracks.some(t=>t.track_id===current)?current:
       (data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass")||data.tracks[0])?.track_id||"");
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
@@ -158,6 +170,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    setCandidate(item);setNotes(item.notes);setSectionIndex(index);
    setPreviewReady(true);setNotePage(0);
    if(item.section_id)setAlias(sectionAlias(item.section_id));
+   onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates,index,acceptedSectionIds});
    setMessage("Review "+(index+1)+" of "+candidates.length+"; source gain changes only when this candidate is accepted.");
  }
  function chooseInstrument(packId:string,id:string){
@@ -166,6 +179,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
  function clearCandidate(){
+   onMidiSessionChange?.(null);
    setArrangementId("");setCandidate(null);setSectionQueue([]);setAcceptedSectionIds([]);setNotes([]);setPreviewReady(false);setMessage("");setError("");
    engine?.clearCandidatePreview();
  }
@@ -233,7 +247,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(originalGain<100)form.append("replace_source_track_id",trackId);
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
-     if(candidate.section_id)setAcceptedSectionIds(old=>[...new Set([...old,candidate.section_id!])]);
+     if(candidate.section_id){
+       const accepted=[...new Set([...acceptedSectionIds,candidate.section_id])];
+       setAcceptedSectionIds(accepted);
+       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index:sectionIndex,acceptedSectionIds:accepted});
+     }
      setMessage(candidate.section_id?"Section accepted. Only this section of the source stem is reduced.":"New track added. Source preserved; remove the imported track to undo.");
      onInserted(data);
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
@@ -253,9 +271,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setArrangementId(asset.asset_id);
      if("candidates" in data){
        setSectionQueue(data.candidates);setAcceptedSectionIds([]);setSectionIndex(0);
+       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:data.candidates,index:0,acceptedSectionIds:[]});
        showSectionCandidate(0,data.candidates);
      }else{
-       setSectionQueue([]);setAcceptedSectionIds([]);
+       setSectionQueue([]);setAcceptedSectionIds([]);onMidiSessionChange?.(null);
        setCandidate(data);setNotes(data.notes);setNotePage(0);setPreviewReady(true);
        setMessage("Polyphonic candidate rendered from saved arrangement r"+asset.revision+". Original stem unchanged.");
      }

@@ -89,6 +89,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    const previous=midiSession?.jobId===jobId?midiSession:null;
    setCandidate(previous?.candidates[previous.index]||null);
    const restoredCandidate=previous?.candidates[previous.index];
+   if(restoredCandidate?.section_id)setAlias(sectionAlias(restoredCandidate.section_id));
    if(restoredCandidate?.instrument)setInstrument(restoredCandidate.instrument);
    if(restoredCandidate?.pack_id)setInstrumentPack(restoredCandidate.pack_id);
 

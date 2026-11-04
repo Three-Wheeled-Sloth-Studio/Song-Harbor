@@ -428,7 +428,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      <label className="song-stem-hub-source" title="Active stem">
        <span className="sr-only">Stem</span>
        <select aria-label="Stem" value={trackId} onChange={e=>{if(rollDirty&&!window.confirm("Discard unsaved MIDI arrangement edits before switching stems?"))return;setRollDirty(false);onMidiSessionChange?.(null);setSectionQueue([]);setAcceptedSectionIds([]);setTrackId(e.target.value);setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);engine?.clearCandidatePreview();}}>
-         {trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.display_name}</option>)}
+         {trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.imported&&t.display_name.endsWith(" ("+t.stem_alias+")")?t.stem_alias:t.display_name}</option>)}
        </select>
      </label>
      {selectedTrack?.imported&&<button type="button" title="Remove imported stem. Archives audio and restores source replacement regions" aria-label="Remove imported stem" disabled={busy} onClick={()=>void removeImportedStem()}>⌫</button>}

@@ -54,8 +54,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [alias,setAlias]=useState("Reinstrumented");
  const [originalGain,setOriginalGain]=useState(10);
  const [packFilter,setPackFilter]=useState("all");
- const [instrument,setInstrument]=useState("bowed");
- const [instrumentPack,setInstrumentPack]=useState("song-harbor-core");
+ const [instrument,setInstrument]=useState(persisted?.candidates[persisted.index]?.instrument||"bowed");
+ const [instrumentPack,setInstrumentPack]=useState(persisted?.candidates[persisted.index]?.pack_id||"song-harbor-core");
  const [catalogue,setCatalogue]=useState<InstrumentCatalogue>({packs:[],instruments:[],fluidsynth_ready:false});
  const [installingPack,setInstallingPack]=useState(false);
  const [starters,setStarters]=useState<Starter[]>([]);
@@ -87,6 +87,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  useEffect(()=>{let live=true;
    const previous=midiSession?.jobId===jobId?midiSession:null;
    setCandidate(previous?.candidates[previous.index]||null);
+   const restoredCandidate=previous?.candidates[previous.index];
+   if(restoredCandidate?.instrument)setInstrument(restoredCandidate.instrument);
+   if(restoredCandidate?.pack_id)setInstrumentPack(restoredCandidate.pack_id);
+
    setArrangementId(previous?.candidates[previous.index]?.arrangement_id||"");
    setNotes(previous?.candidates[previous.index]?.notes||[]);
    setSectionQueue(previous?.candidates||[]);
@@ -169,6 +173,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    if(!item)return;
    engine?.clearCandidatePreview();
    setCandidate(item);setNotes(item.notes);setSectionIndex(index);
+   if(item.instrument)setInstrument(item.instrument);
+   if(item.pack_id)setInstrumentPack(item.pack_id);
    setPreviewReady(true);setNotePage(0);
    if(item.section_id)setAlias(sectionAlias(item.section_id));
    onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates,index,acceptedSectionIds:accepted});

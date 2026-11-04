@@ -312,46 +312,38 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }
  async function insertAllSections(){
    if(busy||!sectionQueue.length)return;
-   const pending=sectionQueue.filter(item=>item.section_id&&!acceptedSectionIds.includes(item.section_id));
-   if(!pending.length)return;
-   const prefix=batchPrefix.trim();
-   if(!/^[A-Za-z][A-Za-z0-9_-]{0,29}$/.test(prefix)){
-     setError("Section stem prefix must be 1-30 letters, numbers, underscores or hyphens, starting with a letter.");
+   if(acceptedSectionIds.length){
+     setError("Some rendered sections were already accepted individually. Remove those stems and render again to create one consolidated stem.");
      return;
    }
-   const aliases=pending.map(item=>prefix+"_"+(sectionQueue.findIndex(row=>row.candidate_id===item.candidate_id)+1));
-   const existing=new Set(trackRows.map(row=>row.stem_alias.toLowerCase()));
-   if(aliases.some(name=>existing.has(name.toLowerCase()))){
-     setError("One or more numbered stem names already exist. Choose a different prefix before adding sections.");
+   const name=batchPrefix.trim();
+   if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(name)){
+     setError("Stem name must start with a letter and contain only letters, numbers, underscore or hyphen (32 characters maximum).");
      return;
    }
-   if(!window.confirm("Add "+pending.length+" rendered sections as "+aliases[0]+
-     (aliases.length>1?" through "+aliases[aliases.length-1]:"")+
-     "? Original stem gain changes only within the accepted section regions."))return;
-   setBusy(true);setError("");setBatchProgress("Adding 0 of "+pending.length+" sections");
-   let latest:Imported|null=null;
-   const accepted=[...acceptedSectionIds];
-   let completed=0;
+   if(trackRows.some(row=>row.stem_alias.toLowerCase()===name.toLowerCase())){
+     setError("This stem name is already used. Choose a different name.");
+     return;
+   }
+   if(!window.confirm("Create one stem named "+name+" containing "+sectionQueue.length+
+     " rendered sections? Only those source regions will be reduced."))return;
+   setBusy(true);setError("");setBatchProgress("Combining "+sectionQueue.length+" sections into one stem");
    try{
-     if(!await saveProject())throw Error("Save song before adding sections");
+     if(!await saveProject())throw Error("Save song before adding the replacement stem");
      onPause();
-     for(const item of pending){
-       setBatchProgress("Adding "+(completed+1)+" of "+pending.length+" sections");
-       latest=await addCandidateClip(item,aliases[completed]);
-       accepted.push(item.section_id!);
-       completed++;
-       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index:sectionIndex,acceptedSectionIds:[...accepted]});
-     }
-     setAcceptedSectionIds([...accepted]);
-     setMessage("Added "+completed+" section stems. Other song regions remain unchanged.");
-   }catch(e){
-     const detail="Added "+completed+" of "+pending.length+" before stopping: "+String(e);
-     setError(detail);onError(detail);
-     setAcceptedSectionIds([...accepted]);
-   }finally{
-     setBatchProgress("");setBusy(false);
-     if(latest)onInserted(latest);
-   }
+     const combined=await req<Candidate>("/api/projects/"+jobId+"/bass-midi/compose-sections",{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({candidate_ids:sectionQueue.map(item=>item.candidate_id)})});
+     setBatchProgress("Adding one consolidated stem");
+     const result=await addCandidateClip(combined,name);
+     engine?.clearCandidatePreview();
+     setAcceptedSectionIds(sectionQueue.map(item=>item.section_id!).filter(Boolean));
+     onMidiSessionChange?.(null);
+     setSectionQueue([]);
+     setMessage("Added one stem, "+name+", with "+sectionQueue.length+" rendered regions.");
+     onInserted(result);
+   }catch(e){const detail=String(e);setError(detail);onError(detail);}
+   finally{setBatchProgress("");setBusy(false);}
  }
  async function removeImportedStem(){
    if(!selectedTrack?.imported||busy)return;
@@ -534,14 +526,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        <div className="song-midi-render">
          {sectionQueue.length>0&&<div className="song-midi-section-batch" role="status">
            <strong>{sectionQueue.length} sections rendered</strong>
-           <span>{acceptedSectionIds.length} accepted, {sectionQueue.length-acceptedSectionIds.length} pending</span>
-           <label title="All added stems will use this prefix with their section number, e.g. Growlybass_1, Growlybass_2">
-             Prefix <input aria-label="Section stem name prefix" maxLength={30} value={batchPrefix}
+           <span>{sectionQueue.length} candidate regions, one output stem</span>
+           <label title="User-assigned name for the combined stem">
+             Name <input aria-label="Combined stem name" maxLength={32} value={batchPrefix}
                onChange={e=>setBatchPrefix(e.target.value)} disabled={busy} placeholder="Growlybass"/>
            </label>
-           <button type="button" title="Add every remaining rendered section as an independent, reversible stem"
-             disabled={busy||acceptedSectionIds.length>=sectionQueue.length}
-             onClick={()=>void insertAllSections()}>✓ Add all {sectionQueue.length-acceptedSectionIds.length} sections</button>
+           <button type="button" title="Combine all selected rendered regions into one reversible stereo stem"
+             disabled={busy||acceptedSectionIds.length>0}
+             onClick={()=>void insertAllSections()}>✓ Add combined stem</button>
            {batchProgress&&<small aria-live="polite">{batchProgress}</small>}
          </div>}
          {sectionQueue.length>0&&<div className="song-midi-section-review">

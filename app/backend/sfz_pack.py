@@ -18,7 +18,10 @@ MAX_UNPACKED_BYTES = 1536 * 1024 * 1024
 MAX_FILES = 12000
 MAX_SFZ_BYTES = 2 * 1024 * 1024
 EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
-UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b|(?:^|\s)(?:sample|default_path)\s*=\s*(?:[A-Za-z]:|/|\\\\|\\)")
+# Ignore documentation/GUI resources rather than executing or importing them.
+METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg"}
+UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b")
+DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 
 
@@ -51,7 +54,7 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
                 raise ValueError("SFZ archive links and special files are forbidden")
             if member.is_dir():
                 continue
-            if path.suffix.lower() not in EXTENSIONS:
+            if path.suffix.lower() not in EXTENSIONS | METADATA_EXTENSIONS:
                 raise ValueError("SFZ ZIP contains unsupported file type")
             if member.file_size < 0 or member.file_size > MAX_UNPACKED_BYTES:
                 raise ValueError("Oversized sample in SFZ archive")
@@ -79,7 +82,8 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
                 relative = safe_member(member.filename)
                 target = destination.joinpath(*relative.parts)
                 if member.is_dir():
-                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                if relative.suffix.lower() in METADATA_EXTENSIONS:
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with z.open(member) as source, target.open("xb") as output:
@@ -95,8 +99,14 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
         manifest_instruments = []
         for index, definition in enumerate(definitions):
             text = definition.read_text(encoding="utf-8-sig")
-            if UNSAFE_SFZ.search(text) or ".." in text or re.search(r"(?im)(?:^|\s)default_path\s*=",text):
-                raise ValueError("SFZ definition uses external paths or unsupported preprocessing")
+            if UNSAFE_SFZ.search(text):
+                raise ValueError("SFZ definition uses unsupported preprocessing")
+            defaults = [match.group(1).strip().strip('"').replace("\\", "/") for match in DEFAULT_PATH.finditer(text)]
+            if len(defaults) > 1:
+                raise ValueError("Multiple SFZ default_path assignments are unsupported")
+            prefix = defaults[0] if defaults else ""
+            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix) or any(part == ".." for part in PurePosixPath(prefix).parts):
+                raise ValueError("SFZ default_path escapes the imported pack")
             # Permit references to samples inside the imported archive only. No shell or plugin scripts.
             for found in SAMPLE_REF.finditer(text):
                 sample = found.group(1).strip().strip('"').replace("\\", "/")
@@ -104,7 +114,7 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
                     raise ValueError("Unsafe SFZ sample reference")
                 if any(part in ("..", ".") for part in PurePosixPath(sample).parts):
                     raise ValueError("SFZ sample reference escapes pack")
-                sample_file=(definition.parent/sample).resolve()
+                sample_file=(definition.parent/prefix/sample).resolve()
                 if not sample_file.is_relative_to(destination.resolve()) or not sample_file.is_file():
                     raise ValueError("SFZ references a missing or external sample: "+sample[:120])
             relative = definition.relative_to(destination).as_posix()

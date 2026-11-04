@@ -368,6 +368,8 @@ The user reported Windows dev launcher failed `tsc --noEmit && vite build` at `s
 - `6198eec`, `e827773`: Remove imported stem icon (title, accessible label, confirmation) beside the active stem selector, visible in both Mix and MIDI modes. Calls the existing DELETE endpoint with `expected_alias`. Refreshes parent song on success, restores original via existing replacement-mask lifecycle, and archives import files. Original separated tracks do not show Remove.
 - `30c8773`: compact styling for batch review/progress.
 - `bba9605`: regression test of two non-contiguous replacement clips: removing one restores **only its own** original-stem mask and preserves the other.
+- `e827773`: moved the icon-first Remove control to the persistent Stem Tools header next to active stem, visible in Mix and MIDI modes.
+- `2f17ef4`: fixed per-section alias restoration after mixer remount so sequential single-section approvals do not all revert to `Reinstrumented`.
 - For one-at-a-time Add this section, the next unaccepted candidate becomes the active review item on remount. Session queue remains available through the song-level state.
 
 ### Required Windows QA (not executed by agent)

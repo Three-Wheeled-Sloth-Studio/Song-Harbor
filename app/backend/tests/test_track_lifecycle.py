@@ -75,6 +75,34 @@ class TrackLifecycleTests(unittest.TestCase):
         self.assertEqual(removed["section_gain_automation"],original["section_gain_automation"])
         self.assertEqual(removed["section_pan_automation"],original["section_pan_automation"])
 
+    def test_remove_one_section_stem_restores_only_its_mask(self):
+        project=self.sample()
+        first="trk_intro (Reinst_Intro).wav"
+        second="trk_verse (Reinst_Verse).wav"
+        for ident,alias,filename,start in [
+            ("trk_intro","Reinst_Intro",first,0),
+            ("trk_verse","Reinst_Verse",second,10)
+        ]:
+            project["files"].append(filename)
+            project.setdefault("stems",[]).append({"filename":filename,"gain":1,"mute":False,"solo":False})
+            project["source_tracks"].append({
+                "track_id":ident,"stem_alias":alias,"display_name":alias,
+                "working_filename":filename,"original_filename":ident+".wav",
+                "imported":True,"start_seconds":start,"duration_seconds":4})
+            project.setdefault("replacement_masks",[]).append({
+                "replacement_track_id":ident,"source_track_id":"trk0002",
+                "source_filename":FILES[1],"start_seconds":start,"end_seconds":start+4,
+                "fade_seconds":0.05,"original_gain":0.1})
+        original=copy.deepcopy(project)
+        updated,_=track_lifecycle.remove(project,"trk_intro")
+        self.assertEqual(project,original)
+        self.assertEqual(len(updated["replacement_masks"]),1)
+        self.assertEqual(updated["replacement_masks"][0]["replacement_track_id"],"trk_verse")
+        self.assertIn(second,updated["files"])
+        self.assertNotIn(first,updated["files"])
+        with self.assertRaises(ValueError):
+            track_lifecycle.remove(updated,"trk0002")
+
     def test_stable_id_legacy_backfill(self):
         project={"files":FILES}
         first=track_lifecycle.ensure_identities(project)

@@ -266,8 +266,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [ending,setEnding]=useState<{fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear"}>({
     fade_seconds:0,tail_seconds:0,curve:"smooth"
   });
-  const [openTools,setOpenTools]=useState<WorkbenchTool[]>([]);
-  const [midiStemId,setMidiStemId]=useState<string|undefined>(undefined);
+  const [openTools,setOpenTools]=useState<WorkbenchTool[]>(midiSession?.jobId===jobId&&midiSession.candidates.length?["bassMidi"]:[]);
+  const [midiStemId,setMidiStemId]=useState<string|undefined>(midiSession?.jobId===jobId?midiSession.sourceTrackId:undefined);
   function stemToMidi(filename:string){
     const track=trackIdentities.find(x=>x.working_filename===filename);
     if(!track){setError("Stem identity unavailable; reopen this song before transcription.");return;}

@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
+import wave
 from pathlib import Path
 import sfz_render_adapter
 
@@ -40,5 +41,13 @@ def render_candidate(
           creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
         if completed.returncode or not aligned.is_file() or aligned.stat().st_size < 44:
             raise ValueError("Could not align SFZ preview to MIDI duration")
+        try:
+            with wave.open(str(aligned), "rb") as wav:
+                if (wav.getframerate() != 48000 or wav.getnchannels() != 2 or
+                        wav.getsampwidth() != 2 or
+                        abs(wav.getnframes()/48000-duration) > 0.05):
+                    raise ValueError("SFZ preview must be aligned 48-kHz stereo PCM WAV")
+        except (EOFError, wave.Error) as exc:
+            raise ValueError("SFZ preview is not a valid PCM WAV") from exc
         # os.replace publishes only the finished candidate. Source stem untouched.
         os.replace(aligned,candidate_wav)

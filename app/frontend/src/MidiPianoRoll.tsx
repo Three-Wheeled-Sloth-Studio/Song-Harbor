@@ -1,12 +1,14 @@
 import {useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 import type {PointerEvent as ReactPointerEvent} from "react";
+import type {SongSection} from "./SectionEditor";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
 export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[]};
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
-type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
+type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
+type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -28,7 +30,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChange,onUse,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -37,6 +39,9 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  const [future,setFuture]=useState<RollNote[][]>([]);
  const [selected,setSelected]=useState("");
  const [popOut,setPopOut]=useState(false);
+ const [selectedSections,setSelectedSections]=useState<string[]>([]);
+ const [position,setPosition]=useState({x:0,y:0});
+ const moveWindow=useRef<{x:number;y:number;left:number;top:number}|null>(null);
  const [selectedIds,setSelectedIds]=useState<string[]>([]);
  const clipboard=useRef<RollNote[]>([]);
  const scrollerRef=useRef<HTMLDivElement|null>(null);
@@ -70,7 +75,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
+ function open(value:Arrangement){setSelectedSections([]);setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
  async function refresh(){try{const found=await request<{arrangements:Summary[]}>(root);setListing(found.arrangements);}catch(error){onError(String(error));}}
  useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);void refresh();},[jobId,sourceTrackId]);
  useEffect(()=>{if(!requestedAssetId)return;
@@ -194,15 +199,54 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  function moveVelocity(event:ReactPointerEvent<SVGRectElement>){
   if(velocityDrag.current)setVelocity(event,velocityDrag.current.ids);
  }
+ const visibleSections=asset?sections.filter(section=>{
+   const start=asset.source.start_sample/RATE,end=start+asset.duration_samples/RATE;
+   return section.end_seconds>start&&section.start_seconds<end;
+ }):[];
+ const selectedSectionRanges=visibleSections.filter(section=>selectedSections.includes(section.id));
+ function chooseSection(section:SongSection,event:React.MouseEvent<HTMLButtonElement>){
+   const matching=event.altKey?visibleSections.filter(item=>item.kind.toLowerCase()===section.kind.toLowerCase()).map(item=>item.id):[section.id];
+   setSelectedSections(previous=>{
+     if(event.ctrlKey||event.metaKey||event.shiftKey)return [...new Set([...previous,...matching])];
+     return matching;
+   });
+ }
+ function startWindowDrag(event:ReactPointerEvent<HTMLElement>){
+   if((event.target as HTMLElement).closest("button,input,select"))return;
+   event.currentTarget.setPointerCapture(event.pointerId);
+   moveWindow.current={x:event.clientX,y:event.clientY,left:position.x,top:position.y};
+ }
+ function dragWindow(event:ReactPointerEvent<HTMLElement>){
+   const original=moveWindow.current;
+   if(!original)return;
+   setPosition({x:original.left+event.clientX-original.x,y:original.top+event.clientY-original.y});
+ }
  const active=notes.find(n=>n.id===selected);
  return <div className="song-roll-launcher">
    <span title={asset?"Saved MIDI arrangement "+asset.asset_id:"No saved arrangement open"}><strong>MIDI score</strong> {asset?notes.length+" notes · revision "+asset.revision:"No score open"}{dirty?" · unsaved edits":""}</span>
    <button type="button" title="Open piano roll editor in a large workspace" aria-label="Open piano roll" onClick={()=>setPopOut(true)}>▦</button>
-   {popOut&&createPortal(<div className="song-roll-overlay" role="presentation">
-     <section className="song-piano-roll song-roll-popout" role="dialog" aria-modal="true" aria-label="MIDI piano roll editor">
-       <header className="song-roll-popout-header"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
+   {popOut&&createPortal(<div className="song-roll-overlay song-roll-overlay-modeless" role="presentation">
+     <section className="song-piano-roll song-roll-popout song-roll-modeless" role="dialog" aria-label="MIDI piano roll editor" style={{transform:`translate(${position.x}px,${position.y}px)`}}>
+       <header className="song-roll-popout-header" onPointerDown={startWindowDrag} onPointerMove={dragWindow} onPointerUp={()=>{moveWindow.current=null;}} onLostPointerCapture={()=>{moveWindow.current=null;}} title="Drag to move piano roll window"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>
+   {asset&&<div className="song-roll-sections" aria-label="Arrangement sections">
+     <small title="Click one; Ctrl/Shift-click adds; Alt-click selects all instances of the same section type.">Sections</small>
+     {visibleSections.map(section=><button type="button" key={section.id}
+        title={section.kind+(section.number?" "+section.number:"")+" · Alt-click to select all "+section.kind+" sections"}
+        className={selectedSections.includes(section.id)?"is-selected":""}
+        aria-pressed={selectedSections.includes(section.id)}
+        onClick={event=>chooseSection(section,event)}>
+        {section.kind}{section.number?" "+section.number:""}
+     </button>)}
+     {!!selectedSections.length&&<button type="button" title="Clear section selection" onClick={()=>setSelectedSections([])}>×</button>}
+   </div>}
+   {asset&&<div className="song-roll-instrument">
+     <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
+       {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
+     </select></label>
+     <small>{selectedSections.length?selectedSections.length+" sections selected · sectional rendering not yet enabled":"Whole saved arrangement"}</small>
+   </div>}
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>
     <select aria-label="Saved MIDI arrangements" value={asset?.asset_id||""} onChange={e=>{if(e.target.value)void load(e.target.value);}} disabled={busy}>

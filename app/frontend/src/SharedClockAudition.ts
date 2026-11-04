@@ -69,6 +69,8 @@ export class SharedClockAudition {
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
   private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean}|null=null;
+  private candidateExtras:NonNullable<typeof this.candidatePreview>[]=[];
+  private previewClips(){return this.candidatePreview?[this.candidatePreview,...this.candidateExtras]:[];}
   private replacementMasks:ReplacementMask[]=[];
   private candidateOriginalMix:{filename:string;gain:number}|null=null;
   private automation:Record<string,{gain?:AutomationPoint[];volume?:AutomationPoint[];pan?:AutomationPoint[];reverb?:AutomationPoint[];width?:AutomationPoint[];space?:AutomationPoint[];eq?:EqCurves;dynamics?:DynamicsCurves}>={};
@@ -303,6 +305,41 @@ export class SharedClockAudition {
     this.candidatePreview={buffer,startSeconds,gain,source:null,enabled:false,blend:0,trimDb:0,solo:false};
     if(this.running)this.scheduleCandidate(this.context.currentTime+.01,this.position);
   }
+  /** Load independent section clips without allocating a song-long silent buffer.
+   * All voices are scheduled on the same clock at their absolute song timestamps.
+   */
+  async loadCandidatePreviews(clips:readonly {url:string;startSeconds:number}[]){
+    if(!this.ready||!clips.length||clips.length>24)throw Error("Choose 1 to 24 rendered preview sections");
+    const ordered=[...clips].sort((a,b)=>a.startSeconds-b.startSeconds);
+    const loaded:{buffer:AudioBuffer;startSeconds:number}[]=[];
+    for(const clip of ordered){
+      if(!Number.isFinite(clip.startSeconds)||clip.startSeconds<0)throw Error("Invalid section preview start");
+      const response=await fetch(clip.url,{cache:"no-store"});
+      if(!response.ok)throw Error("Cannot fetch rendered section preview");
+      const buffer=await this.context.decodeAudioData(await response.arrayBuffer());
+      if(this.disposed)throw Error("Audio engine closed");
+      if(clip.startSeconds+buffer.duration>this.sourceDurationSeconds+.15)throw Error("Section preview exceeds the song");
+      if(loaded.length&&clip.startSeconds<loaded[loaded.length-1].startSeconds+loaded[loaded.length-1].buffer.duration-.005)
+        throw Error("Preview sections overlap");
+      loaded.push({buffer,startSeconds:clip.startSeconds});
+    }
+    // Publish only after every clip was decoded and validated.
+    this.clearCandidatePreview();
+    const entries=loaded.map(({buffer,startSeconds})=>{
+      const gain=this.context.createGain();
+      gain.gain.value=0;
+      gain.connect(this.master);
+      return {buffer,startSeconds,gain,source:null as AudioBufferSourceNode|null,
+              enabled:false,blend:0,trimDb:0,solo:false};
+    });
+    this.candidatePreview=entries[0];
+    this.candidateExtras=entries.slice(1);
+    if(this.running){
+      const offset=this.position;
+      this.configurePreviewNodes(this.context.currentTime+.02,offset);
+      this.scheduleCandidate(this.context.currentTime+.025,offset);
+    }
+  }
   /** A/B the accepted result without attenuating unrelated backing stems.
    * Applies a temporary original-stem region gain during candidate preview only. */
   setCandidateOriginalMix(filename:string,originalPercent:number){
@@ -320,13 +357,13 @@ export class SharedClockAudition {
   setCandidatePreviewSolo(value:boolean){
     const candidate=this.candidatePreview;
     if(!candidate)return;
-    candidate.solo=value;
+    for(const clip of this.previewClips())clip.solo=value;
     this.setCandidatePreviewBlend(candidate.blend*100);
   }
   setCandidatePreviewTrimDb(db:number){
     const candidate=this.candidatePreview;
     if(!candidate)return;
-    candidate.trimDb=Math.max(-12,Math.min(9,db));
+    for(const clip of this.previewClips())clip.trimDb=Math.max(-12,Math.min(9,db));
     this.setCandidatePreviewBlend(candidate.blend*100);
   }
   /** Route every original stem AND wet FX through one mix bus. Solo hard-mutes
@@ -337,35 +374,26 @@ export class SharedClockAudition {
     const candidate=this.candidatePreview;
     if(!candidate)return;
     const p=Math.max(0,Math.min(100,percent))/100;
-    candidate.blend=p;
-    candidate.enabled=candidate.solo||p>0;
-    const originalLevel=candidate.solo?0:this.candidateOriginalMix?1:Math.cos(p*Math.PI/2);
-    const generatedLevel=(candidate.solo?1:Math.sin(p*Math.PI/2))*Math.pow(10,candidate.trimDb/20);
+    const clips=this.previewClips();
+    const solo=candidate.solo;
     const now=this.context.currentTime;
+    for(const clip of clips){
+      clip.blend=p;
+      clip.enabled=solo||p>0;
+      const generated=(solo?1:Math.sin(p*Math.PI/2))*Math.pow(10,clip.trimDb/20);
+      clip.gain.gain.cancelScheduledValues(now);
+      clip.gain.gain.setTargetAtTime(generated,now,.008);
+    }
     const original=this.originalPreviewBus.gain;
     original.cancelScheduledValues(now);
-    // No underlying instrument or reverb can sound while Solo is engaged.
-    if(candidate.solo){
+    if(solo){
       original.setTargetAtTime(0,now,.005);
-    }else{
-      const clipStart=candidate.startSeconds;
-      const clipEnd=clipStart+candidate.buffer.duration;
-      const inClip=offset>=clipStart&&offset<clipEnd;
-      original.setTargetAtTime(inClip?originalLevel:1,now,.008);
-      // Audio nodes are scheduled from a shared future clock, even if the
-      // audition was seeking from before the generated clip's beginning.
-      if(offset<clipStart){
-        const begin=at+clipStart-offset;
-        original.setValueAtTime(1,Math.max(now,begin-.02));
-        original.linearRampToValueAtTime(originalLevel,begin+.02);
-      }
-      if(offset<clipEnd){
-        const finish=at+clipEnd-offset;
-        original.setValueAtTime(originalLevel,Math.max(now,finish-.02));
-        original.linearRampToValueAtTime(1,finish+.02);
-      }
+      return;
     }
-    candidate.gain.gain.setTargetAtTime(generatedLevel,now,.008);
+    // When auditioning a replacement, the original mix and unrelated stems
+    // remain audible. Only the source stem is attenuated, in the selected clips.
+    original.setTargetAtTime(1,now,.008);
+    if(this.prepared)this.configurePreviewNodes(at,offset);
   }
   candidateWaveform(size=160):number[]{
     const buffer=this.candidatePreview?.buffer;
@@ -382,32 +410,37 @@ export class SharedClockAudition {
     return peaks.map(value=>value/max);
   }
   clearCandidatePreview(){
-    const candidate=this.candidatePreview;
-    if(!candidate)return;
-    try{candidate.source?.stop();}catch{/* already ended */}
-    candidate.source?.disconnect();
-    candidate.gain.disconnect();
+    const clips=this.previewClips();
+    if(!clips.length)return;
+    for(const candidate of clips){
+      try{candidate.source?.stop();}catch{/* already ended */}
+      candidate.source?.disconnect();
+      candidate.gain.disconnect();
+    }
     this.candidatePreview=null;
+    this.candidateExtras=[];
     this.candidateOriginalMix=null;
     if(this.prepared)this.configurePreviewNodes(this.context.currentTime+.02,this.position);
     this.originalPreviewBus.gain.cancelScheduledValues(this.context.currentTime);
     this.originalPreviewBus.gain.setTargetAtTime(1,this.context.currentTime,.012);
   }
   private scheduleCandidate(at:number,offset:number){
-    const candidate=this.candidatePreview;
-    if(!candidate)return;
-    try{candidate.source?.stop();}catch{/* already ended */}
-    candidate.source?.disconnect();
-    candidate.source=null;
-    const clipEnd=candidate.startSeconds+candidate.buffer.duration;
-    if(offset>=clipEnd)return;
-    const source=this.context.createBufferSource();
-    source.buffer=candidate.buffer;
-    source.connect(candidate.gain);
-    candidate.source=source;
-    this.setCandidatePreviewBlend(candidate.blend*100,at,offset);
-    if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
-    else source.start(at,offset-candidate.startSeconds);
+    const clips=this.previewClips();
+    if(!clips.length)return;
+    for(const candidate of clips){
+      try{candidate.source?.stop();}catch{/* already ended */}
+      candidate.source?.disconnect();
+      candidate.source=null;
+      const clipEnd=candidate.startSeconds+candidate.buffer.duration;
+      if(offset>=clipEnd)continue;
+      const source=this.context.createBufferSource();
+      source.buffer=candidate.buffer;
+      source.connect(candidate.gain);
+      candidate.source=source;
+      if(offset<=candidate.startSeconds)source.start(at+candidate.startSeconds-offset,0);
+      else source.start(at,offset-candidate.startSeconds);
+    }
+    this.setCandidatePreviewBlend(clips[0].blend*100,at,offset);
   }
 
   setLevels(levels:Record<string,AuditionLevel>,monitor:number){
@@ -495,11 +528,13 @@ export class SharedClockAudition {
       const src=track.source;
       scheduleAutomation(track.sectionGain.gain,
         !this.referenceOriginal&&this.automation[src.filename]?.gain||[{time:0,value:1}],offset,at);
-      const audition=this.candidatePreview&&this.candidateOriginalMix?.filename===src.filename
-        ?[{replacement_track_id:"__audition__",source_track_id:"__audition__",source_filename:src.filename,
-            start_seconds:this.candidatePreview.startSeconds,
-            end_seconds:this.candidatePreview.startSeconds+this.candidatePreview.buffer.duration,
-            fade_seconds:.05,original_gain:this.candidateOriginalMix.gain}]
+      const audition=this.candidatePreview&&this.candidatePreview.enabled&&
+        !this.candidatePreview.solo&&this.candidateOriginalMix?.filename===src.filename
+        ?this.previewClips().map((clip,index)=>({
+            replacement_track_id:"__audition__"+index,source_track_id:"__audition__",
+            source_filename:src.filename,start_seconds:clip.startSeconds,
+            end_seconds:clip.startSeconds+clip.buffer.duration,
+            fade_seconds:.05,original_gain:this.candidateOriginalMix!.gain}))
         :[];
       scheduleAutomation(track.scriptVolume.gain,this.automation[src.filename]?.volume||[{time:0,value:1}],offset,at);
       scheduleAutomation(track.replacementGain.gain,replacementCurve([
@@ -932,10 +967,11 @@ export class SharedClockAudition {
     }
   }
   private stopSources(){
-    if(this.candidatePreview?.source){
-      try{this.candidatePreview.source.stop();}catch{/* already stopped */}
-      this.candidatePreview.source.disconnect();
-      this.candidatePreview.source=null;
+    for(const candidate of this.previewClips()){
+      if(!candidate.source)continue;
+      try{candidate.source.stop();}catch{/* already stopped */}
+      candidate.source.disconnect();
+      candidate.source=null;
     }
     this.running=false;
     this.dryMaster.gain.cancelScheduledValues(this.context.currentTime);

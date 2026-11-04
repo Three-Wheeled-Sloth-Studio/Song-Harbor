@@ -62,6 +62,27 @@ class SFZPackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"Duplicate"):
             sfz_pack.inspect_archive(self.archive)
 
+    def test_declared_unpacked_limit_rejected_before_extraction(self):
+        from unittest.mock import patch
+        self.make_zip({"Cello.sfz": "<region> sample=c4.wav",
+                       "c4.wav": b"0" * 256})
+        with patch.object(sfz_pack, "MAX_UNPACKED_BYTES", 60):
+            with self.assertRaisesRegex(ValueError, "uncompressed size|Oversized"):
+                sfz_pack.inspect_archive(self.archive)
+
+    def test_default_path_is_not_allowed(self):
+        self.make_zip({"Cello.sfz": "<control> default_path=samples/\\n<region> sample=c4.wav",
+                       "samples/c4.wav": b"sample"})
+        with self.assertRaisesRegex(ValueError, "external paths"):
+            sfz_pack.install_zip(self.root, self.archive, "Unsafe defaults")
+
+    def test_failed_install_does_not_leave_pack_folder(self):
+        self.make_zip({"Cello.sfz": "<region> sample=missing.wav"})
+        with self.assertRaises(ValueError):
+            sfz_pack.install_zip(self.root, self.archive, "Broken")
+        pack_folder = self.root / "instrument-packs"
+        self.assertEqual(list(pack_folder.iterdir()), [])
+
     def test_missing_pack_is_not_in_catalogue(self):
         self.assertEqual(instrument_library.catalogue(self.root)["packs"][0]["engine"],"synthetic")
 

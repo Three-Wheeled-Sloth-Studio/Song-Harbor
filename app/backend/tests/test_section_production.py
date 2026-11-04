@@ -79,6 +79,8 @@ class ProductionNotationTests(unittest.TestCase):
         script=section_import.render_tags(project)
         self.assertIn("Bass.volume:0%@2.000-8.000#trk_a",script)
         self.assertIn("Bass.volume:10%@10.000-16.000#trk_b",script)
+        legacy=section_import.apply(project,script.replace(".volume:"," .original:".strip()),"replace",20)
+        self.assertEqual(len(legacy["replacement_masks"]),2)
         self.assertIn("Bass.gain:+2",script)
         revised=script.replace("Bass.volume:10%","Bass.volume:35%")
         result=section_import.apply(project,revised,"replace",20)

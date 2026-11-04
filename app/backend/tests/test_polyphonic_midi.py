@@ -68,6 +68,33 @@ class PolyphonicMidiTests(unittest.TestCase):
         score=self.score()
         score["notes"][0]["channel"]=9
         with self.assertRaisesRegex(ValueError,"Channel 10"):polyphonic_midi.to_midi(score,32)
+    def test_explicit_percussion_mode_uses_channel_ten_without_program_change(self):
+        score=midi_arrangements.create("drums",0,2,[
+            {"pitch":36,"start":0.0,"end":0.1,"velocity":108},
+            {"pitch":38,"start":0.0,"end":0.1,"velocity":90},
+            {"pitch":42,"start":0.25,"end":0.35,"velocity":72}])
+        for note in score["notes"]:
+            note["channel"]=9
+        output=polyphonic_midi.to_midi(score,0,percussion=True)
+        all_events=events(output)
+        attacks=[e for e in all_events if isinstance(e[1],int) and e[1]&0xf0==0x90]
+        self.assertEqual({e[2] for e in attacks},{36,38,42})
+        self.assertTrue(all(e[1]==0x99 for e in attacks))
+        self.assertFalse(any(isinstance(e[1],int) and e[1]&0xf0==0xc0 for e in all_events))
+        self.assertEqual(output,polyphonic_midi.to_midi(score,0,percussion=True))
+
+    def test_percussion_mode_rejects_melodic_notes_and_mixed_channels(self):
+        score=self.score()
+        with self.assertRaisesRegex(ValueError,"channel 10"):
+            polyphonic_midi.to_midi(score,0,percussion=True)
+        score["notes"][0]["channel"]=9
+        with self.assertRaisesRegex(ValueError,"channel 10"):
+            polyphonic_midi.to_midi(score,0,percussion=True)
+        with self.assertRaisesRegex(ValueError,"Channel 10"):
+            polyphonic_midi.to_midi(score,0)
+        with self.assertRaisesRegex(ValueError,"boolean"):
+            polyphonic_midi.to_midi(score,0,percussion="yes")
+
     def test_invalid_program_bank_or_tempo(self):
         score=self.score()
         for args in ((128,0,120),(38,16384,120),(38,0,1)):

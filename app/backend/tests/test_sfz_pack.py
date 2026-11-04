@@ -53,7 +53,7 @@ class SFZPackTests(unittest.TestCase):
     def test_external_directive_rejected(self):
         self.make_zip({"Unsafe.sfz":"#include \"../external.sfz\"",
                        "x.wav":b"x"})
-        with self.assertRaisesRegex(ValueError,"external paths"):
+        with self.assertRaisesRegex(ValueError,"unsupported preprocessing"):
             sfz_pack.install_zip(self.root,self.archive,"Unsafe")
 
     def test_case_insensitive_duplicate_rejected(self):
@@ -70,10 +70,18 @@ class SFZPackTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "uncompressed size|Oversized"):
                 sfz_pack.inspect_archive(self.archive)
 
-    def test_default_path_is_not_allowed(self):
-        self.make_zip({"Cello.sfz": "<control> default_path=samples/\\n<region> sample=c4.wav",
+    def test_relative_default_path_and_readme_import(self):
+        self.make_zip({"Cello.sfz": "<control> default_path=samples/\n<region> sample=c4.wav",
+                       "samples/c4.wav": b"sample",
+                       "LICENSE": "CC0",
+                       "README.txt": "Sample instrument"})
+        result = sfz_pack.install_zip(self.root, self.archive, "Default path sample")
+        self.assertEqual(result["instruments"], 1)
+
+    def test_parent_default_path_rejected(self):
+        self.make_zip({"Cello.sfz": "<control> default_path=../outside/\n<region> sample=c4.wav",
                        "samples/c4.wav": b"sample"})
-        with self.assertRaisesRegex(ValueError, "external paths"):
+        with self.assertRaisesRegex(ValueError, "escapes"):
             sfz_pack.install_zip(self.root, self.archive, "Unsafe defaults")
 
     def test_failed_install_does_not_leave_pack_folder(self):

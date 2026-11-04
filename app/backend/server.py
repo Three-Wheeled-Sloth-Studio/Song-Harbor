@@ -780,10 +780,10 @@ async def add_project_track(ident: str, request: Request,
                                          for row in verified["section_masks"]]
                     if len(replacement_regions)>8:
                         raise ValueError("Too many section regions")
-                elif verified.get("section_id"):
-                    replacement_regions=[(float(start_seconds),float(start_seconds)+float(verified["duration_seconds"]))]
                 else:
-                    raise ValueError("Unsupported MIDI candidate for section replacement")
+                    # A full-score MIDI candidate is one continuous accepted
+                    # region; section composites carry sparse explicit masks.
+                    replacement_regions=[(float(start_seconds),float(start_seconds)+float(verified["duration_seconds"]))]
                 candidate_end=float(start_seconds)+float(verified["duration_seconds"])
                 for a,b in replacement_regions:
                     if not (float(start_seconds)-.005<=a<b<=candidate_end+.005):

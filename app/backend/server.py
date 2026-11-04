@@ -834,6 +834,10 @@ async def add_project_track(ident: str, request: Request,
         if result.returncode or not staging.is_file() or staging.stat().st_size<44:
             raise ValueError("Audio conversion failed: "+(result.stderr or "")[-300:])
         os.replace(staging,final)
+        if isinstance(midi_candidate_id,str) and midi_candidate_id:
+            source_candidate=bass_midi.read_json(DATA_ROOT/"jobs"/ident,midi_candidate_id)
+            if abs(probe_duration(final)-float(source_candidate["duration_seconds"]))>.06:
+                raise ValueError("Section candidate audio duration differs from its approved source-replacement region")
         updated=track_lifecycle.ensure_identities(record)
         if len(updated)>=stem_import.MAX_TRACKS:raise ValueError("Maximum 64 source tracks")
         updated.append({"track_id":track_id,"original_filename":original.name,

@@ -250,6 +250,26 @@ User reported `sfizz_render.exe` loaded and configured on Windows, requested rec
 - If a curated ZIP does not import, inspect its published structure and unsupported opcode; do not mark it installed or silently bypass security checks. Avoid auto-download until producer-approved fixed release and SHA-256 are verified (GitHub asset metadata currently did not include a digest).
 
 ---
+## 2026-11-04: GUI QA from screenshots, plus deferred multi-instrument transcription
+
+User screenshots of dev Stem tools at ~500px width show the saved 243-note arrangement consuming most of the vertical tools window and conventional text buttons wrapping into several lines. The instrument section shows only '+ SF2' and '+ SFZ'; the separately introduced 'Curated SFZ' and 'Starter GM' entry points are not obvious/visible in these screenshots. The user confirms this is a UX failure even if the code contains conditional controls. Treat as actionable QA, not "user missed it".
+
+**Priority UI fixes (requested):**
+1. **Piano roll is a pop-out workspace**, not an embedded editor in Stem Tools. Keep a compact launcher in tools. Provide large/resizable dedicated surface with a close action and full grid/velocity lane. Opening/closing must NOT lose unsaved edits, make hidden changes, or start audio.
+2. **Icon-first controls with hover titles/accessibility labels**, grouped by edit/selection/history/render semantics. Do not create three rows of 'Undo Redo Revert Duplicate...' in the host pane. Reflect disabled state and dirty/save status clearly.
+3. **Discoverable pack loader** with explicit starter SF2 (GeneralUser) and curated SFZ catalog access, clear already-installed state, download/import distinctions, and no misleading one-click promise for untested archives. Check that controls appear in the actual dev build and narrow tools width.
+4. Verify import uses a selected local ZIP, honors 768MB cap and errors, and refreshes instrument selection. User has sfizz installed/configured but no sample pack was successfully imported in these screenshots.
+
+**Deferred musical architecture (user explicitly said to document and circle back):**
+- A complete SFZ drum kit can render multiple GM-mapped drum hits from one MIDI arrangement; our current `polyphonic_midi.to_midi` rejects percussion channel 10. Need explicit kit key maps, drum/event transcription from a mixed drum stem and channel-10/kit render support.
+- Polyphonic strings are not necessarily an ensemble. For full string parts, provide either actual section samples or independent violin/viola/cello/bass MIDI lanes and combined or per-lane rendering. The transcription path is still primarily monophonic; need polyphonic pitch transcription and instrument-family attribution before attempting automated string separation.
+- Keep editable MIDI/arrangement as a durable production asset with group edits; no need to physically split each drum hit into source WAV stems if event transcription can recover kit hits.
+- Design a multi-instrument arrangement and group-aware preview/render model after SFZ initial QA. Preserve source stems, per-lane audition, dynamic scripting, and reversible acceptance.
+- Do not conflate 'SFZ supports polyphony' with 'Song Harbor can automatically extract multiple instruments from an existing audio stem'.
+
+**Status at receipt:** QA/design request recorded; screenshots are evidence of crowded UI, not full functional test; prioritize fixes on `dev`, run build if possible.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

@@ -971,3 +971,10 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-time-sections>button{position:absolute;top:3px;height:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;padding:3px 5px;background:#38556a;border:1px solid #668ba4;border-radius:4px;color:#ecf3f8;font-size:11px;cursor:pointer}
 .song-roll-time-sections>button.is-selected{background:#7a633a;border-color:#e3b965;color:#fff}
 .song-roll-time-sections>button:focus-visible{outline:2px solid #e3b965;outline-offset:-2px}
+
+/* Section batch review: distinguish the entire render selection from one auditioned clip. */
+.song-midi-section-batch{display:flex;align-items:center;flex-wrap:wrap;gap:7px;padding:5px 7px;border:1px solid var(--tws-color-border-normal);border-radius:6px;background:rgba(68,105,120,.13);font-size:11px}
+.song-midi-section-batch strong{font-size:12px}
+.song-midi-section-batch span{color:var(--tws-color-text-muted)}
+.song-midi-section-batch>button{margin-left:auto;min-height:28px;white-space:nowrap}
+.song-midi-section-batch>small{flex-basis:100%}

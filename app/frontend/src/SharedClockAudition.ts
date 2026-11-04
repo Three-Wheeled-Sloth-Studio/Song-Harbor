@@ -393,7 +393,10 @@ export class SharedClockAudition {
     }
     // When auditioning a replacement, the original mix and unrelated stems
     // remain audible. Only the source stem is attenuated, in the selected clips.
-    original.setTargetAtTime(1,now,.008);
+    // Preserve the pre-existing full-mix crossfade behavior for callers which
+    // do not specify a source stem; MIDI replacements instead attenuate only
+    // their selected source stem inside the rendered section regions.
+    original.setTargetAtTime(this.candidateOriginalMix?1:Math.cos(p*Math.PI/2),now,.008);
     if(this.prepared)this.configurePreviewNodes(at,offset);
   }
   candidateWaveform(size=160):number[]{

@@ -40,6 +40,7 @@ import stem_import
 import track_lifecycle
 import declick_recipes
 import midi_arrangements
+import midi_section_slices
 import polyphonic_midi
 import sfz_pack
 import curated_sfz
@@ -1195,6 +1196,47 @@ def arrangement_from_candidate(ident:str,request:Request,
     except (ValueError,KeyError,TypeError,OSError) as exc:
         raise HTTPException(400,str(exc)) from exc
 
+def _render_saved_midi_candidate(project_root:Path,asset_id:str,asset:dict,
+                                  selected:dict,font:Path,revision:int,
+                                  section_id:str="")->dict[str,Any]:
+    """One independently maskable candidate. Input MIDI score remains immutable."""
+    duration=asset["duration_samples"]/midi_arrangements.RATE
+    if not .1<=duration<=bass_midi.MAX_REGION_SECONDS:
+        raise HTTPException(400,"Arrangement render must be 0.1 to 600 seconds")
+    midi=polyphonic_midi.to_midi(asset,selected["program"],selected["bank"])
+    candidate_id=uuid.uuid4().hex
+    folder=bass_midi.candidate_folder(project_root,candidate_id)
+    folder.mkdir(parents=True,exist_ok=False)
+    try:
+        if selected["engine"]=="sf2":
+            instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
+                folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
+        else:
+            sfz_candidate_audio.render_candidate(
+                midi,font,folder/"bowed-preview.wav",duration,
+                dependency_tool("ffmpeg"),APP_ROOT)
+        (folder/"notes.mid").write_bytes(midi)
+        notes=[{"pitch":n["pitch"],"start":round(n["start_sample"]/48000,3),
+                "end":round(n["end_sample"]/48000,3),"velocity":n["velocity"]}
+               for n in asset["notes"]]
+        record={"candidate_id":candidate_id,"source_track_id":asset["source"]["track_id"],
+            "start_seconds":asset["source"]["start_sample"]/48000,
+            "duration_seconds":duration,"notes":notes,"original_notes":notes,
+            "arrangement_id":asset_id,"arrangement_revision":revision,
+            "render_kind":selected["engine"]+"_polyphonic_preview","rendered":True,
+            "instrument":selected["id"],"pack_id":selected["pack_id"],
+            "instrument_sha256":instrument_library.hash_file(font),
+            "instrument_engine":selected["engine"],
+            "pack_sha256":(json.loads((instrument_library.pack_root(DATA_ROOT)/selected["pack_id"]/"manifest.json").read_text(encoding="utf-8")).get("sha256","")),
+            "method":"Saved polyphonic MIDI arrangement",
+            "section_id":section_id}
+        bass_midi.write_json(folder/"candidate.json",record)
+        return record
+    except Exception:
+        shutil.rmtree(folder,ignore_errors=True)
+        raise
+
+
 class PolyphonicRenderRequest(BaseModel):
     revision: int = Field(ge=0)
     pack_id: str = Field(min_length=1,max_length=80)
@@ -1218,43 +1260,54 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
         if selected["engine"] not in ("sf2","sfz"):
             raise HTTPException(400,"Select an installed SF2 or SFZ instrument for arrangement rendering")
-        duration=asset["duration_samples"]/midi_arrangements.RATE
-        if not .1<=duration<=bass_midi.MAX_REGION_SECONDS:
-            raise HTTPException(400,"Arrangement render must be 0.1 to 600 seconds")
-        midi=polyphonic_midi.to_midi(asset,selected["program"],selected["bank"])
-        candidate_id=uuid.uuid4().hex
-        folder=bass_midi.candidate_folder(project_root,candidate_id)
-        folder.mkdir(parents=True,exist_ok=False)
-        try:
-            if selected["engine"]=="sf2":
-                instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
-                    folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
-            else:
-                sfz_candidate_audio.render_candidate(
-                    midi,font,folder/"bowed-preview.wav",duration,
-                    dependency_tool("ffmpeg"),APP_ROOT)
-            (folder/"notes.mid").write_bytes(midi)
-            notes=[{"pitch":n["pitch"],"start":round(n["start_sample"]/48000,3),
-                    "end":round(n["end_sample"]/48000,3),"velocity":n["velocity"]}
-                   for n in asset["notes"]]
-            record={"candidate_id":candidate_id,"source_track_id":asset["source"]["track_id"],
-                "start_seconds":asset["source"]["start_sample"]/48000,
-                "duration_seconds":duration,"notes":notes,"original_notes":notes,
-                "arrangement_id":asset_id,"arrangement_revision":body.revision,
-                "render_kind":selected["engine"]+"_polyphonic_preview","rendered":True,
-                "instrument":selected["id"],"pack_id":selected["pack_id"],
-                "instrument_sha256":instrument_library.hash_file(font),
-                "instrument_engine":selected["engine"],
-                "pack_sha256":(json.loads((instrument_library.pack_root(DATA_ROOT)/selected["pack_id"]/"manifest.json").read_text(encoding="utf-8")).get("sha256","")),
-                "method":"Saved polyphonic MIDI arrangement"}
-            bass_midi.write_json(folder/"candidate.json",record)
-            return record
-        except Exception:
-            shutil.rmtree(folder,ignore_errors=True)
-            raise
+        return _render_saved_midi_candidate(project_root,asset_id,asset,selected,font,body.revision)
     except HTTPException:
         raise
     except (ValueError,OSError,KeyError,TypeError,subprocess.TimeoutExpired,sfz_render_adapter.SFZRenderError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+class SectionalMidiRenderRequest(PolyphonicRenderRequest):
+    section_ids: list[str] = Field(min_length=1,max_length=8)
+
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/render-sections")
+def render_midi_sections(ident:str,asset_id:str,request:Request,
+                         body:SectionalMidiRenderRequest)->dict[str,Any]:
+    """Render independent section clips; acceptance controls each source mask."""
+    require_local_origin(request)
+    _ace_project(ident)
+    root=DATA_ROOT/"jobs"/ident
+    created=[]
+    try:
+        asset=midi_arrangements.read(root,asset_id)
+        if asset["revision"]!=body.revision:
+            raise HTTPException(409,"Saved MIDI arrangement revision changed; reopen latest")
+        project=projects.read_project(DATA_ROOT,ident)
+        if not project:
+            raise HTTPException(404,"Song unavailable")
+        pieces=midi_section_slices.select_sections(
+            asset,project.get("sections",[]),body.section_ids)
+        selected,font=instrument_library.resolve_instrument(
+            DATA_ROOT,body.pack_id,body.instrument_id)
+        if selected["engine"] not in ("sf2","sfz"):
+            raise HTTPException(400,"Select installed SF2 or SFZ instrument")
+        results=[]
+        for piece in pieces:
+            record=_render_saved_midi_candidate(root,asset_id,piece["arrangement"],
+                                                selected,font,body.revision,
+                                                piece["section_id"])
+            created.append(record["candidate_id"])
+            results.append(record)
+        return {"candidates":results}
+    except HTTPException:
+        for candidate_id in created:
+            shutil.rmtree(bass_midi.candidate_folder(root,candidate_id),ignore_errors=True)
+        raise
+    except (ValueError,OSError,KeyError,TypeError,subprocess.TimeoutExpired,
+            sfz_render_adapter.SFZRenderError) as exc:
+        for candidate_id in created:
+            shutil.rmtree(bass_midi.candidate_folder(root,candidate_id),ignore_errors=True)
         raise HTTPException(400,str(exc)) from exc
 
 

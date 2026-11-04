@@ -108,16 +108,19 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage("Imported "+response.instruments+" instruments.");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
- async function installSfzPack(file:File|undefined, name?:string){
+ async function installSfzPack(file:File|undefined, name?:string, curatedId?:string){
    if(!file||installingPack)return;
    setInstallingPack(true);setError("");setMessage("");
    try{
      const form=new FormData();
      form.append("file",file);
      form.append("pack_name",name||file.name.replace(/\\.zip$/i,""));
+     if(curatedId)form.append("curated_id",curatedId);
      const installed=await req<{pack_id:string;instruments:number}>("/api/instruments/sfz",{method:"POST",body:form});
-     const data=await req<InstrumentCatalogue>("/api/instruments");
-     setCatalogue(data);setPackFilter(installed.pack_id);
+     const [data,remaining]=await Promise.all([
+       req<InstrumentCatalogue>("/api/instruments"),
+       req<{packs:CuratedSfz[]}>("/api/instruments/curated-sfz")]);
+     setCatalogue(data);setCuratedSfz(remaining.packs);setPackFilter(installed.pack_id);
      const first=data.instruments.find(x=>x.pack_id===installed.pack_id);
      if(first)chooseInstrument(first.pack_id,first.id);
      setMessage("Imported "+installed.instruments+" SFZ instruments. Render saved arrangement to audition.");
@@ -325,13 +328,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
      {showCurated&&<div className="song-midi-curated" aria-label="Recommended SFZ instrument packs">
        <small>Recommended free instrument packs. Downloads open the publisher's site; ZIP import is local and explicit. Compatibility is not yet verified.</small>
+       {curatedSfz.length===0&&<small>All curated SFZ packs have been imported. Installed instruments remain in the Pack selector.</small>}
        {curatedSfz.map(pack=><div className="song-midi-curated-row" key={pack.id}>
          <span title={pack.description}><strong>{pack.name}</strong> <small>{pack.family} · {pack.fit} · {pack.license}{pack.approx_mb?" · ~"+pack.approx_mb+" MB":""}</small></span>
          <small>{pack.description}</small>
          <a href={pack.download_url} target="_blank" rel="noopener noreferrer" title={"Publisher download: "+pack.source}>Get ZIP</a>
          <label title={"Import the downloaded ZIP for "+pack.name}>Import ZIP
            <input type="file" accept=".zip" disabled={installingPack} aria-label={"Import "+pack.name+" ZIP"}
-            onChange={e=>{void installSfzPack(e.target.files?.[0],pack.name);e.target.value="";}}/>
+            onChange={e=>{void installSfzPack(e.target.files?.[0],pack.name,pack.id);e.target.value="";}}/>
          </label>
          <a href={pack.source_page} target="_blank" rel="noopener noreferrer" title={"Publisher and licensing information for "+pack.name}>Source</a>
        </div>)}

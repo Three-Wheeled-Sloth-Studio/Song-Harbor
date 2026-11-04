@@ -19,7 +19,7 @@ MAX_FILES = 12000
 MAX_SFZ_BYTES = 2 * 1024 * 1024
 EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
 # Ignore documentation/GUI resources rather than executing or importing them.
-METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg"}
+METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg", ".nki", ".nkm", ".nkc", ".nkr", ".nkx"}
 METADATA_NAMES = {"readme", "license", "copying", "authors", "changelog", "notice"}
 UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b")
 DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")

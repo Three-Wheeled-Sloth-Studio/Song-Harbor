@@ -59,10 +59,11 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, settingsOpen }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, settingsOpen }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   onConfigureFluidSynth?:()=>void;
+  onConfigureSfizz?:()=>void;
   settingsOpen?:boolean;
   savedStems?: SavedStem[];
   trackLabels?: Record<string,string>;
@@ -1549,7 +1550,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onStemMix={(filename,changes)=>update(filename,changes)}
           engine={audio.current} playing={playing} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
-          saveProject={saveProject} onError={setError} onConfigureFluidSynth={onConfigureFluidSynth} settingsOpen={settingsOpen}/>}
+          saveProject={saveProject} onError={setError} onConfigureFluidSynth={onConfigureFluidSynth} onConfigureSfizz={onConfigureSfizz} settingsOpen={settingsOpen}/>}
         {tool==="ending"&&<>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>

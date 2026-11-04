@@ -384,6 +384,32 @@ The user reported Windows dev launcher failed `tsc --noEmit && vite build` at `s
 **Limitations:** A multi-section selection currently produces multiple independent imported stems, *not* one combined long stem with silent gaps and multiple replacement masks. This is an intentional first-pass use of the existing reversible clip infrastructure. The batch action is sequential and not transactionally all-or-nothing; partial successes remain if a later clip fails. In-browser QA/real audio checks are outstanding; GitHub source edits alone do not prove successful build or output.
 
 ---
+## 2026-11-04: multi-section audition and numbered batch stem names
+
+### Confirmed user QA
+- **Remove stem works** in Windows DEV.
+- **Add all five sections works**, creating five clips and applying source reduction only to corresponding regions.
+- **Solo Preview** still played only the first region before this slice; **A/B** was ambiguous.
+- No prefix entry for batch stem naming; user explicitly wants a name prefix and deterministic suffix `_#`.
+
+### New code (on dev only)
+- `03d4078` `SharedClockAudition.ts`: group preview audio loading with `loadCandidatePreviews([{url,startSeconds}, ...])`, bounded 24 independent clips. Decode all/validate nonoverlap, then publish atomically; schedule multiple independent buffer sources on shared AudioContext absolute song time, without constructing one massive silent song buffer. Existing one-clip API remains. Clear/seek/stop now manage all preview sources; trim/solo/blend actions apply consistently across grouped candidates. During replacement preview, the original SOURCE stem alone gets a temporary, per-region gain mask, not the full song or all backing stems.
+- `1fbe0d9` declares explicit `CandidatePreview` type for TypeScript.
+- `ffa4dea` retains existing non-MIDI, no-source-selected whole-mix crossfade behavior to avoid regression.
+- `9f03a5b` `BassMidiTool.tsx`: Scope selector defaults to All rendered sections, optionally This section. **Solo** plays rendered MIDI alone for selected previews and auto-skips gaps. **A: Current** plays the current song mix WITHOUT unaccepted preview, **B: MIDI** plays the generated replacement in selected regions with the current backing mix. Separate buttons and a state label clarify comparison. A/B changes keep the current playhead when inside a target region. Source retained level is shown by the existing Original slider.
+- `4381ab8`: start audition at first selected rendered region when playhead was outside the selection.
+- `d3a6703`: added editable batch Prefix field; `Add all N sections` generates deterministic aliases `Prefix_1`, `Prefix_2`, ... using full original rendered queue order (maintains numbers if some sections accepted already). Validates allowed alias characters and rejects known existing name collisions before starting. Does not silently overwrite clips. The individual Add this section action continues to use its own alias input.
+- `54822ee`: compact alias input and visible active audition state styling.
+
+### QA not executed remotely
+- Re-launch dev, run `npm run build` and existing backend tests. **No TypeScript/Vite build, rendered-audio playback, waveform listening, or actual five-clip audition was executed by the coding agent.** Static source check alone cannot establish audio correctness.
+- Render five noncontiguous sections. Scope=All 5, Solo: audition should play each selected generated clip and jump unselected gaps. Scope=This section should audition one only. A: Current should include original/current song mix, while B: MIDI should overlay generated clips and attenuate ONLY selected source sections. Click A/B during playback inside a selected section and verify no arbitrary restart.
+- Check clipping, sound gap transitions, seeking into middle of second/third section, pause/resume and replay, and the behavior when already accepted stems are present (A reflects current mix, including accepted stems, not historical untouched source).
+- Prefix e.g. `GrowlyBass` should add aliases `GrowlyBass_1 ... GrowlyBass_5`; verify correct section ordering and no duplicate aliases after prior imports. Check input rejects invalid prefixes and collisions. Partial failure must leave accepted clips removable; no automatic rollback is claimed.
+- User's previous five-clip rendered candidates may have been discarded by app refresh; re-render to exercise current batch preview. Source files remain untouched.
+- Design note: Solo gap skipping happens while Song Harbor's normal transport is playing and may have a slight scheduling edge at section boundaries. Evaluate perceptual jumps and Web Audio playback responsiveness in Windows. Separate native modeless window support is not introduced here.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

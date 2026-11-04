@@ -340,7 +340,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <a href={pack.source_page} target="_blank" rel="noopener noreferrer" title={"Publisher and licensing information for "+pack.name}>Source</a>
        </div>)}
      </div>}
-     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId} onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId}
+       sections={sections} instruments={catalogue.instruments} selectedInstrument={instrumentPack+"::"+instrument}
+       onInstrumentChange={key=>{const [pack,id]=key.split("::");chooseInstrument(pack,id);}}
+       onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>
      {candidate&&!candidate.arrangement_id&&!arrangementId&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>

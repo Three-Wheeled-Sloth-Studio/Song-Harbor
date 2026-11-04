@@ -20,6 +20,7 @@ MAX_SFZ_BYTES = 2 * 1024 * 1024
 EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
 # Ignore documentation/GUI resources rather than executing or importing them.
 METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg"}
+METADATA_NAMES = {"readme", "license", "copying", "authors", "changelog", "notice"}
 UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b")
 DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
@@ -54,7 +55,7 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
                 raise ValueError("SFZ archive links and special files are forbidden")
             if member.is_dir():
                 continue
-            if path.suffix.lower() not in EXTENSIONS | METADATA_EXTENSIONS:
+            if path.suffix.lower() not in EXTENSIONS | METADATA_EXTENSIONS and path.name.casefold() not in METADATA_NAMES:
                 raise ValueError("SFZ ZIP contains unsupported file type")
             if member.file_size < 0 or member.file_size > MAX_UNPACKED_BYTES:
                 raise ValueError("Oversized sample in SFZ archive")
@@ -83,7 +84,7 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
                 target = destination.joinpath(*relative.parts)
                 if member.is_dir():
                     continue
-                if relative.suffix.lower() in METADATA_EXTENSIONS:
+                if relative.suffix.lower() in METADATA_EXTENSIONS or relative.name.casefold() in METADATA_NAMES:
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with z.open(member) as source, target.open("xb") as output:

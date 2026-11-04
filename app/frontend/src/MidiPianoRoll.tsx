@@ -8,7 +8,7 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
-type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement)=>Promise<void>;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[])=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -245,7 +245,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
-     <small>{selectedSections.length?selectedSections.length+" sections selected · sectional rendering not yet enabled":"Whole saved arrangement"}</small>
+     <small>{selectedSections.length?selectedSections.length+" sections selected · one candidate per section":"Whole saved arrangement"}</small>
    </div>}
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>
@@ -264,7 +264,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
     <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes" aria-label="Copy">⎘</button>
     <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement" aria-label="Paste">⎗</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy} title="Save arrangement edits" aria-label="Save arrangement edits">▣{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Render saved arrangement with selected instrument pack" aria-label="Render arrangement">▶ Render</button></>}
+    <button type="button" onClick={()=>{void onUse(asset,selectedSections).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>8} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">

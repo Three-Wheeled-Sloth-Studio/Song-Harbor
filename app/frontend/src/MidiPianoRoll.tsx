@@ -271,9 +271,9 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
       })}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Overlapping notes render with SF2 instruments; other instrument types are not yet supported for saved arrangements. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Saved arrangements render with configured SF2 or SFZ instruments; full drum-kit key maps and ensemble lanes are future work. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
-   {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
+   {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select a configured SF2 or SFZ instrument and render from the editor.</small>}
    {message&&<small role="status">{message}</small>}
   </section></div>,document.body)}
  </div>;

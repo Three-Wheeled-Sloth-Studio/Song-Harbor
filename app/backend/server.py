@@ -44,6 +44,7 @@ import polyphonic_midi
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
+import sfz_candidate_audio
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1225,25 +1226,9 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
                 instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
                     folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
             else:
-                import tempfile
-                with tempfile.TemporaryDirectory(prefix="sh-sfz-",dir=folder) as tmp:
-                    scratch=Path(tmp)
-                    note_file=scratch/"notes.mid"
-                    note_file.write_bytes(midi)
-                    raw=scratch/"render.wav"
-                    sfz_render_adapter.render_sfz(note_file,font,raw,config_root=APP_ROOT,
-                        timeout_seconds=min(360,max(30,int(duration*2))))
-                    aligned=scratch/"aligned.wav"
-                    converted=subprocess.run([
-                        dependency_tool("ffmpeg"),"-hide_banner","-loglevel","error",
-                        "-nostdin","-y","-i",str(raw),
-                        "-af",f"apad,atrim=duration={duration:.3f}",
-                        "-ar","48000","-ac","2","-c:a","pcm_s16le",str(aligned)
-                    ],capture_output=True,text=True,timeout=180,
-                      creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
-                    if converted.returncode or not aligned.is_file() or aligned.stat().st_size<44:
-                        raise ValueError("Could not align SFZ render to MIDI arrangement region")
-                    os.replace(aligned,folder/"bowed-preview.wav")
+                sfz_candidate_audio.render_candidate(
+                    midi,font,folder/"bowed-preview.wav",duration,
+                    dependency_tool("ffmpeg"),APP_ROOT)
             (folder/"notes.mid").write_bytes(midi)
             notes=[{"pitch":n["pitch"],"start":round(n["start_sample"]/48000,3),
                     "end":round(n["end_sample"]/48000,3),"velocity":n["velocity"]}
@@ -1344,17 +1329,26 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
         if selected["engine"]=="sf2":
             instrument_library.render_sf2(DATA_ROOT,selected,font,midi,
                 folder/"bowed-preview.wav",duration,dependency_tool("ffmpeg"),APP_ROOT)
-        else:
+        elif selected["engine"]=="sfz":
+            sfz_candidate_audio.render_candidate(
+                midi,font,folder/"bowed-preview.wav",duration,
+                dependency_tool("ffmpeg"),APP_ROOT)
+        elif selected["engine"]=="synthetic":
             bass_midi.render_instrument_wav(folder/"bowed-preview.wav",notes,duration,selected["id"])
+        else:
+            raise ValueError("Unsupported local instrument engine")
         (folder/"notes.mid").write_bytes(midi)
         record["notes"]=notes
         record["render_kind"]=selected["engine"]+"_"+selected["id"]+"_preview"
+        record["instrument_engine"]=selected["engine"]
+        if font is not None:
+            record["instrument_sha256"]=instrument_library.hash_file(font)
         record["instrument"]=selected["id"]
         record["pack_id"]=selected["pack_id"]
         record["rendered"]=True
         bass_midi.write_json(folder/"candidate.json",record)
         return record
-    except (ValueError,OSError) as exc:
+    except (ValueError,OSError,subprocess.TimeoutExpired,sfz_render_adapter.SFZRenderError) as exc:
         raise HTTPException(400,str(exc)) from exc
 
 

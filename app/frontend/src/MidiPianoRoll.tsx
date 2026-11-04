@@ -8,7 +8,9 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
-type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[])=>Promise<void>;onError:(error:string)=>void};
+export type DrumOptions={percussion:boolean;drum_keymap:{schema_version:number;mapping_kind:"gm"|"custom";lanes:{pitch:number;name:string}[]}|null};
+const GM_KIT:Record<number,string>={35:"Acoustic Kick",36:"Kick",37:"Rim",38:"Snare",39:"Clap",40:"Electric Snare",41:"Floor Tom",42:"Closed Hat",43:"Floor Tom",44:"Pedal Hat",45:"Low Tom",46:"Open Hat",47:"Mid Tom",48:"Mid Tom",49:"Crash",50:"High Tom",51:"Ride",52:"China",53:"Ride Bell",54:"Tambourine",55:"Splash",56:"Cowbell",57:"Crash 2",58:"Vibraslap",59:"Ride 2",60:"Bongo",61:"Bongo",62:"Conga",63:"Conga",64:"Conga",65:"Timbale",66:"Timbale",67:"Agogo",68:"Agogo",69:"Cabasa",70:"Maracas",71:"Whistle",72:"Whistle",73:"Guiro",74:"Guiro",75:"Claves",76:"Wood Block",77:"Wood Block",78:"Cuica",79:"Cuica",80:"Triangle",81:"Triangle"};
+type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -35,6 +37,10 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
  const [notes,setNotes]=useState<RollNote[]>([]);
+ const [drumMode,setDrumMode]=useState(false);
+ const [kitKind,setKitKind]=useState<"gm"|"custom">("gm");
+ const [kitText,setKitText]=useState("");
+ const [kitExpanded,setKitExpanded]=useState(false);
  const [history,setHistory]=useState<RollNote[][]>([]);
  const [future,setFuture]=useState<RollNote[][]>([]);
  const [selected,setSelected]=useState("");
@@ -61,21 +67,43 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   window.addEventListener("beforeunload",guard);
   return()=>window.removeEventListener("beforeunload",guard);
  },[dirty]);
+ const sfzSelected=instruments.some(x=>x.pack_id+"::"+x.id===selectedInstrument&&x.engine==="sfz");
+ const keyWidth=drumMode?148:KEY_WIDTH, topPitch=drumMode?81:PITCH_HIGH;
+ let kitLanes:{pitch:number;name:string}[]=[],kitError="";
+ if(drumMode){
+  if(kitKind==="gm")kitLanes=Object.entries(GM_KIT).map(([p,name])=>({pitch:Number(p),name}));
+  else try{
+   const used=new Set<number>();
+   for(const line of kitText.split(/\r?\n/)){
+    if(!line.trim())continue;
+    const match=/^\s*(\d{1,3})\s*[=:]\s*(.{1,80})\s*$/.exec(line);
+    if(!match||Number(match[1])>127||used.has(Number(match[1])))throw Error("Kit lanes must be unique MIDI pitch = name entries.");
+    used.add(Number(match[1]));kitLanes.push({pitch:Number(match[1]),name:match[2].trim()});
+   }
+   if(!kitLanes.length)throw Error("Define at least one kit lane.");
+  }catch(e){kitError=String(e);}
+  if(sfzSelected&&kitKind==="gm")kitError="Select a verified custom map for SFZ drums.";
+  const keys=new Set(kitLanes.map(l=>l.pitch));
+  const missing=[...new Set(notes.filter(n=>!keys.has(n.pitch)).map(n=>n.pitch))];
+  if(missing.length)kitError="Unmapped drum pitches: "+missing.join(", ");
+ }
+ const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
+ const drumOptions:DrumOptions={percussion:drumMode,drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null};
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
- const width=asset?Math.max(540,KEY_WIDTH+asset.duration_samples/RATE*pixelsPerSecond+18):540;
- const rollHeight=(PITCH_HIGH-PITCH_LOW+1)*ROW;
+ const width=asset?Math.max(540,keyWidth+asset.duration_samples/RATE*pixelsPerSecond+18):540;
+ const rollHeight=(topPitch-PITCH_LOW+1)*ROW;
  const height=rollHeight+VELOCITY_HEIGHT;
  const q=(sample:number)=>snap?Math.round(sample/(RATE*gridMs/1000))*(RATE*gridMs/1000):Math.round(sample);
- const toX=(sample:number)=>KEY_WIDTH+sample/RATE*pixelsPerSecond;
- const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-KEY_WIDTH)/pixelsPerSecond*RATE)));
- const toY=(pitch:number)=>(PITCH_HIGH-pitch)*ROW;
+ const toX=(sample:number)=>keyWidth+sample/RATE*pixelsPerSecond;
+ const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-keyWidth)/pixelsPerSecond*RATE)));
+ const toY=(pitch:number)=>(topPitch-pitch)*ROW;
  function edit(updated:RollNote[],record=true){
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
   setNotes(updated);notesRef.current=updated;
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setSelectedSections([]);setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
+ function open(value:Arrangement){setSelectedSections([]);setDrumMode(value.notes.length>0&&value.notes.every(n=>n.channel===9));setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
  async function refresh(){try{const found=await request<{arrangements:Summary[]}>(root);setListing(found.arrangements);}catch(error){onError(String(error));}}
  useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);void refresh();},[jobId,sourceTrackId]);
  useEffect(()=>{if(!requestedAssetId)return;
@@ -130,14 +158,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   const high=Math.max(...picked.map(n=>n.end_sample));
   const minPitch=Math.min(...picked.map(n=>n.pitch)),maxPitch=Math.max(...picked.map(n=>n.pitch));
   const delta=Math.max(-low,Math.min(asset.duration_samples-high,timeDelta));
-  const pitch=Math.max(-minPitch,Math.min(127-maxPitch,pitchDelta));
+  const pitch=Math.max(PITCH_LOW-minPitch,Math.min(topPitch-maxPitch,pitchDelta));
   edit(notesRef.current.map(n=>ids.has(n.id)?{...n,pitch:n.pitch+pitch,
     start_sample:n.start_sample+delta,end_sample:n.end_sample+delta}:n));
  }
  function addAt(x:number,pitch:number){if(!asset)return;
-  const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*.5);
+  const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*(drumMode?.15:.5));
   if(end-start<MIN_NOTE)return;
-  const note:RollNote={id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:Math.round(end),pitch,velocity:85,channel:0};
+  const note:RollNote={id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:Math.round(end),pitch,velocity:85,channel:drumMode?9:0};
   edit([...notesRef.current,note]);selectOne(note.id);scrollerRef.current?.focus();}
  function startDrag(event:ReactPointerEvent<SVGRectElement>,note:RollNote,mode:"move"|"resize"){
   event.stopPropagation();
@@ -258,18 +286,34 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
     <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes" aria-label="Copy">⎘</button>
     <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement" aria-label="Paste">⎗</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy} title="Save arrangement edits" aria-label="Save arrangement edits">▣{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset,selectedSections).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>8} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
+    <button type="button" onClick={()=>{void onUse(asset,selectedSections,drumOptions).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>8||(drumMode&&!!kitError)} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
-     <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap</label>
+     <label>Drums <input type="checkbox" checked={drumMode} onChange={e=>{
+       const enabled=e.target.checked;
+       if(notesRef.current.length&&!window.confirm("Convert notes to "+(enabled?"channel 10 percussion":"channel 1 melodic")+"? Save before rendering."))return;
+       setDrumMode(enabled);
+       if(notesRef.current.length)edit(notesRef.current.map(n=>({...n,channel:enabled?9:0})));
+      }}/></label>
+      {drumMode&&<label>Kit <select aria-label="Drum kit mapping" value={kitKind} onChange={e=>{setKitKind(e.target.value as "gm"|"custom");setKitExpanded(e.target.value==="custom");}}>
+       <option value="gm" disabled={sfzSelected}>GM SoundFont</option><option value="custom">Custom / SFZ</option>
+      </select></label>}
+      {drumMode&&kitKind==="custom"&&<button type="button" onClick={()=>setKitExpanded(v=>!v)}>Map notes</button>}
+      {kitError&&<small role="alert">{kitError}</small>}
+      <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap</label>
      <label>Grid <select value={gridMs} onChange={e=>setGridMs(Number(e.target.value))}><option value={125}>125 ms</option><option value={250}>250 ms</option><option value={500}>500 ms</option></select></label>
-     <label>Zoom <select aria-label="Piano roll horizontal zoom" value={pixelsPerSecond} onChange={e=>{const next=Number(e.target.value);const scroller=scrollerRef.current;const center=scroller?(scroller.scrollLeft+scroller.clientWidth/2-KEY_WIDTH)/pixelsPerSecond:0;setPixelsPerSecond(next);if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=Math.max(0,KEY_WIDTH+center*next-scroller.clientWidth/2);});}}><option value={24}>Overview</option><option value={65}>Normal</option><option value={130}>Close</option><option value={260}>Detail</option></select></label>
+     <label>Zoom <select aria-label="Piano roll horizontal zoom" value={pixelsPerSecond} onChange={e=>{const next=Number(e.target.value);const scroller=scrollerRef.current;const center=scroller?(scroller.scrollLeft+scroller.clientWidth/2-keyWidth)/pixelsPerSecond:0;setPixelsPerSecond(next);if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=Math.max(0,keyWidth+center*next-scroller.clientWidth/2);});}}><option value={24}>Overview</option><option value={65}>Normal</option><option value={130}>Close</option><option value={260}>Detail</option></select></label>
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
      {active&&<label>{selectedIds.length>1?"Selection velocity":"Velocity"} <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127){const ids=new Set(selectedIds);edit(notesRef.current.map(n=>ids.has(n.id)?{...n,velocity}:n));}}}/></label>}
      <span>{selectedIds.length} notes selected · {selectedSections.length} sections selected</span>
     </div>
-    <div className="song-roll-scroller" ref={scrollerRef} tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
+    {drumMode&&kitKind==="custom"&&kitExpanded&&<div className="song-roll-toolbar song-roll-options">
+      <label>Kit note mappings <textarea aria-label="Custom drum keymap" rows={5} value={kitText}
+       placeholder={"36 = Kick\n38 = Snare\n42 = Closed Hat"} onChange={e=>setKitText(e.target.value)}/></label>
+      <small>Use playable SFZ note pitches. Labels do not remap samples.</small>
+     </div>}
+     <div className="song-roll-scroller" ref={scrollerRef} tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
      onKeyDown={e=>{if(e.target!==e.currentTarget)return;
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="a"){e.preventDefault();setSelectedIds(notes.map(n=>n.id));setSelected(notes[0]?.id||"");}
       if(e.key==="Escape"){e.preventDefault();setSelectedIds([]);setSelected("");}
@@ -301,20 +345,20 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        })}
      </div>}
      <svg width={width} height={height} role="img" aria-label="Editable piano roll">
-      {Array.from({length:PITCH_HIGH-PITCH_LOW+1},(_,i)=>{const p=PITCH_HIGH-i;return <g key={p}>
+      {Array.from({length:topPitch-PITCH_LOW+1},(_,i)=>{const p=topPitch-i;return <g key={p}>
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
-       <rect x={0} y={i*ROW} width={KEY_WIDTH} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#8897a7":"#e2e7eb"} />
-       <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{pitchLabel(p)}</text>
-       <rect x={KEY_WIDTH} y={i*ROW} width={width-KEY_WIDTH} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
+       <rect x={0} y={i*ROW} width={keyWidth} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#8897a7":"#e2e7eb"} />
+       <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{drumMode?(kitNames.get(p)||('Note '+p)):pitchLabel(p)}</text>
+       <rect x={keyWidth} y={i*ROW} width={width-keyWidth} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
       </g>;})}
-      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={KEY_WIDTH+i*pixelsPerSecond*.5} y1={0} x2={KEY_WIDTH+i*pixelsPerSecond*.5} y2={rollHeight} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
-      {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>PITCH_HIGH)return null;return <g key={note.id}>
+      {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={keyWidth+i*pixelsPerSecond*.5} y1={0} x2={keyWidth+i*pixelsPerSecond*.5} y2={rollHeight} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
+      {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>topPitch)return null;return <g key={note.id}>
        <rect x={x} y={y+2} width={w} height={ROW-4} rx={2} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"} stroke="#d6eee7" strokeWidth={1} onPointerDown={e=>startDrag(e,note,"move")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
        <rect x={x+Math.max(0,w-6)} y={y+2} width={Math.min(6,w)} height={ROW-4} fill="#467f82" onPointerDown={e=>startDrag(e,note,"resize")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
       </g>;})}
       <rect x={0} y={rollHeight} width={width} height={VELOCITY_HEIGHT} fill="#192633" stroke="#536171" strokeWidth={1}/>
       <text x={4} y={rollHeight+14} fill="#e2e7eb" fontSize={11}>Velocity</text>
-      {[32,64,96,127].map(v=><line key={v} x1={KEY_WIDTH} x2={width} y1={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} y2={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} stroke="#8196a5" strokeOpacity={.25} pointerEvents="none"/>)}
+      {[32,64,96,127].map(v=><line key={v} x1={keyWidth} x2={width} y1={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} y2={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} stroke="#8196a5" strokeOpacity={.25} pointerEvents="none"/>)}
       {notes.map(note=>{
        const x=toX(note.start_sample), barWidth=Math.max(5,Math.min(12,toX(note.end_sample)-x));
        const heightValue=note.velocity/127*(VELOCITY_HEIGHT-18);
@@ -326,7 +370,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
       })}
      </svg>
     </div>
-    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Saved arrangements render with configured SF2 or SFZ instruments; full drum-kit key maps and ensemble lanes are future work. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
+    <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Saved arrangements render with configured SF2 or SFZ instruments; drum mode uses explicit kit note mappings; ensemble lanes are future work. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select a configured SF2 or SFZ instrument and render from the editor.</small>}
    {message&&<small role="status">{message}</small>}

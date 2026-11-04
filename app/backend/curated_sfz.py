@@ -75,5 +75,20 @@ CURATED_SFZ = [
 ]
 
 
-def curated_catalogue() -> list[dict]:
-    return [dict(entry) for entry in CURATED_SFZ]
+def curated_catalogue(installed_packs: list[dict] | None = None) -> list[dict]:
+    """Filter installed packs; use stable IDs when available and legacy names otherwise."""
+    import re
+    def normalized(value: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", value.casefold())
+    installed_ids = {p.get("curated_id") for p in (installed_packs or [])}
+    installed_names = {normalized(str(p.get("name", ""))) for p in (installed_packs or [])}
+    return [
+        dict(entry) for entry in CURATED_SFZ
+        if entry["id"] not in installed_ids and
+           normalized(entry["name"]) not in installed_names and
+           not any(
+               normalized(entry["id"]) in name
+               for name in installed_names
+               if len(normalized(entry["id"])) >= 8
+           )
+    ]

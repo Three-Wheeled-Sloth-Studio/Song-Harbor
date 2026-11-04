@@ -32,7 +32,7 @@ async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fet
 export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,onConfigureSfizz,settingsOpen,midiSession,onMidiSessionChange}:Props){
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
- const [functionMode,setFunctionMode]=useState<"mix"|"midi">("mix");
+ const [functionMode,setFunctionMode]=useState<"mix"|"midi">(midiSession?.jobId===jobId&&midiSession.candidates.length?"midi":"mix");
  const [regionMode,setRegionMode]=useState<"song"|"span"|"custom">("song");
  const [fromId,setFromId]=useState("");
  const [toId,setToId]=useState("");
@@ -43,7 +43,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [sectionQueue,setSectionQueue]=useState<Candidate[]>(persisted?.candidates||[]);
  const [sectionIndex,setSectionIndex]=useState(persisted?.index||0);
  const [acceptedSectionIds,setAcceptedSectionIds]=useState<string[]>(persisted?.acceptedSectionIds||[]);
- const [arrangementId,setArrangementId]=useState("");
+ const [arrangementId,setArrangementId]=useState(persisted?.candidates[persisted.index]?.arrangement_id||"");
  const [rollDirty,setRollDirty]=useState(false);
  useEffect(()=>{if(rollDirty){setPreviewReady(false);engine?.clearCandidatePreview();}},[rollDirty,engine]);
  const [notes,setNotes]=useState<Note[]>([]);
@@ -87,6 +87,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  useEffect(()=>{let live=true;
    const previous=midiSession?.jobId===jobId?midiSession:null;
    setCandidate(previous?.candidates[previous.index]||null);
+   setArrangementId(previous?.candidates[previous.index]?.arrangement_id||"");
    setNotes(previous?.candidates[previous.index]?.notes||[]);
    setSectionQueue(previous?.candidates||[]);
    setSectionIndex(previous?.index||0);

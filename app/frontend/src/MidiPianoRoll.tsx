@@ -230,17 +230,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        <header className="song-roll-popout-header" onPointerDown={startWindowDrag} onPointerMove={dragWindow} onPointerUp={()=>{moveWindow.current=null;}} onLostPointerCapture={()=>{moveWindow.current=null;}} title="Drag to move piano roll window"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>
-   {asset&&<div className="song-roll-sections" aria-label="Arrangement sections">
-     <small title="Click one; Ctrl/Shift-click adds; Alt-click selects all instances of the same section type.">Sections</small>
-     {visibleSections.map(section=><button type="button" key={section.id}
-        title={section.kind+(section.number?" "+section.number:"")+" · Alt-click to select all "+section.kind+" sections"}
-        className={selectedSections.includes(section.id)?"is-selected":""}
-        aria-pressed={selectedSections.includes(section.id)}
-        onClick={event=>chooseSection(section,event)}>
-        {section.kind}{section.number?" "+section.number:""}
-     </button>)}
-     {!!selectedSections.length&&<button type="button" title="Clear section selection" onClick={()=>setSelectedSections([])}>×</button>}
-   </div>}
    {asset&&<div className="song-roll-instrument">
      <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
@@ -273,7 +262,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      <label>Zoom <select aria-label="Piano roll horizontal zoom" value={pixelsPerSecond} onChange={e=>{const next=Number(e.target.value);const scroller=scrollerRef.current;const center=scroller?(scroller.scrollLeft+scroller.clientWidth/2-KEY_WIDTH)/pixelsPerSecond:0;setPixelsPerSecond(next);if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=Math.max(0,KEY_WIDTH+center*next-scroller.clientWidth/2);});}}><option value={24}>Overview</option><option value={65}>Normal</option><option value={130}>Close</option><option value={260}>Detail</option></select></label>
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
      {active&&<label>{selectedIds.length>1?"Selection velocity":"Velocity"} <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127){const ids=new Set(selectedIds);edit(notesRef.current.map(n=>ids.has(n.id)?{...n,velocity}:n));}}}/></label>}
-     <span>{selectedIds.length} selected</span>
+     <span>{selectedIds.length} notes selected · {selectedSections.length} sections selected</span>
     </div>
     <div className="song-roll-scroller" ref={scrollerRef} tabIndex={0} aria-label="Piano roll; click empty grid to add notes, drag notes to move, drag right edge to resize"
      onKeyDown={e=>{if(e.target!==e.currentTarget)return;
@@ -289,6 +278,23 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        e.preventDefault();const step=Math.round(RATE*gridMs/1000);
        nudgeSelected(e.key==="ArrowUp"?1:e.key==="ArrowDown"?-1:0,e.key==="ArrowRight"?step:e.key==="ArrowLeft"?-step:0);
       }}}>
+     {asset&&<div className="song-roll-time-sections" style={{width,height:32}} aria-label="Song sections, aligned with the MIDI timeline">
+       <span className="song-roll-time-key" title="Ctrl or Shift click adds; Alt click selects all of this section type.">§</span>
+       {visibleSections.map(section=>{
+         const localStart=Math.max(0,section.start_seconds*RATE-asset.source.start_sample);
+         const localEnd=Math.min(asset.duration_samples,section.end_seconds*RATE-asset.source.start_sample);
+         const left=toX(localStart);
+         const span=(localEnd-localStart)/RATE*pixelsPerSecond;
+         return <button key={section.id} type="button"
+           style={{left,width:Math.max(7,span)}}
+           className={selectedSections.includes(section.id)?"is-selected":""}
+           aria-pressed={selectedSections.includes(section.id)}
+           title={section.kind+(section.number?" "+section.number:"")+" · "+section.start_seconds.toFixed(2)+"-"+section.end_seconds.toFixed(2)+"s · Alt-click selects all "+section.kind+" sections"}
+           onClick={event=>chooseSection(section,event)}>
+           {section.kind}{section.number?" "+section.number:""}
+         </button>;
+       })}
+     </div>}
      <svg width={width} height={height} role="img" aria-label="Editable piano roll">
       {Array.from({length:PITCH_HIGH-PITCH_LOW+1},(_,i)=>{const p=PITCH_HIGH-i;return <g key={p}>
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>

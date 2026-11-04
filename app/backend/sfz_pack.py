@@ -83,7 +83,14 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with z.open(member) as source, target.open("xb") as output:
-                    shutil.copyfileobj(source, output, length=1024*1024)
+                    extracted = 0
+                    while chunk := source.read(1024 * 1024):
+                        extracted += len(chunk)
+                        if extracted > member.file_size or extracted > MAX_UNPACKED_BYTES:
+                            raise ValueError("SFZ ZIP entry expanded beyond declared size")
+                        output.write(chunk)
+                    if extracted != member.file_size:
+                        raise ValueError("SFZ ZIP entry has an unexpected size")
         definitions = sorted(p for p in destination.rglob("*") if p.suffix.lower() == ".sfz" and p.is_file())
         manifest_instruments = []
         for index, definition in enumerate(definitions):

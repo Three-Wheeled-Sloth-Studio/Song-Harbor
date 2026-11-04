@@ -22,7 +22,7 @@ import {findingReviewKey,markReviewed} from "./FindingReview";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {CleanupReview} from "./CleanupReview";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
-import {BassMidiTool} from "./BassMidiTool";
+import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import type { SongSection } from "./SectionEditor";
@@ -59,11 +59,13 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, settingsOpen }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, midiSession, onMidiSessionChange, settingsOpen }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   onConfigureFluidSynth?:()=>void;
   onConfigureSfizz?:()=>void;
+  midiSession?:MidiRenderSession|null;
+  onMidiSessionChange?:(value:MidiRenderSession|null)=>void;
   settingsOpen?:boolean;
   savedStems?: SavedStem[];
   trackLabels?: Record<string,string>;
@@ -1550,7 +1552,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           onStemMix={(filename,changes)=>update(filename,changes)}
           engine={audio.current} playing={playing} onSeek={seek}
           onPlay={togglePlayback} onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
-          saveProject={saveProject} onError={setError} onConfigureFluidSynth={onConfigureFluidSynth} onConfigureSfizz={onConfigureSfizz} settingsOpen={settingsOpen}/>}
+          saveProject={saveProject} onError={setError} onConfigureFluidSynth={onConfigureFluidSynth} onConfigureSfizz={onConfigureSfizz}
+          midiSession={midiSession} onMidiSessionChange={onMidiSessionChange} settingsOpen={settingsOpen}/>}
         {tool==="ending"&&<>
         <EndingTool jobId={jobId} sections={timelineSections} ending={ending}
           onChange={value=>{setEnding(value);setMixUrl(null);setScriptRevision(v=>v+1);}}/>

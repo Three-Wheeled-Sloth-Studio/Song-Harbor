@@ -78,10 +78,24 @@ class SFZPackTests(unittest.TestCase):
         result = sfz_pack.install_zip(self.root, self.archive, "Default path sample")
         self.assertEqual(result["instruments"], 1)
 
+    def test_sibling_sample_folder_allowed(self):
+        self.make_zip({
+            "Programs/Cello.sfz": "<control> default_path=../Samples/\n<region> sample=C4.wav",
+            "Samples/C4.wav": b"sample",
+            "Programs/Cello.nki": b"Kontakt companion not imported",
+            "README": "Original publisher notes"
+        })
+        outcome = sfz_pack.install_zip(self.root, self.archive, "Cello")
+        self.assertEqual(outcome["instruments"], 1)
+        imported = next((self.root / "instrument-packs").iterdir())
+        self.assertFalse((imported / "Programs" / "Cello.nki").exists())
+        self.assertTrue((imported / "Programs" / "Cello.sfz").is_file())
+        self.assertTrue((imported / "Samples" / "C4.wav").is_file())
+
     def test_parent_default_path_rejected(self):
         self.make_zip({"Cello.sfz": "<control> default_path=../outside/\n<region> sample=c4.wav",
                        "samples/c4.wav": b"sample"})
-        with self.assertRaisesRegex(ValueError, "escapes"):
+        with self.assertRaisesRegex(ValueError, "missing or external"):
             sfz_pack.install_zip(self.root, self.archive, "Unsafe defaults")
 
     def test_failed_install_does_not_leave_pack_folder(self):

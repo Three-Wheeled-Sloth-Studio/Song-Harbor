@@ -349,6 +349,39 @@ The user reported Windows dev launcher failed `tsc --noEmit && vite build` at `s
 - No functional or production-audio changes; `main` unchanged.
 
 ---
+## 2026-11-04: Multi-section render acceptance QA and Remove stem action
+
+### User QA
+- Windows DEV now launches after the earlier `TS1005` JSX brace fix.
+- Screenshot shows a single short `growly...` imported stem in Intro although the user selected all non-Chorus/non-Bridge sections for rendering.
+- User requests a **Remove stem** operation directly within Stem Tools.
+
+### Root cause / product behavior
+- The backend `render-sections` route returns one *independent candidate per section*; `BassMidiTool` presented the **first** candidate and exposed only "Add stem" (singular).
+- Add stem accepted only that single candidate; a mixer remount obscured the pending queue. This is a UI/workflow failure, not proof the backend rendered just one file. No per-section batch accept command existed.
+- Existing `DELETE /api/projects/{ident}/tracks/{track_id}` and `track_lifecycle.remove` already remove **imported** stems only, archive audio under job/trash and remove matching source-replacement masks. Original separated tracks may not be removed.
+
+### Fixes committed to `dev` (do not modify `main`)
+- `9474569`: add imported-track metadata and batch status state.
+- `f5bf9b4`: centralized one-candidate explicit file acceptance, plus **Add all pending sections** action. Saves song once, processes each candidate sequentially, creates separately positioned stems/masks, and refreshes the mixer **once** on completion rather than after the first clip. If a later import fails, previously accepted clips remain (no fake atomic rollback), with completed count tracked; user can remove individually.
+- `cac55a9`: exposes `N sections rendered`, accepted/pending counts, an **Add all N sections** action, and renames the singular button **Add this section** so users know the difference between review and full acceptance.
+- `6198eec`, `e827773`: Remove imported stem icon (title, accessible label, confirmation) beside the active stem selector, visible in both Mix and MIDI modes. Calls the existing DELETE endpoint with `expected_alias`. Refreshes parent song on success, restores original via existing replacement-mask lifecycle, and archives import files. Original separated tracks do not show Remove.
+- `30c8773`: compact styling for batch review/progress.
+- `bba9605`: regression test of two non-contiguous replacement clips: removing one restores **only its own** original-stem mask and preserves the other.
+- For one-at-a-time Add this section, the next unaccepted candidate becomes the active review item on remount. Session queue remains available through the song-level state.
+
+### Required Windows QA (not executed by agent)
+1. **First remove the earlier short Growlybass imported Intro stem** using Stem Tools > select the imported `growly...` stem > Remove icon. Confirm the Intro replacement mask disappears and original Bass returns. Removing original Bass must not be offered.
+2. Render the same saved MIDI selection (Intro, verses, pre-chorus, outro; excluding Chorus/Bridge) with Growlybass Dirty. Stem Tools must visibly show the **total number of section candidates**, not just "first".
+3. Review two sections with arrows and listen to A/B. Then choose **Add all N sections** to import the pending ones. Verify separate short stems at each selected section's original timeline position (rather than one contiguous stem), source gain reduced **only within** those exact regions, and Chorus/Bridge still using original bass.
+4. Test single **Add this section**, then navigate/accept another, and ensure the batch queue survives mixer remount.
+5. Negative: deliberately fail a later batch item. Earlier successful imports must remain removable, and success count must not be misreported. Stop and surface failures, not silently skip sections.
+6. Remove one of several accepted section clips and verify only that section's mask is cleared.
+7. Run `cd app/frontend && npm run build` and `cd app/backend && python -m unittest discover -s tests -p 'test_track_lifecycle.py' -v`, plus MIDI and SFZ suites.
+
+**Limitations:** A multi-section selection currently produces multiple independent imported stems, *not* one combined long stem with silent gaps and multiple replacement masks. This is an intentional first-pass use of the existing reversible clip infrastructure. The batch action is sequential and not transactionally all-or-nothing; partial successes remain if a later clip fails. In-browser QA/real audio checks are outstanding; GitHub source edits alone do not prove successful build or output.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

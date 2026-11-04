@@ -6,6 +6,34 @@ Starting point: dev HEAD at least 8c5746a (polyphonic SF2 render), plus later so
 User acceptance so far: dev application reloaded clean once, but not otherwise tested. User auditioned Mean Saw Bass and said it sounds pretty good. Do not infer that polyphonic rendering, piano roll or export have passed Windows QA.
 Release: previous track mix is locked. Keep main and locked release assets unchanged.
 
+## CURRENT CHECKPOINT - 2026-11-04, 4:20 PM America/New_York
+
+**Latest user QA:** "Update and relaunch is clean, not otherwise tested yet." This means Windows portable launcher pulled current `origin/dev` and completed frontend compilation/startup without a reported error. **It does NOT verify any new multi-section composition, source masks, actual import audio, L/R channel routing, A/B, section-script roundtrip, export or automated tests.** Earlier QA did confirm Remove imported stem works, individual-section batch acceptance created five clips and muted five matching source regions, and Growlybass Dirty sounded good. Those passes predate the NEW one-stem composite workflow.
+
+**Branch/environment:** `dev` only, `D:\\Apps\\Song-Harbor-Dev` checkout and isolated `D:\\Apps\\SongHarborDev` runtime on Windows. Do not modify `main`, production application or locked release stems. Last pre-handoff source commit: `f36366b` (suppress duplicated alias subtitle). The original handoff sections below are chronological; early "not yet implemented" status statements are historical and superseded by the newest updates.
+
+**Implementation currently present, but NOT functionally QA-verified:**
+- Saved MIDI arrangement is a revisioned, persistent score with note drawing, batch selection, clipboard, history, velocity editing, zoom, a modeless/draggable/resizable piano-roll editor, section-aligned ruler, Alt-click same-type section multi-selection, and SF2/SFZ instrument selector. MIDI extraction remains primarily monophonic; MIDI channels are not stereo channels.
+- SFZ: machine-configured `sfizz_render.exe`, explicit manual ZIP import, curated pack catalog, stereo render of Growlybass tested in an earlier slice; previous Preview engine bug fixed, multi-region A/B and solo code added, still needs detailed listening QA. `deshimmer` is a capability-only bridge, NOT processed vocal restoration.
+- **New multi-section workflow:** `POST /api/projects/{ident}/midi-arrangements/{asset_id}/render-sections` makes individual section candidates for audition. `POST /api/projects/{ident}/bass-midi/compose-sections` produces ONE 48-kHz stereo composite WAV with the rendered audio in selected sections and silence in unselected intervals, preserving the original source WAV. UI offers one `Name` and `Add combined stem`; single-section Add is hidden while a batch queue is active.
+- Acceptance reuses `tracks/add`: creates exactly ONE user-named imported stem and multiple non-overlapping region-specific replacement masks linked to that same track ID, retaining source volume only within selected sections. Remove imported stem is reversible and clears ALL masks for that track. A composite may be up to 8 section candidates, 600 seconds end-to-end; fails safely on missing/stale candidates, mismatched boundaries or overlapping replacement regions.
+- `app/backend/midi_section_composite.py` concatenates disjoint PCM16 clips into a sparse stereo WAV, not several imported stems. `app/backend/tests/test_midi_section_composite.py` covers gaps, validation, mask removal and script roundtrip, but has not been executed here.
+- New stem naming is user alias only; existing `Instrument (Alias)` style imports display `Alias` without editing saved metadata. Replacement directives **render as `.volume`**, while old `.original` syntax remains importable; linked masks remain separate multiplicative automation, not destructive modifications to manually scripted gain/volume.
+- New accepted MIDI imports call existing `channel_split.split_stems` and `track_routing.attach` after the stereo stem is saved, yielding independently routable L/R derived mono files while preserving the parent stereo WAV. If this post-commit step fails, server reports `channel_split_warning` and must not claim failed import or blindly retry. Actual L/R routing on a new combined stem remains unverified.
+- Piano roll currently edits note time/pitch/velocity/MIDI channel, **not independent per-note left/right audio placement**. That feature is deferred and should not be implied by channel split.
+
+**Immediate next-thread gate (do this before expanding features):**
+1. On next Windows DEV test, remove previously imported individual Growlybass section stems using existing Remove. Select five non-contiguous song sections in saved piano roll, render with a known Growlybass preset. Check section ruler and all-section Solo/A/B playback.
+2. With user name `GrowlybassDirty`, select **Add combined stem** ONCE. Confirm **one** imported track in mixer, correct stereo sound in selected regions and silence elsewhere in that new stem, correct original Bass gain ONLY for selected regions (unselected Chorus/Bridge preserved), no duplicated aliases, and independent left/right child controls. Compare exported WAV/mix with playback. Confirm no additional separate stem was silently added.
+3. Remove the combined track; verify ALL its linked masks disappear and original Bass returns in all five regions. Re-add, then edit/roundtrip section text: emitted `.volume` remains editable; legacy `.original` can still parse. Check section boundaries and fades for clicks.
+4. Run focused backend tests `cd app/backend && python -m unittest discover -s tests -p 'test_midi_section_composite.py' -v`, plus `test_section_production.py`, `test_track_lifecycle.py`, `test_midi_section_slices.py`, and SFZ suites; then broader unittest. Frontend `cd app/frontend && npm run build`. These have NOT been run by the coding environment (no locally checked-out repo); the clean Windows relaunch is the available frontend-build evidence.
+5. Potential code risks to inspect after real testing: multiple `.volume` replacement directives targeting one track, source mask fade behavior when combined audio has gaps, region alignment at frame boundaries, channel split after manifest commit, and song-scale memory/disk footprint. Correct defects before proceeding with drum-to-MIDI transcription or Deshimmer integration.
+6. After this QA gate: resume drum arrangement/percussion keymap research (drum channel 10 currently excluded in `polyphonic_midi.py`), per-note stereo/lane architecture, per-section preset assignments, and only then additional drum transcription and Deshimmer vocal cleanup.
+
+**Current source guidance:** The newest handoff section at the bottom of this file includes individual commits and implementation caveats. Do not follow older "embedded piano roll", "SFZ not integrated", "single rendered section added", or "five individual imported stems" claims from earlier checkpoints; those were superseded.
+
+---
+
 ## Mission and priority order
 The next track has a relatively sparse arrangement. The aim is to reinstrument **all instrumental parts, not vocals**, with high-quality editable MIDI and sampled instruments, while aggressively investigating restoration of the **original vocal identity and phrasing**. Three near-term engineering workstreams:
 1. **Piano roll / arrangement as editable production asset** (P0, fix correctness and usability first).
@@ -447,10 +475,10 @@ Screenshot showed ten rows of truncated `growly...` labels after multiple sectio
 
 ---
 ## Immediate next-thread task
-1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
-2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.
-3. Begin A0/A1, particularly authoritative note edits and piano-roll usability, while documenting an independently implementable C1 Deshimmer adapter path.
-4. Preserve all accepted audio and previous production mix; work only on `dev`. Report committed SHA and actual/remaining QA.
+1. Read **CURRENT CHECKPOINT** at the top of this handoff FIRST, then consult the chronological updates and architecture docs as needed. Older status claims here are historical.
+2. User's most recent confirmation: **DEV update and relaunch are clean; nothing in the new composite workflow was functionally tested.** Preserve this distinction.
+3. Focus on real five-section **one-stem** composite QA, section-bound source masks, playback/export, L/R derived channels, script `.volume` roundtrip, and removal restoring all replaced sections. Fix any defects from this test before new features.
+4. Run relevant backend tests and frontend build where executable. Source changes are on `dev` only. Keep `main` and locked production audio unchanged; report exact implementation versus verified behavior.
 
 ## Explicit technical caution
 The existing `refs/handoffs/currentHandoff.md` contains old guidance to work on `main` and older artifact priorities; those are historical for this new-track dev project. **This dev handoff supersedes that branch/prioritization guidance for the next thread.**

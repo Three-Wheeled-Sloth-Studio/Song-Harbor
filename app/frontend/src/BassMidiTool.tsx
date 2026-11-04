@@ -163,14 +163,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    const tag=sectionId.replace(/[^A-Za-z0-9]/g,"").slice(-8);
    return ("Reinst_"+kind+"_"+tag).slice(0,32);
  }
- function showSectionCandidate(index:number,candidates=sectionQueue){
+ function showSectionCandidate(index:number,candidates=sectionQueue,accepted=acceptedSectionIds){
    const item=candidates[index];
    if(!item)return;
    engine?.clearCandidatePreview();
    setCandidate(item);setNotes(item.notes);setSectionIndex(index);
    setPreviewReady(true);setNotePage(0);
    if(item.section_id)setAlias(sectionAlias(item.section_id));
-   onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates,index,acceptedSectionIds});
+   onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates,index,acceptedSectionIds:accepted});
    setMessage("Review "+(index+1)+" of "+candidates.length+"; source gain changes only when this candidate is accepted.");
  }
  function chooseInstrument(packId:string,id:string){
@@ -271,8 +271,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setArrangementId(asset.asset_id);
      if("candidates" in data){
        setSectionQueue(data.candidates);setAcceptedSectionIds([]);setSectionIndex(0);
-       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:data.candidates,index:0,acceptedSectionIds:[]});
-       showSectionCandidate(0,data.candidates);
+       showSectionCandidate(0,data.candidates,[]);
      }else{
        setSectionQueue([]);setAcceptedSectionIds([]);onMidiSessionChange?.(null);
        setCandidate(data);setNotes(data.notes);setNotePage(0);setPreviewReady(true);

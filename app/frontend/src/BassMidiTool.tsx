@@ -243,6 +243,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      form.append("stem_alias",alias);
      form.append("display_name",selectedLabel+" ("+alias+")");
      form.append("start_seconds",String(candidate.start_seconds));
+     if(candidate.section_id)form.append("midi_candidate_id",candidate.candidate_id);
      form.append("preview_trim_db",String(candidateTrimDb));
      form.append("original_gain_percent",String(originalGain));
      if(originalGain<100)form.append("replace_source_track_id",trackId);

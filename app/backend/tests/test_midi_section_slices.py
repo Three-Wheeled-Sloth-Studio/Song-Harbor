@@ -51,6 +51,19 @@ class SectionSliceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"outside"):
             slices.select_sections(self.asset,rows,["external"])
 
+    def test_empty_section_refuses_silent_candidate(self):
+        asset=midi_arrangements.create("trk_bass",0,8,[
+            {"pitch":40,"start":0.5,"end":1.5,"velocity":80}])
+        sections=[{"id":"silent","start_seconds":4,"end_seconds":8}]
+        with self.assertRaisesRegex(ValueError,"no MIDI notes"):
+            slices.select_sections(asset,sections,["silent"])
+
+    def test_global_arrangement_start_offsets_section_timestamps(self):
+        part=slices.select_sections(self.asset,self.sections,["c1"])[0]
+        self.assertEqual(part["start_seconds"],14)
+        self.assertEqual(part["arrangement"]["source"]["start_sample"],14*RATE)
+        self.assertEqual(part["arrangement"]["duration_samples"],4*RATE)
+
     def test_missing_repeated_and_too_many_selections(self):
         with self.assertRaisesRegex(ValueError,"distinct"):
             slices.select_sections(self.asset,self.sections,["v1","v1"])

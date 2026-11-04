@@ -89,6 +89,6 @@ def curated_catalogue(installed_packs: list[dict] | None = None) -> list[dict]:
            not any(
                normalized(entry["id"]) in name
                for name in installed_names
-               if len(normalized(entry["id"])) >= 8
+               if len(normalized(entry["id"])) >= 6
            )
     ]

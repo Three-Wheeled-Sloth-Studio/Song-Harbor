@@ -17,7 +17,7 @@ const preferred=(x:InstrumentChoice)=>x.engine==="sf2"&&x.bank===0?STARTER_PROGR
 
 type Starter={id:string;name:string;description:string;source_page:string;installed:boolean};
 type CuratedSfz={id:string;name:string;family:string;fit:string;priority:number;description:string;source:string;license:string;version:string;approx_mb:number|null;status:string;source_page:string;download_url:string};
-type Imported={project:unknown;job:unknown};
+type Imported={project:unknown;job:unknown;channel_split_warning?:string};
 type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;selectedTrackId?:string;engine:SharedClockAudition|null;
  stemControls:{filename:string;trackId?:string;gain:number;mute:boolean;solo:boolean;name:string}[];
  onStemMix:(filename:string,changes:{gain?:number;mute?:boolean;solo?:boolean})=>void;
@@ -295,6 +295,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(!await saveProject())throw Error("Save song before inserting a new track");
      onPause();
      const data=await addCandidateClip(candidate,alias);
+     if(data.channel_split_warning)onError(data.channel_split_warning);
      engine?.clearCandidatePreview();
      if(candidate.section_id){
        const accepted=[...new Set([...acceptedSectionIds,candidate.section_id])];
@@ -336,6 +337,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        body:JSON.stringify({candidate_ids:sectionQueue.map(item=>item.candidate_id)})});
      setBatchProgress("Adding one consolidated stem");
      const result=await addCandidateClip(combined,name);
+     if(result.channel_split_warning)onError(result.channel_split_warning);
      engine?.clearCandidatePreview();
      setAcceptedSectionIds(sectionQueue.map(item=>item.section_id!).filter(Boolean));
      onMidiSessionChange?.(null);

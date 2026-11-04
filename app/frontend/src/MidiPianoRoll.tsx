@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from "react";
+import {createPortal} from "react-dom";
 import type {PointerEvent as ReactPointerEvent} from "react";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
@@ -35,6 +36,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
  const [history,setHistory]=useState<RollNote[][]>([]);
  const [future,setFuture]=useState<RollNote[][]>([]);
  const [selected,setSelected]=useState("");
+ const [popOut,setPopOut]=useState(false);
  const [selectedIds,setSelectedIds]=useState<string[]>([]);
  const clipboard=useRef<RollNote[]>([]);
  const scrollerRef=useRef<HTMLDivElement|null>(null);
@@ -193,25 +195,32 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
   if(velocityDrag.current)setVelocity(event,velocityDrag.current.ids);
  }
  const active=notes.find(n=>n.id===selected);
- return <section className="song-piano-roll" aria-label="Editable MIDI arrangement">
+ return <div className="song-roll-launcher">
+   <span title={asset?"Saved MIDI arrangement "+asset.asset_id:"No saved arrangement open"}><strong>MIDI score</strong> {asset?notes.length+" notes · revision "+asset.revision:"No score open"}{dirty?" · unsaved edits":""}</span>
+   <button type="button" title="Open piano roll editor in a large workspace" aria-label="Open piano roll" onClick={()=>setPopOut(true)}>▦</button>
+   {popOut&&createPortal(<div className="song-roll-overlay" role="presentation">
+     <section className="song-piano-roll song-roll-popout" role="dialog" aria-modal="true" aria-label="MIDI piano roll editor">
+       <header className="song-roll-popout-header"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
+        <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
+       </header>
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>
     <select aria-label="Saved MIDI arrangements" value={asset?.asset_id||""} onChange={e=>{if(e.target.value)void load(e.target.value);}} disabled={busy}>
      <option value="">Open saved arrangement...</option>
      {listForTrack.map(x=><option key={x.asset_id} value={x.asset_id}>{x.asset_id.slice(0,8)} · {x.note_count} notes · r{x.revision}</option>)}
     </select>
-    <button type="button" onClick={()=>void refresh()} title="Refresh saved arrangements" disabled={busy}>Refresh</button>
-    {asset&&<><button type="button" onClick={undo} disabled={!history.length||busy} title="Undo note edit">Undo</button>
-    <button type="button" onClick={redo} disabled={!future.length||busy} title="Redo note edit">Redo</button>
-    <button type="button" onClick={()=>{if(asset&&window.confirm("Revert all unsaved MIDI edits?"))open(asset);}} disabled={!dirty||busy} title="Discard unsaved edits and restore saved revision">Revert</button>
-    <button type="button" onClick={duplicateSelected} disabled={!selectedIds.length||busy} title="Duplicate selected notes">Duplicate</button>
-    <button type="button" onClick={removeSelected} disabled={!selectedIds.length||busy} title="Delete selected notes">Delete</button>
-    <button type="button" onClick={()=>{setSelectedIds(notes.map(n=>n.id));setSelected(notes[0]?.id||"");scrollerRef.current?.focus();}} disabled={!notes.length||busy} title="Select every note in arrangement">All</button>
-    <button type="button" onClick={()=>{setSelectedIds([]);setSelected("");}} disabled={!selectedIds.length||busy} title="Clear note selection">Clear</button>
-    <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes">Copy</button>
-    <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement">Paste</button>
-    <button type="button" onClick={()=>void save()} disabled={!dirty||busy}>Save{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Render saved arrangement with selected instrument pack">Render arrangement</button></>}
+    <button type="button" onClick={()=>void refresh()} title="Refresh saved arrangements" aria-label="Refresh arrangements" disabled={busy}>↻</button>
+    {asset&&<><button type="button" onClick={undo} disabled={!history.length||busy} title="Undo note edit" aria-label="Undo">↶</button>
+    <button type="button" onClick={redo} disabled={!future.length||busy} title="Redo note edit" aria-label="Redo">↷</button>
+    <button type="button" onClick={()=>{if(asset&&window.confirm("Revert all unsaved MIDI edits?"))open(asset);}} disabled={!dirty||busy} title="Discard unsaved edits and restore saved revision" aria-label="Revert">⟲</button>
+    <button type="button" onClick={duplicateSelected} disabled={!selectedIds.length||busy} title="Duplicate selected notes" aria-label="Duplicate">⧉</button>
+    <button type="button" onClick={removeSelected} disabled={!selectedIds.length||busy} title="Delete selected notes" aria-label="Delete">×</button>
+    <button type="button" onClick={()=>{setSelectedIds(notes.map(n=>n.id));setSelected(notes[0]?.id||"");scrollerRef.current?.focus();}} disabled={!notes.length||busy} title="Select every note in arrangement" aria-label="All">▣</button>
+    <button type="button" onClick={()=>{setSelectedIds([]);setSelected("");}} disabled={!selectedIds.length||busy} title="Clear note selection" aria-label="Clear">□</button>
+    <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes" aria-label="Copy">⎘</button>
+    <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement" aria-label="Paste">⎗</button>
+    <button type="button" onClick={()=>void save()} disabled={!dirty||busy} title="Save arrangement edits" aria-label="Save arrangement edits">▣{dirty?" *":""}</button>
+    <button type="button" onClick={()=>{void onUse(asset).catch(e=>onError(String(e)));}} disabled={dirty||busy} title="Render saved arrangement with selected instrument pack" aria-label="Render arrangement">▶ Render</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
@@ -266,5 +275,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,onDirtyChang
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select an SF2 instrument and choose Render arrangement.</small>}
    {message&&<small role="status">{message}</small>}
-  </section>;
+  </section></div>,document.body)}
+ </div>;
 }

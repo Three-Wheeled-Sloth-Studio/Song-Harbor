@@ -51,6 +51,14 @@ const names = ["Vocals", "Drums", "Bass", "Guitar", "Piano", "Other"];
 function labelOf(filename: string) {
   return names.find(label => filename.includes("(" + label + ")")) || filename;
 }
+/** Legacy MIDI imports used "instrument (alias)" as their display name.
+ * Keep stored identities untouched, but display only the user's alias.
+ */
+function visibleStemName(filename:string,label:string,identities:TrackIdentity[]|undefined):string{
+  const row=identities?.find(item=>item.working_filename===filename);
+  if(row?.imported&&label.endsWith(" ("+row.stem_alias+")"))return row.stem_alias;
+  return label;
+}
 function timecode(seconds: number) {
   const s = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
   return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
@@ -81,7 +89,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [stems, setStems] = useState<Stem[]>(() => files.map(filename => {
     const saved = savedStems?.find(stem => stem.filename === filename);
     return {
-      filename, name: trackLabels?.[filename] || labelOf(filename),
+      filename, name: visibleStemName(filename,trackLabels?.[filename] || labelOf(filename),trackDetails),
       gain: saved ? Math.round(saved.gain * 100) : 100,
       mute: saved?.mute ?? false, solo: saved?.solo ?? false,
     };

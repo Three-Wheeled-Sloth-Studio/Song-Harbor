@@ -282,7 +282,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    const chosen=catalogue.instruments.find(x=>x.id===item.instrument&&x.pack_id===item.pack_id);
    form.append("display_name",newAlias);
    form.append("start_seconds",String(item.start_seconds));
-   if(item.section_id||item.section_masks?.length)form.append("midi_candidate_id",item.candidate_id);
+   if(item.rendered)form.append("midi_candidate_id",item.candidate_id);
    form.append("preview_trim_db",String(candidateTrimDb));
    form.append("original_gain_percent",String(originalGain));
    if(originalGain<100)form.append("replace_source_track_id",trackId);

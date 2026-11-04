@@ -304,6 +304,23 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(latest)onInserted(latest);
    }
  }
+ async function removeImportedStem(){
+   if(!selectedTrack?.imported||busy)return;
+   const name=selectedTrack.display_name;
+   if(!window.confirm('Remove imported stem "'+name+'"? Song Harbor will archive its files and restore any original-stem regions it replaced.'))return;
+   setBusy(true);setError("");
+   try{
+     onPause();
+     const removed=await req<Imported>("/api/projects/"+jobId+"/tracks/"+encodeURIComponent(selectedTrack.track_id),{
+       method:"DELETE",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({expected_alias:selectedTrack.stem_alias})});
+     engine?.clearCandidatePreview();
+     onMidiSessionChange?.(null);
+     setSectionQueue([]);setAcceptedSectionIds([]);setCandidate(null);
+     onInserted(removed);
+   }catch(e){const detail=String(e);setError(detail);onError(detail);}
+   finally{setBusy(false);}
+ }
  async function useArrangement(asset:Arrangement,sectionIds:string[]){
    if(asset.source.track_id!==trackId)throw Error("Arrangement belongs to a different stem.");
    if(busy)return;
@@ -382,6 +399,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        <button type="button" className={mix.mute?"is-muted":""} aria-pressed={mix.mute} title="Mute" onClick={()=>onStemMix(mix.filename,{mute:!mix.mute})}>M</button>
        <button type="button" className={mix.solo?"is-solo":""} aria-pressed={mix.solo} title="Solo" onClick={()=>onStemMix(mix.filename,{solo:!mix.solo})}>S</button>
        <button type="button" title="Reset gain, mute and solo" onClick={()=>onStemMix(mix.filename,{gain:100,mute:false,solo:false})}>↺</button>
+       {selectedTrack?.imported&&<button type="button" title="Remove imported stem, archive its audio and restore its source replacement masks" aria-label="Remove imported stem" disabled={busy} onClick={()=>void removeImportedStem()}>⌫</button>}
      </div>:<small role="status">Choose a stem to edit its base mix.</small>}
      <button type="button" className="song-stem-hub-next" onClick={()=>setFunctionMode("midi")}>♮ Stem → MIDI</button>
    </div>}

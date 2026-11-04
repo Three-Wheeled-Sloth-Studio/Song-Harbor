@@ -979,10 +979,35 @@ def browse_fluidsynth_settings(request:Request)->dict[str,str|None]:
         raise HTTPException(400,str(exc)) from exc
 
 
+@app.get("/api/settings/sfizz")
+def get_sfizz_settings()->dict[str,Any]:
+    return {"configured_path":sfz_render_adapter.configured_sfizz(APP_ROOT),
+            "resolved_path":sfz_render_adapter.find_renderer(APP_ROOT)}
+
+
+@app.put("/api/settings/sfizz")
+def put_sfizz_settings(body:FluidSynthPathRequest,request:Request)->dict[str,Any]:
+    require_local_origin(request)
+    try:
+        resolved=sfz_render_adapter.save_renderer(APP_ROOT,body.path)
+        return {"configured_path":resolved,"resolved_path":resolved}
+    except (ValueError,OSError,sfz_render_adapter.SFZRenderError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+@app.post("/api/settings/sfizz/browse")
+def browse_sfizz_settings(request:Request)->dict[str,str|None]:
+    require_local_origin(request)
+    try:return {"path":sfz_render_adapter.browse_renderer()}
+    except (ValueError,OSError,sfz_render_adapter.SFZRenderError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
 @app.get("/api/instruments")
 def list_instrument_library()->dict[str,Any]:
     result=instrument_library.catalogue(DATA_ROOT)
     result["fluidsynth_ready"]=bool(instrument_library.find_fluidsynth(DATA_ROOT,APP_ROOT))
+    result["sfizz_ready"]=bool(sfz_render_adapter.find_renderer(APP_ROOT))
     return result
 
 
@@ -1200,7 +1225,7 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
                     note_file=scratch/"notes.mid"
                     note_file.write_bytes(midi)
                     raw=scratch/"render.wav"
-                    sfz_render_adapter.render_sfz(note_file,font,raw,
+                    sfz_render_adapter.render_sfz(note_file,font,raw,config_root=APP_ROOT,
                         timeout_seconds=min(360,max(30,int(duration*2))))
                     aligned=scratch/"aligned.wav"
                     converted=subprocess.run([

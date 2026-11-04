@@ -147,8 +147,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }
  function sectionAlias(sectionId:string){
    const section=sections.find(item=>item.id===sectionId);
-   const suffix=section?(section.kind.replace(/[^A-Za-z0-9]/g,"")+(section.number||"")):"Part";
-   return ("Reinst_"+suffix).slice(0,32);
+   const kind=section?section.kind.replace(/[^A-Za-z0-9]/g,"").slice(0,12):"Part";
+   const tag=sectionId.replace(/[^A-Za-z0-9]/g,"").slice(-8);
+   return ("Reinst_"+kind+"_"+tag).slice(0,32);
  }
  function showSectionCandidate(index:number,candidates=sectionQueue){
    const item=candidates[index];

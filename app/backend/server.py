@@ -1249,6 +1249,8 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
                 "render_kind":selected["engine"]+"_polyphonic_preview","rendered":True,
                 "instrument":selected["id"],"pack_id":selected["pack_id"],
                 "instrument_sha256":instrument_library.hash_file(font),
+                "instrument_engine":selected["engine"],
+                "pack_sha256":(json.loads((instrument_library.pack_root(DATA_ROOT)/selected["pack_id"]/"manifest.json").read_text(encoding="utf-8")).get("sha256","")),
                 "method":"Saved polyphonic MIDI arrangement"}
             bass_midi.write_json(folder/"candidate.json",record)
             return record

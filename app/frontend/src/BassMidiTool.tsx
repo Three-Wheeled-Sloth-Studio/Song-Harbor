@@ -314,7 +314,20 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    if(busy||!sectionQueue.length)return;
    const pending=sectionQueue.filter(item=>item.section_id&&!acceptedSectionIds.includes(item.section_id));
    if(!pending.length)return;
-   if(!window.confirm("Add "+pending.length+" rendered sections as separate reversible stems? Original bass is reduced only within each accepted section."))return;
+   const prefix=batchPrefix.trim();
+   if(!/^[A-Za-z][A-Za-z0-9_-]{0,29}$/.test(prefix)){
+     setError("Section stem prefix must be 1-30 letters, numbers, underscores or hyphens, starting with a letter.");
+     return;
+   }
+   const aliases=pending.map(item=>prefix+"_"+(sectionQueue.findIndex(row=>row.candidate_id===item.candidate_id)+1));
+   const existing=new Set(trackRows.map(row=>row.stem_alias.toLowerCase()));
+   if(aliases.some(name=>existing.has(name.toLowerCase()))){
+     setError("One or more numbered stem names already exist. Choose a different prefix before adding sections.");
+     return;
+   }
+   if(!window.confirm("Add "+pending.length+" rendered sections as "+aliases[0]+
+     (aliases.length>1?" through "+aliases[aliases.length-1]:"")+
+     "? Original stem gain changes only within the accepted section regions."))return;
    setBusy(true);setError("");setBatchProgress("Adding 0 of "+pending.length+" sections");
    let latest:Imported|null=null;
    const accepted=[...acceptedSectionIds];
@@ -324,7 +337,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      onPause();
      for(const item of pending){
        setBatchProgress("Adding "+(completed+1)+" of "+pending.length+" sections");
-       latest=await addCandidateClip(item,sectionAlias(item.section_id!));
+       latest=await addCandidateClip(item,aliases[completed]);
        accepted.push(item.section_id!);
        completed++;
        onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index:sectionIndex,acceptedSectionIds:[...accepted]});
@@ -522,6 +535,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          {sectionQueue.length>0&&<div className="song-midi-section-batch" role="status">
            <strong>{sectionQueue.length} sections rendered</strong>
            <span>{acceptedSectionIds.length} accepted, {sectionQueue.length-acceptedSectionIds.length} pending</span>
+           <label title="All added stems will use this prefix with their section number, e.g. Growlybass_1, Growlybass_2">
+             Prefix <input aria-label="Section stem name prefix" maxLength={30} value={batchPrefix}
+               onChange={e=>setBatchPrefix(e.target.value)} disabled={busy} placeholder="Growlybass"/>
+           </label>
            <button type="button" title="Add every remaining rendered section as an independent, reversible stem"
              disabled={busy||acceptedSectionIds.length>=sectionQueue.length}
              onClick={()=>void insertAllSections()}>✓ Add all {sectionQueue.length-acceptedSectionIds.length} sections</button>

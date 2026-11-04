@@ -280,7 +280,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    form.append("file",new File([blob],"Instrument-"+item.candidate_id.slice(0,8)+".wav",{type:"audio/wav"}));
    form.append("stem_alias",newAlias);
    const chosen=catalogue.instruments.find(x=>x.id===item.instrument&&x.pack_id===item.pack_id);
-   form.append("display_name",(chosen?.name||selectedLabel)+" ("+newAlias+")");
+   form.append("display_name",newAlias);
    form.append("start_seconds",String(item.start_seconds));
    if(item.section_id)form.append("midi_candidate_id",item.candidate_id);
    form.append("preview_trim_db",String(candidateTrimDb));
@@ -567,7 +567,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            auditionMode==="replacement"?"B: Rendered MIDI in selected sections, current backing mix":
            "Solo: Rendered MIDI only"+(sectionQueue.length>1&&auditionScope==="all"?" (all sections)":"")
          }</div>}
-         {previewReady&&<div className="song-midi-accept">
+         {previewReady&&sectionQueue.length===0&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
            <button type="button" disabled={busy||Boolean(candidate.section_id&&acceptedSectionIds.includes(candidate.section_id))} title="Add only the currently reviewed section. To add all rendered sections, use Add all sections." onClick={()=>void insert()}>✓ {sectionQueue.length?"Add this section":"Add stem"}</button>
          </div>}

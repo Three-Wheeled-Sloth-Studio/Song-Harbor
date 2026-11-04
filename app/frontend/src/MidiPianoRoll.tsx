@@ -239,7 +239,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one candidate per section":"Whole saved arrangement"}</small>
-     {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>setSelectedSections([])}>× Clear sections</button>
+     {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>setSelectedSections([])}>× Clear sections</button>}
    </div>}
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>

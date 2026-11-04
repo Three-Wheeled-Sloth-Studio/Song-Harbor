@@ -1274,7 +1274,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             title={"Stem tools · "+s.name} onClick={()=>stemToMidi(s.filename)}>
             <AudioIcon kind={trackAliases?.[s.filename]||labelOf(s.filename)} size={32}/>
             <span className="mixer-stem-names"><span className="mixer-stem-name">{s.name}</span>
-              <small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small></span>
+              {(trackAliases?.[s.filename]||labelOf(s.filename))!==s.name&&<small>{trackAliases?.[s.filename]||labelOf(s.filename)}</small>}</span>
           </button>
           <span className="stem-label-toggles" aria-label={s.name+" quick controls"}>
             <button type="button" className={"track-toggle"+(s.mute?" is-muted":"")} aria-label={"Mute "+s.name}

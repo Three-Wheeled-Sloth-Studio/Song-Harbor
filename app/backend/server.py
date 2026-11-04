@@ -883,7 +883,18 @@ async def add_project_track(ident: str, request: Request,
             job["files"]=record["files"]
             job["status"]="complete"
             job["message"]="New stem added"
-        return {"project":record,"job":snapshot(job)}
+        split_warning=""
+        if isinstance(midi_candidate_id,str) and midi_candidate_id:
+            # Only after the imported stem is safely committed. Channel split
+            # is a reversible derivative and must never discard its parent.
+            try:
+                export=channel_split.split_stems(
+                    DATA_ROOT,record,[final_name],
+                    dependency_tool("ffmpeg"),dependency_tool("ffprobe"))
+                track_routing.attach(DATA_ROOT,record,export,[final_name])
+            except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as exc:
+                split_warning="Stem was saved, but its L/R channel split failed: "+str(exc)
+        return {"project":record,"job":snapshot(job),"channel_split_warning":split_warning}
     except (ValueError,OSError,subprocess.SubprocessError) as exc:
         final.unlink(missing_ok=True)
         original.unlink(missing_ok=True)

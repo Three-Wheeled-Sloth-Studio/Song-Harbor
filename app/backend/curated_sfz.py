@@ -3,6 +3,8 @@
 These entries are not bundled or automatically downloaded. Users choose the
 publisher's download, review the terms, then explicitly import local files.
 Versioned official release asset URLs were checked on 2026-11-04.
+VSCO 2 CE is intentionally deferred: its 2.3-GB archive exceeds the 768-MB
+Song Harbor SFZ ZIP import limit.
 """
 
 CURATED_SFZ = [
@@ -69,15 +71,7 @@ CURATED_SFZ = [
         "source_page": "https://github.com/sfzinstruments/karoryfer.caveman-cosmonaut",
         "download_url": "https://github.com/sfzinstruments/karoryfer.caveman-cosmonaut/releases/download/v1.001/Karoryfer.Caveman_Cosmonaut.v1.001.zip",
     },
-    {
-        "id": "vsco2", "name": "VSCO 2 Community Edition",
-        "family": "Orchestra", "priority": 5, "fit": "Starter essentials",
-        "description": "Chamber strings, brass, woodwinds and orchestral percussion with sampled articulations.",
-        "source": "Versilian Studios", "license": "CC0-1.0", "version": "1.1.0",
-        "approx_mb": None, "status": "Import/render not yet QA-tested; some SFZ directives may require an importer upgrade",
-        "source_page": "https://versilian-studios.com/vsco-community/",
-        "download_url": "https://github.com/sgossner/VSCO-2-CE/releases/tag/1.1.0",
-    },
+
 ]
 
 

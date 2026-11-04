@@ -282,6 +282,34 @@ User screenshots of dev Stem tools at ~500px width show the saved 243-note arran
 - Known remaining concerns: closing/unmounting the entire parent Stem Tools while edits are dirty may still need explicit protection; popout has no window-dragging/resizing beyond the large responsive dialog; ensure actual dev CSS z-order, focus trap and keyboard behavior. The icon-first conversion applies to the piano-roll action toolbar, not all instrument/Stem Tools actions. Library downloads are explicit manual ZIPs, not auto-installed. Address any functional failures before expanding more UI.
 
 
+## 2026-11-04: Growlybass preview and curated pack post-import QA
+
+User Windows QA:
+- Piano-roll popover **looks good for now**, preserve existing implementation and defer additional UI changes.
+- After successful Growlybass import, pressing Preview displayed `Error: Unsupported local instrument preview`.
+- Curated library should automatically **remove already-imported packs** from the recommendation list; installed packs must remain selectable in Instrument/Pack drop-downs.
+
+### Confirmed root cause and fixes (all on `dev`)
+- `render_bass_midi_candidate` in `app/backend/server.py` supported SF2 through FluidSynth and sent *all other engines* through `bass_midi.render_instrument_wav`, which only understands built-in synthetic instruments. Thus SFZ preview failed with `Unsupported local instrument preview`. The saved-score route had a separate working SFZ source branch, explaining the inconsistent behavior.
+- `f59af0f`: new `app/backend/sfz_candidate_audio.py` centralizes raw offline sfizz render -> FFmpeg alignment -> atomically published candidate WAV. Original stem untouched; temporary MIDI and raw audio deleted.
+- `cc45ae6`: both extracted candidate Preview and saved-arrangement render call that helper for SFZ. Preserve existing SF2/synthetic branches; only reject genuinely unsupported engines. Convert sfizz/FFmpeg failures to actionable HTTP 400. Preview metadata records selected instrument/engine.
+- `e73f454`: validate finalized WAV actually has 48-kHz stereo 16-bit PCM and duration within 0.05s before atomic publish.
+- `26ba836`: mocked shared SFZ preview unit tests cover successful render, input stem unchanged, invalid aligned WAV retaining previous candidate, rejected MIDI payload.
+- `4539cb3`, `7dac7cb`: curated catalogue filters installed packs by curated identity and normalized legacy names, including Growlybass imported before the new metadata was added.
+- `693563e`: `GET /api/instruments/curated-sfz` now examines the installed pack registry rather than returning an unconditional list.
+- `1a5cc36`, `ae2a966`, `ca9c0f7`: newly curated ZIP installs save and expose `curated_id` in pack manifest (validated against editorial catalog). Older installs continue to use name matching.
+- `eef913d`: frontend passes curated identity during import, then refreshes installed instrument selection AND curated recommendation list immediately, hiding the newly installed item. It still shows in the Pack/Instrument selectors.
+- `d85eded`: catalog regression tests for stable IDs and legacy names.
+
+### QA status and next steps
+- GitHub source checks confirmed shared SFZ renderer called in both server routes, importer receives curated_id and UI refreshes recommendations. **No runtime unit tests, frontend build or local real-audio render were run in this environment.**
+- The current user's Growlybass installation should be recognized through name matching after the next dev reload. If not, inspect persisted `instrument-packs/<pack>/manifest.json` name and adapt matching without deleting or renaming existing installed packs.
+- On Windows QA: select Growlybass; Extract or open existing candidate; use Preview (legacy extracted-notes route), then load saved score and Render arrangement (saved-revision route); compare 48-kHz sound, alignment, A/B, acceptance and export. Verify a failed render cannot publish or accept stale audio. Confirm source stem unchanged.
+- If preview now fails with a distinct `sfizz_render` or unsupported opcode error, capture exact backend message and use it to validate the imported Growlybass definitions and configured renderer.
+- Run `cd app/backend && python -m unittest discover -s tests -p 'test_*sfz*.py' -v` and `cd app/frontend && npm run build` on the dev checkout. Tests are present but unexecuted.
+- Do not revisit the piano-roll popover without new QA findings. Continue working on `dev`, not `main`.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

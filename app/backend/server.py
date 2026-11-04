@@ -721,6 +721,7 @@ async def add_project_track(ident: str, request: Request,
                             preview_trim_db: float = Form(0.0),
                             accept_mode: str = Form("layer"),
                             replace_source_track_id: str = Form(""),
+                            midi_candidate_id: str = Form(""),
                             original_gain_percent: float | None = Form(None)) -> dict[str, Any]:
     """Add a short, timeline-positioned clip without padding or touching sources."""
     require_local_origin(request)
@@ -763,6 +764,24 @@ async def add_project_track(ident: str, request: Request,
         source_row=next((row for row in rows if row.get("track_id")==replace_source_track_id),None)
         if original_gain_percent<100 and not source_row:
             raise HTTPException(400,"The original stem is no longer available")
+        if isinstance(midi_candidate_id,str) and midi_candidate_id:
+            try:
+                verified=bass_midi.read_json(DATA_ROOT/"jobs"/ident,midi_candidate_id)
+                if not verified.get("rendered") or not verified.get("section_id"):
+                    raise ValueError("Expected an independently rendered MIDI section candidate")
+                if abs(float(verified["start_seconds"])-float(start_seconds))>.005:
+                    raise ValueError("Section candidate start does not match import position")
+                if verified.get("source_track_id")!=replace_source_track_id and original_gain_percent<100:
+                    raise ValueError("Section candidate must replace its own original stem")
+                section_end=float(start_seconds)+float(verified["duration_seconds"])
+                for mask in record.get("replacement_masks",[]):
+                    if (original_gain_percent<100 and
+                        mask.get("source_track_id")==replace_source_track_id and
+                        float(mask.get("start_seconds",0))<section_end-.005 and
+                        float(mask.get("end_seconds",0))>float(start_seconds)+.005):
+                        raise ValueError("A source replacement already covers this region. Remove the existing replacement before accepting a new one.")
+            except (ValueError,OSError,KeyError,TypeError) as exc:
+                raise HTTPException(409,str(exc)) from exc
         if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
             raise HTTPException(409,"Script alias already belongs to a track")
         if section_id:

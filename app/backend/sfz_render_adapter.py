@@ -6,6 +6,8 @@ sampler, pack and preview QA pass. The caller owns all file locations.
 from __future__ import annotations
 
 import os
+import json
+import tempfile
 import shutil
 import subprocess
 import wave
@@ -14,6 +16,89 @@ from pathlib import Path
 
 class SFZRenderError(RuntimeError):
     """Actionable local renderer failure."""
+
+
+def configured_sfizz(config_root: Path) -> str:
+    """Read only the machine-local renderer preference, never pack-supplied config."""
+    try:
+        data = json.loads((config_root / "config" / "settings.json").read_text(encoding="utf-8"))
+        value = data.get("sfizz_render_executable", "")
+        return value if isinstance(value, str) else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def verify_renderer(path: str) -> str:
+    """Require a concrete, locally selected sfizz_render binary and probe it."""
+    candidate = Path(path.strip().strip('"')).expanduser()
+    if candidate.is_dir():
+        candidate = candidate / ("sfizz_render.exe" if os.name == "nt" else "sfizz_render")
+    if candidate.name.lower() not in ("sfizz_render", "sfizz_render.exe", "sfizz-render", "sfizz-render.exe"):
+        raise SFZRenderError("Select sfizz_render.exe or its containing folder")
+    if not candidate.is_file():
+        raise SFZRenderError("SFZ renderer executable was not found")
+    try:
+        response = subprocess.run([str(candidate), "--help"], capture_output=True, text=True,
+                                  timeout=8, shell=False,
+                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SFZRenderError("Could not launch sfizz_render to verify it") from exc
+    output = (response.stdout + response.stderr).lower()
+    if response.returncode != 0 or "--sfz" not in output or "--midi" not in output or "--wav" not in output:
+        raise SFZRenderError("Executable did not respond with expected sfizz_render options")
+    return str(candidate.resolve())
+
+
+def save_renderer(config_root: Path, path: str) -> str:
+    verified = verify_renderer(path)
+    settings = config_root / "config" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            data = {}
+    except (OSError, ValueError):
+        data = {}
+    data["sfizz_render_executable"] = verified
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".tmp",
+                                     dir=settings.parent, delete=False) as handle:
+        json.dump(data, handle, indent=2)
+        staged = Path(handle.name)
+    try:
+        os.replace(staged, settings)
+    finally:
+        staged.unlink(missing_ok=True)
+    return verified
+
+
+def browse_renderer() -> str | None:
+    if os.name != "nt":
+        raise SFZRenderError("Native SFZ renderer picker requires Windows")
+    import tkinter
+    from tkinter import filedialog
+    window = tkinter.Tk()
+    window.withdraw()
+    window.attributes("-topmost", True)
+    try:
+        return filedialog.askopenfilename(
+            title="Select sfizz_render executable",
+            filetypes=[("SFZ renderer", "sfizz_render.exe"), ("Executables", "*.exe")]) or None
+    finally:
+        window.destroy()
+
+
+def find_renderer(config_root: Path | None = None) -> str | None:
+    from_settings = configured_sfizz(config_root) if config_root else ""
+    candidates = [from_settings, os.environ.get("SONG_HARBOR_SFIZZ_RENDER", ""),
+                  shutil.which("sfizz_render") or shutil.which("sfizz-render") or ""]
+    for value in candidates:
+        if not value:
+            continue
+        try:
+            return verify_renderer(value)
+        except SFZRenderError:
+            pass
+    return None
 
 
 def locate_renderer(configured: str | None = None) -> Path:
@@ -40,6 +125,7 @@ def render_sfz(
     output_file: Path,
     *,
     renderer: str | None = None,
+    config_root: Path | None = None,
     timeout_seconds: int = 180,
     sample_rate: int = 48000,
 ) -> Path:
@@ -63,7 +149,7 @@ def render_sfz(
         raise SFZRenderError("Refusing to overwrite an existing output")
     output.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        str(locate_renderer(renderer)), "--sfz", str(sfz),
+        str(locate_renderer(renderer or find_renderer(config_root))), "--sfz", str(sfz),
         "--midi", str(midi), "--wav", str(output),
         "--samplerate", str(sample_rate),
     ]

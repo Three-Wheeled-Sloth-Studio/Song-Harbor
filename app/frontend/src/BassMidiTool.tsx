@@ -4,7 +4,7 @@ import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Note={pitch:number;start:number;end:number;velocity:number};
-export type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
+export type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;section_masks?:{start_seconds:number;end_seconds:number}[];method:string};
 export type MidiRenderSession={jobId:string;sourceTrackId:string;candidates:Candidate[];index:number;acceptedSectionIds:string[]};
 type Track={track_id:string;stem_alias:string;display_name:string;imported?:boolean;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
@@ -282,7 +282,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    const chosen=catalogue.instruments.find(x=>x.id===item.instrument&&x.pack_id===item.pack_id);
    form.append("display_name",newAlias);
    form.append("start_seconds",String(item.start_seconds));
-   if(item.section_id)form.append("midi_candidate_id",item.candidate_id);
+   if(item.section_id||item.section_masks?.length)form.append("midi_candidate_id",item.candidate_id);
    form.append("preview_trim_db",String(candidateTrimDb));
    form.append("original_gain_percent",String(originalGain));
    if(originalGain<100)form.append("replace_source_track_id",trackId);

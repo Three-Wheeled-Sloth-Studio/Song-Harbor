@@ -765,22 +765,38 @@ async def add_project_track(ident: str, request: Request,
         source_row=next((row for row in rows if row.get("track_id")==replace_source_track_id),None)
         if original_gain_percent<100 and not source_row:
             raise HTTPException(400,"The original stem is no longer available")
+        replacement_regions=[]
         if isinstance(midi_candidate_id,str) and midi_candidate_id:
             try:
                 verified=bass_midi.read_json(DATA_ROOT/"jobs"/ident,midi_candidate_id)
-                if not verified.get("rendered") or not verified.get("section_id"):
-                    raise ValueError("Expected an independently rendered MIDI section candidate")
+                if not verified.get("rendered"):
+                    raise ValueError("Expected a rendered MIDI candidate")
                 if abs(float(verified["start_seconds"])-float(start_seconds))>.005:
-                    raise ValueError("Section candidate start does not match import position")
+                    raise ValueError("MIDI candidate start does not match import position")
                 if verified.get("source_track_id")!=replace_source_track_id and original_gain_percent<100:
-                    raise ValueError("Section candidate must replace its own original stem")
-                section_end=float(start_seconds)+float(verified["duration_seconds"])
-                for mask in record.get("replacement_masks",[]):
-                    if (original_gain_percent<100 and
-                        mask.get("source_track_id")==replace_source_track_id and
-                        float(mask.get("start_seconds",0))<section_end-.005 and
-                        float(mask.get("end_seconds",0))>float(start_seconds)+.005):
-                        raise ValueError("A source replacement already covers this region. Remove the existing replacement before accepting a new one.")
+                    raise ValueError("MIDI candidate must replace its own original stem")
+                if verified.get("section_masks"):
+                    replacement_regions=[(float(row["start_seconds"]),float(row["end_seconds"]))
+                                         for row in verified["section_masks"]]
+                    if len(replacement_regions)>8:
+                        raise ValueError("Too many section regions")
+                elif verified.get("section_id"):
+                    replacement_regions=[(float(start_seconds),float(start_seconds)+float(verified["duration_seconds"]))]
+                else:
+                    raise ValueError("Unsupported MIDI candidate for section replacement")
+                candidate_end=float(start_seconds)+float(verified["duration_seconds"])
+                for a,b in replacement_regions:
+                    if not (float(start_seconds)-.005<=a<b<=candidate_end+.005):
+                        raise ValueError("Replacement section lies outside candidate audio")
+                    if original_gain_percent<100:
+                        for mask in record.get("replacement_masks",[]):
+                            if (mask.get("source_track_id")==replace_source_track_id and
+                                float(mask.get("start_seconds",0))<b-.005 and
+                                float(mask.get("end_seconds",0))>a+.005):
+                                raise ValueError("A source replacement already covers this region")
+                if any(replacement_regions[i][0]<replacement_regions[i-1][1]-.005
+                       for i in range(1,len(replacement_regions))):
+                    raise ValueError("MIDI replacement sections overlap or are out of order")
             except (ValueError,OSError,KeyError,TypeError) as exc:
                 raise HTTPException(409,str(exc)) from exc
         if any(x["stem_alias"].casefold()==stem_alias.casefold() for x in rows):
@@ -849,13 +865,14 @@ async def add_project_track(ident: str, request: Request,
                         "content_sha256":digest,"import_trim_db":round(float(preview_trim_db),2)})
         record["source_tracks"]=updated
         if original_gain_percent<100:
-            record.setdefault("replacement_masks",[]).append({
-                "replacement_track_id":track_id,"source_track_id":replace_source_track_id,
-                "source_filename":str(source_row["working_filename"]),
-                "start_seconds":round(float(start_seconds),3),
-                "end_seconds":round(float(start_seconds+original_duration),3),
-                "fade_seconds":round(min(.05,original_duration/8),3),
-                "original_gain":round(original_gain_percent/100,4)})
+            spans=replacement_regions or [(float(start_seconds),float(start_seconds+original_duration))]
+            for a,b in spans:
+                record.setdefault("replacement_masks",[]).append({
+                    "replacement_track_id":track_id,"source_track_id":replace_source_track_id,
+                    "source_filename":str(source_row["working_filename"]),
+                    "start_seconds":round(a,3),"end_seconds":round(b,3),
+                    "fade_seconds":round(min(.05,(b-a)/8),3),
+                    "original_gain":round(original_gain_percent/100,4)})
         record["files"]=list(record["files"])+[final_name]
         record["stems"]=list(record.get("stems",[]))+[{"filename":final_name,"gain":1.0,"mute":False,"solo":False}]
         record["imported_tracks"]=True

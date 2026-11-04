@@ -25,6 +25,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1;startSeconds:number;timelinePositioned:boolean};
 export type AuditionLevel = {gain:number};
 export type DeclickRecipe={id:string;filename:string;source_key:string;time_seconds:number;half_window_ms:number};
+type CandidatePreview={buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean};
 type Track = {source:AuditionSource;buffer:AudioBuffer;rawBuffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;scriptVolume:GainNode;replacementGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
 
@@ -68,8 +69,8 @@ export class SharedClockAudition {
   private monitorLevel=0.75;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
-  private candidatePreview:{buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean}|null=null;
-  private candidateExtras:NonNullable<typeof this.candidatePreview>[]=[];
+  private candidatePreview:CandidatePreview|null=null;
+  private candidateExtras:CandidatePreview[]=[];
   private previewClips(){return this.candidatePreview?[this.candidatePreview,...this.candidateExtras]:[];}
   private replacementMasks:ReplacementMask[]=[];
   private candidateOriginalMix:{filename:string;gain:number}|null=null;

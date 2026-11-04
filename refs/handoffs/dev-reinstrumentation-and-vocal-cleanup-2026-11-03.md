@@ -310,6 +310,34 @@ User Windows QA:
 - Do not revisit the piano-roll popover without new QA findings. Continue working on `dev`, not `main`.
 
 ---
+## 2026-11-04: Modeless section-aware MIDI renderer (new development slice)
+
+User accepted the existing piano-roll popout geometry but requested it be modeless, with sections atop the notes, Alt-click selecting every section of the same type, multi-selection and independent sectional rendering, an instrument selector inside the piano roll, and original stem muting **only in the sections accepted as replacements**. User specifically wants different Growlybass/other instrument articulations per section.
+
+### Implemented on `dev` (not yet runtime QA verified)
+- `d2df183`, `4a51972`, `18657c5`: piano-roll portal is now a draggable/resizable **modeless** dialog; uncovered main Song Harbor UI remains clickable. This is an in-browser window, not an OS-native separate window. It has its own Close action.
+- `84fa5a1`, `ac50bc3`: instrument dropdown in piano roll uses installed SF2/SFZ presets and syncs with the tool instrument picker. Each new render explicitly chooses a preset. Changing preset alone does not mutate audio.
+- `60499d3`, `72792ba`: section ruler immediately above the scrolling note grid, using the same sample/time x-axis; click selects one section, Ctrl/Shift-click adds, Alt-click selects all visible sections of the same kind (e.g., every Chorus). Multiple selected sections highlighted; the ruler scrolls/zooms with the piano notes.
+- `efb786c`, `48a0b07`, `3e06290`, `ab6093b`: pure Python section slicer validates 1-8 nonoverlapping selected sections within saved MIDI arrangement and <=600 seconds combined. Clips notes crossing boundaries and adjusts the candidate's absolute start while preserving original score. Rejects empty-note sections to prevent silent source replacement. Adds source/clip/bounds tests.
+- `6d30216`: `POST /api/projects/{ident}/midi-arrangements/{asset_id}/render-sections` renders one distinct candidate WAV per selected section. Extracted notes are section-local but candidate placement remains song-global; each candidate has `section_id` and saved arrangement/revision provenance. An error rolls back previously created batch candidates where possible. Existing whole-song render remains available.
+- `c88a187`: Piano roll Render button chooses the sectional endpoint when section IDs are selected, otherwise the whole-arrangement path.
+- `5ca1987`, `3b3c310`: Stem MIDI panel displays a section candidate review queue. Audition and Add stem remain explicit; accepting a clip creates an individually positioned new stem using existing replacement_masks, so unselected song regions do not lose base stem gain. Per-section aliases include a suffix derived from the section ID. Multi-section render is **NOT** auto-accepted or automatically played.
+- `bcfe15e`, `bf9fb9c`, `6eef8ab`: Import of a rendered section sends its candidate ID; backend checks its rendered source, start and duration, verifies candidate WAV length, and blocks overlapping source replacement masks for the same source when applying original gain below 100%. Replacing a previously accepted section requires removing the prior replacement first. This is a safety tradeoff pending richer replace-in-place workflow.
+- `5b661c8`, `5c403a4`, `c378d20`, `3923fcf`, `5153c38`, `d78d227`, `35f88a1`: candidate queue and accepted IDs held at song level, so they survive StemMixer's deliberate key-triggered remount after an added stem. MIDI Stem Tool reopens with source, saved arrangement and selected preset. This is a session-local queue; not yet persistent across full app restart. Track changes discard the queue. Instrument presets may be selected differently for subsequent render passes.
+- `35efd6b`: discard queue on source stem change to prevent wrong-stem candidates.
+- Other safety: no source WAV is directly modified; accepting a candidate is the only operation that creates a replacement mask. Saved MIDI revision remains canonical for all renditions. There is **no** batch source mute covering gaps between selected sections.
+
+### Known limits and QA gates
+- **No backend unittest, TypeScript/Vite build, Windows modeless interaction, actual multi-section audio render, or accept/export verification has been run remotely.** Static GitHub checks only show endpoints/components/props present.
+- On Windows, run `cd app/frontend && npm run build` and `cd app/backend && python -m unittest discover -s tests -p 'test_midi_section_slices.py' -v`, plus existing SFZ and MIDI tests.
+- Visual test: open the piano roll, resize and drag it, click an uncovered Stem Mixer or playback control without closing piano roll. Close/reopen with unsaved edits. Ensure the window cannot be lost off-screen; if it can, add reset-position and clamping.
+- Sections: require saved song sections. Click single Chorus, Alt-click Chorus to select all; Ctrl-click add Bridge; verify ruler labels line up with the piano roll timeline at Overview/Detail zoom. Ctrl/Shift multi-select semantics use additive selection, not toggling.
+- Render: select a saved full-song arrangement containing notes in chosen sections, choose Growlybass Dirty, render one section, audition and **check mute mask applies only from section start to end**. Then Alt-click same-type sections and generate multiple candidates; navigate next/previous and accept only one. Confirm other sections remain original. On remount after Add stem, next pending candidate should still be reviewable. Test different presets for a new single-section render.
+- Negative tests: reject unsaved MIDI edits, missing/overlapping/empty/out-of-bounds sections, >8 selected, >600s batch duration, stale revision, overlapping accepted replacements, mismatched candidate WAV duration, missing sfizz/FFmpeg. In-progress batch render runs synchronously and can be slow; consider background jobs/progress/cancel later.
+- Current section review controls are in Stem Tools, not mirrored inside the modeless piano-roll editor. A full per-section instrument assignment map/preset automation has not yet been added; preset selection is applied to the currently selected render batch. New render may replace the unaccepted review queue; accepted replacement stems remain in the project.
+- This slice is an implementation first pass, not locked/shipped QA. Preserve `main` and all production audio.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

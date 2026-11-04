@@ -106,15 +106,13 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
             if len(defaults) > 1:
                 raise ValueError("Multiple SFZ default_path assignments are unsupported")
             prefix = defaults[0] if defaults else ""
-            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix) or any(part == ".." for part in PurePosixPath(prefix).parts):
+            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
                 raise ValueError("SFZ default_path escapes the imported pack")
             # Permit references to samples inside the imported archive only. No shell or plugin scripts.
             for found in SAMPLE_REF.finditer(text):
                 sample = found.group(1).strip().strip('"').replace("\\", "/")
                 if not sample or sample.startswith("/") or re.match(r"^[A-Za-z]:", sample):
                     raise ValueError("Unsafe SFZ sample reference")
-                if any(part in ("..", ".") for part in PurePosixPath(sample).parts):
-                    raise ValueError("SFZ sample reference escapes pack")
                 sample_file=(definition.parent/prefix/sample).resolve()
                 if not sample_file.is_relative_to(destination.resolve()) or not sample_file.is_file():
                     raise ValueError("SFZ references a missing or external sample: "+sample[:120])

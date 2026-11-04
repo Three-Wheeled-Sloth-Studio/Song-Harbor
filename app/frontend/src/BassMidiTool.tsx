@@ -4,7 +4,7 @@ import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Note={pitch:number;start:number;end:number;velocity:number};
-type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
+type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
 type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
@@ -37,6 +37,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [customStart,setCustomStart]=useState(0);
  const [customDuration,setCustomDuration]=useState(20);
  const [candidate,setCandidate]=useState<Candidate|null>(null);
+ const [sectionQueue,setSectionQueue]=useState<Candidate[]>([]);
+ const [sectionIndex,setSectionIndex]=useState(0);
+ const [acceptedSectionIds,setAcceptedSectionIds]=useState<string[]>([]);
  const [arrangementId,setArrangementId]=useState("");
  const [rollDirty,setRollDirty]=useState(false);
  useEffect(()=>{if(rollDirty){setPreviewReady(false);engine?.clearCandidatePreview();}},[rollDirty,engine]);
@@ -142,13 +145,27 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage(starter.name+" installed · "+outcome.instruments+" presets");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
+ function sectionAlias(sectionId:string){
+   const section=sections.find(item=>item.id===sectionId);
+   const suffix=section?(section.kind.replace(/[^A-Za-z0-9]/g,"")+(section.number||"")):"Part";
+   return ("Reinst_"+suffix).slice(0,32);
+ }
+ function showSectionCandidate(index:number,candidates=sectionQueue){
+   const item=candidates[index];
+   if(!item)return;
+   engine?.clearCandidatePreview();
+   setCandidate(item);setNotes(item.notes);setSectionIndex(index);
+   setPreviewReady(true);setNotePage(0);
+   if(item.section_id)setAlias(sectionAlias(item.section_id));
+   setMessage("Review "+(index+1)+" of "+candidates.length+"; source gain changes only when this candidate is accepted.");
+ }
  function chooseInstrument(packId:string,id:string){
    setInstrumentPack(packId);setInstrument(id);setPreviewReady(false);
    engine?.clearCandidatePreview();setMessage("");
  }
  useEffect(()=>()=>{engine?.clearCandidatePreview();},[engine,jobId]);
  function clearCandidate(){
-   setArrangementId("");setCandidate(null);setNotes([]);setPreviewReady(false);setMessage("");setError("");
+   setArrangementId("");setCandidate(null);setSectionQueue([]);setAcceptedSectionIds([]);setNotes([]);setPreviewReady(false);setMessage("");setError("");
    engine?.clearCandidatePreview();
  }
  function edited(index:number,patch:Partial<Note>){
@@ -215,22 +232,32 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(originalGain<100)form.append("replace_source_track_id",trackId);
      const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
      engine?.clearCandidatePreview();
-     setMessage("New track added. Source preserved; remove the imported track to undo.");
+     if(candidate.section_id)setAcceptedSectionIds(old=>[...new Set([...old,candidate.section_id!])]);
+     setMessage(candidate.section_id?"Section accepted. Only this section of the source stem is reduced.":"New track added. Source preserved; remove the imported track to undo.");
      onInserted(data);
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
  }
- async function useArrangement(asset:Arrangement){
+ async function useArrangement(asset:Arrangement,sectionIds:string[]){
    if(asset.source.track_id!==trackId)throw Error("Arrangement belongs to a different stem.");
    if(busy)return;
    setBusy(true);setError("");setPreviewReady(false);engine?.clearCandidatePreview();
    try{
      if(!["sf2","sfz"].includes(chosenInstrument?.engine||""))throw Error("Select an SF2 or SFZ instrument to render a polyphonic arrangement.");
-     const data=await req<Candidate>("/api/projects/"+jobId+"/midi-arrangements/"+asset.asset_id+"/render",{
+     const root="/api/projects/"+jobId+"/midi-arrangements/"+asset.asset_id;
+     const data=await req<Candidate|{candidates:Candidate[]}>(
+       root+(sectionIds.length?"/render-sections":"/render"),{
        method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({revision:asset.revision,instrument_id:instrument,pack_id:instrumentPack})});
-     setCandidate(data);setNotes(data.notes);setNotePage(0);setArrangementId(asset.asset_id);
-     setPreviewReady(true);
-     setMessage("Polyphonic candidate rendered from saved arrangement r"+asset.revision+". Original stem unchanged.");
+       body:JSON.stringify({revision:asset.revision,instrument_id:instrument,pack_id:instrumentPack,
+        ...(sectionIds.length?{section_ids:sectionIds}:{})})});
+     setArrangementId(asset.asset_id);
+     if("candidates" in data){
+       setSectionQueue(data.candidates);setAcceptedSectionIds([]);setSectionIndex(0);
+       showSectionCandidate(0,data.candidates);
+     }else{
+       setSectionQueue([]);setAcceptedSectionIds([]);
+       setCandidate(data);setNotes(data.notes);setNotePage(0);setPreviewReady(true);
+       setMessage("Polyphonic candidate rendered from saved arrangement r"+asset.revision+". Original stem unchanged.");
+     }
    }finally{setBusy(false);}
  }
  async function saveArrangement(){
@@ -371,6 +398,15 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </>}
      {candidate&&<>
        <div className="song-midi-render">
+         {sectionQueue.length>0&&<div className="song-midi-section-review">
+           <button type="button" title="Previous rendered section" aria-label="Previous rendered section" disabled={busy||sectionIndex===0}
+            onClick={()=>showSectionCandidate(sectionIndex-1)}>←</button>
+           <span>Section {sectionIndex+1}/{sectionQueue.length} · {candidate?.section_id?sections.find(x=>x.id===candidate.section_id)?.kind||"Section":""}
+             {candidate?.section_id&&acceptedSectionIds.includes(candidate.section_id)?" · Accepted":""}</span>
+           <button type="button" title="Next rendered section" aria-label="Next rendered section" disabled={busy||sectionIndex===sectionQueue.length-1}
+            onClick={()=>showSectionCandidate(sectionIndex+1)}>→</button>
+           <small>Each accepted section has its own source-replacement mask.</small>
+         </div>}
          <div className="song-midi-controls">
            {arrangementId?<small title="Render the saved arrangement above to ensure the versioned MIDI notes are authoritative">Render via arrangement above</small>:<button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>}
            <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
@@ -380,7 +416,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
-           <button type="button" disabled={busy} title="Add candidate as a removable new stem" onClick={()=>void insert()}>✓ Add stem</button>
+           <button type="button" disabled={busy||Boolean(candidate.section_id&&acceptedSectionIds.includes(candidate.section_id))} title="Add candidate as removable stem, lower original only across its rendered region" onClick={()=>void insert()}>✓ Add stem</button>
          </div>}
        </div>
      </>}

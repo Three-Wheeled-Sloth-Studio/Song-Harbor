@@ -340,6 +340,15 @@ User accepted the existing piano-roll popout geometry but requested it be modele
 - This slice is an implementation first pass, not locked/shipped QA. Preserve `main` and all production audio.
 
 ---
+## 2026-11-04: DEV launch TS1005 correction
+
+The user reported Windows dev launcher failed `tsc --noEmit && vite build` at `src/MidiPianoRoll.tsx:243:4` with `TS1005: '}' expected`. The newly added conditional `{!!selectedSections.length&&<button ...>Clear sections</button>` was missing its final `}` before `</div>}`.
+
+- `de0b5d8` (`dev` only): appended the missing closing JSX expression brace after `</button>`. Refetched the committed file and confirmed the line now ends `</button>}`.
+- Source syntax checked at the exact failure site; **no full TypeScript/Vite build or Windows relaunch executed** from this environment. If a subsequent compiler error appears, fix by exact line rather than assuming it is related.
+- No functional or production-audio changes; `main` unchanged.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

@@ -429,6 +429,8 @@ Screenshot showed ten rows of truncated `growly...` labels after multiple sectio
 - `30bbb06`: composite acceptance rejects stale saved MIDI revisions and changed section boundaries rather than silently applying mismatched masks.
 - `4db3aaf`: piano-roll description now clarifies the editor is for MIDI note events and L/R routing occurs on the accepted stereo stem.
 - `1414e08`, `ec2e5b8`: all accepted rendered MIDI candidates, including whole-score renders, now carry their candidate ID to the import endpoint for source/position validation and automatic L/R derived channel creation, not just section composites.
+- `b21e135`: catch invalid composite WAV format errors and remove incomplete generated candidates rather than leaving failed artifacts.
+- `f36366b`: suppress repeated stem alias subtitles when the main display name already matches the user alias.
 - `b8f9272`: added explicit legacy `.original` import compatibility coverage. Existing named tracks/old scripts are not silently rewritten.
 
 

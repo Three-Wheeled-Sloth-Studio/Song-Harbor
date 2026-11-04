@@ -1015,7 +1015,8 @@ def list_instrument_library()->dict[str,Any]:
 
 @app.get("/api/instruments/curated-sfz")
 def list_curated_sfz_packs()->dict[str,Any]:
-    return {"packs":curated_sfz.curated_catalogue()}
+    installed = instrument_library.catalogue(DATA_ROOT)["packs"]
+    return {"packs":curated_sfz.curated_catalogue(installed)}
 
 
 @app.get("/api/instruments/starters")

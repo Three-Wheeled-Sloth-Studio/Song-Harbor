@@ -53,6 +53,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
  const [alias,setAlias]=useState("Reinstrumented");
+ const [batchPrefix,setBatchPrefix]=useState("Reinstrumented");
+ const [auditionScope,setAuditionScope]=useState<"all"|"section">("all");
+ const [auditionMode,setAuditionMode]=useState<"none"|"current"|"replacement"|"solo">("none");
  const [originalGain,setOriginalGain]=useState(10);
  const [packFilter,setPackFilter]=useState("all");
  const [instrument,setInstrument]=useState(persisted?.candidates[persisted.index]?.instrument||"bowed");
@@ -173,7 +176,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  function showSectionCandidate(index:number,candidates=sectionQueue,accepted=acceptedSectionIds){
    const item=candidates[index];
    if(!item)return;
-   engine?.clearCandidatePreview();
+   engine?.clearCandidatePreview();setAuditionMode("none");
    setCandidate(item);setNotes(item.notes);setSectionIndex(index);
    if(item.instrument)setInstrument(item.instrument);
    if(item.pack_id)setInstrumentPack(item.pack_id);
@@ -223,19 +226,51 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage("Preview rendered.");
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
- async function audition(solo:boolean){
-   if(!candidate||!previewReady||!engine?.ready)return;
+ async function audition(mode:"current"|"replacement"|"solo"){
+   if(!candidate||!previewReady||!engine?.ready||busy)return;
    setBusy(true);setError("");
    try{
-     await engine.loadCandidatePreview(base+"/"+candidate.candidate_id+"/audio?revision="+Date.now(),candidate.start_seconds);
-     engine.setCandidatePreviewSolo(solo);
-     engine.setCandidatePreviewBlend(100);
-     engine.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",originalGain);
-     engine.setCandidatePreviewTrimDb(candidateTrimDb);
-     onSeek(candidate.start_seconds);
+     const clips=sectionQueue.length&&auditionScope==="all"?sectionQueue:[candidate];
+     const first=clips[0];
+     if(mode==="current"){
+       engine.clearCandidatePreview();
+     }else if(clips.length>1){
+       await engine.loadCandidatePreviews(clips.map(item=>({
+         url:base+"/"+item.candidate_id+"/audio?revision="+Date.now(),
+         startSeconds:item.start_seconds
+       })));
+     }else{
+       await engine.loadCandidatePreview(base+"/"+first.candidate_id+"/audio?revision="+Date.now(),first.start_seconds);
+     }
+     if(mode!=="current"){
+       engine.setCandidatePreviewSolo(mode==="solo");
+       engine.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",originalGain);
+       engine.setCandidatePreviewTrimDb(candidateTrimDb);
+       engine.setCandidatePreviewBlend(100);
+     }
+     // Keep the transport position when comparing A/B. Only jump to the first
+     // generated region when starting an audition from outside the selection.
+     const inRange=clips.some(item=>position>=item.start_seconds&&position<item.start_seconds+item.duration_seconds);
+     if(!playing&&!inRange)onSeek(first.start_seconds);
+     setAuditionMode(mode);
+     setMessage(mode==="current"?"A: Current mix, no unaccepted MIDI preview.":
+       mode==="replacement"?"B: "+clips.length+" rendered section"+(clips.length===1?"":"s")+" mixed into the song. Original stem retained at "+originalGain+"% in those regions.":
+       "Solo: "+clips.length+" rendered section"+(clips.length===1?"":"s")+", backing stems muted. Skips unselected gaps.");
      if(!playing)await onPlay();
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
+ useEffect(()=>{
+   if(!playing||auditionMode!=="solo"||auditionScope!=="all"||sectionQueue.length<2)return;
+   const ordered=[...sectionQueue].sort((a,b)=>a.start_seconds-b.start_seconds);
+   for(let i=0;i<ordered.length-1;i++){
+     const ending=ordered[i].start_seconds+ordered[i].duration_seconds;
+     const next=ordered[i+1].start_seconds;
+     if(position>=ending-.025&&position<next-.05){
+       onSeek(next);
+       break;
+     }
+   }
+ },[position,playing,auditionMode,auditionScope,sectionQueue,onSeek]);
  async function addCandidateClip(item:Candidate,newAlias:string):Promise<Imported>{
    if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(newAlias))throw Error("Invalid track alias");
    const response=await fetch(base+"/"+item.candidate_id+"/audio");
@@ -503,11 +538,18 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>}
          <div className="song-midi-controls">
            {arrangementId?<small title="Render the saved arrangement above to ensure the versioned MIDI notes are authoritative">Render via arrangement above</small>:<button type="button" title="Render selected instrument preview" disabled={busy||!notes.length} onClick={()=>void render()}>◈ Render</button>}
-           <button type="button" title="Solo candidate" disabled={!previewReady||busy} onClick={()=>void audition(true)}>▶ Solo</button>
-           <button type="button" title="Audition in song" disabled={!previewReady||busy} onClick={()=>void audition(false)}>◉ A/B</button>
+           {sectionQueue.length>1&&<label title="Audition the complete rendered batch or only the review selection">Scope <select aria-label="Preview scope" value={auditionScope} onChange={e=>{setAuditionScope(e.target.value as "all"|"section");engine?.clearCandidatePreview();setAuditionMode("none");}}><option value="all">All {sectionQueue.length}</option><option value="section">This section</option></select></label>}
+           <button type="button" aria-pressed={auditionMode==="solo"} title="Preview only the rendered MIDI clips; skip gaps between selected sections" disabled={!previewReady||busy} onClick={()=>void audition("solo")}>▶ Solo</button>
+           <button type="button" aria-pressed={auditionMode==="current"} title="A: Play current song without unaccepted MIDI preview" disabled={!previewReady||busy} onClick={()=>void audition("current")}>A: Current</button>
+           <button type="button" aria-pressed={auditionMode==="replacement"} title="B: Play rendered MIDI clips with backing instruments and region-scoped original gain" disabled={!previewReady||busy} onClick={()=>void audition("replacement")}>B: MIDI</button>
            <label className="song-original-mix" title="Retained original stem gain inside this region; 0% replaces, 100% layers">Original <input type="range" min="0" max="100" step="1" aria-label="Original stem retained gain" value={originalGain} onChange={e=>{const value=Number(e.target.value);setOriginalGain(value);engine?.setCandidateOriginalMix(stemControls.find(t=>t.trackId===trackId)?.filename||"",value);}}/><output>{originalGain}%</output></label>
            <div className="song-candidate-volume" title="Candidate level, also applied when adding the track">◖ <input type="range" aria-label="Candidate volume trim" min="-12" max="9" step="1" value={candidateTrimDb} onChange={e=>{const db=Number(e.target.value);setCandidateTrimDb(db);engine?.setCandidatePreviewTrimDb(db);}}/><output>{candidateTrimDb>0?"+":""}{candidateTrimDb} dB</output><button type="button" title="Reset candidate volume" aria-label="Reset candidate volume" onClick={()=>{setCandidateTrimDb(0);engine?.setCandidatePreviewTrimDb(0);}}>↺</button></div>
          </div>
+         {auditionMode!=="none"&&<div className="song-midi-audition-status" role="status">{
+           auditionMode==="current"?"A: Current mix (without unaccepted MIDI preview)":
+           auditionMode==="replacement"?"B: Rendered MIDI in selected sections, current backing mix":
+           "Solo: Rendered MIDI only"+(sectionQueue.length>1&&auditionScope==="all"?" (all sections)":"")
+         }</div>}
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
            <button type="button" disabled={busy||Boolean(candidate.section_id&&acceptedSectionIds.includes(candidate.section_id))} title="Add only the currently reviewed section. To add all rendered sections, use Add all sections." onClick={()=>void insert()}>✓ {sectionQueue.length?"Add this section":"Add stem"}</button>

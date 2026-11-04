@@ -917,3 +917,15 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-midi-fluid-setup{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--tws-color-text-muted)}
 .song-midi-fluid-setup button,.song-midi-error button{font-size:11px;min-height:26px;padding:3px 7px}
 .song-midi-error{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* Curated sample library remains compact inside the existing resizable tool surface. */
+.song-midi-curated{display:grid;gap:5px;max-height:270px;overflow:auto;padding:7px;border:1px solid var(--tws-color-border-normal);border-radius:7px;min-width:0}
+.song-midi-curated>small{font-size:11px;color:var(--tws-color-text-muted)}
+.song-midi-curated-row{display:grid;grid-template-columns:minmax(145px,1.4fr) minmax(140px,2fr) auto auto auto;align-items:center;gap:7px;padding:5px;border-bottom:1px solid var(--tws-color-border-normal);min-width:0}
+.song-midi-curated-row>span{min-width:0;display:flex;flex-direction:column;gap:2px}
+.song-midi-curated-row strong{font-size:12px}
+.song-midi-curated-row small{font-size:10px;color:var(--tws-color-text-muted);line-height:1.25}
+.song-midi-curated-row>a,.song-midi-curated-row>label{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;cursor:pointer;text-decoration:none;border:1px solid var(--tws-color-border-normal);border-radius:5px;padding:4px 6px;font-size:11px}
+.song-midi-curated-row>label input[type=file]{display:none}
+.song-midi-curated-row>a:hover,.song-midi-curated-row>label:hover{border-color:currentColor}
+@media(max-width:700px){.song-midi-curated-row{grid-template-columns:minmax(0,1fr) auto auto auto}.song-midi-curated-row>small{grid-column:1/-1;grid-row:2}}

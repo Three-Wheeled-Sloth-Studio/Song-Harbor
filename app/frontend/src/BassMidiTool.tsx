@@ -6,7 +6,7 @@ import type {SharedClockAudition} from "./SharedClockAudition";
 type Note={pitch:number;start:number;end:number;velocity:number};
 export type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;method:string};
 export type MidiRenderSession={jobId:string;sourceTrackId:string;candidates:Candidate[];index:number;acceptedSectionIds:string[]};
-type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?:number;duration_seconds?:number};
+type Track={track_id:string;stem_alias:string;display_name:string;imported?:boolean;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
 type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean;sfizz_ready?:boolean};
@@ -49,6 +49,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [notes,setNotes]=useState<Note[]>([]);
  const [notePage,setNotePage]=useState(0);
  const [busy,setBusy]=useState(false);
+ const [batchProgress,setBatchProgress]=useState("");
  const [message,setMessage]=useState("");
  const [error,setError]=useState("");
  const [alias,setAlias]=useState("Reinstrumented");

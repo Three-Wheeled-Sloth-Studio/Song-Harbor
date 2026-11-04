@@ -964,3 +964,10 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
  .song-roll-modeless{width:95vw;height:75vh;min-width:0}
  .song-roll-instrument select{min-width:120px;max-width:220px}
 }
+
+/* Section ruler shares the horizontal scroll coordinate system with MIDI notes. */
+.song-roll-time-sections{position:relative;background:#1c2b36;height:32px;border-bottom:1px solid #657788;box-sizing:border-box}
+.song-roll-time-key{position:absolute;top:0;left:0;bottom:0;width:43px;display:flex;justify-content:center;align-items:center;background:#d0d9e0;color:#13202b;border-right:1px solid #72818c;font-size:12px}
+.song-roll-time-sections>button{position:absolute;top:3px;height:26px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;padding:3px 5px;background:#38556a;border:1px solid #668ba4;border-radius:4px;color:#ecf3f8;font-size:11px;cursor:pointer}
+.song-roll-time-sections>button.is-selected{background:#7a633a;border-color:#e3b965;color:#fff}
+.song-roll-time-sections>button:focus-visible{outline:2px solid #e3b965;outline-offset:-2px}

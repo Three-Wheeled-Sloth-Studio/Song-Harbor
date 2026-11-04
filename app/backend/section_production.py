@@ -94,7 +94,7 @@ GAIN_TOKEN = re.compile(
 # Linked accepted replacement, editable in the section script without replacing
 # the track's independently authored gain automation.
 ORIGINAL_MIX_TOKEN = re.compile(
-    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.original:(?P<percent>\d{1,3})%"
+    r"(?i)^(?P<track>[A-Za-z][A-Za-z0-9_-]*)\.(?:volume|original):(?P<percent>\d{1,3})%"
     r"@(?P<start>\d+(?:\.\d{1,3})?)-(?P<end>\d+(?:\.\d{1,3})?)"
     r"#(?P<replacement>trk_[A-Za-z0-9_-]{1,64})$"
 )
@@ -435,7 +435,7 @@ def render_block(directives: list[dict[str, Any]]) -> str:
             continue
         if d["kind"] == "original_mix":
             rendered.append(
-                f"{d['track']}.original:{int(d['percent'])}%"
+                f"{d['track']}.volume:{int(d['percent'])}%"
                 f"@{float(d['start_seconds']):.3f}-{float(d['end_seconds']):.3f}"
                 f"#{d['replacement_track_id']}")
             continue

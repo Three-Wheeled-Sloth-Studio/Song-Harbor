@@ -42,6 +42,7 @@ import declick_recipes
 import midi_arrangements
 import polyphonic_midi
 import sfz_pack
+import curated_sfz
 import sfz_render_adapter
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
@@ -1009,6 +1010,11 @@ def list_instrument_library()->dict[str,Any]:
     result["fluidsynth_ready"]=bool(instrument_library.find_fluidsynth(DATA_ROOT,APP_ROOT))
     result["sfizz_ready"]=bool(sfz_render_adapter.find_renderer(APP_ROOT))
     return result
+
+
+@app.get("/api/instruments/curated-sfz")
+def list_curated_sfz_packs()->dict[str,Any]:
+    return {"packs":curated_sfz.curated_catalogue()}
 
 
 @app.get("/api/instruments/starters")

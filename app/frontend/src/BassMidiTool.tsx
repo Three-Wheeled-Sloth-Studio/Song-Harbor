@@ -364,7 +364,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    }catch(e){const detail=String(e);setError(detail);onError(detail);}
    finally{setBusy(false);}
  }
- async function useArrangement(asset:Arrangement,sectionIds:string[]){
+ async function useArrangement(asset:Arrangement,sectionIds:string[],options:import("./MidiPianoRoll").DrumOptions){
    if(asset.source.track_id!==trackId)throw Error("Arrangement belongs to a different stem.");
    if(busy)return;
    setBusy(true);setError("");setPreviewReady(false);engine?.clearCandidatePreview();
@@ -375,7 +375,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        root+(sectionIds.length?"/render-sections":"/render"),{
        method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({revision:asset.revision,instrument_id:instrument,pack_id:instrumentPack,
-        ...(sectionIds.length?{section_ids:sectionIds}:{})})});
+        ...options,...(sectionIds.length?{section_ids:sectionIds}:{})})});
      setArrangementId(asset.asset_id);
      if("candidates" in data){
        setSectionQueue(data.candidates);setAcceptedSectionIds([]);setSectionIndex(0);

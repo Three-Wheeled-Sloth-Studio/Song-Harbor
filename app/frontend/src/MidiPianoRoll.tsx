@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
-import type {PointerEvent as ReactPointerEvent} from "react";
+import type {PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent} from "react";
 import type {SongSection} from "./SectionEditor";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
@@ -204,7 +204,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
    return section.end_seconds>start&&section.start_seconds<end;
  }):[];
  const selectedSectionRanges=visibleSections.filter(section=>selectedSections.includes(section.id));
- function chooseSection(section:SongSection,event:React.MouseEvent<HTMLButtonElement>){
+ function chooseSection(section:SongSection,event:ReactMouseEvent<HTMLButtonElement>){
    const matching=event.altKey?visibleSections.filter(item=>item.kind.toLowerCase()===section.kind.toLowerCase()).map(item=>item.id):[section.id];
    setSelectedSections(previous=>{
      if(event.ctrlKey||event.metaKey||event.shiftKey)return [...new Set([...previous,...matching])];

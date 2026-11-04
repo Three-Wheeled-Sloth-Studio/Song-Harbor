@@ -1491,6 +1491,16 @@ def compose_midi_sections(ident:str,request:Request,body:ComposeMidiSectionsRequ
         if len(arrangement)!=1:raise ValueError("Selected sections must come from the same saved MIDI revision")
         if len({item.get("section_id") for item,_ in items})!=len(items):
             raise ValueError("Duplicate song section in composite")
+        asset_id,revision=next(iter(arrangement))
+        latest=midi_arrangements.read(root,asset_id)
+        if latest["revision"]!=revision:
+            raise ValueError("MIDI score changed after these sections were rendered; render the latest revision")
+        by_section={entry["id"]:entry for entry in project.get("sections",[])}
+        for item,_ in items:
+            section=by_section.get(item["section_id"])
+            if not section or abs(float(section["start_seconds"])-float(item["start_seconds"]))>.005 or abs(
+                float(section["end_seconds"])-float(item["start_seconds"])-float(item["duration_seconds"]))>.06:
+                raise ValueError("Section boundaries changed after rendering; render the selection again")
         duration=resolved_song_duration(project,get_job(ident))
         if any(float(item["start_seconds"])+float(item["duration_seconds"])>duration+.005 for item,_ in items):
             raise ValueError("Section extends beyond song end")

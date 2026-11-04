@@ -235,35 +235,74 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(!playing)await onPlay();
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
+ async function addCandidateClip(item:Candidate,newAlias:string):Promise<Imported>{
+   if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(newAlias))throw Error("Invalid track alias");
+   const response=await fetch(base+"/"+item.candidate_id+"/audio");
+   if(!response.ok)throw Error("Could not retrieve rendered audio for "+(item.section_id||item.candidate_id));
+   const blob=await response.blob();
+   const form=new FormData();
+   form.append("file",new File([blob],"Instrument-"+item.candidate_id.slice(0,8)+".wav",{type:"audio/wav"}));
+   form.append("stem_alias",newAlias);
+   const chosen=catalogue.instruments.find(x=>x.id===item.instrument&&x.pack_id===item.pack_id);
+   form.append("display_name",(chosen?.name||selectedLabel)+" ("+newAlias+")");
+   form.append("start_seconds",String(item.start_seconds));
+   if(item.section_id)form.append("midi_candidate_id",item.candidate_id);
+   form.append("preview_trim_db",String(candidateTrimDb));
+   form.append("original_gain_percent",String(originalGain));
+   if(originalGain<100)form.append("replace_source_track_id",trackId);
+   return req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
+ }
  async function insert(){
    if(!candidate||!previewReady||busy)return;
-   if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(alias)){setError("Invalid track alias");return;}
    setBusy(true);setError("");
    try{
      if(!await saveProject())throw Error("Save song before inserting a new track");
      onPause();
-     const response=await fetch(base+"/"+candidate.candidate_id+"/audio");
-     if(!response.ok)throw Error("Could not retrieve rendered bowed-string audio");
-     const blob=await response.blob();
-     const form=new FormData();
-     form.append("file",new File([blob],"Instrument-"+candidate.candidate_id.slice(0,8)+".wav",{type:"audio/wav"}));
-     form.append("stem_alias",alias);
-     form.append("display_name",selectedLabel+" ("+alias+")");
-     form.append("start_seconds",String(candidate.start_seconds));
-     if(candidate.section_id)form.append("midi_candidate_id",candidate.candidate_id);
-     form.append("preview_trim_db",String(candidateTrimDb));
-     form.append("original_gain_percent",String(originalGain));
-     if(originalGain<100)form.append("replace_source_track_id",trackId);
-     const data=await req<Imported>("/api/projects/"+jobId+"/tracks/add",{method:"POST",body:form});
+     const data=await addCandidateClip(candidate,alias);
      engine?.clearCandidatePreview();
      if(candidate.section_id){
        const accepted=[...new Set([...acceptedSectionIds,candidate.section_id])];
+       const next=sectionQueue.findIndex((item,i)=>i!==sectionIndex&&item.section_id&&!accepted.includes(item.section_id));
+       const index=next>=0?next:sectionIndex;
        setAcceptedSectionIds(accepted);
-       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index:sectionIndex,acceptedSectionIds:accepted});
+       setSectionIndex(index);
+       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index,acceptedSectionIds:accepted});
+       setMessage("Section accepted. "+(sectionQueue.length-accepted.length)+" sections remain.");
+     }else{
+       setMessage("New stem added. Remove it to restore the previous mix.");
      }
-     setMessage(candidate.section_id?"Section accepted. Only this section of the source stem is reduced.":"New track added. Source preserved; remove the imported track to undo.");
      onInserted(data);
    }catch(e){const detail=String(e);setError(detail);onError(detail);}finally{setBusy(false);}
+ }
+ async function insertAllSections(){
+   if(busy||!sectionQueue.length)return;
+   const pending=sectionQueue.filter(item=>item.section_id&&!acceptedSectionIds.includes(item.section_id));
+   if(!pending.length)return;
+   if(!window.confirm("Add "+pending.length+" rendered sections as separate reversible stems? Original bass is reduced only within each accepted section."))return;
+   setBusy(true);setError("");setBatchProgress("Adding 0 of "+pending.length+" sections");
+   let latest:Imported|null=null;
+   const accepted=[...acceptedSectionIds];
+   let completed=0;
+   try{
+     if(!await saveProject())throw Error("Save song before adding sections");
+     onPause();
+     for(const item of pending){
+       setBatchProgress("Adding "+(completed+1)+" of "+pending.length+" sections");
+       latest=await addCandidateClip(item,sectionAlias(item.section_id!));
+       accepted.push(item.section_id!);
+       completed++;
+       onMidiSessionChange?.({jobId,sourceTrackId:trackId,candidates:sectionQueue,index:sectionIndex,acceptedSectionIds:[...accepted]});
+     }
+     setAcceptedSectionIds([...accepted]);
+     setMessage("Added "+completed+" section stems. Other song regions remain unchanged.");
+   }catch(e){
+     const detail="Added "+completed+" of "+pending.length+" before stopping: "+String(e);
+     setError(detail);onError(detail);
+     setAcceptedSectionIds([...accepted]);
+   }finally{
+     setBatchProgress("");setBusy(false);
+     if(latest)onInserted(latest);
+   }
  }
  async function useArrangement(asset:Arrangement,sectionIds:string[]){
    if(asset.source.track_id!==trackId)throw Error("Arrangement belongs to a different stem.");

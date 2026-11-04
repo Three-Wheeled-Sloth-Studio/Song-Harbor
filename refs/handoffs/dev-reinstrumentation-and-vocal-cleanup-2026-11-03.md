@@ -189,6 +189,36 @@ The `dev` GitHub reads confirmed:
 
 ---
 
+## 2026-11-04: resumed SFZ setup and import hardening
+
+Branch: **dev ONLY**; main and release audio untouched. The user's last "Proceed" followed a timeout recovery, not a successful SFZ render test.
+
+### Commits (in order)
+- `80f2816` `sfz_render_adapter.py`: machine-local sfizz executable configuration, fixed-basename validation, bounded `--help` probe, atomic save in existing settings JSON, native Windows picker, configured/PATH discovery, and render using configured binary.
+- `bf5151f` `server.py`: GET/PUT `/api/settings/sfizz`, POST `/api/settings/sfizz/browse`, exposed `sfizz_ready` in instrument catalog, configured renderer passed to SFZ render path.
+- `84fccfe` `AppSettings.tsx`: contextual Components UI for Browse, Detect, Verify & save, ready/not configured status.
+- `15d6a69`, `2570f86`, `eb551ae`: prop wiring from `main.tsx` through `StemMixer.tsx` into `BassMidiTool.tsx`; missing sfizz in instrument area now links directly to Settings.
+- `9e577fd` `sfz_pack.py`: bounded actual decompressed-byte streaming per ZIP entry; reject unexpected entry sizes; importer retains rollback behavior.
+- `671c83f` `test_sfz_render_adapter.py`: mocked settings validation, preserving other machine config keys, missing or mismatched executable.
+- `b445571` `test_sfz_pack.py`: ZIP unpacked size limits, default_path rejection, failed import cleanup.
+- `292b14b` `server.py`: candidate metadata includes `instrument_engine`, `instrument_sha256`, full `pack_sha256` from manifest.
+
+### What was actually checked
+- GitHub `dev` source inspection after wiring confirmed the expected frontend props/settings controls and backend routes were present.
+- Public upstream sfizz-render source confirms `--help`, `--sfz`, `--midi`, `--wav`, `--samplerate`, and 16-bit stereo WAV output; source https://github.com/sfztools/sfizz-render/blob/master/main.cpp and CLI manual https://man.archlinux.org/man/sfizz_render.1.en.
+- This environment has no working DNS access to `github.com` from the command-line container, therefore it **cannot clone/build/run the exact remote tree**. The GitHub app used for code commits does not itself execute tests.
+- **No local Windows, frontend build, backend unit test, actual SFZ ZIP import, sampler probe, candidate audition, save/reopen, or export parity has passed during this session.** These are implementation commits awaiting testing.
+
+### Required next QA and limitations
+1. From dev checkout: `cd app/backend && python -m unittest discover -s tests -p 'test_sfz*.py' -v`, then full backend suite. Frontend `cd app/frontend && npm run build`. Fix test/build failures before any more features.
+2. In Settings > Components, browse to installed `sfizz_render.exe`, verify and save, close/reopen Settings, ensure persisted path and `sfizz_ready` updates. Then in Stem Tools > MIDI select SFZ instrument and render a **saved** arrangement revision. The selection remains an explicit user action; no autoplay.
+3. Import a tiny known-good self-contained SFZ ZIP first. Larger Karoryfer/VSCO packs may use unsupported `#include` or `default_path` opcodes, so current importer intentionally rejects them. Their licensing, sound, and compatibility are unverified.
+4. Test same MIDI with SF2 vs SFZ, held notes and release tails, clipping, candidate A/B, Add stem/undo/reopen, section automation, 48-kHz timing and 24-bit export parity. Confirm original stem hash unchanged.
+5. Validate ffmpeg dependency, sfizz error reporting, malformed archives and race conditions. Full pack fingerprint is recorded but user-mutation verification against the original manifest and sampler-version pinning remain pending.
+6. Deshimmer remains an isolated Python API **handshake only**, not a vocal cleanup processor or integrated candidate. Do not claim processing has been implemented.
+7. The historical handoff above contains earlier statements that SFZ was not connected. Those refer to previous checkpoints. As of this section, source is connected but **not tested**.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

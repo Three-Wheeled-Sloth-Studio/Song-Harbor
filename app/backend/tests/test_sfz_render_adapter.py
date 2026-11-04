@@ -63,6 +63,38 @@ class SFZAdapterTests(unittest.TestCase):
                 sfz.render_sfz(self.midi, self.instrument, self.output, renderer=str(self.exe))
         self.assertFalse(self.output.exists())
 
+    def test_verify_and_save_preserves_other_machine_settings(self):
+        root = self.exe.parent
+        folder = root / "config"
+        folder.mkdir()
+        (folder / "settings.json").write_text('{"working_files_directory":"D:/Music"}')
+        def invoke(command, **kwargs):
+            self.assertEqual(command[1], "--help")
+            self.assertFalse(kwargs["shell"])
+            return type("Result", (), {
+                "returncode": 0,
+                "stdout": "sfizz_render --sfz FILE --midi FILE --wav FILE --samplerate 48000",
+                "stderr": "",
+            })()
+        with patch.object(sfz.subprocess, "run", side_effect=invoke):
+            saved = sfz.save_renderer(root, str(self.exe))
+            self.assertEqual(sfz.find_renderer(root), saved)
+        import json
+        settings = json.loads((folder / "settings.json").read_text())
+        self.assertEqual(settings["working_files_directory"], "D:/Music")
+        self.assertEqual(settings["sfizz_render_executable"], saved)
+
+    def test_reject_wrong_binary_and_unusable_help(self):
+        renamed = self.exe.with_name("unrelated.exe")
+        renamed.write_bytes(b"fixture")
+        with self.assertRaisesRegex(sfz.SFZRenderError, "Select sfizz_render"):
+            sfz.verify_renderer(str(renamed))
+        with patch.object(sfz.subprocess, "run", return_value=type("Result", (), {
+            "returncode": 0, "stdout": "unrelated tool", "stderr": ""
+        })()):
+            with self.assertRaisesRegex(sfz.SFZRenderError, "expected"):
+                sfz.verify_renderer(str(self.exe))
+
     def test_timeout_bounds(self):
         with self.assertRaisesRegex(sfz.SFZRenderError, "timeout"):
             sfz.render_sfz(self.midi, self.instrument, self.output,

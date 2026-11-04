@@ -1298,6 +1298,12 @@ def _render_saved_midi_candidate(project_root:Path,asset_id:str,asset:dict,
         raise
 
 
+@app.get("/api/instruments/drum-keymap/gm")
+def general_midi_drum_keymap()->dict[str,Any]:
+    """Expose explicit GM pitch labels for drum lanes and kit setup."""
+    return drum_keymaps.default_keymap()
+
+
 class PolyphonicRenderRequest(BaseModel):
     revision: int = Field(ge=0)
     pack_id: str = Field(min_length=1,max_length=80)

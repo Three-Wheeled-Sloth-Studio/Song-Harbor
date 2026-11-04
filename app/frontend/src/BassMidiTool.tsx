@@ -465,6 +465,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </>}
      {candidate&&<>
        <div className="song-midi-render">
+         {sectionQueue.length>0&&<div className="song-midi-section-batch" role="status">
+           <strong>{sectionQueue.length} sections rendered</strong>
+           <span>{acceptedSectionIds.length} accepted, {sectionQueue.length-acceptedSectionIds.length} pending</span>
+           <button type="button" title="Add every remaining rendered section as an independent, reversible stem"
+             disabled={busy||acceptedSectionIds.length>=sectionQueue.length}
+             onClick={()=>void insertAllSections()}>✓ Add all {sectionQueue.length-acceptedSectionIds.length} sections</button>
+           {batchProgress&&<small aria-live="polite">{batchProgress}</small>}
+         </div>}
          {sectionQueue.length>0&&<div className="song-midi-section-review">
            <button type="button" title="Previous rendered section" aria-label="Previous rendered section" disabled={busy||sectionIndex===0}
             onClick={()=>showSectionCandidate(sectionIndex-1)}>←</button>
@@ -483,7 +491,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          </div>
          {previewReady&&<div className="song-midi-accept">
            <input aria-label="New stem alias" title="New stem alias" maxLength={32} value={alias} onChange={e=>setAlias(e.target.value)}/>
-           <button type="button" disabled={busy||Boolean(candidate.section_id&&acceptedSectionIds.includes(candidate.section_id))} title="Add candidate as removable stem, lower original only across its rendered region" onClick={()=>void insert()}>✓ Add stem</button>
+           <button type="button" disabled={busy||Boolean(candidate.section_id&&acceptedSectionIds.includes(candidate.section_id))} title="Add only the currently reviewed section. To add all rendered sections, use Add all sections." onClick={()=>void insert()}>✓ {sectionQueue.length?"Add this section":"Add stem"}</button>
          </div>}
        </div>
      </>}

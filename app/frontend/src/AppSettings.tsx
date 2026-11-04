@@ -9,7 +9,7 @@ type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
-  focus?:"fluidsynth"|null;
+  focus?:"fluidsynth"|"sfizz"|null;
 }) {
   const [data,setData]=useState<Working|null>(null);
   const [path,setPath]=useState("");
@@ -20,16 +20,23 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [ffmpegOpen,setFfmpegOpen]=useState(false);
   const [fluid,setFluid]=useState<FluidSynthSettings|null>(null);
   const [fluidPath,setFluidPath]=useState("");
+  const [sfizz,setSfizz]=useState<FluidSynthSettings|null>(null);
+  const [sfizzPath,setSfizzPath]=useState("");
 
   useEffect(()=>{
     if(!open)return;
-    setError("");setNotice("");setShowTools(focus==="fluidsynth");
+    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");
     void fetch("/api/settings/working-files").then(async r=>{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
+    void fetch("/api/settings/sfizz").then(async r=>{
+      if(!r.ok)throw Error("Could not read sfizz settings");
+      return await r.json() as FluidSynthSettings;
+    }).then(x=>{setSfizz(x);setSfizzPath(x.configured_path||x.resolved_path||"");})
+      .catch(e=>setError(String(e)));
   },[open,focus]);
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
@@ -91,6 +98,30 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               const x=await response<FluidSynthSettings>("/api/settings/fluidsynth","GET");
               setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");
               setNotice(x.resolved_path?"FluidSynth detected.":"FluidSynth not detected in standard locations.");
+            })}>Detect</Button>
+          </div>
+          <div className="setting-tool-row">
+            <span>SFZ renderer <Status tone={sfizz?.resolved_path?"success":"warning"}>{sfizz?.resolved_path?"Ready":"Not configured"}</Status></span>
+          </div>
+          <div className="setting-controls setting-component-path">
+            <input aria-label="sfizz renderer executable path" value={sfizzPath}
+              onChange={e=>setSfizzPath(e.target.value)} placeholder="Path to sfizz_render.exe"/>
+            <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+              const x=await response<{path:string|null}>("/api/settings/sfizz/browse","POST");
+              if(x.path)setSfizzPath(x.path);
+            })}>Browse</Button>
+          </div>
+          <div className="setting-controls">
+            <Button size="compact" variant="primary" disabled={busy||!sfizzPath.trim()||sfizzPath===sfizz?.configured_path}
+              onClick={()=>void act(async()=>{
+                const x=await response<FluidSynthSettings>("/api/settings/sfizz","PUT",{path:sfizzPath});
+                setSfizz(x);setSfizzPath(x.configured_path);
+                setNotice("sfizz renderer verified and saved for SFZ rendering.");
+              })}>Verify & save</Button>
+            <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+              const x=await response<FluidSynthSettings>("/api/settings/sfizz","GET");
+              setSfizz(x);setSfizzPath(x.configured_path||x.resolved_path||"");
+              setNotice(x.resolved_path?"sfizz renderer detected.":"sfizz renderer not detected in configured path or PATH.");
             })}>Detect</Button>
           </div>
           <AceServiceControls open={open&&showTools}/></>}

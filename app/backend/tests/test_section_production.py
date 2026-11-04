@@ -77,18 +77,18 @@ class ProductionNotationTests(unittest.TestCase):
              "start_seconds":10,"end_seconds":16,"fade_seconds":.05,"original_gain":.1}]
         before_gain=project["section_gain_automation"]
         script=section_import.render_tags(project)
-        self.assertIn("Bass.original:0%@2.000-8.000#trk_a",script)
-        self.assertIn("Bass.original:10%@10.000-16.000#trk_b",script)
+        self.assertIn("Bass.volume:0%@2.000-8.000#trk_a",script)
+        self.assertIn("Bass.volume:10%@10.000-16.000#trk_b",script)
         self.assertIn("Bass.gain:+2",script)
-        revised=script.replace("Bass.original:10%","Bass.original:35%")
+        revised=script.replace("Bass.volume:10%","Bass.volume:35%")
         result=section_import.apply(project,revised,"replace",20)
         self.assertEqual(result["section_gain_automation"],before_gain)
         self.assertEqual([x["original_gain"] for x in result["replacement_masks"]],[0,.35])
         project.update(result)
-        self.assertIn("Bass.original:35%",section_import.render_tags(project))
+        self.assertIn("Bass.volume:35%",section_import.render_tags(project))
         deleted=section_import.apply(project,
             section_import.render_tags(project).replace(
-                "Bass.original:0%@2.000-8.000#trk_a",""),"replace",20)
+                "Bass.volume:0%@2.000-8.000#trk_a",""),"replace",20)
         self.assertEqual(len(deleted["replacement_masks"]),1)
         self.assertEqual(deleted["replacement_masks"][0]["replacement_track_id"],"trk_b")
         self.assertEqual(deleted["section_gain_automation"],before_gain)

@@ -251,7 +251,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      // Keep the transport position when comparing A/B. Only jump to the first
      // generated region when starting an audition from outside the selection.
      const inRange=clips.some(item=>position>=item.start_seconds&&position<item.start_seconds+item.duration_seconds);
-     if(!playing&&!inRange)onSeek(first.start_seconds);
+     if(!inRange)onSeek(first.start_seconds);
      setAuditionMode(mode);
      setMessage(mode==="current"?"A: Current mix, no unaccepted MIDI preview.":
        mode==="replacement"?"B: "+clips.length+" rendered section"+(clips.length===1?"":"s")+" mixed into the song. Original stem retained at "+originalGain+"% in those regions.":

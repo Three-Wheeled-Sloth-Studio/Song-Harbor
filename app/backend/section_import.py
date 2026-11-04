@@ -277,7 +277,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
     masks=list(project.get("replacement_masks",[])) if mode=="append" else []
     source_by_alias=section_production.source_map(files,tracks,children)
     ids={row.get("track_id"):row for row in tracks}
-    seen={mask.get("replacement_track_id") for mask in masks}
+    seen={(mask.get("replacement_track_id"),round(float(mask.get("start_seconds",0)),3),round(float(mask.get("end_seconds",0)),3)) for mask in masks}
     for section in validated:
         directives=production.get(section["id"],[])
         for directive in directives:
@@ -289,10 +289,11 @@ def apply(project: dict[str, Any], content: str, mode: str,
                 raise ValueError("Original mix refers to a missing source or accepted replacement track")
             if source==item.get("working_filename"):
                 raise ValueError("A replacement cannot attenuate itself")
-            if replacement in seen:
-                raise ValueError("Original mix has duplicate replacement IDs")
             start=float(directive["start_seconds"])
             end=float(directive["end_seconds"])
+            key=(replacement,round(start,3),round(end,3))
+            if key in seen:
+                raise ValueError("Duplicate replacement volume interval")
             clip_start=float(item.get("start_seconds") or 0)
             clip_end=clip_start+float(item.get("duration_seconds") or 0)
             if start<clip_start-.005 or end>clip_end+.005:
@@ -303,7 +304,7 @@ def apply(project: dict[str, Any], content: str, mode: str,
                 source_end=source_start+float(source_entry.get("duration_seconds") or duration or 0)
                 if start<source_start-.005 or end>source_end+.005:
                     raise ValueError("Original mix interval exceeds source stem")
-            seen.add(replacement)
+            seen.add(key)
             masks.append({"replacement_track_id":replacement,
                           "source_track_id":source_entry.get("track_id") if source_entry else "",
                           "source_filename":source,

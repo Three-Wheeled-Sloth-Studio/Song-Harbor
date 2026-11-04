@@ -410,6 +410,37 @@ The user reported Windows dev launcher failed `tsc --noEmit && vite build` at `s
 - Design note: Solo gap skipping happens while Song Harbor's normal transport is playing and may have a slight scheduling edge at section boundaries. Evaluate perceptual jumps and Web Audio playback responsiveness in Windows. Separate native modeless window support is not introduced here.
 
 ---
+## 2026-11-04: single-stem MIDI composite and stereo QA cleanup
+
+### User QA/requirements
+Screenshot showed ten rows of truncated `growly...` labels after multiple section batches. User noted: new stem displays `<instrument> (<user alias>)` instead of alias alone; one-region Add action is dangerously easy during a multi-section review; multi-selection should add **one** output stem, not one track per section; readable source muting script must say `.volume` rather than `.original`; newly rendered audio needs left/right derived channels; piano-roll still has no stereo-specific editing.
+
+### Changes committed on `dev` only
+- `7211058`: new MIDI imports use only their user-assigned alias as `display_name`. Suppressed single-section Add control whenever the section review queue is nonempty.
+- `05a37be`: new `app/backend/midi_section_composite.py`, deterministic streaming 48-kHz stereo PCM16 WAV joiner, preserving independent section placement, silence between unselected regions, no changes to original stems; validates frame count, format, nonoverlap and output size/time.
+- `3a4371b`: `POST /api/projects/{ident}/bass-midi/compose-sections` creates one reviewable composite audio candidate from up to 8 existing section candidates, without adding a stem, with `section_masks` and source/revision metadata.
+- `2838781`, `89ba64d`: existing `tracks/add` accepts that composite candidate, stores a *single* imported audio track and one linked replacement mask **per selected section**. It still validates source identity, clip placement and overlapping existing accepted regions. Frontend sends the composite candidate ID. Removing the composite track clears all its linked masks.
+- `592d282`: the multi-section acceptance control now says **Add combined stem** with one editable **Name** field and confirms the number of selected sections. It composes the batch and imports it as one stem. The single-section import button is hidden while a multi-section queue exists, so clicking the default cannot silently add one piece and discard/obscure the others. The individual section candidates remain available for review, Solo, and A/B, not independent acceptance by default.
+- `04976c3`, `aa70025`: generated source-mute annotations in section script use `Bass.volume:10%@start-end#trk_id` instead of `Bass.original`. Parser still accepts legacy `.original` syntax for existing projects, and one composite stem ID can legitimately have multiple interval-specific volume annotations. This remains a non-destructive multiplicative replacement mask; it does not overwrite separate user-authored volume automation.
+- `ea28d00`, `cb56a52`: section-production regression expectations use `.volume`, and MIDI control label is **Source volume**.
+- `7f47f53`, `a153bcb`: **new accepted MIDI stems** automatically run through Song Harbor's existing stereo-to-left/right channel split and activate derived channels; stereo original retained for reversibility. Split errors are explicitly returned as non-fatal warnings (stem import is not rolled back).
+- `4531ebb`: pure backend tests cover stereo audio containing silent gaps, overlapping-region rejection, duration mismatch, multiple masks linked to one track, removal clearing all linked masks, and `.volume` script round trip.
+- `5c16d9c`, `3b53a4c`: existing imported stems with the specific old auto-generated `Instrument (Alias)` display pattern show only `Alias` in mixer/Stem Tools without modifying saved custom labels.
+- `30bbb06`: composite acceptance rejects stale saved MIDI revisions and changed section boundaries rather than silently applying mismatched masks.
+- `4db3aaf`: piano-roll description now clarifies the editor is for MIDI note events and L/R routing occurs on the accepted stereo stem.
+
+### Important limitations and QA
+- **No Windows build, unit suite, real audio import, L/R split, or A/B listening validation executed by this agent.** Source is committed; status is unverified until user reloads dev and tests. Do not claim end-to-end success.
+- On Windows DEV, run `cd app/frontend && npm run build`, `cd app/backend && python -m unittest discover -s tests -p 'test_midi_section_composite.py' -v`, the full `test_section_production.py` tests, plus `test_track_lifecycle.py`.
+- QA: remove earlier individually imported Growlybass tracks; render 5 nonadjacent regions; review them; name output `GrowlybassDirty`; **Add combined stem** once; verify exactly ONE added track with WAV sound only at selected times, untouched Chorus/Bridge base stem, and 5 independently bounded source masks. Confirm Remove clears all 5 masks and restores original bass.
+- Verify the new track's L/R child routing appears and can be controlled independently. L/R is a **split of the rendered stereo instrument audio**, not independent MIDI note programming. Existing imported stems from older sessions may still need the manual Split Channels function.
+- The MIDI piano roll stores `note.channel` (MIDI channel 1-16); this is not a left/right audio track. The editor currently **does not** offer per-note stereo L/R placement. This remains an open architecture task: implement per-note/voice pan or named render layers in the MIDI asset, separate audition and rendered L/R. Do NOT claim MIDI note L/R editing is now supported.
+- Rendering different instruments in separate selection passes currently resets the temporary review queue. Per-section preset mapping across batches is a follow-on, not solved by this composite operation.
+- Validate generated `.volume` annotations survive editing/reimport; old `.original` scripts must remain loadable. Ensure normal user volume automation is preserved and not overwritten.
+- Composite is limited to 8 source section clips and 600s between first and last. Candidate file has 48-kHz stereo PCM16, final imported working stem is converted through FFmpeg to PCM24 and two derived 32-bit float mono WAVs. Watch disk footprint and split processing duration.
+- If split fails *after* stem import, do not attempt a blind re-import: the new stereo stem is already accepted. Report the warning and use the non-destructive channel-split repair action instead.
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

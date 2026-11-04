@@ -1071,13 +1071,16 @@ async def install_instrument_soundfont(request:Request,
 @app.post("/api/instruments/sfz")
 async def install_instrument_sfz(request:Request,
                                  file:UploadFile=File(...),
-                                 pack_name:str=Form("Imported SFZ pack"))->dict[str,Any]:
+                                 pack_name:str=Form("Imported SFZ pack"),
+                                 curated_id:str=Form(""))->dict[str,Any]:
     """Explicit user-uploaded self-contained ZIP; never extract arbitrary paths."""
     require_local_origin(request)
     if not (file.filename or "").lower().endswith(".zip"):
         raise HTTPException(400,"Choose a self-contained SFZ ZIP archive")
     if not 1<=len(pack_name.strip())<=100:
         raise HTTPException(400,"Pack name must be 1-100 characters")
+    if curated_id and curated_id not in {entry["id"] for entry in curated_sfz.curated_catalogue()}:
+        raise HTTPException(400,"Unknown curated instrument pack")
     import tempfile
     root=instrument_library.pack_root(DATA_ROOT)
     root.mkdir(parents=True,exist_ok=True)
@@ -1091,7 +1094,7 @@ async def install_instrument_sfz(request:Request,
                 if received>sfz_pack.MAX_ARCHIVE_BYTES:
                     raise ValueError("SFZ archive exceeds upload limit")
                 tmp.write(chunk)
-        return sfz_pack.install_zip(DATA_ROOT,staged,pack_name.strip())
+        return sfz_pack.install_zip(DATA_ROOT,staged,pack_name.strip(),curated_id=curated_id)
     except (ValueError,OSError,zipfile.BadZipFile,UnicodeError) as exc:
         raise HTTPException(400,str(exc)) from exc
     finally:

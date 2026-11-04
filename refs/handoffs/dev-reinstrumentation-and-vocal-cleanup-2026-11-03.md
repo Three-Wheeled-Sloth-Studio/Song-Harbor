@@ -219,6 +219,37 @@ Branch: **dev ONLY**; main and release audio untouched. The user's last "Proceed
 7. The historical handoff above contains earlier statements that SFZ was not connected. Those refer to previous checkpoints. As of this section, source is connected but **not tested**.
 
 ---
+## 2026-11-04: curated SFZ instrument starter library (user confirmed sfizz configured)
+
+User reported `sfizz_render.exe` loaded and configured on Windows, requested recommended starter packs placed in the in-app loader. No Windows instrument ZIP was supplied or auditioned during this session. Continue **dev only**, preserve main and all locked mixes.
+
+### Curated editorial catalog and UI
+- `a1877c1`: added `app/backend/curated_sfz.py`, editorial CC0/official release-asset catalog. No downloads, third-party binaries, audio samples, or licenses bundled.
+- `c6069c2`: added `GET /api/instruments/curated-sfz`, data-only source of recommendations.
+- `82f3795`: `BassMidiTool.tsx` loads the catalog, adds collapsible "Curated SFZ" within existing MIDI instrument import controls, publisher Get ZIP/Source links and manual local Import ZIP action using the current safe import route. Imported pack becomes selected. The button is **not** a verified one-click network installer.
+- `0ef65f3`: compact, scrollable editorial entries in existing Stem Tools, no new permanent pane.
+- `cdf38ec`: expanded initial recommendations with unusual Infra Choir-friendly String Cyborgs, War Tuba and Caveman Cosmonaut.
+- `be7f2a1`: removed VSCO 2 CE from actionable curated list: its published ~2.3GB archive exceeds the current 768MB ZIP upload cap. Reconsider later with explicit large-pack streaming/storage design, not a disabled/false installer.
+- `5eedb1f`: metadata-only regression tests `test_curated_sfz.py` require CC0, HTTPS versioned official ZIP assets, distinct IDs, no pack exceeding upload limit.
+- Catalog currently features 7 CC0 Karoryfer downloads: Bigcat Cello v1.001 (~133MB ZIP), Growlybass v1.002 (~167MB), Bear Sax v1.004 (~132MB), Big Rusty Drums v1.100 (~620MB), String Cyborgs v1.001 (~64MB), War Tuba v1.002 (~109MB), Caveman Cosmonaut v1.001 (~98MB). Each official versioned GitHub release URL and size were queried from GitHub release metadata (2026-11-04). Sizes in UI are rounded download sizes, not total unpacked disk usage. License is marked CC0 based on Karoryfer's official free-samples page and repository LICENSE, no third-party sample redistribution.
+
+### SFZ ZIP compatibility improvements
+- `81b1f07`: importer accepts harmless metadata/UI companions (.txt/.pdf/.png/.xml/etc.) by **skipping**, not executing or importing them, and supports bounded relative `default_path` for sample references.
+- `276a4fe`: also skips extensionless README/LICENSE/COPYING/AUTHORS/CHANGELOG/NOTICE.
+- `b43f46e`: permits `../Samples/` relative paths in SFZ definitions **only when the fully resolved sample stays inside the imported pack root**, for common sibling Programs/Samples layouts. The ZIP filenames themselves still forbid traversal.
+- `dcd66de`: skips optional Kontakt `.nki`/`.nkm`/`.nk*` companions. It does **not** load Kontakt presets; SFZ definitions only.
+- `bb0178d`, `e696dff`: updated ZIP importer regression fixtures for `default_path`, sibling Samples layout, metadata skipping, failed import cleanup and external path rejection.
+- Our intentionally bounded importer still **rejects** SFZ `#include` and macro `#define`, external absolute sample references, archives over 768 MB or metadata declaring over 1.5GB uncompressed, and unexpected executable file types. Real library compatibility remains unknown until a specific release ZIP is imported and a MIDI render is auditioned.
+- Check `app/backend/sfz_pack.py` for security and edge-case parsing before shipping beyond local development, notably sample filename quoting, multiple `default_path` headers and extremely large decompression cases.
+
+### Provenance and QA
+- Source: https://shop.karoryfer.com/pages/free-samples; individual GitHub releases under `sfzinstruments/`; license evidence e.g. https://github.com/sfzinstruments/karoryfer.growlybass.
+- VSCO 2 CE remains a later candidate: https://versilian-studios.com/vsco-community/ (larger than allowed).
+- The private GitHub repository was updated via GitHub connector. The command-line container still cannot resolve `github.com`, so **no exact checked-out dev frontend build, backend unittest, ZIP import, sfizz subprocess audition, or export parity test was executed**. Static source inspection confirms catalog integration; commits passing API calls do not prove runtime compatibility.
+- Priority: on user Windows dev build, run `npm run build` in `app/frontend`, `python -m unittest discover -s tests -p 'test_*sfz*.py' -v` from `app/backend`, and try real Bigcat Cello and Growlybass releases with short saved MIDI phrases. Record pack importer success/errors, polyphony, release tails, audio quality and candidate accept/export alignment. Revisit archive parser pragmatically based on real failures.
+- If a curated ZIP does not import, inspect its published structure and unsupported opcode; do not mark it installed or silently bypass security checks. Avoid auto-download until producer-approved fixed release and SHA-256 are verified (GitHub asset metadata currently did not include a digest).
+
+---
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

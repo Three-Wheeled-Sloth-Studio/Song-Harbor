@@ -14,6 +14,7 @@ import subprocess
 import math
 import sys
 import zipfile
+import wave
 import threading
 import time
 import uuid
@@ -1528,7 +1529,7 @@ def compose_midi_sections(ident:str,request:Request,body:ComposeMidiSectionsRequ
                 "notes":[],"original_notes":[]}
         bass_midi.write_json(folder/"candidate.json",result)
         return result
-    except (ValueError,OSError,KeyError,TypeError,EOFError,RuntimeError) as exc:
+    except (ValueError,OSError,KeyError,TypeError,EOFError,RuntimeError,wave.Error) as exc:
         if folder is not None:shutil.rmtree(folder,ignore_errors=True)
         raise HTTPException(400,str(exc)) from exc
 

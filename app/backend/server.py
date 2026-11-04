@@ -41,6 +41,7 @@ import track_lifecycle
 import declick_recipes
 import midi_arrangements
 import midi_section_slices
+import midi_section_composite
 import polyphonic_midi
 import sfz_pack
 import curated_sfz
@@ -1429,6 +1430,68 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
         bass_midi.write_json(folder/"candidate.json",record)
         return record
     except (ValueError,OSError,subprocess.TimeoutExpired,sfz_render_adapter.SFZRenderError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+class ComposeMidiSectionsRequest(BaseModel):
+    candidate_ids: list[str] = Field(min_length=1,max_length=8)
+
+
+@app.post("/api/projects/{ident}/bass-midi/compose-sections")
+def compose_midi_sections(ident:str,request:Request,body:ComposeMidiSectionsRequest)->dict[str,Any]:
+    """Build one stereo candidate with silence between previously rendered sections."""
+    require_local_origin(request)
+    _ace_project(ident)
+    root=DATA_ROOT/"jobs"/ident
+    if len(set(body.candidate_ids))!=len(body.candidate_ids):
+        raise HTTPException(400,"Duplicate MIDI section candidate")
+    project=projects.read_project(DATA_ROOT,ident)
+    if not project:raise HTTPException(404,"Song unavailable")
+    items=[]
+    folder=None
+    try:
+        for ident_candidate in body.candidate_ids:
+            candidate=bass_midi.read_json(root,ident_candidate)
+            if not candidate.get("section_id") or not candidate.get("rendered"):
+                raise ValueError("Only individually rendered MIDI sections can be combined")
+            path=bass_midi.candidate_folder(root,ident_candidate)/"bowed-preview.wav"
+            if not path.is_file():raise ValueError("Rendered MIDI section WAV is missing")
+            items.append((candidate,path))
+        common={str(item.get("source_track_id")) for item,_ in items}
+        if len(common)!=1:raise ValueError("All selected sections must belong to one source stem")
+        arrangement={(item.get("arrangement_id"),item.get("arrangement_revision")) for item,_ in items}
+        if len(arrangement)!=1:raise ValueError("Selected sections must come from the same saved MIDI revision")
+        if len({item.get("section_id") for item,_ in items})!=len(items):
+            raise ValueError("Duplicate song section in composite")
+        duration=resolved_song_duration(project,get_job(ident))
+        if any(float(item["start_seconds"])+float(item["duration_seconds"])>duration+.005 for item,_ in items):
+            raise ValueError("Section extends beyond song end")
+        candidate_id=uuid.uuid4().hex
+        folder=bass_midi.candidate_folder(root,candidate_id)
+        folder.mkdir(parents=True,exist_ok=False)
+        first,masks=midi_section_composite.compose(
+            [(path,float(item["start_seconds"]),float(item["duration_seconds"])) for item,path in items],
+            folder/"bowed-preview.wav")
+        masks=sorted(masks,key=lambda x:x["start_seconds"])
+        for mask in masks:
+            if any(mask["start_seconds"]<float(existing["end_seconds"])-.005 and
+                   mask["end_seconds"]>float(existing["start_seconds"])+.005 and
+                   existing.get("source_track_id")==next(iter(common))
+                   for existing in project.get("replacement_masks",[])):
+                raise ValueError("Selected region already has an accepted replacement; remove it first")
+        result={"candidate_id":candidate_id,"source_track_id":next(iter(common)),
+                "start_seconds":first,
+                "duration_seconds":masks[-1]["end_seconds"]-first,
+                "rendered":True,"section_masks":masks,
+                "arrangement_id":items[0][0].get("arrangement_id"),
+                "arrangement_revision":items[0][0].get("arrangement_revision"),
+                "method":"Combined MIDI section render",
+                "render_kind":"composite_sections",
+                "notes":[],"original_notes":[]}
+        bass_midi.write_json(folder/"candidate.json",result)
+        return result
+    except (ValueError,OSError,KeyError,TypeError,EOFError,RuntimeError) as exc:
+        if folder is not None:shutil.rmtree(folder,ignore_errors=True)
         raise HTTPException(400,str(exc)) from exc
 
 

@@ -270,6 +270,18 @@ User screenshots of dev Stem tools at ~500px width show the saved 243-note arran
 **Status at receipt:** QA/design request recorded; screenshots are evidence of crowded UI, not full functional test; prioritize fixes on `dev`, run build if possible.
 
 ---
+### Follow-up commits addressing screenshot QA (2026-11-04)
+
+- `0aa4e3c`: recorded the three screenshot findings and deferred drum kit/multi-instrument string arrangement architecture.
+- `c9c9917`: `MidiPianoRoll.tsx` now displays a compact launcher in Stem Tools; selecting it mounts the existing editable arrangement in a large React portal dialog with a dedicated Close action. The component remains mounted while the popout is closed, so state/unsaved edits are retained on simple close/reopen. Migrated arrangement actions toward icon-first controls with title and accessible labels; kept Render recognizable.
+- `32b58bb`: large overlay, flexible piano-grid viewport and compact host launcher CSS. This is a dedicated dialog workspace, **not** a detachable OS-native window and **not** draggable/resizable as a separate floating tool yet.
+- `b35f9f5`: SF2 GeneralUser starter now remains visible even after install (disabled as Installed), generic import actions explicitly say Import SF2 / Import SFZ, and Browse instrument library displays the SFZ curated publisher-download/local-import workflow.
+- `2a37cf2`: removed stale SF2-only help copy from piano-roll editor; SFZ saved arrangements are supported.
+- Existing MIDI editor behavior remains saved revision-based, with dirty state reflected in the launcher's brief summary.
+- **No frontend build, Windows UI QA, actual ZIP import, or recorded audio check occurred in this remote session.** The previous user screenshots reflect pre-fix dev UI. On dev relaunch, verify editor launcher is visible; open/close with unsaved edits and confirm preservation; check keyboard focus, Escape, resizing and render; inspect tools at narrow width; confirm SF2 starter visible as installed/available and curated SFZ Browse visible and populated.
+- Known remaining concerns: closing/unmounting the entire parent Stem Tools while edits are dirty may still need explicit protection; popout has no window-dragging/resizing beyond the large responsive dialog; ensure actual dev CSS z-order, focus trap and keyboard behavior. The icon-first conversion applies to the piano-roll action toolbar, not all instrument/Stem Tools actions. Library downloads are explicit manual ZIPs, not auto-installed. Address any functional failures before expanding more UI.
+
+
 ## Immediate next-thread task
 1. Read this file, `docs/dev-full-reinstrumentation-vocal-restoration-2026-11-03.md`, `docs/dev-polyphonic-render-slice-2026-11-03.md`, and `docs/deshimmer-song-harbor-integration-plan-2026-11-03.md`.
 2. Fetch `dev`, compare current source with claims, run/build existing backend and frontend tests if an execution environment supports it.

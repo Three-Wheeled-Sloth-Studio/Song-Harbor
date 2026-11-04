@@ -945,3 +945,22 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-popout>small{flex:0 0 auto;line-height:1.3}
 .song-roll-popout .song-roll-toolbar button{min-width:28px;min-height:27px}
 @media(max-width:620px){.song-roll-overlay{padding:8px}.song-roll-popout{width:100%;height:96vh;padding:7px}.song-roll-popout>small{max-height:45px;overflow:auto}}
+
+/* Modeless piano roll: window receives input, but uncovered app remains interactive. */
+.song-roll-overlay-modeless{pointer-events:none;background:transparent;align-items:flex-start;justify-content:flex-end;padding:72px 26px 20px}
+.song-roll-modeless{pointer-events:auto;resize:both;overflow:hidden;width:min(1100px,80vw);height:min(700px,80vh);min-width:min(440px,94vw);min-height:280px}
+.song-roll-popout-header{touch-action:none;cursor:move;user-select:none}
+.song-roll-popout-header button{cursor:pointer}
+.song-roll-sections{display:flex;align-items:center;gap:5px;overflow-x:auto;flex:0 0 auto;min-height:30px;padding:3px 0}
+.song-roll-sections small{flex:0 0 auto;font-size:11px;color:var(--tws-color-text-muted)}
+.song-roll-sections button{flex:0 0 auto;min-height:25px;padding:3px 7px;font-size:11px;border:1px solid var(--tws-color-border-normal);border-radius:5px;background:transparent}
+.song-roll-sections button.is-selected{border-color:#e3b965;background:#5b5135;color:#fff}
+.song-roll-instrument{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px}
+.song-roll-instrument label{display:flex;align-items:center;gap:7px}
+.song-roll-instrument select{max-width:320px;min-width:180px}
+.song-roll-instrument small{color:var(--tws-color-text-muted)}
+@media(max-width:700px){
+ .song-roll-overlay-modeless{padding:65px 8px 8px}
+ .song-roll-modeless{width:95vw;height:75vh;min-width:0}
+ .song-roll-instrument select{min-width:120px;max-width:220px}
+}

@@ -69,7 +69,7 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
         return members
 
 
-def install_zip(runtime: Path, archive: Path, name: str) -> dict:
+def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = "") -> dict:
     """Install self-contained samples, rejecting unsafe references and malformed archives."""
     members = inspect_archive(archive)
     root = runtime / "instrument-packs"
@@ -129,6 +129,7 @@ def install_zip(runtime: Path, archive: Path, name: str) -> dict:
             digest.update(content_hash.digest())
         manifest = {"schema_version": 1, "id": identifier, "name": name.strip()[:100] or "SFZ pack",
                     "engine": "sfz", "source": "user-installed",
+                    "curated_id": curated_id,
                     "sha256": digest.hexdigest(), "instruments": manifest_instruments}
         (destination / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return {"pack_id": identifier, "instruments": len(manifest_instruments)}

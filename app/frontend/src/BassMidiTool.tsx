@@ -15,6 +15,7 @@ const STARTER_PROGRAMS=[42,43,44,45,48,49,50,52,54,55,57,60,61,62,30,34,38,89];
 const preferred=(x:InstrumentChoice)=>x.engine==="sf2"&&x.bank===0?STARTER_PROGRAMS.indexOf(x.program):-1;
 
 type Starter={id:string;name:string;description:string;source_page:string;installed:boolean};
+type CuratedSfz={id:string;name:string;family:string;fit:string;priority:number;description:string;source:string;license:string;version:string;approx_mb:number|null;status:string;source_page:string;download_url:string};
 type Imported={project:unknown;job:unknown};
 type Props={jobId:string;sections:SongSection[];songDuration:number;position:number;selectedTrackId?:string;engine:SharedClockAudition|null;
  stemControls:{filename:string;trackId?:string;gain:number;mute:boolean;solo:boolean;name:string}[];
@@ -52,6 +53,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [catalogue,setCatalogue]=useState<InstrumentCatalogue>({packs:[],instruments:[],fluidsynth_ready:false});
  const [installingPack,setInstallingPack]=useState(false);
  const [starters,setStarters]=useState<Starter[]>([]);
+ const [curatedSfz,setCuratedSfz]=useState<CuratedSfz[]>([]);
+ const [showCurated,setShowCurated]=useState(false);
  const [previewReady,setPreviewReady]=useState(false);
  const [candidateTrimDb,setCandidateTrimDb]=useState(0);
  const available=catalogue.instruments.filter(x=>packFilter==="all"||x.pack_id===packFilter).sort((a,b)=>{
@@ -83,6 +86,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
       (data.tracks.find(t=>t.stem_alias.toLowerCase()==="bass")||data.tracks[0])?.track_id||"");
  }).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[jobId,selectedTrackId]);
 
+ useEffect(()=>{let live=true;void req<{packs:CuratedSfz[]}>("/api/instruments/curated-sfz").then(data=>{if(live)setCuratedSfz(data.packs);}).catch(()=>{});return()=>{live=false;};},[]);
  useEffect(()=>{let live=true;void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(e=>{if(live)setError(String(e));});void req<{starters:Starter[]}>("/api/instruments/starters").then(data=>{if(live)setStarters(data.starters);}).catch(()=>{});return()=>{live=false;};},[jobId]);
  useEffect(()=>{if(settingsOpen)return;let live=true;
    void req<InstrumentCatalogue>("/api/instruments").then(data=>{if(live)setCatalogue(data);}).catch(()=>{});
@@ -104,13 +108,13 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setMessage("Imported "+response.instruments+" instruments.");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
- async function installSfzPack(file:File|undefined){
+ async function installSfzPack(file:File|undefined, name?:string){
    if(!file||installingPack)return;
    setInstallingPack(true);setError("");setMessage("");
    try{
      const form=new FormData();
      form.append("file",file);
-     form.append("pack_name",file.name.replace(/\\.zip$/i,""));
+     form.append("pack_name",name||file.name.replace(/\\.zip$/i,""));
      const installed=await req<{pack_id:string;instruments:number}>("/api/instruments/sfz",{method:"POST",body:form});
      const data=await req<InstrumentCatalogue>("/api/instruments");
      setCatalogue(data);setPackFilter(installed.pack_id);
@@ -314,10 +318,24 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
            <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
            <label title="Install a self-contained ZIP with SFZ definitions and their samples">＋ SFZ<input type="file" accept=".zip" disabled={installingPack} aria-label="Import SFZ ZIP instrument pack" onChange={e=>{void installSfzPack(e.target.files?.[0]);e.target.value="";}}/></label>
+           <button type="button" aria-expanded={showCurated} onClick={()=>setShowCurated(v=>!v)} title="Publisher-sourced SFZ instrument suggestions">Curated SFZ {showCurated?"▴":"▾"}</button>
            {chosenInstrument?.engine==="sfz"&&!catalogue.sfizz_ready&&<span role="status" className="song-midi-fluid-setup">sfizz renderer required <button type="button" disabled={!onConfigureSfizz} onClick={onConfigureSfizz}>Configure sfizz</button></span>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>
+     {showCurated&&<div className="song-midi-curated" aria-label="Recommended SFZ instrument packs">
+       <small>Recommended free instrument packs. Downloads open the publisher's site; ZIP import is local and explicit. Compatibility is not yet verified.</small>
+       {curatedSfz.map(pack=><div className="song-midi-curated-row" key={pack.id}>
+         <span title={pack.description}><strong>{pack.name}</strong> <small>{pack.family} · {pack.fit} · {pack.license}{pack.approx_mb?" · ~"+pack.approx_mb+" MB":""}</small></span>
+         <small>{pack.description}</small>
+         <a href={pack.download_url} target="_blank" rel="noopener noreferrer" title={"Publisher download: "+pack.source}>Get ZIP</a>
+         <label title={"Import the downloaded ZIP for "+pack.name}>Import ZIP
+           <input type="file" accept=".zip" disabled={installingPack} aria-label={"Import "+pack.name+" ZIP"}
+            onChange={e=>{void installSfzPack(e.target.files?.[0],pack.name);e.target.value="";}}/>
+         </label>
+         <a href={pack.source_page} target="_blank" rel="noopener noreferrer" title={"Publisher and licensing information for "+pack.name}>Source</a>
+       </div>)}
+     </div>}
      <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId} onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>
      {candidate&&!candidate.arrangement_id&&!arrangementId&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">

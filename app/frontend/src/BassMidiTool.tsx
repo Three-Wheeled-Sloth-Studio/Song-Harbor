@@ -388,6 +388,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          {trackRows.map(t=><option key={t.track_id} value={t.track_id}>{t.display_name}</option>)}
        </select>
      </label>
+     {selectedTrack?.imported&&<button type="button" title="Remove imported stem. Archives audio and restores source replacement regions" aria-label="Remove imported stem" disabled={busy} onClick={()=>void removeImportedStem()}>⌫</button>}
      <div className="song-stem-hub-tabs" role="group" aria-label="Stem function">
        <button type="button" aria-pressed={functionMode==="mix"} title="Stem mix controls" onClick={()=>setFunctionMode("mix")}>◉ <span>Mix</span></button>
        <button type="button" aria-pressed={functionMode==="midi"} title="Stem to MIDI" onClick={()=>setFunctionMode("midi")}>♮ <span>MIDI</span></button>
@@ -399,7 +400,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        <button type="button" className={mix.mute?"is-muted":""} aria-pressed={mix.mute} title="Mute" onClick={()=>onStemMix(mix.filename,{mute:!mix.mute})}>M</button>
        <button type="button" className={mix.solo?"is-solo":""} aria-pressed={mix.solo} title="Solo" onClick={()=>onStemMix(mix.filename,{solo:!mix.solo})}>S</button>
        <button type="button" title="Reset gain, mute and solo" onClick={()=>onStemMix(mix.filename,{gain:100,mute:false,solo:false})}>↺</button>
-       {selectedTrack?.imported&&<button type="button" title="Remove imported stem, archive its audio and restore its source replacement masks" aria-label="Remove imported stem" disabled={busy} onClick={()=>void removeImportedStem()}>⌫</button>}
      </div>:<small role="status">Choose a stem to edit its base mix.</small>}
      <button type="button" className="song-stem-hub-next" onClick={()=>setFunctionMode("midi")}>♮ Stem → MIDI</button>
    </div>}

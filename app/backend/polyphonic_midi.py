@@ -19,13 +19,18 @@ def vlq(value:int)->bytes:
         value>>=7
     return bytes(items)
 
-def to_midi(asset:dict,program:int,bank:int=0,bpm:int=BPM)->bytes:
+def to_midi(asset:dict,program:int,bank:int=0,bpm:int=BPM,*,percussion:bool=False)->bytes:
     data=midi_arrangements.validate(asset)
     if type(program)!=int or not 0<=program<=127:raise ValueError("Invalid program")
     if type(bank)!=int or not 0<=bank<=16383:raise ValueError("Invalid bank")
     if type(bpm)!=int or not 20<=bpm<=300:raise ValueError("Invalid tempo")
-    # GM channel 10 is percussion, not a pitched SoundFont instrument.
-    if any(n["channel"]==9 for n in data["notes"]):
+    # MIDI channel 10 (zero-based 9) is percussion, not pitched instruments.
+    # Drum arrangements must opt in; never silently reinterpret melodic notes.
+    if type(percussion) is not bool:raise ValueError("Percussion mode must be boolean")
+    if percussion:
+        if any(n["channel"]!=9 for n in data["notes"]):
+            raise ValueError("Percussion arrangement requires MIDI channel 10 for every note")
+    elif any(n["channel"]==9 for n in data["notes"]):
         raise ValueError("Channel 10 is reserved for drums; choose a melodic channel")
     by_key=defaultdict(list)
     for note in data["notes"]:
@@ -42,6 +47,10 @@ def to_midi(asset:dict,program:int,bank:int=0,bpm:int=BPM)->bytes:
     channels={n["channel"] for n in data["notes"]} or {0}
     events=[(0,0,b"\xff\x51\x03"+round(60000000/bpm).to_bytes(3,"big"))]
     for channel in sorted(channels):
+        if percussion:
+            # GM percussion selection uses channel 10 and key number; a
+            # melodic program change would misrepresent the kit mapping.
+            continue
         events.extend([(0,1,bytes([0xb0|channel,0,(bank>>7)&127])),
                        (0,2,bytes([0xb0|channel,32,bank&127])),
                        (0,3,bytes([0xc0|channel,program]))])

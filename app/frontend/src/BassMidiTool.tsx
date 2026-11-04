@@ -8,7 +8,7 @@ type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?
 type Track={track_id:string;stem_alias:string;display_name:string;start_seconds?:number;duration_seconds?:number};
 type InstrumentPack={id:string;name:string;engine:string;source:string};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
-type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean};
+type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean;sfizz_ready?:boolean};
 // General MIDI programs, zero-based. Favorites prioritize Infra Choir's
 // gothic/industrial/orchestral palette without hiding any other presets.
 const STARTER_PROGRAMS=[42,43,44,45,48,49,50,52,54,55,57,60,61,62,30,34,38,89];
@@ -21,12 +21,12 @@ type Props={jobId:string;sections:SongSection[];songDuration:number;position:num
  onStemMix:(filename:string,changes:{gain?:number;mute?:boolean;solo?:boolean})=>void;
  playing:boolean;onSeek:(seconds:number)=>void;onPlay:()=>Promise<void>;onPause:()=>void;
  onInserted:(data:Imported)=>void;saveProject:()=>Promise<boolean>;onError:(message:string)=>void;
- onConfigureFluidSynth?:()=>void;settingsOpen?:boolean};
+ onConfigureFluidSynth?:()=>void;onConfigureSfizz?:()=>void;settingsOpen?:boolean};
 function clock(seconds:number){const ms=Math.max(0,Math.round(seconds*1000));return Math.floor(ms/60000)+":"+String(Math.floor(ms%60000/1000)).padStart(2,"0")+"."+String(ms%1000).padStart(3,"0");}
 const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Stem MIDI operation failed");return data;}
-export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,settingsOpen}:Props){
+export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,onConfigureSfizz,settingsOpen}:Props){
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
  const [functionMode,setFunctionMode]=useState<"mix"|"midi">("mix");
@@ -314,7 +314,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {starters.filter(x=>!x.installed).map(starter=><button key={starter.id} type="button" title={starter.description+" · download from author"} disabled={installingPack} onClick={()=>void installStarter(starter)}>{installingPack?"…":"↓ Starter GM"}</button>)}
            <label title="Install a local SF2 SoundFont">＋ SF2<input type="file" accept=".sf2" disabled={installingPack} aria-label="Import SF2 instrument pack" onChange={e=>{void installPack(e.target.files?.[0]);e.target.value="";}}/></label>
            <label title="Install a self-contained ZIP with SFZ definitions and their samples">＋ SFZ<input type="file" accept=".zip" disabled={installingPack} aria-label="Import SFZ ZIP instrument pack" onChange={e=>{void installSfzPack(e.target.files?.[0]);e.target.value="";}}/></label>
-           {chosenInstrument?.engine==="sfz"&&<small title="Requires separately installed sfizz_render executable">SFZ render requires sfizz_render (SONG_HARBOR_SFIZZ_RENDER)</small>}
+           {chosenInstrument?.engine==="sfz"&&!catalogue.sfizz_ready&&<span role="status" className="song-midi-fluid-setup">sfizz renderer required <button type="button" disabled={!onConfigureSfizz} onClick={onConfigureSfizz}>Configure sfizz</button></span>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
          </div>
@@ -361,6 +361,6 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </>}
    </>}
    {message&&<small role="status" className="song-midi-status">{message}</small>}
-   {error&&<div role="alert" className="song-midi-error">{error}{/fluidsynth/i.test(error)&&<button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth}>Configure FluidSynth</button>}</div>}
+   {error&&<div role="alert" className="song-midi-error">{error}{/fluidsynth/i.test(error)&&<button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth}>Configure FluidSynth</button>}{/sfizz|sfz renderer/i.test(error)&&<button type="button" onClick={onConfigureSfizz} disabled={!onConfigureSfizz}>Configure sfizz</button>}</div>}
  </div>;
 }

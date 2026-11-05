@@ -1569,10 +1569,18 @@ def compose_midi_sections(ident:str,request:Request,body:ComposeMidiSectionsRequ
                    existing.get("source_track_id")==next(iter(common))
                    for existing in project.get("replacement_masks",[])):
                 raise ValueError("Selected region already has an accepted replacement; remove it first")
+        # Keep the exact preset used in every region. The resulting WAV is
+        # one stem for this part, not one track per (instrument x section).
+        variants=[{"section_id":item["section_id"],"pack_id":item.get("pack_id"),
+                   "instrument_id":item.get("instrument"),
+                   "instrument_engine":item.get("instrument_engine"),
+                   "instrument_sha256":item.get("instrument_sha256"),
+                   "candidate_id":item["candidate_id"]} for item,_ in items]
         result={"candidate_id":candidate_id,"source_track_id":next(iter(common)),
                 "start_seconds":first,
                 "duration_seconds":masks[-1]["end_seconds"]-first,
                 "rendered":True,"section_masks":masks,
+                "section_instruments":variants,
                 "arrangement_id":items[0][0].get("arrangement_id"),
                 "arrangement_revision":items[0][0].get("arrangement_revision"),
                 "method":"Combined MIDI section render",

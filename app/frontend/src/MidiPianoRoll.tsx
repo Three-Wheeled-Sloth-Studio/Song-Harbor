@@ -60,7 +60,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [popOut,setPopOut]=useState(false);
  const [selectedSections,setSelectedSections]=useState<string[]>([]);
  const [sectionPresetKeys,setSectionPresetKeys]=useState<Record<string,string>>({});
- const [defaultPresetKey,setDefaultPresetKey]=useState("");
  const [directionText,setDirectionText]=useState("");
  const [directionBusy,setDirectionBusy]=useState(false);
  const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
@@ -103,14 +102,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
  const sectionInstruments=selectedSections.flatMap(sectionId=>{
   const key=sectionPresetKeys[sectionId];
-  if(!key||key===(defaultPresetKey||selectedInstrument))return [];
+  if(!key||key===selectedInstrument)return [];
   const instrument=instruments.find(item=>item.pack_id+"::"+item.id===key);
   return instrument?[{section_id:sectionId,pack_id:instrument.pack_id,instrument_id:instrument.id}]:[];
  });
  const drumOptions:DrumOptions={percussion:drumMode,
   drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null,
   ...(selectedSections.length?{section_instruments:sectionInstruments}:{})};
- const currentDefault=defaultPresetKey||selectedInstrument;
+ const currentDefault=selectedInstrument;
  const defaultItem=instruments.find(item=>item.pack_id+"::"+item.id===currentDefault);
  const desiredInstrumentSections:SavedInstrumentRecipe|null=selectedSections.length&&defaultItem?{
   schema_version:1,default:{pack_id:defaultItem.pack_id,instrument_id:defaultItem.id},
@@ -147,7 +146,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   setSelectedSections(value.instrument_sections?.section_ids||[]);
   setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
    row.section_id,row.pack_id+"::"+row.instrument_id])));
-  setDefaultPresetKey(value.instrument_sections?value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id:"");
   if(value.instrument_sections)onInstrumentChange?.(value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id);
   setDirectionMatch(null);setDirectionError("");
   const saved=value.percussion?.keymap;
@@ -168,7 +166,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  async function save(){if(!asset||busy)return;const operations=diffNotes(asset.notes,notes);
   if(!operations.length&&!metadataDirty&&!presetDirty){setMessage("No unsaved changes.");return;}
   if(drumMode&&kitError){onError(kitError);return;}
-  if(selectedSections.length&&!defaultItem){onError("Select an installed default preset.");return;}
+  if(selectedSections.length&&(!defaultItem||!["sf2","sfz"].includes(defaultItem.engine))){onError("Select an installed SF2 or SFZ default preset.");return;}
   if(selectedSections.some(id=>!sections.some(s=>s.id===id))){onError("Saved section no longer exists.");return;}
   setBusy(true);try{const saved=await request<Arrangement>(root+"/"+asset.asset_id,{
    method:"PATCH",headers:{"Content-Type":"application/json"},
@@ -335,7 +333,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
    for(const section of a.targets)patch[section.id]=a.key;
   });
   setSelectedSections(matchSections.map(s=>s.id));
-  setDefaultPresetKey(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
   setSectionPresetKeys(previous=>({...previous,...patch}));
   onInstrumentChange?.(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
   setDirectionMatch(null);
@@ -361,7 +358,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>
    {asset&&<div className="song-roll-instrument">
-     <label>Render instrument <select aria-label="MIDI render instrument" value={defaultPresetKey||selectedInstrument} onChange={e=>{setDefaultPresetKey(e.target.value);onInstrumentChange?.(e.target.value);}}>
+     <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>

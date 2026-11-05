@@ -30,7 +30,9 @@ def is_ignorable_member(path: PurePosixPath) -> bool:
     if path.name.startswith("._") or path.name.casefold() in (".ds_store", "thumbs.db"):
         return True
     return path.suffix.lower() not in EXTENSIONS
-UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b")
+SFZ_DIRECTIVE = re.compile(r"(?im)^\\s*#\\s*([A-Za-z_]+)\\b")
+INCLUDE_REF = re.compile(r'(?im)^\\s*#\\s*include\\s+["\\']([^"\\']+)["\\']')
+
 DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 
@@ -82,6 +84,29 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
         return members
 
 
+def resolve_pack_reference(definition: Path, value: str, root: Path,
+                           *, allowed: set[str], purpose: str) -> Path:
+    """Resolve only existing pack-owned files with SFZ program-relative paths.
+
+    Nested Big Rusty mapping includes refer to sample and mapping roots from
+    the parent Programs directory rather than the nested include directory.
+    Candidate directories are ancestors INSIDE the imported pack only.
+    """
+    value = value.strip().strip('"').replace("\\\\", "/")
+    if not value or "\\x00" in value or value.startswith("/") or re.match(r"^[A-Za-z]:", value):
+        raise ValueError("Unsafe SFZ " + purpose + " reference")
+    root = root.resolve()
+    folder = definition.parent.resolve()
+    while folder.is_relative_to(root):
+        candidate = (folder / value).resolve()
+        if candidate.is_relative_to(root) and candidate.suffix.lower() in allowed and candidate.is_file():
+            return candidate
+        if folder == root:
+            break
+        folder = folder.parent
+    raise ValueError("SFZ references a missing or external " + purpose + ": " + value[:120])
+
+
 def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = "") -> dict:
     """Install self-contained samples, rejecting unsafe references and malformed archives."""
     members = inspect_archive(archive)
@@ -111,29 +136,41 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                         output.write(chunk)
                     if extracted != member.file_size:
                         raise ValueError("SFZ ZIP entry has an unexpected size")
-        definitions = sorted(p for p in destination.rglob("*") if p.suffix.lower() == ".sfz" and p.is_file())
-        manifest_instruments = []
-        for index, definition in enumerate(definitions):
+        definitions = sorted(p for p in destination.rglob("*")
+                             if p.suffix.lower() == ".sfz" and p.is_file())
+        included: set[Path] = set()
+        for definition in definitions:
             text = definition.read_text(encoding="utf-8-sig")
-            if UNSAFE_SFZ.search(text):
-                raise ValueError("SFZ definition uses unsupported preprocessing")
-            defaults = [match.group(1).strip().strip('"').replace("\\", "/") for match in DEFAULT_PATH.finditer(text)]
+            for directive in SFZ_DIRECTIVE.finditer(text):
+                if directive.group(1).casefold() not in {"include", "define"}:
+                    raise ValueError("SFZ definition uses unsupported preprocessing")
+            for found in INCLUDE_REF.finditer(text):
+                included.add(resolve_pack_reference(
+                    definition, found.group(1), destination,
+                    allowed={".sfz"}, purpose="include"))
+            defaults = [match.group(1).strip().strip('"').replace("\\\\", "/")
+                        for match in DEFAULT_PATH.finditer(text)]
             if len(defaults) > 1:
                 raise ValueError("Multiple SFZ default_path assignments are unsupported")
             prefix = defaults[0] if defaults else ""
             if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
                 raise ValueError("SFZ default_path escapes the imported pack")
-            # Permit references to samples inside the imported archive only. No shell or plugin scripts.
             for found in SAMPLE_REF.finditer(text):
-                sample = found.group(1).strip().strip('"').replace("\\", "/")
-                if not sample or sample.startswith("/") or re.match(r"^[A-Za-z]:", sample):
-                    raise ValueError("Unsafe SFZ sample reference")
-                sample_file=(definition.parent/prefix/sample).resolve()
-                if not sample_file.is_relative_to(destination.resolve()) or not sample_file.is_file():
-                    raise ValueError("SFZ references a missing or external sample: "+sample[:120])
+                sample = found.group(1).strip().strip('"').replace("\\\\", "/")
+                resolve_pack_reference(definition, prefix + sample, destination,
+                                       allowed=EXTENSIONS - {".sfz"}, purpose="sample")
+        manifest_instruments = []
+        # Included mapping snippets are not standalone playable instruments.
+        for definition in definitions:
+            if definition.resolve() in included:
+                continue
             relative = definition.relative_to(destination).as_posix()
-            manifest_instruments.append({"id": f"sfz-{index}", "name": definition.stem[:100],
-                                         "sfz_path": relative, "program": 0, "bank": 0})
+            manifest_instruments.append({
+                "id": f"sfz-{len(manifest_instruments)}",
+                "name": definition.stem[:100],
+                "sfz_path": relative, "program": 0, "bank": 0})
+        if not manifest_instruments:
+            raise ValueError("SFZ pack contains no standalone instrument programs")
         digest = hashlib.sha256()
         for path in sorted(p for p in destination.rglob("*") if p.is_file()):
             digest.update(path.relative_to(destination).as_posix().encode("utf-8"))

@@ -57,7 +57,11 @@ def select_sections(asset:dict, sections:list[dict], selected_ids:list[str])->li
                 continue
             segment["notes"].append({**note,"start_sample":clipped_start-a,"end_sample":clipped_end-a})
         if not segment["notes"]:
-            raise ValueError("Selected section has no MIDI notes; refusing a silent replacement")
+            # A whole-song selection may contain breaks with no notes in this
+            # instrument. Do not create a silent clip or mute the source there.
+            continue
         result.append({"section_id":ident,"start_seconds":(start+a)/RATE,
                        "duration_seconds":(b-a)/RATE,"arrangement":midi_arrangements.validate(segment)})
+    if not result:
+        raise ValueError("No selected sections contain MIDI notes; refusing a silent replacement")
     return result

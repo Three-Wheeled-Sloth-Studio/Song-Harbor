@@ -8,6 +8,12 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
+type MatchAssignment={pack_id:string;instrument_id:string;instrument_name?:string;variant:string;section:string;evidence:string};
+type DirectionMatch={status:"matched"|"ambiguous"|"no_family_match";family?:{pack_id:string;name:string;evidence:string};
+ families?:{pack_id:string;name:string;evidence:string}[];assignments:MatchAssignment[];
+ conflicts?:{section:string;candidates:MatchAssignment[]}[];unresolved_text:string;rule?:string};
+const normalizeScope=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,"");
+
 export type DrumOptions={
  percussion:boolean;
  drum_keymap:{schema_version:number;mapping_kind:"gm"|"custom";lanes:{pitch:number;name:string}[]}|null;
@@ -51,6 +57,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [popOut,setPopOut]=useState(false);
  const [selectedSections,setSelectedSections]=useState<string[]>([]);
  const [sectionPresetKeys,setSectionPresetKeys]=useState<Record<string,string>>({});
+ const [directionText,setDirectionText]=useState("");
+ const [directionBusy,setDirectionBusy]=useState(false);
+ const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
+ const [directionError,setDirectionError]=useState("");
+
  const [position,setPosition]=useState({x:0,y:0});
  const moveWindow=useRef<{x:number;y:number;left:number;top:number}|null>(null);
  const [selectedIds,setSelectedIds]=useState<string[]>([]);
@@ -120,7 +131,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setSelectedSections([]);setSectionPresetKeys({});
+ function open(value:Arrangement){setSelectedSections([]);setSectionPresetKeys({});setDirectionMatch(null);setDirectionError("");
   const saved=value.percussion?.keymap;
   setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
   setKitKind(saved?.mapping_kind||"gm");
@@ -266,6 +277,47 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      return matching;
    });
  }
+ const matchSections=selectedSections.length?visibleSections.filter(s=>selectedSections.includes(s.id)):visibleSections;
+ const defaultVariant=directionMatch?.assignments.find(a=>a.section==="default");
+ const verifiedAssignments=directionMatch?.assignments.map(a=>({
+  ...a,key:a.pack_id+"::"+a.instrument_id,
+  installed:instruments.some(item=>item.pack_id===a.pack_id&&item.id===a.instrument_id&&["sf2","sfz"].includes(item.engine)),
+  targets:a.section==="default"?matchSections:matchSections.filter(s=>normalizeScope(s.kind)===normalizeScope(a.section))
+ }))||[];
+ const matchErrors:string[]=[];
+ if(directionMatch){
+  if(directionMatch.status!=="matched")matchErrors.push("Multiple or missing pack/preset matches require review.");
+  if(!defaultVariant)matchErrors.push("Specify a default installed instrument variant in the instruction.");
+  if(!matchSections.length)matchErrors.push("No sections intersect the saved arrangement.");
+  if(matchSections.length>8)matchErrors.push("Select eight or fewer sections before applying.");
+  verifiedAssignments.forEach(a=>{
+   if(!a.installed)matchErrors.push("Matched preset is not installed: "+a.instrument_name);
+   if(a.section!=="default"&&!a.targets.length)matchErrors.push("No matching sections for "+a.section+".");
+  });
+ }
+ async function previewDirection(){
+  if(!directionText.trim()||directionBusy)return;
+  setDirectionBusy(true);setDirectionMatch(null);setDirectionError("");
+  try{
+   const found=await request<DirectionMatch>("/api/instruments/match-direction",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({instruction:directionText.trim()})});
+   setDirectionMatch(found);
+  }catch(error){setDirectionError(String(error));onError(String(error));}
+  finally{setDirectionBusy(false);}
+ }
+ function applyDirection(){
+  if(!directionMatch||matchErrors.length||!defaultVariant)return;
+  const patch:Record<string,string>={};
+  verifiedAssignments.filter(a=>a.section!=="default").forEach(a=>{
+   for(const section of a.targets)patch[section.id]=a.key;
+  });
+  setSelectedSections(matchSections.map(s=>s.id));
+  setSectionPresetKeys(previous=>({...previous,...patch}));
+  onInstrumentChange?.(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
+  setDirectionMatch(null);
+  setMessage("Verified presets assigned. Review section dropdowns before rendering one instrument stem.");
+ }
  function startWindowDrag(event:ReactPointerEvent<HTMLElement>){
    if((event.target as HTMLElement).closest("button,input,select"))return;
    event.currentTarget.setPointerCapture(event.pointerId);
@@ -291,6 +343,30 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>
      {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>setSelectedSections([])}>× Clear sections</button>}
+   </div>}
+   {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Installed instrument direction preview">
+     <label style={{flex:"1 1 320px"}}>Instrument direction
+      <textarea aria-label="Instrument direction" rows={2} style={{width:"100%"}} value={directionText}
+       onChange={event=>{setDirectionText(event.target.value);setDirectionMatch(null);setDirectionError("");}}
+       placeholder="Growlybass Dirty default, Angry choruses, Shifty bridges; maintain industrial elements."/>
+     </label>
+     <button type="button" disabled={!directionText.trim()||directionBusy||busy} onClick={()=>void previewDirection()}>Match library</button>
+     {directionError&&<small role="alert">{directionError}</small>}
+     {directionMatch&&<div style={{flex:"1 1 100%"}} aria-label="Instrument matching review">
+      <strong>Review matched presets</strong>
+      <small>Preview only. This does not edit MIDI or change selections until Apply.</small>
+      <div>{directionMatch.family?.name||"No single installed instrument pack resolved"}</div>
+      {verifiedAssignments.map((a,index)=><div key={a.key+"-"+a.section+"-"+index}>
+       {a.section==="default"?"Default":a.section}: {a.instrument_name||a.variant}
+       {a.installed?" (installed)":" (missing)"}
+       {a.section!=="default"?" | "+a.targets.length+" matching selected sections":""}
+      </div>)}
+      {directionMatch.conflicts?.map((conflict,index)=><small key={index} role="alert">Conflicting presets for {conflict.section}: {conflict.candidates.map(x=>x.instrument_name).join(", ")}</small>)}
+      <small>Creative direction remains in the request for the future LLM planner. No musical edits are inferred here.</small>
+      {matchErrors.map((error,index)=><small key={index} role="alert">{error}</small>)}
+      <button type="button" disabled={matchErrors.length>0||busy||directionBusy} onClick={applyDirection}>Apply verified presets</button>
+      <button type="button" onClick={()=>setDirectionMatch(null)}>Discard preview</button>
+     </div>}
    </div>}
    {asset&&selectedSections.length>0&&<div className="song-roll-toolbar song-roll-options" aria-label="Per-section instrument presets">
      <strong>Section presets</strong>

@@ -44,8 +44,8 @@ class PolyphonicMidiTests(unittest.TestCase):
     def test_chord_overlap_and_note_off_order(self):
         output=polyphonic_midi.to_midi(self.score(),38,12)
         all_events=events(output)
-        attacks=[(t,e[2],e[3]) for e in all_events if isinstance(e[1],int) and e[1]&0xf0==0x90]
-        releases=[(t,e[2]) for e in all_events if isinstance(e[1],int) and e[1]&0xf0==0x80]
+        attacks=[(e[0],e[2],e[3]) for e in all_events if isinstance(e[1],int) and e[1]&0xf0==0x90]
+        releases=[(e[0],e[2]) for e in all_events if isinstance(e[1],int) and e[1]&0xf0==0x80]
         self.assertEqual(len(attacks),4)
         self.assertEqual(len(releases),4)
         self.assertEqual(attacks[0],(0,48,95))
@@ -82,6 +82,34 @@ class PolyphonicMidiTests(unittest.TestCase):
         self.assertTrue(all(e[1]==0x99 for e in attacks))
         self.assertFalse(any(isinstance(e[1],int) and e[1]&0xf0==0xc0 for e in all_events))
         self.assertEqual(output,polyphonic_midi.to_midi(score,0,percussion=True))
+
+    def test_percussion_same_pitch_overlap_retriggers_without_changing_asset(self):
+        score=midi_arrangements.create("drums",0,2,[
+            {"pitch":36,"start":.1,"end":.4,"velocity":105},
+            {"pitch":36,"start":.2,"end":.5,"velocity":93},
+            {"pitch":38,"start":.2,"end":.6,"velocity":84},
+            {"pitch":36,"start":.35,"end":.7,"velocity":101}])
+        for note in score["notes"]:note["channel"]=9
+        original=[dict(note) for note in score["notes"]]
+        result=events(polyphonic_midi.to_midi(score,0,percussion=True))
+        hits=[e for e in result if isinstance(e[1],int) and e[1]==0x99 and e[2]==36]
+        self.assertEqual([(e[0],e[3]) for e in hits],[(96,105),(192,93),(336,101)])
+        for at in (192,336):
+            same_tick=[e[1]&0xf0 for e in result if isinstance(e[1],int)
+                       and e[0]==at and e[2]==36 and e[1]&0xf0 in (0x80,0x90)]
+            self.assertEqual(same_tick,[0x80,0x90])
+        self.assertEqual(score["notes"],original)
+        self.assertEqual(len([e for e in result if isinstance(e[1],int) and e[1]==0x99]),4)
+
+    def test_same_tick_percussion_duplicate_collapses_to_strongest(self):
+        score=midi_arrangements.create("drums",0,1,[
+            {"pitch":42,"start":.2,"end":.4,"velocity":55},
+            {"pitch":42,"start":.2,"end":.45,"velocity":99},
+            {"pitch":42,"start":.4,"end":.6,"velocity":80}])
+        for note in score["notes"]:note["channel"]=9
+        result=events(polyphonic_midi.to_midi(score,0,percussion=True))
+        hits=[e for e in result if isinstance(e[1],int) and e[1]==0x99]
+        self.assertEqual([(e[0],e[3]) for e in hits],[(192,99),(384,80)])
 
     def test_percussion_mode_rejects_melodic_notes_and_mixed_channels(self):
         score=self.score()

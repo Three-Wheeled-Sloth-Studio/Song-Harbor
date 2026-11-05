@@ -55,8 +55,24 @@ class SectionSliceTests(unittest.TestCase):
         asset=midi_arrangements.create("trk_bass",0,8,[
             {"pitch":40,"start":0.5,"end":1.5,"velocity":80}])
         sections=[{"id":"silent","start_seconds":4,"end_seconds":8}]
-        with self.assertRaisesRegex(ValueError,"no MIDI notes"):
+        with self.assertRaisesRegex(ValueError,"No selected sections contain MIDI notes"):
             slices.select_sections(asset,sections,["silent"])
+
+    def test_whole_song_skips_empty_sections_without_silent_mute(self):
+        asset=midi_arrangements.create("trk_bass",0,4,[
+            {"pitch":40,"start":0.1,"end":0.9,"velocity":80},
+            {"pitch":42,"start":3.1,"end":3.9,"velocity":85}])
+        sections=[{"id":"intro","start_seconds":0,"end_seconds":1},
+                  {"id":"break","start_seconds":1,"end_seconds":3},
+                  {"id":"outro","start_seconds":3,"end_seconds":4}]
+        pieces=slices.select_sections(asset,sections,["intro","break","outro"])
+        self.assertEqual([piece["section_id"] for piece in pieces],["intro","outro"])
+
+    def test_more_than_eight_sections_can_be_selected(self):
+        notes=[{"pitch":40,"start":i+.1,"end":i+.4,"velocity":80} for i in range(12)]
+        asset=midi_arrangements.create("trk_bass",0,12,notes)
+        sections=[{"id":str(i),"start_seconds":i,"end_seconds":i+1} for i in range(12)]
+        self.assertEqual(len(slices.select_sections(asset,sections,[str(i) for i in range(12)])),12)
 
     def test_global_arrangement_start_offsets_section_timestamps(self):
         part=slices.select_sections(self.asset,self.sections,["c1"])[0]
@@ -70,7 +86,7 @@ class SectionSliceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"no longer exists"):
             slices.select_sections(self.asset,self.sections,["not-there"])
         with self.assertRaisesRegex(ValueError,"distinct"):
-            slices.select_sections(self.asset,self.sections,["v1"]*9)
+            slices.select_sections(self.asset,self.sections,["v1"]*65)
 
 
 if __name__=="__main__":

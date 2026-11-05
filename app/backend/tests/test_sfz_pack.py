@@ -155,16 +155,16 @@ class SFZPackTests(unittest.TestCase):
     def test_missing_optional_articulation_does_not_block_complete_basic_kit(self):
         self.make_zip({
             "Programs/01-full.sfz": (
-                '#include "mappings/kick_rc.sfz"\\n'
+                '#include "mappings/kick_rc.sfz"\n'
             ),
             "Programs/02-basic.sfz": (
-                '#include "mappings/kick_basic.sfz"\\n'
+                '#include "mappings/kick_basic.sfz"\n'
             ),
             "Programs/mappings/kick_rc.sfz": (
-                "<region> sample=../Samples/kick_24/rc/sn/k_rc_vl1_rr1.flac\\n"
+                "<region> sample=../Samples/kick_24/rc/sn/k_rc_vl1_rr1.flac\n"
             ),
             "Programs/mappings/kick_basic.sfz": (
-                "<region> sample=../Samples/kick_24/kick/kick_vl1_rr1.flac\\n"
+                "<region> sample=../Samples/kick_24/kick/kick_vl1_rr1.flac\n"
             ),
             "Samples/kick_24/kick/kick_vl1_rr1.flac":b"sample",
         })

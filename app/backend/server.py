@@ -1394,10 +1394,11 @@ def render_midi_sections(ident:str,asset_id:str,request:Request,
         if asset.get("instrument_sections") is not None:
             saved=asset["instrument_sections"]
             incoming=section_instrument_selection.validate_recipe({
-                "schema_version":1,
+                "schema_version":1,"section_ids":body.section_ids,
                 "default":{"pack_id":body.pack_id,"instrument_id":body.instrument_id},
                 "overrides":[entry.model_dump() for entry in body.section_instruments]})
             expected={"schema_version":1,"default":saved["default"],
+                      "section_ids":saved["section_ids"],
                       "overrides":[row for row in saved["overrides"]
                                    if row["section_id"] in body.section_ids]}
             if incoming!=expected:

@@ -177,6 +177,22 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
   setNotes(updated);notesRef.current=updated;setProposalDraft(null);
  }
+ function punchDrums(){
+  if(!asset||!drumMode||busy||!notesRef.current.length)return;
+  const mapping=new Map(kitLanes.map(l=>[l.pitch,l.name.toLowerCase()]));
+  const roles=notesRef.current.map(n=>{
+   const label=mapping.get(n.pitch)||"";
+   return /kick|bass drum/.test(label)?"kick":/snare/.test(label)?"snare":/hi.?hat|hat/.test(label)?"hat":"other";
+  });
+  if(!roles.includes("kick")){setMessage("No kick lane mapped. Check drum pitches first.");return;}
+  const updated=notesRef.current.map((n,i)=>{
+   const role=roles[i];
+   const change=role==="kick"?18:role==="snare"?-8:role==="hat"?(i%3===0?5:-5):0;
+   return {...n,velocity:Math.max(1,Math.min(127,n.velocity+change))};
+  });
+  edit(updated);
+  setMessage("Kick-forward velocity proposal: kick +18, snare -8, alternating hat accents. Review, save or undo. Velocity is not dB.");
+ }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
  function open(value:Arrangement){setRenderStatus("idle");setRenderError("");setProposalDraft(null);setProposalError("");
@@ -570,6 +586,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
        <option value="gm" disabled={sfzSelected}>GM SoundFont</option><option value="custom">Custom / SFZ</option>
       </select></label>}
       {drumMode&&kitKind==="custom"&&<button type="button" onClick={()=>setKitExpanded(v=>!v)}>Map notes</button>}
+      {drumMode&&<button type="button" disabled={!notes.length||busy} title="Reversible drum velocity adjustment. Save and re-render to hear it." onClick={punchDrums}>Kick-forward accents</button>}
       {kitError&&<small role="alert">{kitError}</small>}
       <label><input type="checkbox" checked={snap} onChange={e=>setSnap(e.target.checked)}/> Snap</label>
      <label>Grid <select value={gridMs} onChange={e=>setGridMs(Number(e.target.value))}><option value={125}>125 ms</option><option value={250}>250 ms</option><option value={500}>500 ms</option></select></label>

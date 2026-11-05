@@ -48,6 +48,7 @@ import drum_keymaps
 import instrument_direction_match
 import section_instrument_selection
 import midi_proposal_preview
+import midi_proposal_mock
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
@@ -1261,6 +1262,72 @@ def preview_midi_proposal(ident:str,asset_id:str,body:MidiProposalPreviewRequest
     except HTTPException:raise
     except (ValueError,KeyError,TypeError,OSError) as exc:
         raise HTTPException(400,str(exc)) from exc
+
+
+class MidiMockProposalRequest(BaseModel):
+    base_revision: int = Field(ge=0)
+    source_track_id: str = Field(min_length=1,max_length=100)
+    target_stem: str = Field(min_length=1,max_length=20)
+    section_ids: list[str] = Field(min_length=1,max_length=8)
+    velocity_delta: int = Field(default=5,ge=-20,le=20)
+
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/proposal-mock")
+def mock_midi_proposal(ident:str,asset_id:str,body:MidiMockProposalRequest,
+                       request:Request)->dict[str,Any]:
+    """Generate a reproducible local example plan, without writing it."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        root=DATA_ROOT/"jobs"/ident
+        asset=midi_arrangements.read(root,asset_id)
+        if asset["revision"]!=body.base_revision:
+            raise HTTPException(409,"Saved MIDI arrangement revision changed")
+        if asset["source"]["track_id"]!=body.source_track_id:
+            raise ValueError("Source track differs from saved MIDI arrangement")
+        project=projects.read_project(DATA_ROOT,ident)
+        if not project:raise HTTPException(404,"Song unavailable")
+        plan=midi_proposal_mock.propose(
+            asset,project.get("sections",[]),body.section_ids,
+            body.target_stem,body.velocity_delta)
+        review=midi_proposal_preview.preview(
+            asset,plan,project.get("sections",[]),
+            instrument_library.catalogue(DATA_ROOT))
+        return {"provider":"offline_mock","proposal":plan,"review":review}
+    except HTTPException:raise
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+class MidiProposalAcceptRequest(MidiProposalPreviewRequest):
+    """Exact proposal accepted after an explicit diff review."""
+
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/proposal-accept")
+def accept_midi_proposal(ident:str,asset_id:str,body:MidiProposalAcceptRequest,
+                         request:Request)->dict[str,Any]:
+    """Revalidate under project lock, then persist one MIDI revision; no audio."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        with lock:
+            root=DATA_ROOT/"jobs"/ident
+            asset=midi_arrangements.read(root,asset_id)
+            project=projects.read_project(DATA_ROOT,ident)
+            if not project:raise HTTPException(404,"Song unavailable")
+            proposal=body.model_dump()
+            review=midi_proposal_preview.preview(
+                asset,proposal,project.get("sections",[]),
+                instrument_library.catalogue(DATA_ROOT))
+            updated=midi_arrangements.apply_patch(
+                asset,body.base_revision,body.operations,
+                instrument_sections=body.instrument_sections,
+                update_instrument_sections=body.instrument_sections is not None)
+            midi_arrangements.save(root,updated)
+        return {"asset":updated,"review":review,"accepted":True}
+    except HTTPException:raise
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(409 if "Stale" in str(exc) else 400,str(exc)) from exc
 
 
 @app.get("/api/projects/{ident}/midi-arrangements")

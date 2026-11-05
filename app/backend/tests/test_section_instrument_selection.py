@@ -43,7 +43,7 @@ class SectionInstrumentSelectionTests(unittest.TestCase):
   with self.assertRaises(ValueError):
    choice.resolve(["intro"]*2,[],"pack-growly","dirty",LIBRARY)
   with self.assertRaises(ValueError):
-   choice.resolve([str(n) for n in range(9)],[],"pack-growly","dirty",LIBRARY)
+   choice.resolve([str(n) for n in range(65)],[],"pack-growly","dirty",LIBRARY)
 
  def test_saved_recipe_exact_scope_and_installed_resolution(self):
   recipe={"schema_version":1,

@@ -61,10 +61,10 @@ class RecoveryTests(unittest.TestCase):
         self.assertTrue(manifest["repair_provenance"]["official_files"])
 
     def test_unapproved_pack_never_attempts_publisher_download(self):
-        result=self.install({"Programs/Kit.sfz":"<region> sample=../Samples/kick/kick.flac"},curated="")
-        # Noncurated imports with no valid programs must reject on import.
-        # A supported anonymous pack can still be imported when complete.
-        self.assertEqual(result["instruments"],0)
+        # Noncurated incomplete packs fail before any repair or network action.
+        with patch.object(recovery,"_download_exact",side_effect=AssertionError("Network forbidden")):
+            with self.assertRaisesRegex(ValueError,"no complete instrument programs"):
+                self.install({"Programs/Kit.sfz":"<region> sample=../Samples/kick/kick.flac"},curated="")
 
     def test_relative_sample_rejects_arbitrary_paths(self):
         self.assertIsNone(recovery.relative_sample("other error"))

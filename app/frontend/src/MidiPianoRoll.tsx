@@ -642,9 +642,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
        const heightValue=note.velocity/127*(VELOCITY_HEIGHT-18);
        return <rect key={"velocity-"+note.id} x={x} y={rollHeight+VELOCITY_HEIGHT-8-heightValue}
         width={barWidth} height={Math.max(2,heightValue)} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"}
-        stroke="#d6eee7" strokeWidth={.5} aria-label={"Velocity "+note.velocity+" for "+pitchLabel(note.pitch)}
+        stroke="#d6eee7" strokeWidth={.5} aria-label={"Velocity "+note.velocity+" of 127 for "+pitchLabel(note.pitch)}
         onPointerDown={e=>startVelocity(e,note)} onPointerMove={moveVelocity}
-        onPointerUp={()=>{velocityDrag.current=null;}} onLostPointerCapture={()=>{velocityDrag.current=null;}}/>;
+        onPointerUp={()=>{velocityDrag.current=null;}} onLostPointerCapture={()=>{velocityDrag.current=null;}}>
+         <title>{pitchLabel(note.pitch)+" | MIDI velocity "+note.velocity+"/127 (not measured audio loudness)"}</title>
+        </rect>;
       })}
      </svg>
     </div>

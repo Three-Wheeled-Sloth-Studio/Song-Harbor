@@ -47,6 +47,7 @@ import polyphonic_midi
 import drum_keymaps
 import instrument_direction_match
 import section_instrument_selection
+import midi_proposal_preview
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
@@ -1232,6 +1233,35 @@ class MidiArrangementEditRequest(BaseModel):
     percussion: dict[str,Any] | None = None
     update_instrument_sections: bool = False
     instrument_sections: dict[str,Any] | None = None
+
+class MidiProposalPreviewRequest(BaseModel):
+    schema_version: int
+    base_revision: int
+    source_track_id: str
+    target_stem: str
+    sections: list[dict[str,Any]]
+    operations: list[dict[str,Any]] = Field(default_factory=list,max_length=200)
+    instrument_sections: dict[str,Any] | None = None
+
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/proposal-preview")
+def preview_midi_proposal(ident:str,asset_id:str,body:MidiProposalPreviewRequest,
+                          request:Request)->dict[str,Any]:
+    """Validate and diff a provider-neutral plan without writing project state."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        root=DATA_ROOT/"jobs"/ident
+        asset=midi_arrangements.read(root,asset_id)
+        project=projects.read_project(DATA_ROOT,ident)
+        if not project:raise HTTPException(404,"Song unavailable")
+        return midi_proposal_preview.preview(
+            asset,body.model_dump(),project.get("sections",[]),
+            instrument_library.catalogue(DATA_ROOT))
+    except HTTPException:raise
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
 
 @app.get("/api/projects/{ident}/midi-arrangements")
 def list_midi_arrangements(ident:str)->dict[str,Any]:

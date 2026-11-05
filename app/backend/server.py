@@ -1288,6 +1288,10 @@ def direction_midi_proposal(ident:str,asset_id:str,body:MidiDirectionProposalReq
             raise ValueError("Direction source differs from saved arrangement")
         project=projects.read_project(DATA_ROOT,ident)
         if not project:raise HTTPException(404,"Song unavailable")
+        track=next((row for row in project.get("source_tracks",[])
+                    if isinstance(row,dict) and row.get("track_id")==asset["source"]["track_id"]),None)
+        if track and "vocal" in str(track.get("stem_alias","")).casefold():
+            raise ValueError("Vocal stems are excluded from instrument replacement proposals")
         timeline=project.get("sections",[])
         catalogue=instrument_library.catalogue(DATA_ROOT)
         proposal,mapping=midi_proposal_direction.propose(

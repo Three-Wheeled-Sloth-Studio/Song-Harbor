@@ -167,7 +167,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
    row.section_id,row.pack_id+"::"+row.instrument_id])));
   if(value.instrument_sections)onInstrumentChange?.(value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id);
-  setDirectionMatch(null);setDirectionError("");
+  setDirectionMatch(null);setDirectionError("");setDirectionText("");
   const saved=value.percussion?.keymap;
   setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
   setKitKind(saved?.mapping_kind||"gm");
@@ -319,6 +319,15 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
    });
  }
  const matchSections=selectedSections.length?visibleSections.filter(s=>selectedSections.includes(s.id)):visibleSections;
+ const wholeSongScope=selectedSections.length===0;
+ const scopeLabel=wholeSongScope?"Whole saved arrangement ("+visibleSections.length+" sections)":
+  selectedSections.length+" selected song sections";
+ const scopeIds=matchSections.map(s=>s.id);
+ const scopeError=matchSections.some(s=>asset&&(
+  s.start_seconds<asset.source.start_sample/RATE-.005||
+  s.end_seconds>(asset.source.start_sample+asset.duration_samples)/RATE+.005))
+  ?"A song section extends beyond this MIDI arrangement. Select fully contained sections or extend the score.":"";
+
  const defaultVariant=directionMatch?.assignments.find(a=>a.section==="default");
  const verifiedAssignments=directionMatch?.assignments.map(a=>({
   ...a,key:a.pack_id+"::"+a.instrument_id,
@@ -330,7 +339,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   if(directionMatch.status!=="matched")matchErrors.push("Multiple or missing pack/preset matches require review.");
   if(!defaultVariant)matchErrors.push("Specify a default installed instrument variant in the instruction.");
   if(!matchSections.length)matchErrors.push("No sections intersect the saved arrangement.");
-  if(matchSections.length>8)matchErrors.push("Select eight or fewer sections before applying.");
+  if(matchSections.length>64)matchErrors.push("More than 64 sections: choose a smaller scope.");
+  if(scopeError)matchErrors.push(scopeError);
   verifiedAssignments.forEach(a=>{
    if(!a.installed)matchErrors.push("Matched preset is not installed: "+a.instrument_name);
    if(a.section!=="default"&&!a.targets.length)matchErrors.push("No matching sections for "+a.section+".");
@@ -361,14 +371,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   setMessage("Verified presets assigned. Review section dropdowns before rendering one instrument stem.");
  }
  async function makeMockProposal(){
-  if(!asset||dirty||proposalBusy||busy||!selectedSections.length)return;
+  if(!asset||dirty||proposalBusy||busy||!scopeIds.length||scopeError)return;
   setProposalBusy(true);setProposalError("");setProposalDraft(null);
   try{
    const result=await request<MockProposalResponse>(
     root+"/"+asset.asset_id+"/proposal-mock",{
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify({base_revision:asset.revision,source_track_id:asset.source.track_id,
-      target_stem:proposalPart,section_ids:selectedSections,velocity_delta:mockVelocity})});
+      target_stem:proposalPart,section_ids:scopeIds,velocity_delta:mockVelocity})});
    setProposalDraft(result);
   }catch(error){setProposalError(String(error));}
   finally{setProposalBusy(false);}
@@ -416,20 +426,21 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
-     <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>
-     {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>{setSelectedSections([]);setProposalDraft(null);}}>× Clear sections</button>}
+     <strong>{scopeLabel}</strong>
+     <small>No section selection means the whole saved arrangement. Click timeline sections to limit scope. Multiple sections still produce one instrument stem.</small>
+     {!!selectedSections.length&&<button type="button" title="Use the whole saved MIDI arrangement" aria-label="Use whole arrangement" onClick={()=>{setSelectedSections([]);setProposalDraft(null);setDirectionMatch(null);}}>Use whole arrangement</button>}
    </div>}
    {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Installed instrument direction preview">
-     <label style={{flex:"1 1 320px"}}>Instrument direction
+     <label style={{flex:"1 1 320px"}}>Instrument direction (optional)
       <textarea aria-label="Instrument direction" rows={2} style={{width:"100%"}} value={directionText}
        onChange={event=>{setDirectionText(event.target.value);setDirectionMatch(null);setDirectionError("");}}
-       placeholder="Growlybass Dirty default, Angry choruses, Shifty bridges; maintain industrial elements."/>
+       placeholder="Describe an instrument and optional section-specific variants..."/>
      </label>
      <button type="button" disabled={!directionText.trim()||directionBusy||busy} onClick={()=>void previewDirection()}>Match library</button>
      {directionError&&<small role="alert">{directionError}</small>}
      {directionMatch&&<div style={{flex:"1 1 100%"}} aria-label="Instrument matching review">
       <strong>Review matched presets</strong>
-      <small>Preview only. This does not edit MIDI or change selections until Apply.</small>
+      <small>Preview only. Applies instrument choices to {scopeLabel.toLowerCase()} only when you confirm.</small>
       <div>{directionMatch.family?.name||"No single installed instrument pack resolved"}</div>
       {verifiedAssignments.map((a,index)=><div key={a.key+"-"+a.section+"-"+index}>
        {a.section==="default"?"Default":a.section}: {a.instrument_name||a.variant}
@@ -437,15 +448,15 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        {a.section!=="default"?" | "+a.targets.length+" matching selected sections":""}
       </div>)}
       {directionMatch.conflicts?.map((conflict,index)=><small key={index} role="alert">Conflicting presets for {conflict.section}: {conflict.candidates.map(x=>x.instrument_name).join(", ")}</small>)}
-      <small>Creative direction remains in the request for the future LLM planner. No musical edits are inferred here.</small>
+      <small>Remaining creative direction is retained for later arranging. Library matching does not edit MIDI.</small>
       {matchErrors.map((error,index)=><small key={index} role="alert">{error}</small>)}
       <button type="button" disabled={matchErrors.length>0||busy||directionBusy} onClick={applyDirection}>Apply verified presets</button>
       <button type="button" onClick={()=>setDirectionMatch(null)}>Discard preview</button>
      </div>}
    </div>}
    {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Mock MIDI proposal review">
-     <strong>Arrangement proposal (offline mock)</strong>
-     <small>Test the review workflow with a bounded velocity adjustment. No AI is called and no audio is generated.</small>
+     <strong>Test MIDI proposal (offline mock)</strong>
+     <small>Generate a proposed velocity edit, then review, accept or discard. No AI call or audio render.</small>
      <label>Part <select aria-label="Proposal part" value={proposalPart}
       onChange={event=>{setProposalPart(event.target.value as ProposalPart);setProposalDraft(null);}}>
       {(["Bass","Drums","Guitar","Piano","Other"] as const).map(part=><option key={part} value={part}>{part}</option>)}
@@ -453,10 +464,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      <label>Velocity change <input type="number" min={-20} max={20} step={1}
       aria-label="Mock velocity change" value={mockVelocity}
       onChange={event=>{setMockVelocity(Number(event.target.value));setProposalDraft(null);}}/></label>
-     <button type="button" disabled={busy||proposalBusy||dirty||!selectedSections.length||mockVelocity===0||!Number.isInteger(mockVelocity)||Math.abs(mockVelocity)>20}
-      onClick={()=>void makeMockProposal()}>{proposalBusy?"Working...":"Preview proposal"}</button>
+     <button type="button" disabled={busy||proposalBusy||dirty||!scopeIds.length||!!scopeError||mockVelocity===0||!Number.isInteger(mockVelocity)||Math.abs(mockVelocity)>20}
+      onClick={()=>void makeMockProposal()}>{proposalBusy?"Generating...":"Generate mock proposal"}</button>
      {dirty&&<small>Save current MIDI and preset edits before making a proposal.</small>}
-     {!selectedSections.length&&<small>Select 1 to 8 timeline sections for this proposal.</small>}
+     {!scopeIds.length&&<small>Define at least one song section to generate a proposal.</small>}
+     {!!scopeError&&<small role="alert">{scopeError}</small>}
      {proposalError&&<small role="alert">{proposalError}</small>}
      {proposalDraft&&<div style={{flex:"1 1 100%"}} aria-label="MIDI proposal diff">
       <strong>Review proposed changes (not saved)</strong>
@@ -502,7 +514,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
     <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes" aria-label="Copy">⎘</button>
     <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement" aria-label="Paste">⎗</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy} title="Save arrangement edits" aria-label="Save arrangement edits">▣{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset,selectedSections,drumOptions).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>8||(drumMode&&!!kitError)} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
+    <button type="button" onClick={()=>{void onUse(asset,selectedSections,drumOptions).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>64||(drumMode&&!!kitError)} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
@@ -522,7 +534,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      <label>Zoom <select aria-label="Piano roll horizontal zoom" value={pixelsPerSecond} onChange={e=>{const next=Number(e.target.value);const scroller=scrollerRef.current;const center=scroller?(scroller.scrollLeft+scroller.clientWidth/2-keyWidth)/pixelsPerSecond:0;setPixelsPerSecond(next);if(scroller)requestAnimationFrame(()=>{scroller.scrollLeft=Math.max(0,keyWidth+center*next-scroller.clientWidth/2);});}}><option value={24}>Overview</option><option value={65}>Normal</option><option value={130}>Close</option><option value={260}>Detail</option></select></label>
      <span>{dirty?"Unsaved changes":("Saved revision "+asset.revision)}</span>
      {active&&<label>{selectedIds.length>1?"Selection velocity":"Velocity"} <input type="number" min={1} max={127} value={active.velocity} onChange={e=>{const velocity=Number(e.target.value);if(Number.isInteger(velocity)&&velocity>=1&&velocity<=127){const ids=new Set(selectedIds);edit(notesRef.current.map(n=>ids.has(n.id)?{...n,velocity}:n));}}}/></label>}
-     <span>{selectedIds.length} notes selected · {selectedSections.length} sections selected</span>
+     <span>{selectedIds.length} notes selected · {scopeLabel}</span>
     </div>
     {drumMode&&kitKind==="custom"&&kitExpanded&&<div className="song-roll-toolbar song-roll-options">
       <label>Kit note mappings <textarea aria-label="Custom drum keymap" rows={5} value={kitText}

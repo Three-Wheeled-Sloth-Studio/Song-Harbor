@@ -26,8 +26,8 @@ def preview(asset:dict, proposal:dict, sections:list[dict], catalogue:dict)->dic
     if not isinstance(changes,list) or len(changes)>MAX_PROPOSALS:
         raise ValueError("Too many proposed MIDI operations")
     proposed_sections=proposal.get("sections",[])
-    if not isinstance(proposed_sections,list) or not 1<=len(proposed_sections)<=8:
-        raise ValueError("Proposal requires 1 to 8 selected sections")
+    if not isinstance(proposed_sections,list) or not 1<=len(proposed_sections)<=64:
+        raise ValueError("Proposal requires 1 to 64 selected sections")
     valid={s.get("id"):s for s in sections if isinstance(s,dict)}
     ids=[]
     for section in proposed_sections:

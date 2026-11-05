@@ -26,6 +26,22 @@ class InstrumentMatchTests(unittest.TestCase):
   self.assertIn("industrial",result["unresolved_text"])
   self.assertNotIn("industrial",[r["variant"] for r in result["assignments"]])
 
+ def test_default_does_not_borrow_next_variant_section(self):
+  instruction="Growlybass Dirty as default, Angry for choruses, Shifty for bridges."
+  result=matching.resolve(instruction,CATALOGUE)
+  self.assertEqual(result["status"],"matched")
+  assignments={row["section"]:row["instrument_name"] for row in result["assignments"]}
+  self.assertEqual(assignments,{
+   "default":"growlybass_dirty","chorus":"growlybass_angry","bridge":"growlybass_shifty"})
+
+ def test_instrument_variant_before_and_after_section_phrase(self):
+  result=matching.resolve("Growlybass: chorus Angry, bridge Shifty, Dirty default.",CATALOGUE)
+  self.assertEqual(result["status"],"matched")
+  assignments={row["section"]:row["instrument_name"] for row in result["assignments"]}
+  self.assertEqual(assignments.get("chorus"),"growlybass_angry")
+  self.assertEqual(assignments.get("bridge"),"growlybass_shifty")
+  self.assertEqual(assignments.get("default"),"growlybass_dirty")
+
  def test_missing_pack_is_not_invented(self):
   result=matching.resolve("Use noninstalled rubberbass nasty on the chorus.",CATALOGUE)
   self.assertEqual(result["status"],"no_family_match")

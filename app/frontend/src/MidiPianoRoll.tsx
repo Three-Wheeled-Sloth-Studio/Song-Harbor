@@ -401,81 +401,110 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
        <header className="song-roll-popout-header" onPointerDown={startWindowDrag} onPointerMove={dragWindow} onPointerUp={()=>{moveWindow.current=null;}} onLostPointerCapture={()=>{moveWindow.current=null;}} title="Drag to move piano roll window"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>
-   {asset&&<div className="song-roll-instrument">
-     <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
-       {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
-     </select></label>
-     <strong>{scopeLabel}</strong>
-     <small>No section selection means the whole saved arrangement. Click timeline sections to limit scope. Multiple sections still produce one instrument stem.</small>
-     {!!selectedSections.length&&<button type="button" title="Use the whole saved MIDI arrangement" aria-label="Use whole arrangement" onClick={()=>{setSelectedSections([]);setProposalDraft(null);setDirectionMatch(null);}}>Use whole arrangement</button>}
+   {asset&&<div className="song-roll-direction-row">
+     <textarea aria-label="Instrument direction" rows={2}
+      placeholder="Describe the instrument and how it should change..."
+      value={directionText}
+      onChange={e=>{setDirectionText(e.target.value);setDirectionMatch(null);setProposalDraft(null);setDirectionError("");setProposalError("");}}/>
+     <button className="song-roll-primary-action" type="button"
+      title="Generate a reviewable proposal for installed instrument presets"
+      disabled={!directionText.trim()||busy||proposalBusy||dirty||!scopeIds.length||!!scopeError}
+      onClick={()=>void generateDirectionProposal()}>{proposalBusy?"Generating...":"Generate proposal"}</button>
+     <button className={"song-roll-status-icon is-"+mappingState} type="button"
+      title={mappingReady?"Instrument presets identified. Click to inspect":"Inspect instrument mapping status"}
+      aria-label="Inspect instrument mapping" aria-expanded={inspector==="mapping"}
+      onClick={()=>setInspector(inspector==="mapping"?null:"mapping")}>◈</button>
+     <button className={"song-roll-status-icon"+(proposalDraft?" is-ready":"")} type="button"
+      title="Inspect proposal changes" aria-label="Inspect proposal changes"
+      aria-expanded={inspector==="diff"}
+      onClick={()=>setInspector(inspector==="diff"?null:"diff")}>≡</button>
+     <button className="song-roll-status-icon" type="button"
+      title="Inspect section presets" aria-label="Inspect section presets"
+      aria-expanded={inspector==="presets"}
+      onClick={()=>setInspector(inspector==="presets"?null:"presets")}>⚙</button>
+     {proposalDraft&&<>
+      <button type="button" className="song-roll-accept-action"
+       title="Accept proposal into the saved MIDI score. Audio remains unchanged."
+       aria-label="Accept proposal" disabled={busy||proposalBusy||dirty}
+       onClick={()=>void acceptProposal()}>✓</button>
+      <button type="button" className="song-roll-status-icon"
+       title="Discard proposal" aria-label="Discard proposal"
+       onClick={()=>{setProposalDraft(null);setDirectionMatch(null);setInspector(null);}}>×</button>
+     </>}
    </div>}
-   {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Installed instrument direction preview">
-     <label style={{flex:"1 1 320px"}}>Instrument direction (optional)
-      <textarea aria-label="Instrument direction" rows={2} style={{width:"100%"}} value={directionText}
-       onChange={event=>{setDirectionText(event.target.value);setDirectionMatch(null);setDirectionError("");}}
-       placeholder="Describe an instrument and optional section-specific variants..."/>
-     </label>
-     <button type="button" disabled={!directionText.trim()||directionBusy||busy} onClick={()=>void previewDirection()}>Match library</button>
-     {directionError&&<small role="alert">{directionError}</small>}
-     {directionMatch&&<div style={{flex:"1 1 100%"}} aria-label="Instrument matching review">
-      <strong>Review matched presets</strong>
-      <small>Preview only. Applies instrument choices to {scopeLabel.toLowerCase()} only when you confirm.</small>
-      <div>{directionMatch.family?.name||"No single installed instrument pack resolved"}</div>
-      {verifiedAssignments.map((a,index)=><div key={a.key+"-"+a.section+"-"+index}>
-       {a.section==="default"?"Default":a.section}: {a.instrument_name||a.variant}
-       {a.installed?" (installed)":" (missing)"}
-       {a.section!=="default"?" | "+a.targets.length+" matching selected sections":""}
-      </div>)}
-      {directionMatch.conflicts?.map((conflict,index)=><small key={index} role="alert">Conflicting presets for {conflict.section}: {conflict.candidates.map(x=>x.instrument_name).join(", ")}</small>)}
-      <small>Remaining creative direction is retained for later arranging. Library matching does not edit MIDI.</small>
-      {matchErrors.map((error,index)=><small key={index} role="alert">{error}</small>)}
-      <button type="button" disabled={matchErrors.length>0||busy||directionBusy} onClick={applyDirection}>Apply verified presets</button>
-      <button type="button" onClick={()=>setDirectionMatch(null)}>Discard preview</button>
-     </div>}
+   {asset&&<div className="song-roll-compact-status" aria-live="polite">
+      <span title="Scope: select timeline sections below to narrow">{scopeLabel}</span>
+      {selectedSections.length>0&&<button type="button" title="Use whole arrangement" aria-label="Use whole arrangement"
+       onClick={()=>{setSelectedSections([]);setProposalDraft(null);setInspector(null);}}>↺</button>}
+      {(scopeError||proposalError||directionError)&&<button type="button" className="song-roll-error-trigger"
+       title={scopeError||proposalError||directionError} onClick={()=>setInspector("mapping")}>! Inspect</button>}
+      {dirty&&<span>Unsaved changes</span>}
+      {proposalDraft&&<span>Proposal ready</span>}
    </div>}
-   {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Mock MIDI proposal review">
-     <strong>Test MIDI proposal (offline mock)</strong>
-     <small>Generate a proposed velocity edit, then review, accept or discard. No AI call or audio render.</small>
-     <label>Part <select aria-label="Proposal part" value={proposalPart}
-      onChange={event=>{setProposalPart(event.target.value as ProposalPart);setProposalDraft(null);}}>
-      {(["Bass","Drums","Guitar","Piano","Other"] as const).map(part=><option key={part} value={part}>{part}</option>)}
-     </select></label>
-     <label>Velocity change <input type="number" min={-20} max={20} step={1}
-      aria-label="Mock velocity change" value={mockVelocity}
-      onChange={event=>{setMockVelocity(Number(event.target.value));setProposalDraft(null);}}/></label>
-     <button type="button" disabled={busy||proposalBusy||dirty||!scopeIds.length||!!scopeError||mockVelocity===0||!Number.isInteger(mockVelocity)||Math.abs(mockVelocity)>20}
-      onClick={()=>void makeMockProposal()}>{proposalBusy?"Generating...":"Generate mock proposal"}</button>
-     {dirty&&<small>Save current MIDI and preset edits before making a proposal.</small>}
-     {!scopeIds.length&&<small>Define at least one song section to generate a proposal.</small>}
-     {!!scopeError&&<small role="alert">{scopeError}</small>}
-     {proposalError&&<small role="alert">{proposalError}</small>}
-     {proposalDraft&&<div style={{flex:"1 1 100%"}} aria-label="MIDI proposal diff">
-      <strong>Review proposed changes (not saved)</strong>
-      <div>Provider: offline mock | Base revision: {proposalDraft.proposal.base_revision} | Sections: {proposalDraft.review.selected_sections.length}</div>
-      <div>Added: {proposalDraft.review.note_diff.added.length} | Removed: {proposalDraft.review.note_diff.removed.length} | Changed: {proposalDraft.review.note_diff.changed.length}</div>
-      {proposalDraft.review.note_diff.changed.slice(0,30).map(row=><div key={row.before.id}>
-       MIDI {row.before.pitch} at {(row.before.start_sample/RATE).toFixed(2)}s:
-       velocity {row.before.velocity} to {row.after.velocity}
-      </div>)}
-      {proposalDraft.review.note_diff.changed.length>30&&<small>Showing first 30 changed notes; total shown above.</small>}
-      <button type="button" disabled={proposalBusy||busy||dirty} onClick={()=>void acceptMockProposal()}>Accept MIDI edits</button>
-      <button type="button" disabled={proposalBusy} onClick={()=>{setProposalDraft(null);setProposalError("");}}>Discard proposal</button>
-      <small>Accept saves a new MIDI revision only. The source stem, existing rendered audio and accepted tracks remain unchanged.</small>
-     </div>}
-   </div>}
-   {asset&&selectedSections.length>0&&<div className="song-roll-toolbar song-roll-options" aria-label="Per-section instrument presets">
-     <strong>Section presets</strong>
-     <small>Choose one preset per section. Render previews separately, then add one combined instrument stem.</small>
-     {sections.filter(section=>selectedSections.includes(section.id)).sort((a,b)=>a.start_seconds-b.start_seconds).map(section=><label key={section.id}>
-      {section.kind}{section.number?" "+section.number:""}
-      <select aria-label={"Instrument for "+section.kind+" "+(section.number||"")} value={sectionPresetKeys[section.id]||""}
-       onChange={event=>setSectionPresetKeys(previous=>({...previous,[section.id]:event.target.value}))}>
-       <option value="">Default instrument</option>
-       {instruments.filter(item=>["sf2","sfz"].includes(item.engine)).map(item=>
-        <option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
-      </select>
-     </label>)}
-   </div>}
+   {asset&&inspector&&<aside className="song-roll-inspector"
+     aria-label={inspector==="mapping"?"Instrument mapping details":inspector==="diff"?"MIDI proposal details":inspector==="presets"?"Instrument presets":"Test proposal"}
+     onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();setInspector(null);}}}>
+      <header><strong>{inspector==="mapping"?"Instrument mapping":inspector==="diff"?"Proposal details":
+       inspector==="presets"?"Instrument presets":"Test tools"}</strong>
+       <button type="button" title="Close inspector" aria-label="Close inspector" onClick={()=>setInspector(null)}>×</button>
+      </header>
+      {inspector==="mapping"&&<>
+       {directionMatch?.family&&<strong>{directionMatch.family.name}</strong>}
+       {directionMatch?.assignments.map((row,index)=><div key={index}>
+        {row.section==="default"?"Default":row.section}: {row.instrument_name||row.variant}</div>)}
+       {directionMatch?.conflicts?.map((row,index)=><div key={index} role="alert">Conflict: {row.section}</div>)}
+       {!directionMatch&&<p>{directionError||"Generate a proposal to identify available presets."}</p>}
+       <small>Identifies installed presets only. Musical direction beyond preset selection requires a composition model.</small>
+      </>}
+      {inspector==="diff"&&<>
+       {!proposalDraft?<p>No proposal yet.</p>:<>
+        <strong>{proposalDraft.provider==="library_mapping"?"Preset mapping proposal":"Offline test proposal"}</strong>
+        <div>{proposalDraft.review.selected_sections.length} sections,
+         {proposalDraft.review.note_diff.added.length} added,
+         {proposalDraft.review.note_diff.removed.length} removed,
+         {proposalDraft.review.note_diff.changed.length} changed notes</div>
+        {proposalDraft.proposal.instrument_sections&&<>
+         <div>Default: {instruments.find(x=>x.pack_id===proposalDraft.proposal.instrument_sections?.default.pack_id&&x.id===proposalDraft.proposal.instrument_sections?.default.instrument_id)?.name||"Installed instrument"}</div>
+         {proposalDraft.proposal.instrument_sections.overrides.map(row=><div key={row.section_id}>
+          {sections.find(s=>s.id===row.section_id)?.kind||row.section_id}: {instruments.find(x=>x.id===row.instrument_id&&x.pack_id===row.pack_id)?.name||row.instrument_id}
+         </div>)}
+        </>}
+        {proposalDraft.review.note_diff.changed.slice(0,40).map(row=><div key={row.before.id}>
+         MIDI {row.before.pitch} @ {(row.before.start_sample/RATE).toFixed(2)}s:
+         {row.before.velocity} to {row.after.velocity}</div>)}
+       </>}
+      </>}
+      {inspector==="presets"&&<>
+        <label>Default <select aria-label="Default instrument" value={selectedInstrument}
+         onChange={e=>onInstrumentChange?.(e.target.value)}>
+          {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{x.name}</option>)}
+        </select></label>
+        <div>{scopeLabel}</div>
+        {matchSections.map(section=><label key={section.id}>
+         {section.kind}{section.number?" "+section.number:""}
+         <select aria-label={"Instrument for "+section.kind+" "+(section.number||"")}
+          value={sectionPresetKeys[section.id]||""}
+          onChange={e=>setSectionPresetKeys(previous=>({...previous,[section.id]:e.target.value}))}>
+          <option value="">Default</option>
+          {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(x=><option key={x.pack_id+"::"+x.id} value={x.pack_id+"::"+x.id}>{x.name}</option>)}
+         </select>
+        </label>)}
+        <button type="button" disabled={!dirty||busy} onClick={()=>void save()}>Save presets</button>
+        <button type="button" title="Open offline mock test tools" aria-label="Open test tools"
+         onClick={()=>setInspector("test")}>⚙ Test</button>
+      </>}
+      {inspector==="test"&&<>
+       <small>Offline test only. Adjusts velocity, not musical arrangement.</small>
+       <label>Part <select value={proposalPart} aria-label="Mock proposal part"
+        onChange={e=>setProposalPart(e.target.value as ProposalPart)}>
+        {(["Bass","Drums","Guitar","Piano","Other"] as const).map(x=><option key={x}>{x}</option>)}
+       </select></label>
+       <label>Velocity <input type="number" min={-20} max={20} value={mockVelocity}
+        onChange={e=>setMockVelocity(Number(e.target.value))}/></label>
+       <button type="button" disabled={!scopeIds.length||dirty||busy||proposalBusy||mockVelocity===0||Math.abs(mockVelocity)>20}
+        onClick={()=>void makeMockProposal()}>Generate mock</button>
+      </>}
+   </aside>}
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>
     <select aria-label="Saved MIDI arrangements" value={asset?.asset_id||""} onChange={e=>{if(e.target.value)void load(e.target.value);}} disabled={busy}>

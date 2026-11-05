@@ -183,6 +183,7 @@ def repair(runtime:Path, pack_id:str)->dict:
         # Publisher assets are fetched via versioned HTTPS. Without a pinned
         # per-file hash this is origin verification, NOT cryptographic identity.
         manifest["instruments"]=valid
+        manifest["unavailable_program_count"]=len(remaining)
         manifest["sha256"]=pack_digest(root)
         manifest["repair_provenance"]={
             "origin":"curated_publisher_version",

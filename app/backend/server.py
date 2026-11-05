@@ -1480,6 +1480,22 @@ def edit_midi_arrangement(ident:str,asset_id:str,request:Request,
         with lock:
             root=DATA_ROOT/"jobs"/ident
             current=midi_arrangements.read(root,asset_id)
+            if body.update_instrument_sections and body.instrument_sections is not None:
+                recipe=section_instrument_selection.validate_recipe(body.instrument_sections)
+                project=projects.read_project(DATA_ROOT,ident)
+                if not project:raise ValueError("Song unavailable")
+                by_id={s.get("id"):s for s in project.get("sections",[]) if isinstance(s,dict)}
+                lo=current["source"]["start_sample"]
+                hi=lo+current["duration_samples"]
+                for section_id in recipe["section_ids"]:
+                    section=by_id.get(section_id)
+                    if not section:raise ValueError("Preset references missing song section")
+                    left=section.get("start_seconds")
+                    right=section.get("end_seconds")
+                    if not isinstance(left,(int,float)) or not isinstance(right,(int,float)) or right<=left:
+                        raise ValueError("Invalid section bounds")
+                    if round(left*midi_arrangements.RATE)<lo or round(right*midi_arrangements.RATE)>hi:
+                        raise ValueError("Preset section falls outside saved arrangement")
             updated=midi_arrangements.apply_patch(current,body.base_revision,body.operations,
                 body.percussion,update_percussion=body.update_percussion,
                 instrument_sections=body.instrument_sections,

@@ -106,7 +106,9 @@ def catalogue(runtime:Path)->dict[str,list[dict]]:
                 if not isinstance(entries,list) or len(entries)>4096:continue
                 packs.append({"id":folder.name,"name":_safe_label(str(doc.get("name","SoundFont"))),
                               "engine":engine,"source":"user-installed",
-                              "curated_id":str(doc.get("curated_id","")) if engine=="sfz" else ""})
+                              "curated_id":str(doc.get("curated_id","")) if engine=="sfz" else "",
+                              "unavailable_program_count":max(0,min(4096,int(doc.get("unavailable_program_count",0))))
+                              if engine=="sfz" else 0})
                 for row in entries:
                     if not isinstance(row,dict):continue
                     program,bank=row.get("program"),row.get("bank")

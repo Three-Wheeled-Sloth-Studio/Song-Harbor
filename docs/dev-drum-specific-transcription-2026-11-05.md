@@ -2,7 +2,7 @@
 
 Date: 2026-11-05
 Branch: dev only; keep main unchanged.
-Status: Implemented POC; requires local Windows auditory QA.
+Status: **PAUSED for the next Infra Choir production release.** Windows DEV build reported clean; Muldjord sounds fuller but is not production-ready. Critical unresolved defect: deep, boomy, messy crashes in the source become higher, crisp, thin and mechanical after transcription/render, losing their ominous character. Do not merge into `main`. Resume using `refs/handoffs/dev-muldjord-drum-tone-pause-2026-11-05.md`.
 
 ## User-reported problems
 - Old Extract used monophonic harmonic/pitched-note estimation even for Drums.

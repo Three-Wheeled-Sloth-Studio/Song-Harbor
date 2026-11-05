@@ -92,6 +92,42 @@ class SFZPackTests(unittest.TestCase):
         self.assertTrue((imported / "Programs" / "Cello.sfz").is_file())
         self.assertTrue((imported / "Samples" / "C4.wav").is_file())
 
+    def test_non_audio_support_files_are_skipped_not_extracted(self):
+        self.make_zip({
+            "Programs/Kit.sfz":"<region> sample=../Samples/Kick.flac key=36",
+            "Samples/Kick.flac":b"sample data fixture",
+            "GUI/Kit.png":b"graphic",
+            "Presets/com.Plogue.Aria/Kit.plg":b"sampler preset metadata",
+            "Presets/com.Plogue.Aria/Kit.xml":b"sampler companion",
+            ".DS_Store":b"mac metadata",
+            "__MACOSX/._Kit.sfz":b"mac resource fork",
+        })
+        result=sfz_pack.install_zip(self.root,self.archive,"Big Rusty fixture")
+        self.assertEqual(result["instruments"],1)
+        self.assertEqual(result["ignored_support_files"],5)
+        destination=next((self.root/"instrument-packs").iterdir())
+        self.assertTrue((destination/"Programs"/"Kit.sfz").is_file())
+        self.assertTrue((destination/"Samples"/"Kick.flac").is_file())
+        self.assertFalse((destination/"Presets"/"com.Plogue.Aria"/"Kit.plg").exists())
+        self.assertFalse((destination/"__MACOSX").exists())
+
+    def test_unsupported_sample_reference_still_rejected(self):
+        self.make_zip({
+            "Kit.sfz":"<region> sample=Kick.mp3 key=36",
+            "Kick.mp3":b"unsupported audio",
+        })
+        with self.assertRaisesRegex(ValueError,"missing or external sample"):
+            sfz_pack.install_zip(self.root,self.archive,"No MP3 support")
+
+    def test_unsafe_support_file_path_still_rejected(self):
+        self.make_zip({
+            "Kit.sfz":"<region> sample=Kick.wav",
+            "Kick.wav":b"sample",
+            "../evil.plg":b"invalid path",
+        })
+        with self.assertRaisesRegex(ValueError,"traversal"):
+            sfz_pack.install_zip(self.root,self.archive,"Unsafe")
+
     def test_parent_default_path_rejected(self):
         self.make_zip({"Cello.sfz": "<control> default_path=../outside/\n<region> sample=c4.wav",
                        "samples/c4.wav": b"sample"})

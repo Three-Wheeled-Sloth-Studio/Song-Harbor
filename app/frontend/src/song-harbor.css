@@ -964,7 +964,43 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-launcher{display:flex;align-items:center;gap:8px;justify-content:space-between;min-width:0;padding:7px 0;border-top:1px solid var(--tws-color-border-normal);font-size:11px}
 .song-roll-launcher>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
 .song-roll-launcher>button{flex:0 0 auto;min-width:32px;min-height:28px;font-size:16px}
-.song-roll-overlay{position:fixed;inset:0;z-index:1200;background:rgba(7,12,20,.70);display:flex;align-items:center;justify-content:center;padding:3vh 3vw}
+/* This popout is portal-rendered at document.body, outside .app-shell.
+   Re-establish theme variables so all labels, controls and text contrast work. */
+.song-roll-overlay{
+  --tws-color-surface-canvas:#121a21;
+  --tws-color-surface-panel:#1b252f;
+  --tws-color-surface-raised:#202e39;
+  --tws-color-surface-inset:#15212b;
+  --tws-color-text-primary:#ecf0ee;
+  --tws-color-text-muted:#a9b8bf;
+  --tws-color-border-normal:#394f5e;
+  --tws-color-border-strong:#6c8793;
+  --tws-color-action-primary:#68bbbe;
+  --tws-color-action-primary-hover:#85d1d0;
+  --tws-color-action-subtle:#28404c;
+  color:var(--tws-color-text-primary);
+  position:fixed;inset:0;z-index:1200;background:rgba(7,12,20,.70);
+  display:flex;align-items:center;justify-content:center;padding:3vh 3vw;
+}
+.song-roll-popout{color:var(--tws-color-text-primary,#ecf0ee)}
+.song-roll-popout .song-roll-toolbar,
+.song-roll-popout .song-roll-options,
+.song-roll-popout .song-roll-instrument{
+  color:var(--tws-color-text-primary,#ecf0ee);
+}
+.song-roll-popout .song-roll-toolbar small,
+.song-roll-popout .song-roll-instrument small,
+.song-roll-popout .song-roll-popout-header>span{
+  color:var(--tws-color-text-muted,#a9b8bf);
+}
+.song-roll-popout .song-roll-toolbar strong,
+.song-roll-popout .song-roll-instrument strong,
+.song-roll-popout .song-roll-toolbar label,
+.song-roll-popout .song-roll-toolbar div{
+  color:var(--tws-color-text-primary,#ecf0ee);
+}
+.song-roll-popout .song-roll-toolbar [role="alert"]{color:#ffd2c6}
+
 .song-roll-popout{display:flex;flex-direction:column;gap:8px;width:min(1240px,94vw);height:min(860px,94vh);padding:10px 12px;background:var(--tws-color-background-primary,#172531);border:1px solid var(--tws-color-border-normal);border-radius:9px;box-shadow:0 16px 55px #000b;overflow:hidden;min-width:0}
 .song-roll-popout-header{display:flex;align-items:center;gap:10px;padding:0 2px 7px;border-bottom:1px solid var(--tws-color-border-normal)}
 .song-roll-popout-header strong{font-size:14px}

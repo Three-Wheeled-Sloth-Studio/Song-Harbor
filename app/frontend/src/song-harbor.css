@@ -908,6 +908,36 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-options label{display:inline-flex;gap:5px;align-items:center}
 .song-roll-options input[type="number"]{width:54px}
 .song-roll-options select{flex:0 0 auto;max-width:95px}
+/* Piano-roll proposal and library review must remain legible in dark mode.
+   Keep labels and explanatory text visually separate from action controls. */
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"],
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"]{
+  align-items:flex-start;gap:9px;padding:9px 10px;
+  border:1px solid var(--tws-color-border-normal);border-radius:6px;
+  color:var(--tws-color-text-primary,#e6edf3);line-height:1.45;
+}
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"]>small,
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"]>small{
+  flex:1 1 100%;opacity:.88;font-size:12px;line-height:1.5;
+}
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"] div[aria-label="Instrument matching review"],
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"] div[aria-label="MIDI proposal diff"]{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:9px;border:1px solid var(--tws-color-border-normal);border-radius:6px;
+}
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"] div[aria-label="Instrument matching review"]>div,
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"] div[aria-label="MIDI proposal diff"]>div{
+  flex:1 1 100%;line-height:1.4;
+}
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"] div[aria-label="Instrument matching review"]>small,
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"] div[aria-label="MIDI proposal diff"]>small{
+  flex:1 1 100%;font-size:12px;line-height:1.5;
+}
+.song-roll-popout .song-roll-options[aria-label="Installed instrument direction preview"] button,
+.song-roll-popout .song-roll-options[aria-label="Mock MIDI proposal review"] button{
+  font-size:12px;min-height:30px;
+}
+
 .song-roll-scroller{width:100%;max-width:100%;max-height:340px;min-height:160px;overflow:auto;overscroll-behavior:contain;border:1px solid var(--tws-color-border-normal);border-radius:6px;background:#27323e;resize:vertical}
 .song-roll-scroller:focus-visible{outline:2px solid var(--tws-color-action-primary)}
 .song-roll-scroller svg{display:block;touch-action:none;user-select:none}

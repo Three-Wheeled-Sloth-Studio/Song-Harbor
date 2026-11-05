@@ -307,6 +307,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }):[];
  const selectedSectionRanges=visibleSections.filter(section=>selectedSections.includes(section.id));
  function chooseSection(section:SongSection,event:ReactMouseEvent<HTMLButtonElement>){
+   setProposalDraft(null);setProposalError("");
    const matching=event.altKey?visibleSections.filter(item=>item.kind.toLowerCase()===section.kind.toLowerCase()).map(item=>item.id):[section.id];
    setSelectedSections(previous=>{
      if(event.ctrlKey||event.metaKey||event.shiftKey){
@@ -352,6 +353,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   verifiedAssignments.filter(a=>a.section!=="default").forEach(a=>{
    for(const section of a.targets)patch[section.id]=a.key;
   });
+  setProposalDraft(null);
   setSelectedSections(matchSections.map(s=>s.id));
   setSectionPresetKeys(previous=>({...previous,...patch}));
   onInstrumentChange?.(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
@@ -415,7 +417,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>
-     {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>setSelectedSections([])}>× Clear sections</button>}
+     {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>{setSelectedSections([]);setProposalDraft(null);}}>× Clear sections</button>}
    </div>}
    {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Installed instrument direction preview">
      <label style={{flex:"1 1 320px"}}>Instrument direction

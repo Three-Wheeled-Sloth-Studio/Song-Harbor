@@ -257,8 +257,16 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    setAutoOpenRollAssetId("");
    setBusy(true);setError("");setMessage("");setArrangementId("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
-     const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
+     const body=JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration});
+     if(selectedTrack?.stem_alias.trim().toLowerCase()==="drums"){
+       const score=await req<Arrangement>("/api/projects/"+jobId+"/drum-midi/analyze",{
+         method:"POST",headers:{"Content-Type":"application/json"},body});
+       setCandidate(null);setSectionQueue([]);setAcceptedSectionIds([]);onMidiSessionChange?.(null);
+       setNotes([]);setArrangementId(score.asset_id);setAutoOpenRollAssetId(score.asset_id);
+       setMessage(score.notes.length+" provisional drum hits extracted. Review kick/snare/hat lanes and verify the kit note mapping before rendering.");
+       return;
+     }
+     const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body});
      // Extract is now an editable production asset, not a stranded legacy note list.
      // Persist the exact candidate transcription first, then let the piano roll load it.
      // Do not silently classify a monophonic pitched estimate as drum transcription.

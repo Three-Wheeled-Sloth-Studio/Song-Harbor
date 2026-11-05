@@ -49,6 +49,7 @@ import instrument_direction_match
 import section_instrument_selection
 import midi_proposal_preview
 import midi_proposal_mock
+import midi_proposal_direction
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
@@ -1259,6 +1260,42 @@ def preview_midi_proposal(ident:str,asset_id:str,body:MidiProposalPreviewRequest
         return midi_proposal_preview.preview(
             asset,body.model_dump(),project.get("sections",[]),
             instrument_library.catalogue(DATA_ROOT))
+    except HTTPException:raise
+    except (ValueError,KeyError,TypeError,OSError) as exc:
+        raise HTTPException(400,str(exc)) from exc
+
+
+class MidiDirectionProposalRequest(BaseModel):
+    base_revision: int = Field(ge=0)
+    source_track_id: str = Field(min_length=1,max_length=100)
+    target_stem: str = Field(min_length=1,max_length=20)
+    instruction: str = Field(min_length=1,max_length=3000)
+    section_ids: list[str] = Field(min_length=1,max_length=64)
+
+
+@app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/proposal-direction")
+def direction_midi_proposal(ident:str,asset_id:str,body:MidiDirectionProposalRequest,
+                            request:Request)->dict[str,Any]:
+    """One action: inspect library, construct bounded preset plan, preview diff."""
+    require_local_origin(request)
+    _ace_project(ident)
+    try:
+        root=DATA_ROOT/"jobs"/ident
+        asset=midi_arrangements.read(root,asset_id)
+        if asset["revision"]!=body.base_revision:
+            raise HTTPException(409,"Saved MIDI revision changed; reopen and try again")
+        if asset["source"]["track_id"]!=body.source_track_id:
+            raise ValueError("Direction source differs from saved arrangement")
+        project=projects.read_project(DATA_ROOT,ident)
+        if not project:raise HTTPException(404,"Song unavailable")
+        timeline=project.get("sections",[])
+        catalogue=instrument_library.catalogue(DATA_ROOT)
+        proposal,mapping=midi_proposal_direction.propose(
+            asset,timeline,body.section_ids,body.target_stem,body.instruction,catalogue)
+        review=midi_proposal_preview.preview(asset,proposal,timeline,catalogue)
+        return {"provider":"library_mapping","proposal":proposal,
+                "review":review,"mapping":mapping,
+                "capability":"verified_installed_presets_only"}
     except HTTPException:raise
     except (ValueError,KeyError,TypeError,OSError) as exc:
         raise HTTPException(400,str(exc)) from exc

@@ -4,7 +4,7 @@ import type {PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent} f
 import type {SongSection} from "./SectionEditor";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
-export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[]};
+export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[];percussion?:{mode:"drums";keymap:NonNullable<DrumOptions["drum_keymap"]>}};
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
@@ -59,7 +59,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const drag=useRef<{id:string;mode:"move"|"resize";originX:number;original:RollNote;group:RollNote[]}|null>(null);
  const velocityDrag=useRef<{ids:string[]}|null>(null);
  const notesRef=useRef(notes);notesRef.current=notes;
- const dirty=asset!==null&&diffNotes(asset.notes,notes).length>0;
+ const noteDirty=asset!==null&&diffNotes(asset.notes,notes).length>0;
  useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
  useEffect(()=>{
   if(!dirty)return;
@@ -89,6 +89,9 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }
  const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
  const drumOptions:DrumOptions={percussion:drumMode,drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null};
+ const desiredPercussion=drumMode?{mode:"drums",keymap:drumOptions.drum_keymap}:null;
+ const metadataDirty=asset!==null&&JSON.stringify(asset.percussion||null)!==JSON.stringify(desiredPercussion);
+ const dirty=noteDirty||metadataDirty;
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
  const width=asset?Math.max(540,keyWidth+asset.duration_samples/RATE*pixelsPerSecond+18):540;
  const rollHeight=(topPitch-PITCH_LOW+1)*ROW;
@@ -103,7 +106,12 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setSelectedSections([]);setDrumMode(value.notes.length>0&&value.notes.every(n=>n.channel===9));setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
+ function open(value:Arrangement){setSelectedSections([]);
+  const saved=value.percussion?.keymap;
+  setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
+  setKitKind(saved?.mapping_kind||"gm");
+  setKitText(saved?.mapping_kind==="custom"?saved.lanes.map(l=>l.pitch+" = "+l.name).join("\n"):"");
+  setKitExpanded(false);setAsset(value);edit(clone(value.notes),false);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);setMessage("");}
  async function refresh(){try{const found=await request<{arrangements:Summary[]}>(root);setListing(found.arrangements);}catch(error){onError(String(error));}}
  useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);void refresh();},[jobId,sourceTrackId]);
  useEffect(()=>{if(!requestedAssetId)return;
@@ -115,10 +123,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  async function load(id:string){if(dirty&&!window.confirm("Discard unsaved MIDI edits?"))return;
   setBusy(true);try{open(await request<Arrangement>(root+"/"+id));}catch(error){onError(String(error));}finally{setBusy(false);}}
  async function save(){if(!asset||busy)return;const operations=diffNotes(asset.notes,notes);
-  if(!operations.length){setMessage("No unsaved changes.");return;}
+  if(!operations.length&&!metadataDirty){setMessage("No unsaved changes.");return;}
+  if(drumMode&&kitError){onError(kitError);return;}
   setBusy(true);try{const saved=await request<Arrangement>(root+"/"+asset.asset_id,{
    method:"PATCH",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({base_revision:asset.revision,operations})});
+   body:JSON.stringify({base_revision:asset.revision,operations,update_percussion:metadataDirty,percussion:desiredPercussion})});
    open(saved);setMessage("Arrangement saved, revision "+saved.revision+".");void refresh();
   }catch(error){onError(String(error));}finally{setBusy(false);}}
  const picked=notes.filter(n=>selectedIds.includes(n.id));

@@ -1173,3 +1173,19 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   font-size:11px;line-height:14px;
 }
 .song-roll-scroller .song-roll-key-overlay>div.is-sharp{background:#8897a7}
+
+/* SFZ import and recovery: visible indeterminate work without blocking the piano roll. */
+.song-sfz-activity,.song-sfz-result,.song-sfz-repair{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:5px 7px;border:1px solid var(--tws-color-border-normal);border-radius:6px;font-size:11px;min-width:0}
+.song-sfz-activity{color:var(--tws-color-text-muted)}
+.song-sfz-spinner{width:13px;height:13px;flex:0 0 auto;border:2px solid var(--tws-color-border-normal);border-top-color:var(--tws-color-action-primary);border-radius:50%;animation:song-sfz-spin .9s linear infinite}
+@keyframes song-sfz-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.song-sfz-spinner{animation:none;border-top-style:dotted}}
+.song-sfz-result>span{flex:1 1 220px;min-width:0}
+.song-sfz-info{flex:0 0 auto;min-width:27px;min-height:26px;padding:2px 5px}
+.song-sfz-details{flex-basis:100%;min-width:0;max-height:180px;overflow:auto;border-top:1px solid var(--tws-color-border-normal);padding-top:6px}
+.song-sfz-details>small{display:block;color:var(--tws-color-text-muted);margin-top:2px}
+.song-sfz-details ul{margin:5px 0 0;padding-left:17px;overflow-wrap:anywhere}
+.song-sfz-details li+li{margin-top:4px}
+.song-sfz-repair{justify-content:space-between}
+.song-sfz-repair>span{flex:1 1 150px}
+.song-sfz-repair button{white-space:normal}

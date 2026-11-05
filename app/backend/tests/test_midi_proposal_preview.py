@@ -52,6 +52,13 @@ class ProposalPreviewTests(unittest.TestCase):
             midi_proposal_preview.preview(self.asset,{
                 **self.proposal,"instrument_sections":missing},SECTIONS,CATALOGUE)
 
+    def test_reject_edit_outside_proposed_section(self):
+        proposal={**self.proposal,
+                  "sections":[{"section_id":"chorus","intent":"Chorus edits only"}],
+                  "instrument_sections":None}
+        with self.assertRaisesRegex(ValueError,"outside selected sections"):
+            midi_proposal_preview.preview(self.asset,proposal,SECTIONS,CATALOGUE)
+
     def test_reject_vocal_target_and_wrong_source(self):
         with self.assertRaisesRegex(ValueError,"target"):
             midi_proposal_preview.preview(self.asset,{

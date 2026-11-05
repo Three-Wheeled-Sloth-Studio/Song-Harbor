@@ -36,7 +36,7 @@ export type DrumOptions={
  section_instruments?:{section_id:string;pack_id:string;instrument_id:string}[];
 };
 const GM_KIT:Record<number,string>={"35":"Acoustic Bass Drum","36":"Bass Drum 1","37":"Side Stick","38":"Acoustic Snare","39":"Hand Clap","40":"Electric Snare","41":"Low Floor Tom","42":"Closed Hi-Hat","43":"High Floor Tom","44":"Pedal Hi-Hat","45":"Low Tom","46":"Open Hi-Hat","47":"Low-Mid Tom","48":"Hi-Mid Tom","49":"Crash Cymbal 1","50":"High Tom","51":"Ride Cymbal 1","52":"Chinese Cymbal","53":"Ride Bell","54":"Tambourine","55":"Splash Cymbal","56":"Cowbell","57":"Crash Cymbal 2","58":"Vibraslap","59":"Ride Cymbal 2","60":"Hi Bongo","61":"Low Bongo","62":"Mute Hi Conga","63":"Open Hi Conga","64":"Low Conga","65":"High Timbale","66":"Low Timbale","67":"High Agogo","68":"Low Agogo","69":"Cabasa","70":"Maracas","71":"Short Whistle","72":"Long Whistle","73":"Short Guiro","74":"Long Guiro","75":"Claves","76":"Hi Wood Block","77":"Low Wood Block","78":"Mute Cuica","79":"Open Cuica","80":"Mute Triangle","81":"Open Triangle"};
-type Props={jobId:string;sourceTrackId:string;targetStem?:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;targetStem?:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onRenderComplete?:()=>void;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -58,7 +58,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onRenderComplete,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -98,6 +98,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
  const [proposalBusy,setProposalBusy]=useState(false);
  const [proposalDraft,setProposalDraft]=useState<MockProposalResponse|null>(null);
  const [proposalError,setProposalError]=useState("");
+ const [renderStatus,setRenderStatus]=useState<"idle"|"rendering"|"ready">("idle");
+ const [renderError,setRenderError]=useState("");
 
 
  const [position,setPosition]=useState({x:0,y:0});
@@ -171,13 +173,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
  const toX=(sample:number)=>keyWidth+sample/RATE*pixelsPerSecond;
  const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-keyWidth)/pixelsPerSecond*RATE)));
  const toY=(pitch:number)=>(topPitch-pitch)*ROW;
- function edit(updated:RollNote[],record=true){
+ function edit(updated:RollNote[],record=true){setRenderStatus("idle");
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
   setNotes(updated);notesRef.current=updated;setProposalDraft(null);
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setProposalDraft(null);setProposalError("");
+ function open(value:Arrangement){setRenderStatus("idle");setRenderError("");setProposalDraft(null);setProposalError("");
   setSelectedSections(value.instrument_sections?.section_ids||[]);
   setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
    row.section_id,row.pack_id+"::"+row.instrument_id])));
@@ -396,6 +398,18 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
   }catch(error){setProposalError(String(error));setProposalDraft(null);}
   finally{setProposalBusy(false);}
  }
+ async function renderArrangement(){
+   if(!asset||dirty||busy||renderStatus==="rendering"||selectedSections.length>64||(drumMode&&!!kitError))return;
+   setRenderStatus("rendering");setRenderError("");
+   try{
+    await onUse(asset,selectedSections,drumOptions);
+    setRenderStatus("ready");setPopOut(false);
+    onRenderComplete?.();
+   }catch(error){
+    setRenderStatus("idle");setRenderError(String(error));
+    onError(String(error));
+   }
+ }
  function startWindowDrag(event:ReactPointerEvent<HTMLElement>){
    if((event.target as HTMLElement).closest("button,input,select"))return;
    event.currentTarget.setPointerCapture(event.pointerId);
@@ -539,7 +553,10 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
     <button type="button" onClick={copySelected} disabled={!selectedIds.length||busy} title="Copy selected notes" aria-label="Copy">⎘</button>
     <button type="button" onClick={pasteSelected} disabled={!clipboard.current.length||busy} title="Paste copied notes into this arrangement" aria-label="Paste">⎗</button>
     <button type="button" onClick={()=>void save()} disabled={!dirty||busy} title="Save arrangement edits" aria-label="Save arrangement edits">▣{dirty?" *":""}</button>
-    <button type="button" onClick={()=>{void onUse(asset,selectedSections,drumOptions).catch(e=>onError(String(e)));}} disabled={dirty||busy||selectedSections.length>64||(drumMode&&!!kitError)} title={selectedSections.length?"Render selected sections as individually reviewable candidates":"Render whole saved arrangement"} aria-label="Render MIDI arrangement">▶ Render</button></>}
+    <button type="button" className={renderStatus==="ready"?"song-roll-render-ready":""}
+      onClick={()=>void renderArrangement()} disabled={dirty||busy||renderStatus==="rendering"||selectedSections.length>64||(drumMode&&!!kitError)}
+      title={renderStatus==="ready"?"Rendered successfully. Re-render if desired.":selectedSections.length?"Render selected sections as preview candidates":"Render whole saved arrangement"}
+      aria-label="Render MIDI arrangement">{renderStatus==="ready"?"✓ Rendered":"▶ Render"}</button></>}
    </div>
    {asset&&<>
     <div className="song-roll-toolbar song-roll-options">
@@ -597,11 +614,19 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
          </button>;
        })}
      </div>}
+     {asset&&<div className="song-roll-key-overlay" style={{width:keyWidth,height:rollHeight,marginBottom:-rollHeight}}
+       aria-label="Sticky MIDI pitch labels">
+       {Array.from({length:topPitch-PITCH_LOW+1},(_,i)=>{
+        const pitch=topPitch-i;
+        return <div key={pitch} className={pitch%12===1||pitch%12===3||pitch%12===6||pitch%12===8||pitch%12===10?"is-sharp":""}
+          style={{height:ROW}} title={"MIDI "+pitch+": "+(drumMode?kitNames.get(pitch)||"Unmapped note":pitchLabel(pitch))}>
+         {drumMode?(kitNames.get(pitch)||"Note "+pitch):pitchLabel(pitch)}
+        </div>;
+       })}
+     </div>}
      <svg width={width} height={height} role="img" aria-label="Editable piano roll">
       {Array.from({length:topPitch-PITCH_LOW+1},(_,i)=>{const p=topPitch-i;return <g key={p}>
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
-       <rect x={0} y={i*ROW} width={keyWidth} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#8897a7":"#e2e7eb"} />
-       <text x={4} y={i*ROW+12} fill="#111b22" fontSize="11">{drumMode?(kitNames.get(p)||('Note '+p)):pitchLabel(p)}</text>
        <rect x={keyWidth} y={i*ROW} width={width-keyWidth} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
       </g>;})}
       {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={keyWidth+i*pixelsPerSecond*.5} y1={0} x2={keyWidth+i*pixelsPerSecond*.5} y2={rollHeight} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
@@ -610,7 +635,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
        <rect x={x+Math.max(0,w-6)} y={y+2} width={Math.min(6,w)} height={ROW-4} fill="#467f82" onPointerDown={e=>startDrag(e,note,"resize")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
       </g>;})}
       <rect x={0} y={rollHeight} width={width} height={VELOCITY_HEIGHT} fill="#192633" stroke="#536171" strokeWidth={1}/>
-      <text x={4} y={rollHeight+14} fill="#e2e7eb" fontSize={11}>Velocity</text>
+      <text x={4} y={rollHeight+14} fill="#e2e7eb" fontSize={10}>Vel. 1-127</text>
       {[32,64,96,127].map(v=><line key={v} x1={keyWidth} x2={width} y1={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} y2={rollHeight+VELOCITY_HEIGHT-8-(v/127)*(VELOCITY_HEIGHT-18)} stroke="#8196a5" strokeOpacity={.25} pointerEvents="none"/>)}
       {notes.map(note=>{
        const x=toX(note.start_sample), barWidth=Math.max(5,Math.min(12,toX(note.end_sample)-x));
@@ -626,7 +651,12 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
     <small>Click grid to add; drag notes to move or resize. Shift-click to select multiple notes; drag selection to move together. Ctrl+A selects all; Escape clears selection. Arrow keys nudge selected notes (left/right by grid interval, up/down by semitone); Delete removes and Ctrl+D duplicates, Ctrl+C/V copies and pastes. Drag the velocity bars beneath the notes to edit one note or the selected group. Undo/redo and Revert remain available. Snap is off by default. Saved arrangements render with configured SF2 or SFZ instruments; drum mode uses explicit kit note mappings; ensemble lanes are future work. {notes.length} notes, {(asset.duration_samples/RATE).toFixed(2)}s.</small>
    </>}
    {!asset&&<small>Save an extracted MIDI arrangement, then open it here. Select a configured SF2 or SFZ instrument and render from the editor.</small>}
+   {renderError&&<small role="alert">{renderError}</small>}
    {message&&<small role="status">{message}</small>}
+   {renderStatus==="rendering"&&<div className="song-roll-render-overlay" role="status" aria-live="polite" aria-label="Rendering MIDI instrument">
+      <span className="song-roll-render-spinner" aria-hidden="true"/>
+      <strong>Rendering instrument...</strong>
+    </div>}
   </section></div>,document.body)}
  </div>;
 }

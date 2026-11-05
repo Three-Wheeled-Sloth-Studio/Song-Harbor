@@ -45,6 +45,22 @@ class SFZPackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"unsafe|traversal"):
             sfz_pack.install_zip(self.root,self.archive,"Unsafe")
 
+    def test_sfz_builtin_silence_does_not_require_audio_file(self):
+        self.make_zip({
+            "Programs/Kit.sfz": (
+                "<region> sample=*silence key=24\\n"
+                "<region> sample=../Samples/Kick.wav key=36\\n"
+            ),
+            "Samples/Kick.wav": b"audio fixture",
+        })
+        result=sfz_pack.install_zip(self.root,self.archive,"Silence region")
+        self.assertEqual(result["instruments"],1)
+
+    def test_fake_silence_filename_still_rejected(self):
+        self.make_zip({"Kit.sfz":"<region> sample=*silence.wav key=24"})
+        with self.assertRaisesRegex(ValueError,"missing or external sample"):
+            sfz_pack.install_zip(self.root,self.archive,"Not built-in silence")
+
     def test_unresolved_sample_rejected(self):
         self.make_zip({"Bad.sfz":"<region> sample=missing.wav"})
         with self.assertRaisesRegex(ValueError,"missing or external"):

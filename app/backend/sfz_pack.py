@@ -55,8 +55,11 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
                 raise ValueError("SFZ archive links and special files are forbidden")
             if member.is_dir():
                 continue
-            if path.suffix.lower() not in EXTENSIONS | METADATA_EXTENSIONS and path.name.casefold() not in METADATA_NAMES:
-                raise ValueError("SFZ ZIP contains unsupported file type")
+            # Third-party packs often include sampler presets, GUI resources,
+            # metadata databases or desktop files. Validate their size/path
+            # but NEVER extract or execute them. Only whitelisted SFZ/audio
+            # members reach the installed instrument folder.
+            # A referenced skipped sample will still fail the sample check.
             if member.file_size < 0 or member.file_size > MAX_UNPACKED_BYTES:
                 raise ValueError("Oversized sample in SFZ archive")
             if path.suffix.lower() == ".sfz" and member.file_size > MAX_SFZ_BYTES:
@@ -77,6 +80,7 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
     identifier = "sfz-" + uuid.uuid4().hex[:16]
     destination = root / identifier
     destination.mkdir()
+    ignored_files = 0
     try:
         with zipfile.ZipFile(archive) as z:
             for member in members:
@@ -84,7 +88,8 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                 target = destination.joinpath(*relative.parts)
                 if member.is_dir():
                     continue
-                if relative.suffix.lower() in METADATA_EXTENSIONS or relative.name.casefold() in METADATA_NAMES:
+                if relative.suffix.lower() not in EXTENSIONS:
+                    ignored_files += 1
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with z.open(member) as source, target.open("xb") as output:
@@ -132,7 +137,8 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                     "curated_id": curated_id,
                     "sha256": digest.hexdigest(), "instruments": manifest_instruments}
         (destination / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        return {"pack_id": identifier, "instruments": len(manifest_instruments)}
+        return {"pack_id": identifier, "instruments": len(manifest_instruments),
+                "ignored_support_files": ignored_files}
     except Exception:
         shutil.rmtree(destination, ignore_errors=True)
         raise

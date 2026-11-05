@@ -30,8 +30,8 @@ def is_ignorable_member(path: PurePosixPath) -> bool:
     if path.name.startswith("._") or path.name.casefold() in (".ds_store", "thumbs.db"):
         return True
     return path.suffix.lower() not in EXTENSIONS
-SFZ_DIRECTIVE = re.compile(r"(?im)^\\s*#\\s*([A-Za-z_]+)\\b")
-INCLUDE_REF = re.compile(r'(?im)^\\s*#\\s*include\\s+["\\']([^"\\']+)["\\']')
+SFZ_DIRECTIVE = re.compile(r"(?im)^\s*#\s*([A-Za-z_]+)\b")
+INCLUDE_REF = re.compile(r'(?im)^\s*#\s*include\s+["\']([^"\']+)["\']')
 
 DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
@@ -92,8 +92,8 @@ def resolve_pack_reference(definition: Path, value: str, root: Path,
     the parent Programs directory rather than the nested include directory.
     Candidate directories are ancestors INSIDE the imported pack only.
     """
-    value = value.strip().strip('"').replace("\\\\", "/")
-    if not value or "\\x00" in value or value.startswith("/") or re.match(r"^[A-Za-z]:", value):
+    value = value.strip().strip('"').replace("\\", "/")
+    if not value or "\x00" in value or value.startswith("/") or re.match(r"^[A-Za-z]:", value):
         raise ValueError("Unsafe SFZ " + purpose + " reference")
     root = root.resolve()
     folder = definition.parent.resolve()

@@ -32,3 +32,28 @@ C. Create editable groove transforms (kick-forward, hats, ghost notes, fills, hu
 D. Expose the above through an explicit natural-language plan adapter. Render audition and A/B acceptance remain mandatory.
 
 Backend test suite may show unrelated existing failures in `test_polyphonic_midi.py` (undefined test variable) and `test_section_production.py` (brace parsing); npm Git dependency install has intermittently failed. Check the latest CI revision and do not misrepresent it as passing.
+
+## 2026-11-05 follow-up: realism is a non-negotiable production requirement
+
+User feedback: the new drum render is closer to usable, but still too MIDI-like and thin. Long-term support for acoustic overlap, natural performance/sample variation, sample diversity, expressive percussion transcription, and production processing is explicitly in scope, not optional polish.
+
+### Sequenced acceptance criteria
+
+1. **Acoustic resonance and note tails:** Separate MIDI note gates from one-shot sample decay. Preserve cymbal/tom/room tails across other hits and fast same-key retriggers where sampler voice behavior supports this. Verify no unexpected voice stealing. Explicit choke only for supported mappings. Test fast kicks, hats, cymbals over snares, tom fills.
+2. **Verified kit mappings:** Read each SFZ program and verify actual playable pitches, velocity layers, alternate articulations, round-robin/randomization, hi-hat control and chokes. SFZ pitch 36 is not automatically a kick. Give users a kit note audition and correct mappings before comparing renders.
+3. **Sample/performance variation:** Verify sampler opcodes for multi-sampling, velocity layers and round robin. Humanize with groove-informed accents and timing only when requested; keep exact timing as default, and all proposed edits revisioned, scoped, audible, reversible.
+4. **Richer transcription:** Current speculative kick/snare/closed-hat spectral classifier is insufficient. Introduce overlapping/multi-label detection of kick, snare, hat articulations, tom, ride, crash and fills, with confidence/provenance and a manually corrected ground-truth comparison.
+5. **Acoustic-to-industrial processing:** Build kit-group workflow including close microphones, overhead/room, bleed, stereo panorama, phase-safe multi-mic layering, transient shaping, EQ, saturation, distortion, parallel compression and room reverb. Preserve current source-mask/preview/export parity and end with one combined stereo drum stem.
+6. **Natural language:** Add provider-neutral bounded note/lane/section production proposals with before/after diff and human approval. Current direction matching only selects presets and is not an expressive drum arranger.
+
+### Muldjord SFZ library and large archive compatibility
+
+The previously enforced upload limit was 768 MiB zipped and 1.5 GiB unpacked. DEV now accepts ZIP up to 4 GiB and declared unpacked payload up to 8 GiB with a 512 MiB free-space reserve, keeping path traversal, duplicate paths, file counts, file-type whitelists, and exact references validated. A browser-side preflight rejects ZIP files above 4 GiB before upload.
+
+The SFZ Instruments Muldjord port is listed around 347 MB, whereas the original DrumGizmo kit is a different multi-microphone distribution. A larger downloaded file might not be the expected SFZ release. The FreePats stereo Muldjord FLAC SFZ is listed as 157 MiB but its official download uses 7z rather than the currently supported ZIP. Do not pretend a 7z archive is a ZIP or that the full DrumGizmo source is one compatible SFZ program.
+
+Big Rusty remains the QA baseline. Compare the same MIDI score and measured render level against one compatible Muldjord SFZ program. If the kit consists of microphone-specific SFZ definitions, rendering one may sound thin because it is only one microphone, not a full kit mix; plan grouped simultaneous program rendering.
+
+QA required: Windows upload of large ZIP, safe rejection of malformed archives, instrument listing, verified SFZ note mapping, real audio tails and velocity behavior, disk space, side effects and restoration.
+
+Sources: https://sfzinstruments.github.io/drums/muldjord_kit/ ; https://github.com/sfzinstruments/DrumGizmo.MuldjordKit ; https://freepats.zenvoid.org/Percussion/acoustic-drum-kit.html

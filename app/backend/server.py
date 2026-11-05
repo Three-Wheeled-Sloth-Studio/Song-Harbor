@@ -46,6 +46,7 @@ import midi_section_composite
 import polyphonic_midi
 import drum_keymaps
 import instrument_direction_match
+import section_instrument_selection
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
@@ -1357,8 +1358,15 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         raise HTTPException(400,str(exc)) from exc
 
 
+class SectionInstrumentOverride(BaseModel):
+    section_id: str = Field(min_length=1,max_length=100)
+    pack_id: str = Field(min_length=1,max_length=80)
+    instrument_id: str = Field(min_length=1,max_length=120)
+
+
 class SectionalMidiRenderRequest(PolyphonicRenderRequest):
     section_ids: list[str] = Field(min_length=1,max_length=8)
+    section_instruments: list[SectionInstrumentOverride] = Field(default_factory=list,max_length=8)
 
 
 @app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/render-sections")
@@ -1378,15 +1386,17 @@ def render_midi_sections(ident:str,asset_id:str,request:Request,
             raise HTTPException(404,"Song unavailable")
         pieces=midi_section_slices.select_sections(
             asset,project.get("sections",[]),body.section_ids)
-        selected,font=instrument_library.resolve_instrument(
-            DATA_ROOT,body.pack_id,body.instrument_id)
         if asset.get("percussion"):
             if not body.percussion or drum_keymaps.validate_keymap(body.drum_keymap) != asset["percussion"]["keymap"]:
                 raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
-        if selected["engine"] not in ("sf2","sfz"):
-            raise HTTPException(400,"Select installed SF2 or SFZ instrument")
+        choices=section_instrument_selection.resolve(
+            body.section_ids,[entry.model_dump() for entry in body.section_instruments],
+            body.pack_id,body.instrument_id,instrument_library.catalogue(DATA_ROOT))
         results=[]
         for piece in pieces:
+            choice=choices[piece["section_id"]]
+            selected,font=instrument_library.resolve_instrument(
+                DATA_ROOT,choice["pack_id"],choice["instrument_id"])
             record=_render_saved_midi_candidate(root,asset_id,piece["arrangement"],
                                                 selected,font,body.revision,
                                                 piece["section_id"],body.percussion,body.drum_keymap)

@@ -8,7 +8,11 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
-export type DrumOptions={percussion:boolean;drum_keymap:{schema_version:number;mapping_kind:"gm"|"custom";lanes:{pitch:number;name:string}[]}|null};
+export type DrumOptions={
+ percussion:boolean;
+ drum_keymap:{schema_version:number;mapping_kind:"gm"|"custom";lanes:{pitch:number;name:string}[]}|null;
+ section_instruments?:{section_id:string;pack_id:string;instrument_id:string}[];
+};
 const GM_KIT:Record<number,string>={"35":"Acoustic Bass Drum","36":"Bass Drum 1","37":"Side Stick","38":"Acoustic Snare","39":"Hand Clap","40":"Electric Snare","41":"Low Floor Tom","42":"Closed Hi-Hat","43":"High Floor Tom","44":"Pedal Hi-Hat","45":"Low Tom","46":"Open Hi-Hat","47":"Low-Mid Tom","48":"Hi-Mid Tom","49":"Crash Cymbal 1","50":"High Tom","51":"Ride Cymbal 1","52":"Chinese Cymbal","53":"Ride Bell","54":"Tambourine","55":"Splash Cymbal","56":"Cowbell","57":"Crash Cymbal 2","58":"Vibraslap","59":"Ride Cymbal 2","60":"Hi Bongo","61":"Low Bongo","62":"Mute Hi Conga","63":"Open Hi Conga","64":"Low Conga","65":"High Timbale","66":"Low Timbale","67":"High Agogo","68":"Low Agogo","69":"Cabasa","70":"Maracas","71":"Short Whistle","72":"Long Whistle","73":"Short Guiro","74":"Long Guiro","75":"Claves","76":"Hi Wood Block","77":"Low Wood Block","78":"Mute Cuica","79":"Open Cuica","80":"Mute Triangle","81":"Open Triangle"};
 type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
@@ -46,6 +50,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [selected,setSelected]=useState("");
  const [popOut,setPopOut]=useState(false);
  const [selectedSections,setSelectedSections]=useState<string[]>([]);
+ const [sectionPresetKeys,setSectionPresetKeys]=useState<Record<string,string>>({});
  const [position,setPosition]=useState({x:0,y:0});
  const moveWindow=useRef<{x:number;y:number;left:number;top:number}|null>(null);
  const [selectedIds,setSelectedIds]=useState<string[]>([]);
@@ -81,7 +86,15 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   if(missing.length)kitError="Unmapped drum pitches: "+missing.join(", ");
  }
  const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
- const drumOptions:DrumOptions={percussion:drumMode,drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null};
+ const sectionInstruments=selectedSections.flatMap(sectionId=>{
+  const key=sectionPresetKeys[sectionId];
+  if(!key||key===selectedInstrument)return [];
+  const instrument=instruments.find(item=>item.pack_id+"::"+item.id===key);
+  return instrument?[{section_id:sectionId,pack_id:instrument.pack_id,instrument_id:instrument.id}]:[];
+ });
+ const drumOptions:DrumOptions={percussion:drumMode,
+  drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null,
+  ...(selectedSections.length?{section_instruments:sectionInstruments}:{})};
  const desiredPercussion=drumMode?{mode:"drums",keymap:drumOptions.drum_keymap}:null;
  const metadataDirty=asset!==null&&JSON.stringify(asset.percussion||null)!==JSON.stringify(desiredPercussion);
  const dirty=noteDirty||metadataDirty;
@@ -107,7 +120,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setSelectedSections([]);
+ function open(value:Arrangement){setSelectedSections([]);setSectionPresetKeys({});
   const saved=value.percussion?.keymap;
   setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
   setKitKind(saved?.mapping_kind||"gm");
@@ -278,6 +291,19 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>
      {!!selectedSections.length&&<button type="button" title="Clear selected sections and render the complete saved arrangement" aria-label="Clear section selection" onClick={()=>setSelectedSections([])}>× Clear sections</button>}
+   </div>}
+   {asset&&selectedSections.length>0&&<div className="song-roll-toolbar song-roll-options" aria-label="Per-section instrument presets">
+     <strong>Section presets</strong>
+     <small>Choose one preset per section. Render previews separately, then add one combined instrument stem.</small>
+     {sections.filter(section=>selectedSections.includes(section.id)).sort((a,b)=>a.start_seconds-b.start_seconds).map(section=><label key={section.id}>
+      {section.kind}{section.number?" "+section.number:""}
+      <select aria-label={"Instrument for "+section.kind+" "+(section.number||"")} value={sectionPresetKeys[section.id]||""}
+       onChange={event=>setSectionPresetKeys(previous=>({...previous,[section.id]:event.target.value}))}>
+       <option value="">Default instrument</option>
+       {instruments.filter(item=>["sf2","sfz"].includes(item.engine)).map(item=>
+        <option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
+      </select>
+     </label>)}
    </div>}
    <div className="song-roll-toolbar">
     <strong>Arrangement</strong>

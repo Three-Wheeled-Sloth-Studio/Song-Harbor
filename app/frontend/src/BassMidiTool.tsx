@@ -7,7 +7,7 @@ type Note={pitch:number;start:number;end:number;velocity:number};
 export type Candidate={candidate_id:string;arrangement_id?:string;arrangement_revision?:number;section_id?:string;instrument?:string;pack_id?:string;source_track_id?:string;start_seconds:number;duration_seconds:number;notes:Note[];original_notes:Note[];rendered?:boolean;section_masks?:{start_seconds:number;end_seconds:number}[];method:string};
 export type MidiRenderSession={jobId:string;sourceTrackId:string;candidates:Candidate[];index:number;acceptedSectionIds:string[]};
 type Track={track_id:string;stem_alias:string;display_name:string;imported?:boolean;start_seconds?:number;duration_seconds?:number};
-type InstrumentPack={id:string;name:string;engine:string;source:string};
+type InstrumentPack={id:string;name:string;engine:string;source:string;curated_id?:string;unavailable_program_count?:number};
 type InstrumentChoice={id:string;name:string;pack_id:string;engine:string;program:number;bank:number};
 type InstrumentCatalogue={packs:InstrumentPack[];instruments:InstrumentChoice[];fluidsynth_ready:boolean;sfizz_ready?:boolean};
 // General MIDI programs, zero-based. Favorites prioritize Infra Choir's
@@ -75,6 +75,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    if(pa>=0&&pb>=0&&pa!==pb)return pa-pb;
    return a.name.localeCompare(b.name);
  });
+ const selectedPack=catalogue.packs.find(p=>p.id===packFilter);
+ const recoveryTarget=sfzRecovery?.packId===packFilter?sfzRecovery:
+   (selectedPack?.curated_id&&selectedPack.unavailable_program_count
+    ?{packId:selectedPack.id,missing:selectedPack.unavailable_program_count}:null);
  const chosenInstrument=catalogue.instruments.find(x=>x.id===instrument&&x.pack_id===instrumentPack);
  const selectedLabel=chosenInstrument?.name||"Instrument";
  const selectedPackName=catalogue.packs.find(x=>x.id===instrumentPack)?.name||"Song Harbor Core";
@@ -157,19 +161,20 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
  async function repairSfzPack(){
-   if(!sfzRecovery||installingPack)return;
+   if(!recoveryTarget||installingPack)return;
+   const packId=recoveryTarget.packId;
    setInstallingPack(true);setError("");
    try{
      const result=await req<{status:string;playable:number;repaired:number;from_local:number;from_publisher:number;
        attempted:number;unavailable_program_count:number}>("/api/instruments/sfz/repair-missing",{
        method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({pack_id:sfzRecovery.packId})});
+       body:JSON.stringify({pack_id:packId})});
      const library=await req<InstrumentCatalogue>("/api/instruments");
-     setCatalogue(library);setPackFilter(sfzRecovery.packId);
-     const first=library.instruments.find(item=>item.pack_id===sfzRecovery.packId);
+     setCatalogue(library);setPackFilter(packId);
+     const first=library.instruments.find(item=>item.pack_id===packId);
      if(first)chooseInstrument(first.pack_id,first.id);
      setSfzRecovery(result.unavailable_program_count?{
-       packId:sfzRecovery.packId,missing:result.unavailable_program_count}:null);
+       packId,missing:result.unavailable_program_count}:null);
      setMessage(result.repaired?result.repaired+" exact samples repaired. "+result.playable+
        " playable programs; "+result.unavailable_program_count+" incomplete.":
        "No exact replacement files found locally or at the curated publisher. Existing programs unchanged.");
@@ -504,8 +509,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {chosenInstrument?.engine==="sfz"&&!catalogue.sfizz_ready&&<span role="status" className="song-midi-fluid-setup">sfizz renderer required <button type="button" disabled={!onConfigureSfizz} onClick={onConfigureSfizz}>Configure sfizz</button></span>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
-            {sfzRecovery&&<button type="button"
-              title={"Try exact missing samples locally and at the approved publisher for "+sfzRecovery.missing+" incomplete programs. No substitutes."}
+            {recoveryTarget&&<button type="button"
+              title={"Try exact missing samples locally and at the approved publisher for "+recoveryTarget.missing+" incomplete programs. No substitutes."}
               disabled={installingPack} onClick={()=>void repairSfzPack()}>
               {installingPack?"…":"↻"} Repair missing samples
             </button>}

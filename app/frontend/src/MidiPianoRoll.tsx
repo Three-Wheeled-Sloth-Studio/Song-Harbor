@@ -36,7 +36,7 @@ export type DrumOptions={
  section_instruments?:{section_id:string;pack_id:string;instrument_id:string}[];
 };
 const GM_KIT:Record<number,string>={"35":"Acoustic Bass Drum","36":"Bass Drum 1","37":"Side Stick","38":"Acoustic Snare","39":"Hand Clap","40":"Electric Snare","41":"Low Floor Tom","42":"Closed Hi-Hat","43":"High Floor Tom","44":"Pedal Hi-Hat","45":"Low Tom","46":"Open Hi-Hat","47":"Low-Mid Tom","48":"Hi-Mid Tom","49":"Crash Cymbal 1","50":"High Tom","51":"Ride Cymbal 1","52":"Chinese Cymbal","53":"Ride Bell","54":"Tambourine","55":"Splash Cymbal","56":"Cowbell","57":"Crash Cymbal 2","58":"Vibraslap","59":"Ride Cymbal 2","60":"Hi Bongo","61":"Low Bongo","62":"Mute Hi Conga","63":"Open Hi Conga","64":"Low Conga","65":"High Timbale","66":"Low Timbale","67":"High Agogo","68":"Low Agogo","69":"Cabasa","70":"Maracas","71":"Short Whistle","72":"Long Whistle","73":"Short Guiro","74":"Long Guiro","75":"Claves","76":"Hi Wood Block","77":"Low Wood Block","78":"Mute Cuica","79":"Open Cuica","80":"Mute Triangle","81":"Open Triangle"};
-type Props={jobId:string;sourceTrackId:string;targetStem?:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onRenderComplete?:()=>void;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;targetStem?:string;requestedAssetId?:string;autoOpenAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onRenderComplete?:()=>void;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -58,7 +58,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onRenderComplete,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedAssetId,autoOpenAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onRenderComplete,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -194,10 +194,10 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
  useEffect(()=>{setAsset(null);setHistory([]);setFuture([]);setSelected("");setSelectedIds([]);void refresh();},[jobId,sourceTrackId]);
  useEffect(()=>{if(!requestedAssetId)return;
   let live=true;void request<Arrangement>(root+"/"+requestedAssetId).then(value=>{
-   if(live&&value.source.track_id===sourceTrackId)open(value);
+   if(live&&value.source.track_id===sourceTrackId){open(value);void refresh();if(autoOpenAssetId===value.asset_id)setPopOut(true);}
   }).catch(error=>{if(live)onError(String(error));});
   return()=>{live=false;};
- },[jobId,sourceTrackId,requestedAssetId]);
+ },[jobId,sourceTrackId,requestedAssetId,autoOpenAssetId]);
  async function load(id:string){if(dirty&&!window.confirm("Discard unsaved MIDI edits?"))return;
   setBusy(true);try{open(await request<Arrangement>(root+"/"+id));}catch(error){onError(String(error));}finally{setBusy(false);}}
  async function save(){if(!asset||busy)return;const operations=diffNotes(asset.notes,notes);

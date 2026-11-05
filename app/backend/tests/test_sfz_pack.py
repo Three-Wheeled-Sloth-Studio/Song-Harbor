@@ -95,17 +95,17 @@ class SFZPackTests(unittest.TestCase):
     def test_big_rusty_style_nested_includes_and_key_definitions(self):
         self.make_zip({
             "Programs/02-basic.sfz": (
-                '<control>\\n#include "keymap/keymap.sfz"\\n'
-                '#define $ht_init 127\\n'
-                '#include "mappings/kick.sfz"\\n'
+                '<control>\n#include "keymap/keymap.sfz"\n'
+                '#define $ht_init 127\n'
+                '#include "mappings/kick.sfz"\n'
             ),
-            "Programs/keymap/keymap.sfz":"#define $kickkey 36\\n",
+            "Programs/keymap/keymap.sfz":"#define $kickkey 36\n",
             "Programs/mappings/kick.sfz":(
-                '<master> key=$kickkey\\n'
-                '#include "mappings/kick_hits.sfz"\\n'
+                '<master> key=$kickkey\n'
+                '#include "mappings/kick_hits.sfz"\n'
             ),
             "Programs/mappings/kick_hits.sfz": (
-                "<region> sample=../Samples/kick/kick_vl1.flac\\n"
+                "<region> sample=../Samples/kick/kick_vl1.flac\n"
             ),
             "Samples/kick/kick_vl1.flac":b"sample bytes",
             "Presets/com.Plogue.Aria/Big Rusty Drums.plg":b"sampler preset",
@@ -119,14 +119,14 @@ class SFZPackTests(unittest.TestCase):
 
     def test_include_cannot_escape_imported_pack(self):
         self.make_zip({
-            "Programs/Kit.sfz":'#include "../../external.sfz"\\n',
+            "Programs/Kit.sfz":'#include "../../external.sfz"\n',
             "Samples/kick.wav":b"data",
         })
         with self.assertRaisesRegex(ValueError,"missing or external include"):
             sfz_pack.install_zip(self.root,self.archive,"Invalid external include")
 
     def test_unknown_directive_rejected(self):
-        self.make_zip({"Kit.sfz":"#unknown /tmp/outside\\n<region> sample=Kick.wav",
+        self.make_zip({"Kit.sfz":"#unknown /tmp/outside\n<region> sample=Kick.wav",
                        "Kick.wav":b"sample"})
         with self.assertRaisesRegex(ValueError,"unsupported preprocessing"):
             sfz_pack.install_zip(self.root,self.archive,"Unsupported directive")

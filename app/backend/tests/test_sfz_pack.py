@@ -53,7 +53,7 @@ class SFZPackTests(unittest.TestCase):
     def test_external_directive_rejected(self):
         self.make_zip({"Unsafe.sfz":"#include \"../external.sfz\"",
                        "x.wav":b"x"})
-        with self.assertRaisesRegex(ValueError,"unsupported preprocessing"):
+        with self.assertRaisesRegex(ValueError,"missing or external include"):
             sfz_pack.install_zip(self.root,self.archive,"Unsafe")
 
     def test_case_insensitive_duplicate_rejected(self):
@@ -91,6 +91,45 @@ class SFZPackTests(unittest.TestCase):
         self.assertFalse((imported / "Programs" / "Cello.nki").exists())
         self.assertTrue((imported / "Programs" / "Cello.sfz").is_file())
         self.assertTrue((imported / "Samples" / "C4.wav").is_file())
+
+    def test_big_rusty_style_nested_includes_and_key_definitions(self):
+        self.make_zip({
+            "Programs/02-basic.sfz": (
+                '<control>\\n#include "keymap/keymap.sfz"\\n'
+                '#define $ht_init 127\\n'
+                '#include "mappings/kick.sfz"\\n'
+            ),
+            "Programs/keymap/keymap.sfz":"#define $kickkey 36\\n",
+            "Programs/mappings/kick.sfz":(
+                '<master> key=$kickkey\\n'
+                '#include "mappings/kick_hits.sfz"\\n'
+            ),
+            "Programs/mappings/kick_hits.sfz": (
+                "<region> sample=../Samples/kick/kick_vl1.flac\\n"
+            ),
+            "Samples/kick/kick_vl1.flac":b"sample bytes",
+            "Presets/com.Plogue.Aria/Big Rusty Drums.plg":b"sampler preset",
+        })
+        outcome=sfz_pack.install_zip(self.root,self.archive,"Rusty Fixture")
+        self.assertEqual(outcome["instruments"],1)
+        pack=next((self.root/"instrument-packs").iterdir())
+        manifest=json.loads((pack/"manifest.json").read_text())
+        self.assertEqual(manifest["instruments"][0]["name"],"02-basic")
+        self.assertFalse((pack/"Presets").exists())
+
+    def test_include_cannot_escape_imported_pack(self):
+        self.make_zip({
+            "Programs/Kit.sfz":'#include "../../external.sfz"\\n',
+            "Samples/kick.wav":b"data",
+        })
+        with self.assertRaisesRegex(ValueError,"missing or external include"):
+            sfz_pack.install_zip(self.root,self.archive,"Invalid external include")
+
+    def test_unknown_directive_rejected(self):
+        self.make_zip({"Kit.sfz":"#unknown /tmp/outside\\n<region> sample=Kick.wav",
+                       "Kick.wav":b"sample"})
+        with self.assertRaisesRegex(ValueError,"unsupported preprocessing"):
+            sfz_pack.install_zip(self.root,self.archive,"Unsupported directive")
 
     def test_non_audio_support_files_are_skipped_not_extracted(self):
         self.make_zip({

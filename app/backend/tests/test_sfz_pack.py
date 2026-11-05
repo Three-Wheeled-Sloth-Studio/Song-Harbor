@@ -78,6 +78,25 @@ class SFZPackTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"Duplicate"):
             sfz_pack.inspect_archive(self.archive)
 
+    def test_large_archive_limits_remain_explicit_and_bounded(self):
+        self.assertEqual(sfz_pack.MAX_ARCHIVE_BYTES,4*1024**3)
+        self.assertEqual(sfz_pack.MAX_UNPACKED_BYTES,8*1024**3)
+        from unittest.mock import patch
+        self.make_zip({"Kit.sfz":"<region> sample=kick.wav","kick.wav":b"sample"})
+        with patch.object(sfz_pack,"MAX_ARCHIVE_BYTES",self.archive.stat().st_size-1):
+            with self.assertRaisesRegex(ValueError,"too large"):
+                sfz_pack.inspect_archive(self.archive)
+
+    def test_import_refuses_insufficient_disk_without_leaving_pack(self):
+        from unittest.mock import patch
+        from collections import namedtuple
+        self.make_zip({"Kit.sfz":"<region> sample=kick.wav","kick.wav":b"sample"})
+        Space=namedtuple("Space",["total","used","free"])
+        with patch.object(sfz_pack.shutil,"disk_usage",return_value=Space(1024,1023,1)):
+            with self.assertRaisesRegex(ValueError,"Not enough disk space"):
+                sfz_pack.install_zip(self.root,self.archive,"No space")
+        self.assertEqual(list((self.root/"instrument-packs").iterdir()),[])
+
     def test_declared_unpacked_limit_rejected_before_extraction(self):
         from unittest.mock import patch
         self.make_zip({"Cello.sfz": "<region> sample=c4.wav",

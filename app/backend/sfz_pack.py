@@ -21,6 +21,15 @@ EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
 # Ignore documentation/GUI resources rather than executing or importing them.
 METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg", ".nki", ".nkm", ".nkc", ".nkr", ".nkx"}
 METADATA_NAMES = {"readme", "license", "copying", "authors", "changelog", "notice"}
+
+
+def is_ignorable_member(path: PurePosixPath) -> bool:
+    """Skip platform sidecars, GUI/docs and unrecognized companions; never execute."""
+    if "__macosx" in (part.casefold() for part in path.parts):
+        return True
+    if path.name.startswith("._") or path.name.casefold() in (".ds_store", "thumbs.db"):
+        return True
+    return path.suffix.lower() not in EXTENSIONS
 UNSAFE_SFZ = re.compile(r"(?im)^\s*#\s*(?:include|define)\b")
 DEFAULT_PATH = re.compile(r"(?im)(?:^|\s)default_path\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
 SAMPLE_REF = re.compile(r"(?im)(?:^|\s)sample\s*=\s*(.+?)(?=\s+[A-Za-z_][A-Za-z_0-9]*\s*=|$)")
@@ -67,7 +76,8 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
             total += member.file_size
             if total > MAX_UNPACKED_BYTES:
                 raise ValueError("SFZ archive exceeds uncompressed size limit")
-        if not any(PurePosixPath(m.filename).suffix.lower() == ".sfz" for m in members):
+        if not any(PurePosixPath(m.filename).suffix.lower() == ".sfz"
+                   and not is_ignorable_member(PurePosixPath(m.filename)) for m in members):
             raise ValueError("SFZ archive contains no instrument")
         return members
 
@@ -88,7 +98,7 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                 target = destination.joinpath(*relative.parts)
                 if member.is_dir():
                     continue
-                if relative.suffix.lower() not in EXTENSIONS:
+                if is_ignorable_member(relative):
                     ignored_files += 1
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)

@@ -142,14 +142,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      form.append("file",file);
      form.append("pack_name",name||file.name.replace(/\\.zip$/i,""));
      if(curatedId)form.append("curated_id",curatedId);
-     const installed=await req<{pack_id:string;instruments:number;ignored_support_files?:number}>("/api/instruments/sfz",{method:"POST",body:form});
+     const installed=await req<{pack_id:string;instruments:number;ignored_support_files?:number;unavailable_program_count?:number;unavailable_programs?:{name:string;reason:string}[]}>("/api/instruments/sfz",{method:"POST",body:form});
      const [data,remaining]=await Promise.all([
        req<InstrumentCatalogue>("/api/instruments"),
        req<{packs:CuratedSfz[]}>("/api/instruments/curated-sfz")]);
      setCatalogue(data);setCuratedSfz(remaining.packs);setPackFilter(installed.pack_id);
      const first=data.instruments.find(x=>x.pack_id===installed.pack_id);
      if(first)chooseInstrument(first.pack_id,first.id);
-     setMessage("Imported "+installed.instruments+" SFZ instruments"+(installed.ignored_support_files?" ("+installed.ignored_support_files+" support files skipped)":"")+".");
+     setMessage("Imported "+installed.instruments+" playable SFZ instruments"+(installed.unavailable_program_count?" ("+installed.unavailable_program_count+" incomplete programs excluded"+(installed.unavailable_programs?.length?"; e.g. "+installed.unavailable_programs[0].name:"")+")":"")+".");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
  async function installStarter(starter:Starter){

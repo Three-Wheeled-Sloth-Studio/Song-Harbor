@@ -382,9 +382,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
   if(proposalDraft.proposal.base_revision!==asset.revision){
    setProposalError("Saved score changed. Generate a fresh proposal.");setProposalDraft(null);return;
   }
-  const changes=proposalDraft.review.note_diff;
-  const count=changes.added.length+changes.removed.length+changes.changed.length;
-  if(!window.confirm("Save this proposal"+(count?" and "+count+" MIDI edits":"")+" as a new MIDI score revision? Audio remains unchanged."))return;
+  // The explicit checkmark is acceptance. Do not add a second modal for
+  // a reversible, revisioned score update.
   setProposalBusy(true);setProposalError("");
   try{
    const response=await request<{asset:Arrangement;accepted:boolean}>(

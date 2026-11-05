@@ -37,7 +37,7 @@ export type DrumOptions={
  section_instruments?:{section_id:string;pack_id:string;instrument_id:string}[];
 };
 const GM_KIT:Record<number,string>={"35":"Acoustic Bass Drum","36":"Bass Drum 1","37":"Side Stick","38":"Acoustic Snare","39":"Hand Clap","40":"Electric Snare","41":"Low Floor Tom","42":"Closed Hi-Hat","43":"High Floor Tom","44":"Pedal Hi-Hat","45":"Low Tom","46":"Open Hi-Hat","47":"Low-Mid Tom","48":"Hi-Mid Tom","49":"Crash Cymbal 1","50":"High Tom","51":"Ride Cymbal 1","52":"Chinese Cymbal","53":"Ride Bell","54":"Tambourine","55":"Splash Cymbal","56":"Cowbell","57":"Crash Cymbal 2","58":"Vibraslap","59":"Ride Cymbal 2","60":"Hi Bongo","61":"Low Bongo","62":"Mute Hi Conga","63":"Open Hi Conga","64":"Low Conga","65":"High Timbale","66":"Low Timbale","67":"High Agogo","68":"Low Agogo","69":"Cabasa","70":"Maracas","71":"Short Whistle","72":"Long Whistle","73":"Short Guiro","74":"Long Guiro","75":"Claves","76":"Hi Wood Block","77":"Low Wood Block","78":"Mute Cuica","79":"Open Cuica","80":"Mute Triangle","81":"Open Triangle"};
-type Props={jobId:string;sourceTrackId:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onError:(error:string)=>void};
+type Props={jobId:string;sourceTrackId:string;targetStem?:string;requestedAssetId?:string;sections?:SongSection[];instruments?:InstrumentOption[];selectedInstrument?:string;onInstrumentChange?:(key:string)=>void;onDirtyChange?:(dirty:boolean)=>void;onUse:(asset:Arrangement,sectionIds:string[],options:DrumOptions)=>Promise<void>;onError:(error:string)=>void};
 const RATE=48000, ROW=17, KEY_WIDTH=43, MIN_NOTE=.06*RATE;
 const PITCH_LOW=28,PITCH_HIGH=76, VELOCITY_HEIGHT=92;
 const pitchNames=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
@@ -59,7 +59,7 @@ async function request<T>(url:string,init?:RequestInit):Promise<T>{
  const response=await fetch(url,init);const value=await response.json() as T&{detail?:string};
  if(!response.ok)throw Error(value.detail||"MIDI arrangement request failed");return value;
 }
-export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onError}:Props){
+export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedAssetId,sections=[],instruments=[],selectedInstrument="",onInstrumentChange,onDirtyChange,onUse,onError}:Props){
  const root="/api/projects/"+jobId+"/midi-arrangements";
  const [listing,setListing]=useState<Summary[]>([]);
  const [asset,setAsset]=useState<Arrangement|null>(null);
@@ -78,6 +78,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [directionBusy,setDirectionBusy]=useState(false);
  const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
  const [directionError,setDirectionError]=useState("");
+ const [inspector,setInspector]=useState<"mapping"|"diff"|"presets"|"test"|null>(null);
  const [proposalPart,setProposalPart]=useState<ProposalPart>("Bass");
  const [mockVelocity,setMockVelocity]=useState(5);
  const [proposalBusy,setProposalBusy]=useState(false);
@@ -167,7 +168,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
    row.section_id,row.pack_id+"::"+row.instrument_id])));
   if(value.instrument_sections)onInstrumentChange?.(value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id);
-  setDirectionMatch(null);setDirectionError("");setDirectionText("");
+  setDirectionMatch(null);setDirectionError("");setDirectionText("");setInspector(null);
   const saved=value.percussion?.keymap;
   setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
   setKitKind(saved?.mapping_kind||"gm");
@@ -328,47 +329,25 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   s.end_seconds>(asset.source.start_sample+asset.duration_samples)/RATE+.005))
   ?"A song section extends beyond this MIDI arrangement. Select fully contained sections or extend the score.":"";
 
- const defaultVariant=directionMatch?.assignments.find(a=>a.section==="default");
- const verifiedAssignments=directionMatch?.assignments.map(a=>({
-  ...a,key:a.pack_id+"::"+a.instrument_id,
-  installed:instruments.some(item=>item.pack_id===a.pack_id&&item.id===a.instrument_id&&["sf2","sfz"].includes(item.engine)),
-  targets:a.section==="default"?matchSections:matchSections.filter(s=>normalizeScope(s.kind)===normalizeScope(a.section))
- }))||[];
- const matchErrors:string[]=[];
- if(directionMatch){
-  if(directionMatch.status!=="matched")matchErrors.push("Multiple or missing pack/preset matches require review.");
-  if(!defaultVariant)matchErrors.push("Specify a default installed instrument variant in the instruction.");
-  if(!matchSections.length)matchErrors.push("No sections intersect the saved arrangement.");
-  if(matchSections.length>64)matchErrors.push("More than 64 sections: choose a smaller scope.");
-  if(scopeError)matchErrors.push(scopeError);
-  verifiedAssignments.forEach(a=>{
-   if(!a.installed)matchErrors.push("Matched preset is not installed: "+a.instrument_name);
-   if(a.section!=="default"&&!a.targets.length)matchErrors.push("No matching sections for "+a.section+".");
-  });
- }
- async function previewDirection(){
-  if(!directionText.trim()||directionBusy)return;
-  setDirectionBusy(true);setDirectionMatch(null);setDirectionError("");
+ const mappingReady=directionMatch?.status==="matched"&&
+  directionMatch.assignments.some(row=>row.section==="default");
+ const mappingState=directionBusy?"working":mappingReady?"ready":
+  directionError||proposalError?"error":directionText.trim()?"unchecked":"empty";
+ async function generateDirectionProposal(){
+  if(!asset||!directionText.trim()||dirty||busy||proposalBusy||!scopeIds.length||scopeError)return;
+  setDirectionBusy(true);setProposalBusy(true);setDirectionError("");setProposalError("");
+  setProposalDraft(null);setDirectionMatch(null);
   try{
-   const found=await request<DirectionMatch>("/api/instruments/match-direction",{
+   const result=await request<MockProposalResponse&{mapping:DirectionMatch}>(
+    root+"/"+asset.asset_id+"/proposal-direction",{
     method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({instruction:directionText.trim()})});
-   setDirectionMatch(found);
-  }catch(error){setDirectionError(String(error));onError(String(error));}
-  finally{setDirectionBusy(false);}
- }
- function applyDirection(){
-  if(!directionMatch||matchErrors.length||!defaultVariant)return;
-  const patch:Record<string,string>={};
-  verifiedAssignments.filter(a=>a.section!=="default").forEach(a=>{
-   for(const section of a.targets)patch[section.id]=a.key;
-  });
-  setProposalDraft(null);
-  setSelectedSections(matchSections.map(s=>s.id));
-  setSectionPresetKeys(previous=>({...previous,...patch}));
-  onInstrumentChange?.(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
-  setDirectionMatch(null);
-  setMessage("Verified presets assigned. Review section dropdowns before rendering one instrument stem.");
+    body:JSON.stringify({base_revision:asset.revision,source_track_id:asset.source.track_id,
+      target_stem:["bass","drums","guitar","piano","other"].includes(targetStem.toLowerCase())?targetStem:"Other",
+      instruction:directionText.trim(),section_ids:scopeIds})});
+   setDirectionMatch(result.mapping);setProposalDraft(result);
+   setMessage("Preset proposal ready to accept. MIDI notes unchanged.");
+  }catch(error){setDirectionError(String(error));setProposalError(String(error));}
+  finally{setDirectionBusy(false);setProposalBusy(false);}
  }
  async function makeMockProposal(){
   if(!asset||dirty||proposalBusy||busy||!scopeIds.length||scopeError)return;
@@ -383,14 +362,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   }catch(error){setProposalError(String(error));}
   finally{setProposalBusy(false);}
  }
- async function acceptMockProposal(){
+ async function acceptProposal(){
   if(!asset||!proposalDraft||proposalBusy||busy||dirty)return;
   if(proposalDraft.proposal.base_revision!==asset.revision){
    setProposalError("Saved score changed. Generate a fresh proposal.");setProposalDraft(null);return;
   }
   const changes=proposalDraft.review.note_diff;
   const count=changes.added.length+changes.removed.length+changes.changed.length;
-  if(!window.confirm("Accept "+count+" reviewed MIDI note changes into a new saved revision? This does not render or replace audio."))return;
+  if(!window.confirm("Save this proposal"+(count?" and "+count+" MIDI edits":"")+" as a new MIDI score revision? Audio remains unchanged."))return;
   setProposalBusy(true);setProposalError("");
   try{
    const response=await request<{asset:Arrangement;accepted:boolean}>(
@@ -398,7 +377,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
      method:"POST",headers:{"Content-Type":"application/json"},
      body:JSON.stringify(proposalDraft.proposal)});
    open(response.asset);
-   setMessage("Mock proposal accepted as saved MIDI revision "+response.asset.revision+". No audio changed.");
+   setMessage("Proposal saved as MIDI revision "+response.asset.revision+". Render to audition.");
    void refresh();
   }catch(error){setProposalError(String(error));setProposalDraft(null);}
   finally{setProposalBusy(false);}

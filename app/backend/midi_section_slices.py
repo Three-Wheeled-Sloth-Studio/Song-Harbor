@@ -10,14 +10,14 @@ import math
 import midi_arrangements
 
 RATE=midi_arrangements.RATE
-MAX_SELECTED_SECTIONS=8
+MAX_SELECTED_SECTIONS=64
 MAX_TOTAL_SECONDS=600
 
 
 def select_sections(asset:dict, sections:list[dict], selected_ids:list[str])->list[dict]:
     score=midi_arrangements.validate(asset)
     if not 1<=len(selected_ids)<=MAX_SELECTED_SECTIONS or len(set(selected_ids))!=len(selected_ids):
-        raise ValueError("Select 1 to 8 distinct sections")
+        raise ValueError("Select 1 to 64 distinct sections")
     by_id={section.get("id"):section for section in sections if isinstance(section,dict)}
     if len(by_id)!=len(sections):
         raise ValueError("Timeline contains duplicate section IDs")

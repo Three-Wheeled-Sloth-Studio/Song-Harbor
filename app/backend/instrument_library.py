@@ -14,6 +14,7 @@ import struct
 import subprocess
 import tempfile
 import uuid
+import midi_candidate_level
 from pathlib import Path
 from typing import Any
 
@@ -335,5 +336,6 @@ def render_sf2(runtime:Path,instrument:dict,soundfont:Path,midi_bytes:bytes,
                                  creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
         if processed.returncode or not staged.is_file() or staged.stat().st_size<44:
             raise ValueError("Could not align SoundFont render to the selected region")
+        midi_candidate_level.level_candidate_wav(staged)
         target.parent.mkdir(parents=True,exist_ok=True)
         os.replace(staged,target)

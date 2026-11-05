@@ -1131,3 +1131,45 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
  .song-roll-direction-row .song-roll-primary-action{flex:1 1 auto}
  .song-roll-inspector{top:145px}
 }
+
+/* Piano-roll render activity is an explicit blocking operation. */
+.song-roll-popout .song-roll-render-ready{
+  background:#225c43;color:#d5ffea;border:1px solid #73c59e;
+}
+.song-roll-popout{position:relative}
+.song-roll-render-overlay{
+  position:absolute;inset:0;z-index:35;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;
+  background:rgba(15,27,37,.79);color:#eafbf4;
+  backdrop-filter:blur(2px);pointer-events:all;
+}
+.song-roll-render-overlay strong{font-size:14px}
+.song-roll-render-spinner{
+  width:38px;height:38px;border-radius:50%;
+  border:4px solid #496d71;border-top-color:#96e3cf;
+  animation:song-roll-render-spin .85s linear infinite;
+}
+@keyframes song-roll-render-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+ .song-roll-render-spinner{animation-duration:2s}
+}
+/* Section names remain at the top when scrolling pitches; pitch labels
+   stay at the left when panning through the song horizontally. */
+.song-roll-scroller .song-roll-time-sections{
+  position:sticky;top:0;z-index:6;
+}
+.song-roll-scroller .song-roll-time-key{
+  position:sticky;left:0;top:0;bottom:auto;
+  z-index:7;min-width:43px;height:32px;
+}
+.song-roll-scroller .song-roll-key-overlay{
+  position:sticky;left:0;z-index:5;pointer-events:none;
+  box-sizing:border-box;
+}
+.song-roll-scroller .song-roll-key-overlay>div{
+  padding:1px 3px;background:#e2e7eb;color:#111b22;
+  border-right:1px solid #627482;border-bottom:1px solid #627482;
+  white-space:nowrap;overflow:hidden;
+  font-size:11px;line-height:14px;
+}
+.song-roll-scroller .song-roll-key-overlay>div.is-sharp{background:#8897a7}

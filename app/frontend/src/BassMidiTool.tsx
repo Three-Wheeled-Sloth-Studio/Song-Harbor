@@ -150,6 +150,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  }
  async function installSfzPack(file:File|undefined, name?:string, curatedId?:string){
    if(!file||installingPack)return;
+   // Fast local preflight avoids a multi-GiB upload that the server would reject.
+   if(file.size>4*1024**3){
+     setError("SFZ ZIP exceeds the 4 GiB safety limit. Use a smaller SFZ distribution or split the sample library into supported self-contained packs.");
+     return;
+   }
    setSfzRecovery(null);setSfzOutcome(null);setShowSfzDetails(false);
    setInstallingPack(true);setPackActivity("import");setError("");setMessage("");
    try{

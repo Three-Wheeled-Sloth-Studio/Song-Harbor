@@ -33,3 +33,9 @@ User reports DEV auto-update/relaunch clean before this slice. No end-to-end Win
 - Add per-section preset assignment + candidate render, so the catalog matched variants actually change between Verse/Chorus/Bridge in one accepted stem.
 - Finish genuine SFZ kit mapping discovery and drum sample QA, rather than claiming that kit mapping alone makes arbitrary drum packs play correctly.
 - Do not promote dev to main without explicit request.
+
+## Confirmed output granularity
+- One resulting stem per instrument, spanning all selected sections. Do not create an individual stem for every instrument-section combination.
+- Bass, Drums, Guitar, Piano, and Other may each have their own named stem. Each instrument stem can use different presets by section and is rendered as one combined audio file.
+- Distinct instruments and deliberately layered parts may remain separate stems. Keep section-level previews for review, but acceptance creates one stem for that instrument with all selected sections and their corresponding reversible source masks.
+- Existing L/R channel splits remain available within each imported instrument stem.

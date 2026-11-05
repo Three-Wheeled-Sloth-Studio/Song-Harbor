@@ -10,6 +10,7 @@ import tempfile
 import wave
 from pathlib import Path
 import sfz_render_adapter
+import midi_candidate_level
 
 
 def render_candidate(
@@ -49,5 +50,7 @@ def render_candidate(
                     raise ValueError("SFZ preview must be aligned 48-kHz stereo PCM WAV")
         except (EOFError, wave.Error) as exc:
             raise ValueError("SFZ preview is not a valid PCM WAV") from exc
+        # Preserve source audio and musical dynamics; lift quiet sampler output only.
+        midi_candidate_level.level_candidate_wav(aligned)
         # os.replace publishes only the finished candidate. Source stem untouched.
         os.replace(aligned,candidate_wav)

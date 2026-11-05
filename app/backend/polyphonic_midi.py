@@ -35,13 +35,16 @@ def to_midi(asset:dict,program:int,bank:int=0,bpm:int=BPM,*,percussion:bool=Fals
     by_key=defaultdict(list)
     for note in data["notes"]:
         by_key[(note["channel"],note["pitch"])].append(note)
-    # Same-pitch overlaps on one MIDI channel have ambiguous note-off behavior.
-    for family in by_key.values():
-        previous_end=-1
-        for note in sorted(family,key=lambda x:x["start_sample"]):
-            if note["start_sample"]<previous_end:
-                raise ValueError("Same-pitch overlapping notes on one MIDI channel require separate channels")
-            previous_end=note["end_sample"]
+    # Melodic overlaps are ambiguous on the same channel/pitch. Percussion
+    # hits are one-shots: retrigger the same lane at its actual onset, ending
+    # the preceding MIDI gate first. Do not change the saved score.
+    if not percussion:
+        for family in by_key.values():
+            previous_end=-1
+            for note in sorted(family,key=lambda x:x["start_sample"]):
+                if note["start_sample"]<previous_end:
+                    raise ValueError("Same-pitch overlapping notes on one MIDI channel require separate channels")
+                previous_end=note["end_sample"]
     def tick(sample:int)->int:
         return round(sample*bpm*PPQ/(60*midi_arrangements.RATE))
     channels={n["channel"] for n in data["notes"]} or {0}
@@ -54,10 +57,31 @@ def to_midi(asset:dict,program:int,bank:int=0,bpm:int=BPM,*,percussion:bool=Fals
         events.extend([(0,1,bytes([0xb0|channel,0,(bank>>7)&127])),
                        (0,2,bytes([0xb0|channel,32,bank&127])),
                        (0,3,bytes([0xc0|channel,program]))])
-    for note in data["notes"]:
-        channel=note["channel"]
-        events.append((tick(note["start_sample"]),5,bytes([0x90|channel,note["pitch"],note["velocity"]])))
-        events.append((tick(note["end_sample"]),4,bytes([0x80|channel,note["pitch"],0])))
+    if percussion:
+        # Same-key retriggers require one owner per MIDI tick. Collapse hits
+        # that quantize to the identical tick (highest velocity wins), while
+        # preserving onset and velocity for all distinct-tick hits. Cap each
+        # gate at the next hit so note-offs cannot silence its successor.
+        for (channel,pitch),family in sorted(by_key.items()):
+            by_tick={}
+            for note in family:
+                start_tick=tick(note["start_sample"])
+                previous=by_tick.get(start_tick)
+                if previous is None or note["velocity"]>previous["velocity"]:
+                    by_tick[start_tick]=note
+            starts=sorted(by_tick)
+            for i,start_tick in enumerate(starts):
+                note=by_tick[start_tick]
+                end_tick=max(start_tick+1,tick(note["end_sample"]))
+                if i+1<len(starts):
+                    end_tick=min(end_tick,starts[i+1])
+                events.append((start_tick,5,bytes([0x90|channel,pitch,note["velocity"]])))
+                events.append((end_tick,4,bytes([0x80|channel,pitch,0])))
+    else:
+        for note in data["notes"]:
+            channel=note["channel"]
+            events.append((tick(note["start_sample"]),5,bytes([0x90|channel,note["pitch"],note["velocity"]])))
+            events.append((tick(note["end_sample"]),4,bytes([0x80|channel,note["pitch"],0])))
     events.sort(key=lambda e:(e[0],e[1],e[2]))
     track=bytearray()
     last=0

@@ -30,7 +30,7 @@ def propose(asset:dict,sections:list[dict],selected_ids:list[str],
             velocity=max(1,min(127,note["velocity"]+velocity_delta))
             if velocity!=note["velocity"]:
                 changes.append({"op":"update","id":note["id"],"changes":{"velocity":velocity}})
-        if len(changes)>=200:break
+        if len(changes)>=2000:raise ValueError("Mock proposal exceeds 2000 edits; select fewer sections")
     if not changes:raise ValueError("No eligible notes to adjust in selected sections")
     return {
         "schema_version":1,"base_revision":score["revision"],

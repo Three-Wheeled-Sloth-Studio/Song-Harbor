@@ -51,6 +51,7 @@ import midi_proposal_preview
 import midi_proposal_mock
 import midi_proposal_direction
 import sfz_pack
+import sfz_sample_recovery
 import curated_sfz
 import sfz_render_adapter
 import sfz_candidate_audio
@@ -1159,6 +1160,21 @@ async def install_instrument_sfz(request:Request,
         raise HTTPException(400,str(exc)) from exc
     finally:
         if staged is not None:staged.unlink(missing_ok=True)
+
+
+class SfZRepairRequest(BaseModel):
+    pack_id: str = Field(min_length=20,max_length=20)
+
+
+@app.post("/api/instruments/sfz/repair-missing")
+def repair_missing_sfz_samples(body:SfZRepairRequest,request:Request)->dict[str,Any]:
+    """Explicit user-initiated recovery from the installed curated publisher."""
+    require_local_origin(request)
+    try:
+        with lock:
+            return sfz_sample_recovery.repair(DATA_ROOT,body.pack_id)
+    except (ValueError,OSError,UnicodeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
 
 
 class BassMidiAnalyzeRequest(BaseModel):

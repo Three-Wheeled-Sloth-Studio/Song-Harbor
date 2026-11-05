@@ -34,6 +34,8 @@ jobs:
             test_instrument_library.py
             test_bass_midi.py
             test_midi_arrangements.py
+            test_drum_transcription.py
+            test_midi_candidate_level.py
             test_polyphonic_midi.py
             test_lyric_captions.py
             test_multiline_section_production.py

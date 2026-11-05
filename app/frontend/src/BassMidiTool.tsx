@@ -63,7 +63,10 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [instrumentPack,setInstrumentPack]=useState(persisted?.candidates[persisted.index]?.pack_id||"song-harbor-core");
  const [catalogue,setCatalogue]=useState<InstrumentCatalogue>({packs:[],instruments:[],fluidsynth_ready:false});
  const [installingPack,setInstallingPack]=useState(false);
+ const [packActivity,setPackActivity]=useState<"import"|"repair"|"starter"|null>(null);
  const [sfzRecovery,setSfzRecovery]=useState<{packId:string;missing:number}|null>(null);
+ const [sfzOutcome,setSfzOutcome]=useState<{packId:string;packName:string;playable:number;incomplete:number;problems:{name:string;reason:string}[];summary:string}|null>(null);
+ const [showSfzDetails,setShowSfzDetails]=useState(false);
  const [starters,setStarters]=useState<Starter[]>([]);
  const [curatedSfz,setCuratedSfz]=useState<CuratedSfz[]>([]);
  const [showCurated,setShowCurated]=useState(false);
@@ -76,9 +79,14 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    return a.name.localeCompare(b.name);
  });
  const selectedPack=catalogue.packs.find(p=>p.id===packFilter);
- const recoveryTarget=sfzRecovery?.packId===packFilter?sfzRecovery:
+ const recoveryTarget=sfzRecovery?.packId===sfzOutcome?.packId?sfzRecovery:
    (selectedPack?.curated_id&&selectedPack.unavailable_program_count
     ?{packId:selectedPack.id,missing:selectedPack.unavailable_program_count}:null);
+ const recoveryPack=catalogue.packs.find(p=>p.id===recoveryTarget?.packId);
+ const canRepair=Boolean(recoveryTarget&&recoveryPack?.curated_id&&recoveryTarget.missing>0);
+ const activityText=packActivity==="import"?"Importing and validating instrument pack...":
+   packActivity==="repair"?"Checking exact missing samples...":
+   packActivity==="starter"?"Installing instrument pack...":"";
  const chosenInstrument=catalogue.instruments.find(x=>x.id===instrument&&x.pack_id===instrumentPack);
  const selectedLabel=chosenInstrument?.name||"Instrument";
  const selectedPackName=catalogue.packs.find(x=>x.id===instrumentPack)?.name||"Song Harbor Core";
@@ -125,7 +133,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  },[settingsOpen,jobId]);
  async function installPack(file:File|undefined){
    if(!file||installingPack)return;
-   setInstallingPack(true);setError("");setMessage("");
+   setInstallingPack(true);setPackActivity("import");setError("");setMessage("");setSfzOutcome(null);
    try{
      const form=new FormData();
      form.append("file",file);form.append("pack_name",file.name.replace(/\\.sf2$/i,""));
@@ -137,12 +145,12 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(first){setInstrument(first.id);setInstrumentPack(first.pack_id);}
      setPreviewReady(false);engine?.clearCandidatePreview();
      setMessage("Imported "+response.instruments+" instruments.");
-   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);setPackActivity(null);}
  }
  async function installSfzPack(file:File|undefined, name?:string, curatedId?:string){
-   setSfzRecovery(null);
    if(!file||installingPack)return;
-   setInstallingPack(true);setError("");setMessage("");
+   setSfzRecovery(null);setSfzOutcome(null);setShowSfzDetails(false);
+   setInstallingPack(true);setPackActivity("import");setError("");setMessage("");
    try{
      const form=new FormData();
      form.append("file",file);
@@ -155,18 +163,24 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setCatalogue(data);setCuratedSfz(remaining.packs);setPackFilter(installed.pack_id);
      const first=data.instruments.find(x=>x.pack_id===installed.pack_id);
      if(first)chooseInstrument(first.pack_id,first.id);
-     if(installed.unavailable_program_count&&curatedId)
-       setSfzRecovery({packId:installed.pack_id,missing:installed.unavailable_program_count});
-     setMessage("Imported "+installed.instruments+" playable SFZ instruments"+(installed.unavailable_program_count?" ("+installed.unavailable_program_count+" incomplete programs excluded"+(installed.unavailable_programs?.length?"; e.g. "+installed.unavailable_programs[0].name:"")+")":"")+".");
-   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+     const incomplete=installed.unavailable_program_count||0;
+     const packName=name||file.name.replace(/\.zip$/i,"");
+     if(incomplete&&curatedId)setSfzRecovery({packId:installed.pack_id,missing:incomplete});
+     setSfzOutcome({packId:installed.pack_id,packName,playable:installed.instruments,
+       incomplete,problems:installed.unavailable_programs||[],
+       summary:packName+" imported. "+installed.instruments+" instruments ready; "+
+         (incomplete?incomplete+" programs need attention.":"all programs validated.")});
+     setMessage("");
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);setPackActivity(null);}
  }
  async function repairSfzPack(){
    if(!recoveryTarget||installingPack)return;
    const packId=recoveryTarget.packId;
-   setInstallingPack(true);setError("");
+   const packName=catalogue.packs.find(p=>p.id===packId)?.name||"SFZ pack";
+   setInstallingPack(true);setPackActivity("repair");setError("");setMessage("");
    try{
      const result=await req<{status:string;playable:number;repaired:number;from_local:number;from_publisher:number;
-       attempted:number;unavailable_program_count:number}>("/api/instruments/sfz/repair-missing",{
+       attempted:number;unavailable_program_count:number;unavailable_programs?:{name:string;reason:string}[]}>("/api/instruments/sfz/repair-missing",{
        method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({pack_id:packId})});
      const library=await req<InstrumentCatalogue>("/api/instruments");
@@ -175,14 +189,22 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      if(first)chooseInstrument(first.pack_id,first.id);
      setSfzRecovery(result.unavailable_program_count?{
        packId,missing:result.unavailable_program_count}:null);
-     setMessage(result.repaired?result.repaired+" exact samples repaired. "+result.playable+
-       " playable programs; "+result.unavailable_program_count+" incomplete.":
-       "No exact replacement files found locally or at the curated publisher. Existing programs unchanged.");
-   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+     const summary=result.repaired?
+       result.repaired+" exact sample files recovered ("+result.from_local+" local, "+result.from_publisher+" publisher). "+
+       result.playable+" programs ready; "+result.unavailable_program_count+" still incomplete.":
+       result.unavailable_program_count===0?
+       packName+" already complete. "+result.playable+" programs ready.":
+       "No exact replacement found for "+packName+". "+result.unavailable_program_count+
+       " programs still incomplete; working programs unchanged.";
+     setSfzOutcome({packId,packName,playable:result.playable,
+       incomplete:result.unavailable_program_count,problems:result.unavailable_programs||[],summary});
+     setShowSfzDetails(false);
+     setMessage("");
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);setPackActivity(null);}
  }
  async function installStarter(starter:Starter){
    if(installingPack)return;
-   setInstallingPack(true);setMessage("");setError("");
+   setInstallingPack(true);setPackActivity("starter");setMessage("");setError("");setSfzOutcome(null);
    try{
      const outcome=await req<{pack_id:string;instruments:number}>("/api/instruments/starters/install",{
        method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({starter_id:starter.id})});
@@ -194,7 +216,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      const selected=library.instruments.find(x=>x.pack_id===outcome.pack_id&&x.program===42&&x.bank===0)||library.instruments.find(x=>x.pack_id===outcome.pack_id);
      if(selected)chooseInstrument(selected.pack_id,selected.id);
      setMessage(starter.name+" installed · "+outcome.instruments+" presets");
-   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);setPackActivity(null);}
  }
  function sectionAlias(sectionId:string){
    const section=sections.find(item=>item.id===sectionId);
@@ -509,11 +531,29 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {chosenInstrument?.engine==="sfz"&&!catalogue.sfizz_ready&&<span role="status" className="song-midi-fluid-setup">sfizz renderer required <button type="button" disabled={!onConfigureSfizz} onClick={onConfigureSfizz}>Configure sfizz</button></span>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
-            {recoveryTarget&&<button type="button"
-              title={"Try exact missing samples locally and at the approved publisher for "+recoveryTarget.missing+" incomplete programs. No substitutes."}
-              disabled={installingPack} onClick={()=>void repairSfzPack()}>
-              {installingPack?"…":"↻"} Repair missing samples
-            </button>}
+         </div>
+         {activityText&&<div className="song-sfz-activity" role="status" aria-live="polite">
+           <span className="song-sfz-spinner" aria-hidden="true"/>
+           <span>{activityText}</span>
+         </div>}
+         {sfzOutcome&&<div className="song-sfz-result" role="status" aria-label="SFZ pack import or repair result">
+           <span>{sfzOutcome.summary}</span>
+           {sfzOutcome.problems.length>0&&<button type="button" className="song-sfz-info" aria-label="Inspect incomplete SFZ programs"
+             title="Inspect incomplete programs and validation reasons" aria-expanded={showSfzDetails}
+             onClick={()=>setShowSfzDetails(value=>!value)}>ⓘ</button>}
+           {sfzOutcome.problems.length>0&&showSfzDetails&&<div className="song-sfz-details">
+             <strong>Incomplete programs ({sfzOutcome.incomplete})</strong>
+             <small>These are SFZ program definitions, not a count of missing audio files.</small>
+             <ul>{sfzOutcome.problems.map((item,index)=><li key={index}><strong>{item.name}</strong>: {item.reason}</li>)}</ul>
+           </div>}
+         </div>}
+         {canRepair&&<div className="song-sfz-repair">
+           <span>{recoveryTarget?.missing} incomplete programs in {recoveryPack?.name}.</span>
+           <button type="button"
+             title="Explicitly check exact sample files locally and at the approved publisher. Never substitute or overwrite samples."
+             disabled={installingPack} onClick={()=>void repairSfzPack()}>
+             ↻ Repair missing samples
+           </button>
          </div>
      {showCurated&&<div className="song-midi-curated" aria-label="Recommended SFZ instrument packs">
        <small>Recommended free instrument packs. Downloads open the publisher's site; ZIP import is local and explicit. Compatibility is not yet verified.</small>

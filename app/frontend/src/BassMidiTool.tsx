@@ -1,4 +1,4 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {MidiPianoRoll,type Arrangement} from "./MidiPianoRoll";
 import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
@@ -30,6 +30,7 @@ const names=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 function pitchName(value:number){return names[(value%12+12)%12]+(Math.floor(value/12)-1);}
 async function req<T>(url:string,init?:RequestInit):Promise<T>{const r=await fetch(url,init);const data=await r.json() as T&{detail?:string};if(!r.ok)throw Error(data.detail||"Stem MIDI operation failed");return data;}
 export function BassMidiTool({jobId,sections,songDuration,position,selectedTrackId,engine,stemControls,onStemMix,playing,onSeek,onPlay,onPause,onInserted,saveProject,onError,onConfigureFluidSynth,onConfigureSfizz,settingsOpen,midiSession,onMidiSessionChange}:Props){
+ const stemToolsRef=useRef<HTMLDivElement>(null);
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
  const [functionMode,setFunctionMode]=useState<"mix"|"midi">(midiSession?.jobId===jobId&&midiSession.candidates.length?"midi":"mix");
@@ -423,7 +424,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    setNotes(current=>[...current,{pitch:40,start:t,end,velocity:85}]);setPreviewReady(false);engine?.clearCandidatePreview();
  }
  function transpose(semitones:number){setNotes(current=>current.map(n=>({...n,pitch:Math.min(76,Math.max(28,n.pitch+semitones))})));setPreviewReady(false);engine?.clearCandidatePreview();}
- return <div className="song-midi-tool song-stem-hub">
+ return <div className="song-midi-tool song-stem-hub" ref={stemToolsRef} tabIndex={-1}>
    <div className="song-stem-hub-header">
      <label className="song-stem-hub-source" title="Active stem">
        <span className="sr-only">Stem</span>
@@ -498,7 +499,9 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} targetStem={selectedTrack?.stem_alias||"Other"} requestedAssetId={arrangementId}
        sections={sections} instruments={catalogue.instruments} selectedInstrument={instrumentPack+"::"+instrument}
        onInstrumentChange={key=>{const [pack,id]=key.split("::");setPackFilter("all");chooseInstrument(pack,id);}}
-       onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>
+       onDirtyChange={setRollDirty} onUse={useArrangement}
+       onRenderComplete={()=>{requestAnimationFrame(()=>stemToolsRef.current?.focus({preventScroll:false}));}}
+       onError={onError}/>
      {candidate&&!candidate.arrangement_id&&!arrangementId&&<>
        <div className="song-midi-controls song-midi-edit-toolbar">
          <strong>{notes.length} notes</strong>

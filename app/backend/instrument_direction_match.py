@@ -131,6 +131,10 @@ def resolve(instruction: str, catalogue: dict) -> dict:
             return None
         after_scope=scope_for(after)
         before_scope=scope_for(before)
+        # "Dirty default, Angry chorus" must not let the previous
+        # instrument's trailing "default" qualify the next variant.
+        if before_scope=="default" and number>0:
+            before_scope=None
         # "chorus Angry, bridge Shifty" names the *next* section
         # before its variant. Without an explicit connector like "for",
         # prefer the section immediately before Angry.

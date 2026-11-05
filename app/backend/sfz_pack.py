@@ -107,6 +107,77 @@ def resolve_pack_reference(definition: Path, value: str, root: Path,
     raise ValueError("SFZ references a missing or external " + purpose + ": " + value[:120])
 
 
+def audit_pack(destination: Path) -> tuple[list[dict], list[dict]]:
+    """Audit playable programs without changing files or claiming missing samples."""
+    definitions = sorted(p for p in destination.rglob("*")
+                         if p.suffix.lower() == ".sfz" and p.is_file())
+    # Work out which .sfz files are mapping fragments. All are still
+    # data-only, but only root programs are advertised to the user.
+    included: set[Path] = set()
+    for definition in definitions:
+        text = definition.read_text(encoding="utf-8-sig")
+        for found in INCLUDE_REF.finditer(text):
+            try:
+                included.add(resolve_pack_reference(
+                    definition, found.group(1), destination,
+                    allowed={".sfz"}, purpose="include"))
+            except ValueError:
+                # Validate the complete dependency when the corresponding
+                # playable program is inspected, not for unrelated patches.
+                pass
+
+    def validate_program(definition: Path, active: set[Path],
+                         *, inherited_path: str = "") -> None:
+        definition = definition.resolve()
+        if definition in active:
+            raise ValueError("SFZ includes contain a cycle")
+        active.add(definition)
+        try:
+            text = definition.read_text(encoding="utf-8-sig")
+            for directive in SFZ_DIRECTIVE.finditer(text):
+                if directive.group(1).casefold() not in {"include", "define"}:
+                    raise ValueError("SFZ definition uses unsupported preprocessing")
+            defaults = [match.group(1).strip().strip('"').replace("\\", "/")
+                        for match in DEFAULT_PATH.finditer(text)]
+            if len(defaults) > 1:
+                raise ValueError("Multiple SFZ default_path assignments are unsupported")
+            prefix = defaults[0] if defaults else inherited_path
+            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
+                raise ValueError("SFZ default_path escapes the imported pack")
+            for found in SAMPLE_REF.finditer(text):
+                sample = found.group(1).strip().strip('"').replace("\\", "/")
+                if sample == "*silence":
+                    continue
+                resolve_pack_reference(definition, prefix + sample, destination,
+                                       allowed=EXTENSIONS - {".sfz"}, purpose="sample")
+            for found in INCLUDE_REF.finditer(text):
+                child = resolve_pack_reference(
+                    definition, found.group(1), destination,
+                    allowed={".sfz"}, purpose="include")
+                validate_program(child, active, inherited_path=prefix)
+        finally:
+            active.remove(definition)
+
+    manifest_instruments = []
+    unavailable_programs = []
+    for definition in definitions:
+        if definition.resolve() in included:
+            continue
+        try:
+            validate_program(definition, set())
+        except (ValueError, OSError, UnicodeError) as exc:
+            unavailable_programs.append({
+                "name": definition.stem[:100],
+                "reason": str(exc)[:180]})
+            continue
+        relative = definition.relative_to(destination).as_posix()
+        manifest_instruments.append({
+            "id": f"sfz-{len(manifest_instruments)}",
+            "name": definition.stem[:100],
+            "sfz_path": relative, "program": 0, "bank": 0})
+    return manifest_instruments, unavailable_programs
+
+
 def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = "") -> dict:
     """Install self-contained samples, rejecting unsafe references and malformed archives."""
     members = inspect_archive(archive)
@@ -136,72 +207,7 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                         output.write(chunk)
                     if extracted != member.file_size:
                         raise ValueError("SFZ ZIP entry has an unexpected size")
-        definitions = sorted(p for p in destination.rglob("*")
-                             if p.suffix.lower() == ".sfz" and p.is_file())
-        # Work out which .sfz files are mapping fragments. All are still
-        # data-only, but only root programs are advertised to the user.
-        included: set[Path] = set()
-        for definition in definitions:
-            text = definition.read_text(encoding="utf-8-sig")
-            for found in INCLUDE_REF.finditer(text):
-                try:
-                    included.add(resolve_pack_reference(
-                        definition, found.group(1), destination,
-                        allowed={".sfz"}, purpose="include"))
-                except ValueError:
-                    # Validate the complete dependency when the corresponding
-                    # playable program is inspected, not for unrelated patches.
-                    pass
-
-        def validate_program(definition: Path, active: set[Path],
-                             *, inherited_path: str = "") -> None:
-            definition = definition.resolve()
-            if definition in active:
-                raise ValueError("SFZ includes contain a cycle")
-            active.add(definition)
-            try:
-                text = definition.read_text(encoding="utf-8-sig")
-                for directive in SFZ_DIRECTIVE.finditer(text):
-                    if directive.group(1).casefold() not in {"include", "define"}:
-                        raise ValueError("SFZ definition uses unsupported preprocessing")
-                defaults = [match.group(1).strip().strip('"').replace("\\", "/")
-                            for match in DEFAULT_PATH.finditer(text)]
-                if len(defaults) > 1:
-                    raise ValueError("Multiple SFZ default_path assignments are unsupported")
-                prefix = defaults[0] if defaults else inherited_path
-                if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
-                    raise ValueError("SFZ default_path escapes the imported pack")
-                for found in SAMPLE_REF.finditer(text):
-                    sample = found.group(1).strip().strip('"').replace("\\", "/")
-                    if sample == "*silence":
-                        continue
-                    resolve_pack_reference(definition, prefix + sample, destination,
-                                           allowed=EXTENSIONS - {".sfz"}, purpose="sample")
-                for found in INCLUDE_REF.finditer(text):
-                    child = resolve_pack_reference(
-                        definition, found.group(1), destination,
-                        allowed={".sfz"}, purpose="include")
-                    validate_program(child, active, inherited_path=prefix)
-            finally:
-                active.remove(definition)
-
-        manifest_instruments = []
-        unavailable_programs = []
-        for definition in definitions:
-            if definition.resolve() in included:
-                continue
-            try:
-                validate_program(definition, set())
-            except (ValueError, OSError, UnicodeError) as exc:
-                unavailable_programs.append({
-                    "name": definition.stem[:100],
-                    "reason": str(exc)[:180]})
-                continue
-            relative = definition.relative_to(destination).as_posix()
-            manifest_instruments.append({
-                "id": f"sfz-{len(manifest_instruments)}",
-                "name": definition.stem[:100],
-                "sfz_path": relative, "program": 0, "bank": 0})
+        manifest_instruments, unavailable_programs = audit_pack(destination)
         if not manifest_instruments:
             details = "; ".join(item["name"] + ": " + item["reason"]
                                 for item in unavailable_programs[:3])

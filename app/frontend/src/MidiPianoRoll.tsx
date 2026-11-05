@@ -137,6 +137,10 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
   if(missing.length)kitError="Unmapped drum pitches: "+missing.join(", ");
  }
  const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
+ const rowPitches=drumMode
+  ?Array.from(new Set([...kitLanes.map(l=>l.pitch),...notes.map(n=>n.pitch)])).sort((a,b)=>b-a)
+  :Array.from({length:PITCH_HIGH-PITCH_LOW+1},(_,i)=>PITCH_HIGH-i);
+ const rowIndex=new Map(rowPitches.map((pitch,i)=>[pitch,i]));
  const sectionInstruments=selectedSections.flatMap(sectionId=>{
   const key=sectionPresetKeys[sectionId];
   if(!key||key===selectedInstrument)return [];
@@ -167,12 +171,12 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
 
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
  const width=asset?Math.max(540,keyWidth+asset.duration_samples/RATE*pixelsPerSecond+18):540;
- const rollHeight=(topPitch-PITCH_LOW+1)*ROW;
+ const rollHeight=rowPitches.length*ROW;
  const height=rollHeight+VELOCITY_HEIGHT;
  const q=(sample:number)=>snap?Math.round(sample/(RATE*gridMs/1000))*(RATE*gridMs/1000):Math.round(sample);
  const toX=(sample:number)=>keyWidth+sample/RATE*pixelsPerSecond;
  const fromX=(x:number)=>Math.max(0,Math.min(asset?.duration_samples||0,q((x-keyWidth)/pixelsPerSecond*RATE)));
- const toY=(pitch:number)=>(topPitch-pitch)*ROW;
+ const toY=(pitch:number)=>(rowIndex.get(pitch)??-1)*ROW;
  function edit(updated:RollNote[],record=true){setRenderStatus("idle");
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
   setNotes(updated);notesRef.current=updated;setProposalDraft(null);
@@ -266,8 +270,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
   const minPitch=Math.min(...picked.map(n=>n.pitch)),maxPitch=Math.max(...picked.map(n=>n.pitch));
   const delta=Math.max(-low,Math.min(asset.duration_samples-high,timeDelta));
   const pitch=Math.max(PITCH_LOW-minPitch,Math.min(topPitch-maxPitch,pitchDelta));
-  edit(notesRef.current.map(n=>ids.has(n.id)?{...n,pitch:n.pitch+pitch,
-    start_sample:n.start_sample+delta,end_sample:n.end_sample+delta}:n));
+  const drumStep=drumMode&&pitchDelta!==0?Math.sign(pitchDelta):0;
+  edit(notesRef.current.map(n=>{
+   if(!ids.has(n.id))return n;
+   const current=rowIndex.get(n.pitch)??0;
+   const target=drumStep?rowPitches[Math.max(0,Math.min(rowPitches.length-1,current-drumStep))]:n.pitch+pitch;
+   return {...n,pitch:target,start_sample:n.start_sample+delta,end_sample:n.end_sample+delta};
+  }));
  }
  function addAt(x:number,pitch:number){if(!asset)return;
   const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*(drumMode ? 0.15 : 0.5));
@@ -633,8 +642,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
      </div>}
      {asset&&<div className="song-roll-key-overlay" style={{width:keyWidth,height:rollHeight,marginBottom:-rollHeight}}
        aria-label="Sticky MIDI pitch labels">
-       {Array.from({length:topPitch-PITCH_LOW+1},(_,i)=>{
-        const pitch=topPitch-i;
+       {rowPitches.map((pitch,i)=>{
         return <div key={pitch} className={pitch%12===1||pitch%12===3||pitch%12===6||pitch%12===8||pitch%12===10?"is-sharp":""}
           style={{height:ROW}} title={"MIDI "+pitch+": "+(drumMode?kitNames.get(pitch)||"Unmapped note":pitchLabel(pitch))}>
          {drumMode?(kitNames.get(pitch)||"Note "+pitch):pitchLabel(pitch)}
@@ -642,12 +650,12 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
        })}
      </div>}
      <svg width={width} height={height} role="img" aria-label="Editable piano roll">
-      {Array.from({length:topPitch-PITCH_LOW+1},(_,i)=>{const p=topPitch-i;return <g key={p}>
+      {rowPitches.map((p,i)=><g key={p}>
        <rect x={0} y={i*ROW} width={width} height={ROW} fill={p%12===1||p%12===3||p%12===6||p%12===8||p%12===10?"#252e3b":"#303d4a"} stroke="#536171" strokeWidth=".3"/>
        <rect x={keyWidth} y={i*ROW} width={width-keyWidth} height={ROW} fill="transparent" onClick={e=>{const box=e.currentTarget.ownerSVGElement?.getBoundingClientRect();const scale=box?width/box.width:1;const local=(e.clientX-(box?.left||0))*scale;addAt(local,p);}}/>
-      </g>;})}
+      </g>)}
       {Array.from({length:Math.ceil((width-KEY_WIDTH)/(pixelsPerSecond*.5))+1},(_,i)=><line key={i} x1={keyWidth+i*pixelsPerSecond*.5} y1={0} x2={keyWidth+i*pixelsPerSecond*.5} y2={rollHeight} stroke="#a7c0ce" strokeOpacity={i%2===0?.35:.12} pointerEvents="none"/>)}
-      {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(note.pitch<PITCH_LOW||note.pitch>topPitch)return null;return <g key={note.id}>
+      {notes.map(note=>{const x=toX(note.start_sample),w=Math.max(3,toX(note.end_sample)-x),y=toY(note.pitch);if(!rowIndex.has(note.pitch))return null;return <g key={note.id}>
        <rect x={x} y={y+2} width={w} height={ROW-4} rx={2} fill={selectedIds.includes(note.id)?"#e3b965":"#70bbaf"} stroke="#d6eee7" strokeWidth={1} onPointerDown={e=>startDrag(e,note,"move")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
        <rect x={x+Math.max(0,w-6)} y={y+2} width={Math.min(6,w)} height={ROW-4} fill="#467f82" onPointerDown={e=>startDrag(e,note,"resize")} onPointerMove={moveDrag} onPointerUp={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}/>
       </g>;})}

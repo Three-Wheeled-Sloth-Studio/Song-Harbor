@@ -4,10 +4,13 @@ import type {PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent} f
 import type {SongSection} from "./SectionEditor";
 
 export type RollNote={id:string;start_sample:number;end_sample:number;pitch:number;velocity:number;channel:number};
-export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[];percussion?:{mode:"drums";keymap:NonNullable<DrumOptions["drum_keymap"]>}};
+export type Arrangement={asset_id:string;revision:number;sample_rate:number;duration_samples:number;source:{track_id:string;start_sample:number;candidate_id?:string;method?:string};notes:RollNote[];percussion?:{mode:"drums";keymap:NonNullable<DrumOptions["drum_keymap"]>};instrument_sections?:SavedInstrumentRecipe};
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
+type InstrumentRef={pack_id:string;instrument_id:string};
+type SavedInstrumentRecipe={schema_version:1;default:InstrumentRef;section_ids:string[];
+ overrides:({section_id:string}&InstrumentRef)[]};
 type MatchAssignment={pack_id:string;instrument_id:string;instrument_name?:string;variant:string;section:string;evidence:string};
 type DirectionMatch={status:"matched"|"ambiguous"|"no_family_match";family?:{pack_id:string;name:string;evidence:string};
  families?:{pack_id:string;name:string;evidence:string}[];assignments:MatchAssignment[];
@@ -57,6 +60,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [popOut,setPopOut]=useState(false);
  const [selectedSections,setSelectedSections]=useState<string[]>([]);
  const [sectionPresetKeys,setSectionPresetKeys]=useState<Record<string,string>>({});
+ const [defaultPresetKey,setDefaultPresetKey]=useState("");
  const [directionText,setDirectionText]=useState("");
  const [directionBusy,setDirectionBusy]=useState(false);
  const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
@@ -99,16 +103,24 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const kitNames=new Map(kitLanes.map(l=>[l.pitch,l.name]));
  const sectionInstruments=selectedSections.flatMap(sectionId=>{
   const key=sectionPresetKeys[sectionId];
-  if(!key||key===selectedInstrument)return [];
+  if(!key||key===(defaultPresetKey||selectedInstrument))return [];
   const instrument=instruments.find(item=>item.pack_id+"::"+item.id===key);
   return instrument?[{section_id:sectionId,pack_id:instrument.pack_id,instrument_id:instrument.id}]:[];
  });
  const drumOptions:DrumOptions={percussion:drumMode,
   drum_keymap:drumMode?{schema_version:1,mapping_kind:kitKind,lanes:kitLanes}:null,
   ...(selectedSections.length?{section_instruments:sectionInstruments}:{})};
+ const currentDefault=defaultPresetKey||selectedInstrument;
+ const defaultItem=instruments.find(item=>item.pack_id+"::"+item.id===currentDefault);
+ const desiredInstrumentSections:SavedInstrumentRecipe|null=selectedSections.length&&defaultItem?{
+  schema_version:1,default:{pack_id:defaultItem.pack_id,instrument_id:defaultItem.id},
+  section_ids:[...selectedSections].sort(),
+  overrides:sectionInstruments.slice().sort((a,b)=>a.section_id.localeCompare(b.section_id))
+ }:null;
+ const presetDirty=asset!==null&&JSON.stringify(asset.instrument_sections||null)!==JSON.stringify(desiredInstrumentSections);
  const desiredPercussion=drumMode?{mode:"drums",keymap:drumOptions.drum_keymap}:null;
  const metadataDirty=asset!==null&&JSON.stringify(asset.percussion||null)!==JSON.stringify(desiredPercussion);
- const dirty=noteDirty||metadataDirty;
+ const dirty=noteDirty||metadataDirty||presetDirty;
  useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
  useEffect(()=>{
   if(!dirty)return;
@@ -131,7 +143,13 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){setSelectedSections([]);setSectionPresetKeys({});setDirectionMatch(null);setDirectionError("");
+ function open(value:Arrangement){
+  setSelectedSections(value.instrument_sections?.section_ids||[]);
+  setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
+   row.section_id,row.pack_id+"::"+row.instrument_id])));
+  setDefaultPresetKey(value.instrument_sections?value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id:"");
+  if(value.instrument_sections)onInstrumentChange?.(value.instrument_sections.default.pack_id+"::"+value.instrument_sections.default.instrument_id);
+  setDirectionMatch(null);setDirectionError("");
   const saved=value.percussion?.keymap;
   setDrumMode(Boolean(value.percussion)||(value.notes.length>0&&value.notes.every(n=>n.channel===9)));
   setKitKind(saved?.mapping_kind||"gm");
@@ -148,11 +166,15 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  async function load(id:string){if(dirty&&!window.confirm("Discard unsaved MIDI edits?"))return;
   setBusy(true);try{open(await request<Arrangement>(root+"/"+id));}catch(error){onError(String(error));}finally{setBusy(false);}}
  async function save(){if(!asset||busy)return;const operations=diffNotes(asset.notes,notes);
-  if(!operations.length&&!metadataDirty){setMessage("No unsaved changes.");return;}
+  if(!operations.length&&!metadataDirty&&!presetDirty){setMessage("No unsaved changes.");return;}
   if(drumMode&&kitError){onError(kitError);return;}
+  if(selectedSections.length&&!defaultItem){onError("Select an installed default preset.");return;}
+  if(selectedSections.some(id=>!sections.some(s=>s.id===id))){onError("Saved section no longer exists.");return;}
   setBusy(true);try{const saved=await request<Arrangement>(root+"/"+asset.asset_id,{
    method:"PATCH",headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({base_revision:asset.revision,operations,update_percussion:metadataDirty,percussion:desiredPercussion})});
+   body:JSON.stringify({base_revision:asset.revision,operations,update_percussion:metadataDirty,
+    percussion:desiredPercussion,update_instrument_sections:presetDirty,
+    instrument_sections:desiredInstrumentSections})});
    open(saved);setMessage("Arrangement saved, revision "+saved.revision+".");void refresh();
   }catch(error){onError(String(error));}finally{setBusy(false);}}
  const picked=notes.filter(n=>selectedIds.includes(n.id));
@@ -313,6 +335,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
    for(const section of a.targets)patch[section.id]=a.key;
   });
   setSelectedSections(matchSections.map(s=>s.id));
+  setDefaultPresetKey(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
   setSectionPresetKeys(previous=>({...previous,...patch}));
   onInstrumentChange?.(defaultVariant.pack_id+"::"+defaultVariant.instrument_id);
   setDirectionMatch(null);
@@ -338,7 +361,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>
    {asset&&<div className="song-roll-instrument">
-     <label>Render instrument <select aria-label="MIDI render instrument" value={selectedInstrument} onChange={e=>onInstrumentChange?.(e.target.value)}>
+     <label>Render instrument <select aria-label="MIDI render instrument" value={defaultPresetKey||selectedInstrument} onChange={e=>{setDefaultPresetKey(e.target.value);onInstrumentChange?.(e.target.value);}}>
        {instruments.filter(x=>["sf2","sfz"].includes(x.engine)).map(item=><option key={item.pack_id+"::"+item.id} value={item.pack_id+"::"+item.id}>{item.name}</option>)}
      </select></label>
      <small>{selectedSections.length?selectedSections.length+" sections selected · one combined stereo output":"Whole saved arrangement"} · Audio L/R routing follows stem acceptance</small>

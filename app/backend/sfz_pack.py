@@ -17,7 +17,10 @@ MAX_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024  # Large local sample libraries
 MAX_UNPACKED_BYTES = 8 * 1024 * 1024 * 1024  # Still bounded against ZIP bombs
 MAX_FILES = 12000
 MAX_SFZ_BYTES = 2 * 1024 * 1024
-EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
+# SFZ #include legitimately uses .txt data fragments (e.g. Muldjord).
+# These are inspected as text only, never executed or interpreted as code.
+TEXT_EXTENSIONS = {".sfz", ".txt"}
+EXTENSIONS = TEXT_EXTENSIONS | {".wav", ".flac", ".aif", ".aiff", ".ogg"}
 # Ignore documentation/GUI resources rather than executing or importing them.
 METADATA_EXTENSIONS = {".txt", ".md", ".pdf", ".png", ".jpg", ".jpeg", ".xml", ".html", ".htm", ".json", ".svg", ".nki", ".nkm", ".nkc", ".nkr", ".nkx"}
 METADATA_NAMES = {"readme", "license", "copying", "authors", "changelog", "notice"}
@@ -73,7 +76,7 @@ def inspect_archive(archive: Path) -> list[zipfile.ZipInfo]:
             # A referenced skipped sample will still fail the sample check.
             if member.file_size < 0 or member.file_size > MAX_UNPACKED_BYTES:
                 raise ValueError("Oversized sample in SFZ archive")
-            if path.suffix.lower() == ".sfz" and member.file_size > MAX_SFZ_BYTES:
+            if path.suffix.lower() in TEXT_EXTENSIONS and member.file_size > MAX_SFZ_BYTES:
                 raise ValueError("SFZ definition exceeds size limit")
             total += member.file_size
             if total > MAX_UNPACKED_BYTES:
@@ -107,75 +110,135 @@ def resolve_pack_reference(definition: Path, value: str, root: Path,
     raise ValueError("SFZ references a missing or external " + purpose + ": " + value[:120])
 
 
+# Tokenize preprocessing directives wherever they appear in a line.
+# Muldjord uses '<global> #include ...' and multiple #defines per line.
+PREPROCESSOR = re.compile(r'#\s*(include|define)\b', re.IGNORECASE)
+MACRO_NAME = re.compile(r'\$[A-Za-z_][A-Za-z_0-9]*')
+MAX_INCLUDE_DEPTH = 40
+MAX_REFERENCED_SAMPLES = 30000
+MAX_INCLUDE_VISITS = 8000
+
+
 def audit_pack(destination: Path) -> tuple[list[dict], list[dict]]:
-    """Audit playable programs without changing files or claiming missing samples."""
+    """Audit SFZ programs, including pack-local .txt fragments and sample macros.
+
+    Validation simulates the data-only subset of SFZ preprocessing. Never
+    execute a directive, access outside the installed folder, or substitute a
+    missing asset. The actual renderer still handles musical SFZ opcodes.
+    """
     definitions = sorted(p for p in destination.rglob("*")
                          if p.suffix.lower() == ".sfz" and p.is_file())
-    # Work out which .sfz files are mapping fragments. All are still
-    # data-only, but only root programs are advertised to the user.
     included: set[Path] = set()
     for definition in definitions:
-        text = definition.read_text(encoding="utf-8-sig")
-        for found in INCLUDE_REF.finditer(text):
+        for match in re.finditer(r'#\s*include\s+["\x27]([^"\x27]+)["\x27]',
+                                 definition.read_text(encoding="utf-8-sig"), re.I):
             try:
-                included.add(resolve_pack_reference(
-                    definition, found.group(1), destination,
-                    allowed={".sfz"}, purpose="include"))
+                child = resolve_pack_reference(definition, match.group(1), destination,
+                                               allowed=TEXT_EXTENSIONS, purpose="include")
+                if child.suffix.lower() == ".sfz":
+                    included.add(child.resolve())
             except ValueError:
-                # Validate the complete dependency when the corresponding
-                # playable program is inspected, not for unrelated patches.
                 pass
 
-    def validate_program(definition: Path, active: set[Path],
-                         *, inherited_path: str = "") -> None:
-        definition = definition.resolve()
-        if definition in active:
-            raise ValueError("SFZ includes contain a cycle")
-        active.add(definition)
-        try:
-            text = definition.read_text(encoding="utf-8-sig")
-            for directive in SFZ_DIRECTIVE.finditer(text):
-                if directive.group(1).casefold() not in {"include", "define"}:
-                    raise ValueError("SFZ definition uses unsupported preprocessing")
-            defaults = [match.group(1).strip().strip('"').replace("\\", "/")
-                        for match in DEFAULT_PATH.finditer(text)]
-            if len(defaults) > 1:
-                raise ValueError("Multiple SFZ default_path assignments are unsupported")
-            prefix = defaults[0] if defaults else inherited_path
-            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
-                raise ValueError("SFZ default_path escapes the imported pack")
-            for found in SAMPLE_REF.finditer(text):
-                sample = found.group(1).strip().strip('"').replace("\\", "/")
+    def validate_program(definition: Path) -> None:
+        # Macros are scoped to the program, but are shared across nested
+        # text fragments exactly as SFZ preprocessors intend.
+        macros: dict[str, str] = {}
+        prefix = ""
+        visited = 0
+        sampled = 0
+
+        def substitute(text: str) -> str:
+            for _ in range(8):
+                updated = MACRO_NAME.sub(lambda match: macros.get(match.group(0),
+                                                                  match.group(0)), text)
+                if updated == text:
+                    break
+                text = updated
+            if MACRO_NAME.search(text):
+                raise ValueError("SFZ sample path uses an unresolved macro: " + text[:100])
+            return text
+
+        def scan_segment(segment: str, current: Path) -> None:
+            nonlocal prefix, sampled
+            for match in DEFAULT_PATH.finditer(segment):
+                # A path is relative to the program/include context, not to
+                # the source machine; validate with each resolved sample.
+                prefix = substitute(match.group(1).strip().strip('"').replace("\\", "/"))
+                if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
+                    raise ValueError("SFZ default_path escapes the imported pack")
+            for match in SAMPLE_REF.finditer(segment):
+                sample = substitute(match.group(1).strip().strip('"').replace("\\", "/"))
                 if sample == "*silence":
                     continue
-                resolve_pack_reference(definition, prefix + sample, destination,
-                                       allowed=EXTENSIONS - {".sfz"}, purpose="sample")
-            for found in INCLUDE_REF.finditer(text):
-                child = resolve_pack_reference(
-                    definition, found.group(1), destination,
-                    allowed={".sfz"}, purpose="include")
-                validate_program(child, active, inherited_path=prefix)
-        finally:
-            active.remove(definition)
+                sampled += 1
+                if sampled > MAX_REFERENCED_SAMPLES:
+                    raise ValueError("SFZ program has too many sample references")
+                resolve_pack_reference(current, prefix + sample, destination,
+                                       allowed=EXTENSIONS - TEXT_EXTENSIONS,
+                                       purpose="sample")
 
-    manifest_instruments = []
-    unavailable_programs = []
+        def scan_file(current: Path, active: set[Path], depth: int) -> None:
+            nonlocal visited
+            current = current.resolve()
+            if current in active:
+                raise ValueError("SFZ includes contain a cycle")
+            if depth > MAX_INCLUDE_DEPTH:
+                raise ValueError("SFZ include nesting is too deep")
+            visited += 1
+            if visited > MAX_INCLUDE_VISITS:
+                raise ValueError("SFZ has too many expanded includes")
+            active.add(current)
+            try:
+                # ZIP members have already passed the per-text-file size check.
+                content = current.read_text(encoding="utf-8-sig")
+                for raw in content.splitlines():
+                    line = raw.split("//", 1)[0]
+                    cursor = 0
+                    for directive in PREPROCESSOR.finditer(line):
+                        scan_segment(line[cursor:directive.start()], current)
+                        rest = line[directive.end():]
+                        if directive.group(1).lower() == "include":
+                            inc = re.match(r'\s*["\x27]([^"\x27]+)["\x27]', rest)
+                            if not inc:
+                                raise ValueError("Malformed SFZ include directive")
+                            child = resolve_pack_reference(
+                                current, substitute(inc.group(1)), destination,
+                                allowed=TEXT_EXTENSIONS, purpose="include")
+                            scan_file(child, active, depth + 1)
+                            cursor = directive.end() + inc.end()
+                        else:
+                            define = re.match(r'\s*(\$[A-Za-z_][A-Za-z_0-9]*)\s+([^\s#]+)', rest)
+                            if not define:
+                                raise ValueError("Malformed SFZ macro definition")
+                            macros[define.group(1)] = define.group(2)
+                            cursor = directive.end() + define.end()
+                    scan_segment(line[cursor:], current)
+                    # Reject any other preprocessor directives explicitly.
+                    for unknown in re.finditer(r'#\s*([A-Za-z_]+)\b', line):
+                        if unknown.group(1).lower() not in {"include", "define"}:
+                            raise ValueError("SFZ definition uses unsupported preprocessing")
+            finally:
+                active.remove(current)
+
+        scan_file(definition, set(), 0)
+
+    instruments = []
+    unavailable = []
     for definition in definitions:
         if definition.resolve() in included:
             continue
         try:
-            validate_program(definition, set())
+            validate_program(definition)
         except (ValueError, OSError, UnicodeError) as exc:
-            unavailable_programs.append({
-                "name": definition.stem[:100],
-                "reason": str(exc)[:180]})
+            unavailable.append({"name": definition.stem[:100],
+                                "reason": str(exc)[:180]})
             continue
-        relative = definition.relative_to(destination).as_posix()
-        manifest_instruments.append({
-            "id": f"sfz-{len(manifest_instruments)}",
-            "name": definition.stem[:100],
-            "sfz_path": relative, "program": 0, "bank": 0})
-    return manifest_instruments, unavailable_programs
+        instruments.append({"id": f"sfz-{len(instruments)}",
+                            "name": definition.stem[:100],
+                            "sfz_path": definition.relative_to(destination).as_posix(),
+                            "program": 0, "bank": 0})
+    return instruments, unavailable
 
 
 def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = "") -> dict:

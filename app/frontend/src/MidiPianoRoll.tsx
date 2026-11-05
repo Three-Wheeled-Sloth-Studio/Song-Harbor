@@ -396,7 +396,10 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
    <span title={asset?"Saved MIDI arrangement "+asset.asset_id:"No saved arrangement open"}><strong>MIDI score</strong> {asset?notes.length+" notes · revision "+asset.revision:"No score open"}{dirty?" · unsaved edits":""}</span>
    <button type="button" title="Open piano roll editor in a large workspace" aria-label="Open piano roll" onClick={()=>setPopOut(true)}>▦</button>
    {popOut&&createPortal(<div className="song-roll-overlay song-roll-overlay-modeless" role="presentation">
-     <section className="song-piano-roll song-roll-popout song-roll-modeless" role="dialog" aria-label="MIDI piano roll editor" style={{transform:`translate(${position.x}px,${position.y}px)`}}>
+     <section className="song-piano-roll song-roll-popout song-roll-modeless" role="dialog" aria-label="MIDI piano roll editor"
+       onPointerDown={event=>{if(inspector&&!(event.target as HTMLElement).closest(".song-roll-inspector,.song-roll-status-icon"))setInspector(null);}}
+       onKeyDown={event=>{if(event.key==="Escape"&&inspector){event.stopPropagation();setInspector(null);}}}
+       style={{transform:`translate(${position.x}px,${position.y}px)`}}>
        <header className="song-roll-popout-header" onPointerDown={startWindowDrag} onPointerMove={dragWindow} onPointerUp={()=>{moveWindow.current=null;}} onLostPointerCapture={()=>{moveWindow.current=null;}} title="Drag to move piano roll window"><strong>Piano roll · {notes.length} notes</strong><span>{dirty?"Unsaved edits":"Saved revision "+(asset?.revision??"")}</span>
         <button type="button" title="Close piano roll (edits stay in memory until saved or reverted)" aria-label="Close piano roll" onClick={()=>setPopOut(false)}>×</button>
        </header>

@@ -142,11 +142,11 @@ def repair(runtime:Path, pack_id:str)->dict:
         raise ValueError("Official repair requires a known curated publisher")
     official_base(entry)  # Validate trusted publisher before any staging.
     before,missing=sfz_pack.audit_pack(root)
-    samples=sample_root(root)
     if not missing:
         return {"status":"complete","repaired":0,"playable":len(before),
                 "unavailable_program_count":0,"attempted":0,
                 "from_local":0,"from_publisher":0}
+    samples=sample_root(root)
     attempted:set[str]=set()
     new_files:list[Path]=[]
     total=0

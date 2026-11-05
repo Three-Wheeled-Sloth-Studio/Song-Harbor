@@ -42,3 +42,33 @@ Tests: app/backend/tests/test_sfz_pack.py and test_sfz_sample_recovery.py; npm r
 Tests committed previously, not executed in GitHub connector session.
 Preceding handoff: refs/handoffs/dev-integrated-sfz-sample-repair-2026-11-05.md.
 Stay on dev. Main unchanged.
+
+
+## Follow-up QA and prioritization: 2026-11-05, after frontend feedback slice
+
+User screenshot confirms:
+- Import progress indicator worked while importing War Tuba; War Tuba had no incomplete programs to test recovery.
+- Big Rusty Drums selected as a previously installed pack initially shows no prominent incomplete-pack warning or actionable repair entry.
+- Reimport produced 26 ready SFZ definitions and three incomplete definitions; inspection icon works and reveals exact errors:
+  - k_rc_sn: `../Samples/kick_24/rc/sn/k_rc_vl1_rr1.flac`
+  - k_sc_sn: `../Samples/kick_24/sc/sn/k_sc_vl1_rr1.flac`
+  - k_tc_sn: `../Samples/kick_24/tc/sn/k_tc_vl1_rr1.flac`
+- Still no user-visible repair button after reimport.
+
+Decision: **Defer repair UX/provenance fixes while testing full-kit audio.** Three errors are kick-related missing sample references, not evidence that the validated top-level `01-full` program is unusable. 26 playable SFZ definitions have passed file-level validation, but no actual audio render has been verified, and no proof yet that `01-full` contains all needed drum articulations. Do NOT claim these three definitions are unneeded until kit audition and mapping inspection.
+
+Likely defect to revisit: The generic Import SFZ flow passes no `curated_id` and installs the pack with `curated_id=""`; the existing repair action requires `curated_id` to be present. The screenshot's ZIP-derived pack name is compatible with generic import, but does not prove which import path the user used. Reimport may simply have repeated the generic path. Even when the catalogue retains an unavailable-program count, the UI only exposes repair for curated packs, and no passive incomplete warning appears on pack selection or after relaunch. In addition, the installer manifest currently stores an incomplete count but not the individual failed programs, so detailed diagnostics for an older import are not persisted.
+
+Follow-up repair backlog:
+1. Surface a compact persistent warning on selection of any incomplete installed SFZ pack, even generic packs, without dominating the editing canvas.
+2. Expose an Inspect action that can re-audit installed SFZ program definitions on demand and show each failed dependency and whether it is a mapping fragment or independent instrument. Do not equate failed program count with missing audio file count.
+3. Safely identify known curated packs at generic import via verified provenance or explicit user confirmation, not a filename-only trust upgrade. Only then offer approved version-specific publisher repair; preserve opt-in, size limits, no substitution and no overwrite.
+4. Offer local exact-sample repair for generic packs only when source and destination are verifiably inside the installed pack or a user-selected archive; no arbitrary remote fetch.
+5. Avoid reimporting ~620 MB solely to see diagnostics or invoke repair. Check persistent status after relaunch.
+6. If full-kit playback reveals missing kick articulations, elevate repair priority and inspect the precise SFZ dependency graph and original ZIP before choosing recovery.
+
+Immediate drum QA gate:
+- Audition `01-full` plus a second verified complete kit, using actual SFZ note mapping rather than assuming General MIDI.
+- Establish audible kick, snare, closed/open hats, toms, crash and ride with appropriate velocities; note silent notes and unknown mappings.
+- Only then proceed to drum onset classification, editable key mapping, and one combined stereo drum replacement stem with reversible original-volume masks.
+- No changes to `main`; this appendix is documentation only.

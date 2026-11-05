@@ -554,7 +554,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
              disabled={installingPack} onClick={()=>void repairSfzPack()}>
              ↻ Repair missing samples
            </button>
-         </div>
+         </div>}
      {showCurated&&<div className="song-midi-curated" aria-label="Recommended SFZ instrument packs">
        <small>Recommended free instrument packs. Downloads open the publisher's site; ZIP import is local and explicit. Compatibility is not yet verified.</small>
        {curatedSfz.length===0&&<small>All curated SFZ packs have been imported. Installed instruments remain in the Pack selector.</small>}

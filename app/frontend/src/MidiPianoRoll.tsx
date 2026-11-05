@@ -29,7 +29,6 @@ type MatchAssignment={pack_id:string;instrument_id:string;instrument_name?:strin
 type DirectionMatch={status:"matched"|"ambiguous"|"no_family_match";family?:{pack_id:string;name:string;evidence:string};
  families?:{pack_id:string;name:string;evidence:string}[];assignments:MatchAssignment[];
  conflicts?:{section:string;candidates:MatchAssignment[]}[];unresolved_text:string;rule?:string};
-const normalizeScope=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]/g,"");
 
 export type DrumOptions={
  percussion:boolean;

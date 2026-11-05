@@ -129,7 +129,14 @@ def resolve(instruction: str, catalogue: dict) -> dict:
                            for i in range(len(fragment)-len(label)+1)):
                         return scope
             return None
-        scope=scope_for(after) or scope_for(before) or "default"
+        after_scope=scope_for(after)
+        before_scope=scope_for(before)
+        # "chorus Angry, bridge Shifty" names the *next* section
+        # before its variant. Without an explicit connector like "for",
+        # prefer the section immediately before Angry.
+        after_connector=any(token in after[:2] for token in ("for","in","during","on","as"))
+        scope=(before_scope if before_scope and after_scope and not after_connector
+               else after_scope or before_scope or "default")
         resolved.append({**item,"section":scope})
     assignments=[]
     conflicts=[]

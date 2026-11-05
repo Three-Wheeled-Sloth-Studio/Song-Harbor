@@ -60,13 +60,6 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const velocityDrag=useRef<{ids:string[]}|null>(null);
  const notesRef=useRef(notes);notesRef.current=notes;
  const noteDirty=asset!==null&&diffNotes(asset.notes,notes).length>0;
- useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
- useEffect(()=>{
-  if(!dirty)return;
-  const guard=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
-  window.addEventListener("beforeunload",guard);
-  return()=>window.removeEventListener("beforeunload",guard);
- },[dirty]);
  const sfzSelected=instruments.some(x=>x.pack_id+"::"+x.id===selectedInstrument&&x.engine==="sfz");
  const keyWidth=drumMode?148:KEY_WIDTH, topPitch=drumMode?81:PITCH_HIGH;
  let kitLanes:{pitch:number;name:string}[]=[],kitError="";
@@ -92,6 +85,14 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const desiredPercussion=drumMode?{mode:"drums",keymap:drumOptions.drum_keymap}:null;
  const metadataDirty=asset!==null&&JSON.stringify(asset.percussion||null)!==JSON.stringify(desiredPercussion);
  const dirty=noteDirty||metadataDirty;
+ useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
+ useEffect(()=>{
+  if(!dirty)return;
+  const guard=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+  window.addEventListener("beforeunload",guard);
+  return()=>window.removeEventListener("beforeunload",guard);
+ },[dirty]);
+
  const listForTrack=listing.filter(x=>x.source.track_id===sourceTrackId);
  const width=asset?Math.max(540,keyWidth+asset.duration_samples/RATE*pixelsPerSecond+18):540;
  const rollHeight=(topPitch-PITCH_LOW+1)*ROW;

@@ -1225,7 +1225,9 @@ class MidiArrangementFromCandidateRequest(BaseModel):
 
 class MidiArrangementEditRequest(BaseModel):
     base_revision: int = Field(ge=0)
-    operations: list[dict[str,Any]] = Field(min_length=1,max_length=2000)
+    operations: list[dict[str,Any]] = Field(default_factory=list,max_length=2000)
+    update_percussion: bool = False
+    percussion: dict[str,Any] | None = None
 
 @app.get("/api/projects/{ident}/midi-arrangements")
 def list_midi_arrangements(ident:str)->dict[str,Any]:
@@ -1327,6 +1329,9 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         if asset["revision"]!=body.revision:
             raise HTTPException(409,"Saved MIDI arrangement has changed; reopen its latest revision")
         selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
+        if asset.get("percussion"):
+            if not body.percussion or body.drum_keymap != asset["percussion"]["keymap"]:
+                raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
         if selected["engine"] not in ("sf2","sfz"):
             raise HTTPException(400,"Select an installed SF2 or SFZ instrument for arrangement rendering")
         return _render_saved_midi_candidate(project_root,asset_id,asset,selected,font,body.revision,
@@ -1360,6 +1365,9 @@ def render_midi_sections(ident:str,asset_id:str,request:Request,
             asset,project.get("sections",[]),body.section_ids)
         selected,font=instrument_library.resolve_instrument(
             DATA_ROOT,body.pack_id,body.instrument_id)
+        if asset.get("percussion"):
+            if not body.percussion or body.drum_keymap != asset["percussion"]["keymap"]:
+                raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
         if selected["engine"] not in ("sf2","sfz"):
             raise HTTPException(400,"Select installed SF2 or SFZ instrument")
         results=[]
@@ -1398,7 +1406,8 @@ def edit_midi_arrangement(ident:str,asset_id:str,request:Request,
         with lock:
             root=DATA_ROOT/"jobs"/ident
             current=midi_arrangements.read(root,asset_id)
-            updated=midi_arrangements.apply_patch(current,body.base_revision,body.operations)
+            updated=midi_arrangements.apply_patch(current,body.base_revision,body.operations,
+                body.percussion,update_percussion=body.update_percussion)
             midi_arrangements.save(root,updated)
         return updated
     except (ValueError,KeyError,TypeError,OSError) as exc:

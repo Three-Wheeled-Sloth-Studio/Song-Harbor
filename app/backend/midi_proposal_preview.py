@@ -66,10 +66,16 @@ def preview(asset:dict, proposal:dict, sections:list[dict], catalogue:dict)->dic
         update_instrument_sections=proposed_recipe is not None)
     before={row["id"]:row for row in score["notes"]}
     after={row["id"]:row for row in changed["notes"]}
-    added=[after[k] for k in after.keys()-before.keys()]
-    removed=[before[k] for k in before.keys()-after.keys()]
-    edited=[{"before":before[k],"after":after[k]} for k in before.keys()&after.keys()
+    added=[after[k] for k in sorted(after.keys()-before.keys())]
+    removed=[before[k] for k in sorted(before.keys()-after.keys())]
+    edited=[{"before":before[k],"after":after[k]} for k in sorted(before.keys()&after.keys())
             if before[k]!=after[k]]
+    regions=[(round(valid[ident]["start_seconds"]*midi_arrangements.RATE)-start,
+              round(valid[ident]["end_seconds"]*midi_arrangements.RATE)-start)
+             for ident in ids]
+    for note in added+removed+[row["before"] for row in edited]+[row["after"] for row in edited]:
+        if not any(note["start_sample"]>=lo and note["end_sample"]<=hi for lo,hi in regions):
+            raise ValueError("Proposed note edit extends outside selected sections")
     return {
         "status":"review_only","asset_id":score["asset_id"],"base_revision":score["revision"],
         "target_stem":part.casefold(),"selected_sections":ids,

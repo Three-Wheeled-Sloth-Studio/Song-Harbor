@@ -1230,6 +1230,8 @@ class MidiArrangementEditRequest(BaseModel):
     operations: list[dict[str,Any]] = Field(default_factory=list,max_length=2000)
     update_percussion: bool = False
     percussion: dict[str,Any] | None = None
+    update_instrument_sections: bool = False
+    instrument_sections: dict[str,Any] | None = None
 
 @app.get("/api/projects/{ident}/midi-arrangements")
 def list_midi_arrangements(ident:str)->dict[str,Any]:
@@ -1389,9 +1391,23 @@ def render_midi_sections(ident:str,asset_id:str,request:Request,
         if asset.get("percussion"):
             if not body.percussion or drum_keymaps.validate_keymap(body.drum_keymap) != asset["percussion"]["keymap"]:
                 raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
-        choices=section_instrument_selection.resolve(
-            body.section_ids,[entry.model_dump() for entry in body.section_instruments],
-            body.pack_id,body.instrument_id,instrument_library.catalogue(DATA_ROOT))
+        if asset.get("instrument_sections") is not None:
+            saved=asset["instrument_sections"]
+            incoming=section_instrument_selection.validate_recipe({
+                "schema_version":1,
+                "default":{"pack_id":body.pack_id,"instrument_id":body.instrument_id},
+                "overrides":[entry.model_dump() for entry in body.section_instruments]})
+            expected={"schema_version":1,"default":saved["default"],
+                      "overrides":[row for row in saved["overrides"]
+                                   if row["section_id"] in body.section_ids]}
+            if incoming!=expected:
+                raise ValueError("Rendered section presets differ from saved arrangement; reopen latest revision")
+            choices=section_instrument_selection.resolve_recipe(
+                saved,body.section_ids,instrument_library.catalogue(DATA_ROOT))
+        else:
+            choices=section_instrument_selection.resolve(
+                body.section_ids,[entry.model_dump() for entry in body.section_instruments],
+                body.pack_id,body.instrument_id,instrument_library.catalogue(DATA_ROOT))
         results=[]
         for piece in pieces:
             choice=choices[piece["section_id"]]
@@ -1432,7 +1448,9 @@ def edit_midi_arrangement(ident:str,asset_id:str,request:Request,
             root=DATA_ROOT/"jobs"/ident
             current=midi_arrangements.read(root,asset_id)
             updated=midi_arrangements.apply_patch(current,body.base_revision,body.operations,
-                body.percussion,update_percussion=body.update_percussion)
+                body.percussion,update_percussion=body.update_percussion,
+                instrument_sections=body.instrument_sections,
+                update_instrument_sections=body.update_instrument_sections)
             midi_arrangements.save(root,updated)
         return updated
     except (ValueError,KeyError,TypeError,OSError) as exc:

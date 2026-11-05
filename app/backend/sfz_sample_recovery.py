@@ -65,6 +65,20 @@ def _validated_audio(path:Path)->bool:
         return False
     return True
 
+def sample_root(root:Path)->Path:
+    """Locate the unique Samples tree in the actual unpacked folder layout."""
+    hits=[]
+    for directory in root.rglob("*"):
+        if not directory.is_dir() or directory.is_symlink() or directory.name.casefold()!="samples":
+            continue
+        resolved=directory.resolve()
+        if resolved.is_relative_to(root.resolve()):
+            hits.append(resolved)
+        if len(hits)>1:
+            raise ValueError("Multiple Samples folders; cannot safely choose repair destination")
+    return hits[0] if hits else root/"Samples"
+
+
 def _local_candidate(root:Path, relative:PurePosixPath)->Path|None:
     # Match exact relative suffix, ignoring case; never guess from basename.
     wanted=tuple(part.casefold() for part in relative.parts)
@@ -128,6 +142,7 @@ def repair(runtime:Path, pack_id:str)->dict:
         raise ValueError("Official repair requires a known curated publisher")
     official_base(entry)  # Validate trusted publisher before any staging.
     before,missing=sfz_pack.audit_pack(root)
+    samples=sample_root(root)
     if not missing:
         return {"status":"complete","repaired":0,"playable":len(before),
                 "unavailable_program_count":0,"attempted":0,
@@ -149,7 +164,7 @@ def repair(runtime:Path, pack_id:str)->dict:
                     break
             if requested is None:break
             attempted.add(str(requested).casefold())
-            destination=(root.joinpath(*requested.parts)).resolve()
+            destination=(samples.joinpath(*requested.parts[1:])).resolve()
             if not destination.is_relative_to(root) or destination.exists():
                 continue
             source=_local_candidate(root,requested)

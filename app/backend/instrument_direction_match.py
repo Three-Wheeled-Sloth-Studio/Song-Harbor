@@ -93,26 +93,44 @@ def resolve(instruction: str, catalogue: dict) -> dict:
                 candidates.append({"pack_id":pack_id,"instrument_id":item.get("id"),
                                    "instrument_name":item.get("name"),
                                    "variant":variant,"evidence":variant})
-    resolved=[]
+    # Treat each variant mention as its own phrase. A following qualifier
+    # belongs to the preceding variant, never to the next named variant.
+    # Examples: "Dirty default, Angry for choruses, Shifty for bridges".
+    tokens=words(instruction)
+    occurrences=[]
     for item in candidates:
-        variant=item["variant"]
-        section="default"
-        # Match the variant to the nearest explicit section label in a bounded
-        # phrase; do not infer a section from the instrument's sample name.
-        tokens=words(instruction)
-        needle=words(variant)
-        locations=[i for i in range(len(tokens)-len(needle)+1) if tokens[i:i+len(needle)]==needle]
-        nearest=None
-        for pos in locations:
+        needle=words(item["variant"])
+        for index in range(len(tokens)-len(needle)+1):
+            if tokens[index:index+len(needle)]==needle:
+                occurrences.append((index,index+len(needle),item))
+    occurrences.sort(key=lambda row:(row[0],-(row[1]-row[0])))
+    # Exclude duplicate matches for the same instrument at the same position.
+    unique=[]
+    seen=set()
+    for begin,finish,item in occurrences:
+        key=(begin,finish,str(item["instrument_id"]))
+        if key not in seen:
+            seen.add(key)
+            unique.append((begin,finish,item))
+    resolved=[]
+    for number,(begin,finish,item) in enumerate(unique):
+        preceding=unique[number-1][1] if number else 0
+        following=unique[number+1][0] if number+1<len(unique) else len(tokens)
+        # Postfix syntax takes precedence: "angry for choruses".
+        after=tokens[finish:min(following,finish+5)]
+        before=tokens[max(preceding,begin-4):begin]
+        def scope_for(fragment:list[str])->str|None:
+            if any(word in fragment for word in ("default","normally","usually")):
+                return "default"
             for scope,aliases in SECTION_TOKENS.items():
                 for alias in aliases:
                     label=words(alias)
-                    for j in range(len(tokens)-len(label)+1):
-                        if tokens[j:j+len(label)]==label and abs(j-pos)<=4:
-                            d=abs(j-pos)
-                            if nearest is None or d<nearest[0]:nearest=(d,scope)
-        if nearest is not None:section=nearest[1]
-        resolved.append({**item,"section":section})
+                    if any(fragment[i:i+len(label)]==label
+                           for i in range(len(fragment)-len(label)+1)):
+                        return scope
+            return None
+        scope=scope_for(after) or scope_for(before) or "default"
+        resolved.append({**item,"section":scope})
     assignments=[]
     conflicts=[]
     for section in sorted({r["section"] for r in resolved}):

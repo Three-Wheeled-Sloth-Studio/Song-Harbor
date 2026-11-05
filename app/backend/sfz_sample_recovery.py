@@ -130,7 +130,8 @@ def repair(runtime:Path, pack_id:str)->dict:
     before,missing=sfz_pack.audit_pack(root)
     if not missing:
         return {"status":"complete","repaired":0,"playable":len(before),
-                "unavailable_program_count":0,"attempted":0}
+                "unavailable_program_count":0,"attempted":0,
+                "from_local":0,"from_publisher":0}
     attempted:set[str]=set()
     new_files:list[Path]=[]
     total=0
@@ -171,7 +172,14 @@ def repair(runtime:Path, pack_id:str)->dict:
                 else:official_count+=1
         valid,remaining=sfz_pack.audit_pack(root)
         if not valid:
-            raise ValueError("Repair could not make any SFZ program playable; nothing installed")
+            # An unavailable publisher file is a normal, reportable outcome.
+            # Roll back all speculative additions; keep the original pack and
+            # its manifest intact so the user can retry later.
+            for path in reversed(new_files):path.unlink(missing_ok=True)
+            return {"status":"unavailable","repaired":0,"from_local":0,
+                    "from_publisher":0,"attempted":len(attempted),
+                    "playable":0,"unavailable_program_count":len(remaining),
+                    "unavailable_programs":remaining[:10]}
         # Publisher assets are fetched via versioned HTTPS. Without a pinned
         # per-file hash this is origin verification, NOT cryptographic identity.
         manifest["instruments"]=valid

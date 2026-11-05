@@ -133,6 +133,40 @@ class SFZPackTests(unittest.TestCase):
         self.assertEqual(manifest["instruments"][0]["name"],"02-basic")
         self.assertFalse((pack/"Presets").exists())
 
+    def test_missing_optional_articulation_does_not_block_complete_basic_kit(self):
+        self.make_zip({
+            "Programs/01-full.sfz": (
+                '#include "mappings/kick_rc.sfz"\\n'
+            ),
+            "Programs/02-basic.sfz": (
+                '#include "mappings/kick_basic.sfz"\\n'
+            ),
+            "Programs/mappings/kick_rc.sfz": (
+                "<region> sample=../Samples/kick_24/rc/sn/k_rc_vl1_rr1.flac\\n"
+            ),
+            "Programs/mappings/kick_basic.sfz": (
+                "<region> sample=../Samples/kick_24/kick/kick_vl1_rr1.flac\\n"
+            ),
+            "Samples/kick_24/kick/kick_vl1_rr1.flac":b"sample",
+        })
+        result=sfz_pack.install_zip(self.root,self.archive,"Partially complete kit")
+        self.assertEqual(result["instruments"],1)
+        self.assertEqual(result["unavailable_program_count"],1)
+        self.assertEqual(result["unavailable_programs"][0]["name"],"01-full")
+        self.assertIn("k_rc_vl1_rr1.flac",result["unavailable_programs"][0]["reason"])
+        pack=next((self.root/"instrument-packs").iterdir())
+        manifest=json.loads((pack/"manifest.json").read_text())
+        self.assertEqual([row["name"] for row in manifest["instruments"]],["02-basic"])
+
+    def test_missing_sample_still_rejects_if_every_program_is_incomplete(self):
+        self.make_zip({
+            "Programs/01-full.sfz":'#include "mapping.sfz"\\n',
+            "Programs/mapping.sfz":"<region> sample=../Samples/absent.flac\\n",
+        })
+        with self.assertRaisesRegex(ValueError,"no complete instrument programs"):
+            sfz_pack.install_zip(self.root,self.archive,"Broken kit")
+        self.assertEqual(list((self.root/"instrument-packs").iterdir()),[])
+
     def test_include_cannot_escape_imported_pack(self):
         self.make_zip({
             "Programs/Kit.sfz":'#include "../../external.sfz"\n',

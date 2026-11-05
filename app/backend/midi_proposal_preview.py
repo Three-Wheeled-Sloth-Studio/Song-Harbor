@@ -7,7 +7,7 @@ from __future__ import annotations
 import midi_arrangements
 import section_instrument_selection
 
-MAX_PROPOSALS=200
+MAX_PROPOSALS=2000
 ALLOWED_PARTS={"bass","drums","guitar","piano","other"}
 
 

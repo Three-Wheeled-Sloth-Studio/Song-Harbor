@@ -63,6 +63,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [instrumentPack,setInstrumentPack]=useState(persisted?.candidates[persisted.index]?.pack_id||"song-harbor-core");
  const [catalogue,setCatalogue]=useState<InstrumentCatalogue>({packs:[],instruments:[],fluidsynth_ready:false});
  const [installingPack,setInstallingPack]=useState(false);
+ const [sfzRecovery,setSfzRecovery]=useState<{packId:string;missing:number}|null>(null);
  const [starters,setStarters]=useState<Starter[]>([]);
  const [curatedSfz,setCuratedSfz]=useState<CuratedSfz[]>([]);
  const [showCurated,setShowCurated]=useState(false);
@@ -135,6 +136,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
  async function installSfzPack(file:File|undefined, name?:string, curatedId?:string){
+   setSfzRecovery(null);
    if(!file||installingPack)return;
    setInstallingPack(true);setError("");setMessage("");
    try{
@@ -149,7 +151,28 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      setCatalogue(data);setCuratedSfz(remaining.packs);setPackFilter(installed.pack_id);
      const first=data.instruments.find(x=>x.pack_id===installed.pack_id);
      if(first)chooseInstrument(first.pack_id,first.id);
+     if(installed.unavailable_program_count&&curatedId)
+       setSfzRecovery({packId:installed.pack_id,missing:installed.unavailable_program_count});
      setMessage("Imported "+installed.instruments+" playable SFZ instruments"+(installed.unavailable_program_count?" ("+installed.unavailable_program_count+" incomplete programs excluded"+(installed.unavailable_programs?.length?"; e.g. "+installed.unavailable_programs[0].name:"")+")":"")+".");
+   }catch(e){setError(String(e));}finally{setInstallingPack(false);}
+ }
+ async function repairSfzPack(){
+   if(!sfzRecovery||installingPack)return;
+   setInstallingPack(true);setError("");
+   try{
+     const result=await req<{status:string;playable:number;repaired:number;from_local:number;from_publisher:number;
+       attempted:number;unavailable_program_count:number}>("/api/instruments/sfz/repair-missing",{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({pack_id:sfzRecovery.packId})});
+     const library=await req<InstrumentCatalogue>("/api/instruments");
+     setCatalogue(library);setPackFilter(sfzRecovery.packId);
+     const first=library.instruments.find(item=>item.pack_id===sfzRecovery.packId);
+     if(first)chooseInstrument(first.pack_id,first.id);
+     setSfzRecovery(result.unavailable_program_count?{
+       packId:sfzRecovery.packId,missing:result.unavailable_program_count}:null);
+     setMessage(result.repaired?result.repaired+" exact samples repaired. "+result.playable+
+       " playable programs; "+result.unavailable_program_count+" incomplete.":
+       "No exact replacement files found locally or at the curated publisher. Existing programs unchanged.");
    }catch(e){setError(String(e));}finally{setInstallingPack(false);}
  }
  async function installStarter(starter:Starter){
@@ -481,6 +504,11 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
            {chosenInstrument?.engine==="sfz"&&!catalogue.sfizz_ready&&<span role="status" className="song-midi-fluid-setup">sfizz renderer required <button type="button" disabled={!onConfigureSfizz} onClick={onConfigureSfizz}>Configure sfizz</button></span>}
            {chosenInstrument?.engine==="sf2"&&!catalogue.fluidsynth_ready&&<span className="song-midi-fluid-setup" role="status">FluidSynth required <button type="button" onClick={onConfigureFluidSynth} disabled={!onConfigureFluidSynth} title="Open FluidSynth settings to browse, detect and verify the executable">Configure FluidSynth</button></span>}
            <small title="Current source pack">{selectedPackName}</small>
+            {sfzRecovery&&<button type="button"
+              title={"Try exact missing samples locally and at the approved publisher for "+sfzRecovery.missing+" incomplete programs. No substitutes."}
+              disabled={installingPack} onClick={()=>void repairSfzPack()}>
+              {installingPack?"…":"↻"} Repair missing samples
+            </button>}
          </div>
      {showCurated&&<div className="song-midi-curated" aria-label="Recommended SFZ instrument packs">
        <small>Recommended free instrument packs. Downloads open the publisher's site; ZIP import is local and explicit. Compatibility is not yet verified.</small>

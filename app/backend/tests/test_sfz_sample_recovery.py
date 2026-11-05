@@ -95,6 +95,32 @@ class RecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"no complete instrument programs"):
                 self.install({"Programs/Kit.sfz":"<region> sample=../Samples/kick/kick.flac"},curated="")
 
+    def test_nested_archive_prefix_kept_for_recovered_audio(self):
+        result=self.install({
+            "Big_Rusty/Programs/Kit.sfz":"<region> sample=../Samples/kick/Kick.flac",
+            "Big_Rusty/Samples/kick/Existing.flac":FLAC,
+        })
+        pack=self.root/"instrument-packs"/result["pack_id"]
+        self.assertEqual(recovery.sample_root(pack),pack/"Big_Rusty"/"Samples")
+        def fetched(_entry,_relative,target):
+            target.write_bytes(FLAC)
+            return True
+        with patch.object(recovery,"_download_exact",side_effect=fetched):
+            response=recovery.repair(self.root,result["pack_id"])
+        self.assertEqual(response["playable"],1)
+        self.assertTrue((pack/"Big_Rusty"/"Samples"/"kick"/"Kick.flac").is_file())
+        self.assertFalse((pack/"Samples").exists())
+
+    def test_multiple_samples_roots_refuse_repair(self):
+        result=self.install({
+            "Programs/Kit.sfz":"<region> sample=../Samples/kick/Kick.flac",
+            "A/Samples/One.flac":FLAC,
+            "B/Samples/Two.flac":FLAC,
+        })
+        with patch.object(recovery,"_download_exact",side_effect=AssertionError("No network")):
+            with self.assertRaisesRegex(ValueError,"Multiple Samples folders"):
+                recovery.repair(self.root,result["pack_id"])
+
     def test_relative_sample_rejects_arbitrary_paths(self):
         self.assertIsNone(recovery.relative_sample("other error"))
         self.assertIsNone(recovery.relative_sample(recovery.MISSING+"../../secret.flac"))

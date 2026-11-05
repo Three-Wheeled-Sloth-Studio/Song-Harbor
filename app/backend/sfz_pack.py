@@ -157,6 +157,10 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                 raise ValueError("SFZ default_path escapes the imported pack")
             for found in SAMPLE_REF.finditer(text):
                 sample = found.group(1).strip().strip('"').replace("\\\\", "/")
+                # SFZ defines *silence as an internal, sample-free region.
+                # It is not a path and must not be resolved against the ZIP.
+                if sample == "*silence":
+                    continue
                 resolve_pack_reference(definition, prefix + sample, destination,
                                        allowed=EXTENSIONS - {".sfz"}, purpose="sample")
         manifest_instruments = []

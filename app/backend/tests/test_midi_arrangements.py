@@ -130,6 +130,39 @@ class ArrangementTests(unittest.TestCase):
         self.assertNotIn("percussion",cleaned)
         self.assertEqual(cleaned["notes"][0]["channel"],0)
 
+    def test_instrument_recipe_revision_and_roundtrip(self):
+        asset=self.sample()
+        recipe={"schema_version":1,
+                "default":{"pack_id":"growly","instrument_id":"dirty"},
+                "section_ids":["bridge","chorus"],
+                "overrides":[{"section_id":"bridge","pack_id":"growly","instrument_id":"shifty"},
+                             {"section_id":"chorus","pack_id":"growly","instrument_id":"angry"}]}
+        saved=midi.apply_patch(asset,0,[],instrument_sections=recipe,update_instrument_sections=True)
+        self.assertEqual(saved["revision"],1)
+        self.assertEqual(saved["instrument_sections"]["section_ids"],["bridge","chorus"])
+        self.assertNotIn("instrument_sections",asset)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            midi.save(root,saved)
+            loaded=midi.read(root,saved["asset_id"])
+            self.assertEqual(loaded["instrument_sections"],saved["instrument_sections"])
+        with self.assertRaisesRegex(ValueError,"Stale"):
+            midi.apply_patch(saved,0,[],instrument_sections=recipe,update_instrument_sections=True)
+        cleared=midi.apply_patch(saved,1,[],instrument_sections=None,update_instrument_sections=True)
+        self.assertNotIn("instrument_sections",cleared)
+
+    def test_reject_duplicate_or_unselected_preset_override(self):
+        asset=self.sample()
+        recipe={"schema_version":1,
+                "default":{"pack_id":"growly","instrument_id":"dirty"},
+                "section_ids":["chorus"],
+                "overrides":[{"section_id":"bridge","pack_id":"growly","instrument_id":"shifty"}]}
+        with self.assertRaisesRegex(ValueError,"saved section selection"):
+            midi.apply_patch(asset,0,[],instrument_sections=recipe,update_instrument_sections=True)
+        recipe["overrides"]=[{"section_id":"chorus","pack_id":"growly","instrument_id":"angry"}]*2
+        with self.assertRaisesRegex(ValueError,"Duplicate"):
+            midi.apply_patch(asset,0,[],instrument_sections=recipe,update_instrument_sections=True)
+
     def test_no_implicit_quantization(self):
         asset=midi.create("drums",0,3,[{"start":.137,"end":.291,"pitch":38}])
         self.assertEqual(asset["notes"][0]["start_sample"],6576)

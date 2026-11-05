@@ -45,6 +45,7 @@ import midi_section_slices
 import midi_section_composite
 import polyphonic_midi
 import drum_keymaps
+import drum_transcription
 import instrument_direction_match
 import section_instrument_selection
 import midi_proposal_preview
@@ -1195,6 +1196,48 @@ class BassMidiRenderRequest(BaseModel):
     instrument: Literal["bowed", "plucked", "warm_pad"] = "bowed"
     pack_id: str = Field(default="song-harbor-core",max_length=80)
     instrument_id: str = Field(default="",max_length=120)
+
+
+
+@app.post("/api/projects/{ident}/drum-midi/analyze")
+def analyze_drum_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->dict[str,Any]:
+    """Save a reviewable transient estimate; never claim exact drum identification."""
+    require_local_origin(request)
+    job=get_job(ident)
+    record=projects.read_project(DATA_ROOT,ident) if job else None
+    if not record or not job or job.get("status")!="complete":
+        raise HTTPException(404,"Completed song not found")
+    if not dependencies.resolve(APP_ROOT):
+        raise HTTPException(409,"FFmpeg setup required to transcribe drums")
+    song_duration=resolved_song_duration(record,job)
+    if body.duration_seconds>drum_transcription.MAX_REGION or body.start_seconds+body.duration_seconds>song_duration+.005:
+        raise HTTPException(400,"Select at most 10 minutes inside the song")
+    try:
+        rows=track_lifecycle.ensure_identities(record)
+        row=next((item for item in rows if item.get("track_id")==body.track_id),None)
+        if not row:raise ValueError("Selected drum source is unavailable")
+        filename=str(row.get("working_filename",""))
+        stem_root=(DATA_ROOT/"jobs"/ident/"stems").resolve()
+        source=(stem_root/filename).resolve()
+        if source.parent!=stem_root or not source.is_file() or source.suffix.lower()!=".wav":
+            raise ValueError("Selected source stem WAV is unavailable")
+        track_start=float(row.get("start_seconds") or 0)
+        local_start=body.start_seconds-track_start
+        track_duration=float(row.get("duration_seconds") or song_duration)
+        if local_start<-.005 or local_start+body.duration_seconds>track_duration+.005:
+            raise ValueError("Drum region falls outside the selected stem")
+        hits=drum_transcription.transcribe_region(source,max(0,local_start),body.duration_seconds,
+                                                   dependency_tool("ffmpeg"))
+        if not hits:raise ValueError("No convincing drum attacks detected; choose a clearer region")
+        asset=midi_arrangements.create(body.track_id,body.start_seconds,body.duration_seconds,hits,
+                                       "Exploratory spectral drum-onset estimate; review classifications")
+        asset["notes"]=[{**note,"channel":9} for note in asset["notes"]]
+        asset["percussion"]={"mode":"drums","keymap":{"schema_version":1,"mapping_kind":"custom",
+            "lanes":[{"pitch":pitch,"name":label} for pitch,label in drum_transcription.LANES.items()]}}
+        midi_arrangements.save(DATA_ROOT/"jobs"/ident,asset)
+        return asset
+    except (ValueError,OSError,subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400,str(exc)) from exc
 
 
 @app.post("/api/projects/{ident}/bass-midi/analyze")

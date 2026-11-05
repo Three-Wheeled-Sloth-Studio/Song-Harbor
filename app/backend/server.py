@@ -1376,6 +1376,8 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
         asset=midi_arrangements.read(project_root,asset_id)
         if asset["revision"]!=body.revision:
             raise HTTPException(409,"Saved MIDI arrangement has changed; reopen its latest revision")
+        if asset.get("instrument_sections") is not None:
+            raise HTTPException(400,"This arrangement has saved section presets. Render its selected sections as one combined stem.")
         selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
         if asset.get("percussion"):
             if not body.percussion or drum_keymaps.validate_keymap(body.drum_keymap) != asset["percussion"]["keymap"]:

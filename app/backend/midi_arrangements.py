@@ -12,6 +12,7 @@ import os
 import re
 import uuid
 from pathlib import Path
+import drum_keymaps
 
 SCHEMA_VERSION=1
 MAX_NOTES=20000
@@ -59,6 +60,16 @@ def validate(asset:dict)->dict:
     notes=[_note(n,duration) for n in rows]
     if len({n["id"] for n in notes})!=len(notes):raise ValueError("Duplicate note IDs")
     clean=copy.deepcopy(asset)
+    percussion=clean.get("percussion")
+    if percussion is not None:
+        if not isinstance(percussion,dict) or percussion.get("mode")!="drums":
+            raise ValueError("Invalid percussion arrangement metadata")
+        keymap=drum_keymaps.validate_keymap(percussion.get("keymap"))
+        if any(n["channel"]!=9 for n in notes):
+            raise ValueError("Drum arrangement requires MIDI channel 10")
+        missing={n["pitch"] for n in notes}-{lane["pitch"] for lane in keymap["lanes"]}
+        if missing:raise ValueError("Unmapped drum pitches: "+", ".join(map(str,sorted(missing))))
+        clean["percussion"]={"mode":"drums","keymap":keymap}
     clean["notes"]=sorted(notes,key=lambda n:(n["start_sample"],n["pitch"],n["id"]))
     return clean
 
@@ -82,7 +93,7 @@ def create(track_id:str,start_seconds:float,duration_seconds:float,notes:list[di
            "notes":rows}
     return validate(asset)
 
-def apply_patch(asset:dict,base_revision:int,operations:list[dict])->dict:
+def apply_patch(asset:dict,base_revision:int,operations:list[dict],percussion:dict|None=None,*,update_percussion:bool=False)->dict:
     """Atomic edit transaction. Operations: add, update, remove.
 
     Update explicitly supplies a patch of note fields. No silent moving of
@@ -90,7 +101,7 @@ def apply_patch(asset:dict,base_revision:int,operations:list[dict])->dict:
     """
     current=validate(asset)
     if base_revision!=current["revision"]:raise ValueError("Stale MIDI revision")
-    if not isinstance(operations,list) or not 1<=len(operations)<=MAX_OPERATIONS:
+    if not isinstance(operations,list) or len(operations)>MAX_OPERATIONS or (not operations and not update_percussion):
         raise ValueError("Invalid MIDI edit transaction")
     notes={n["id"]:n for n in current["notes"]}
     for op in operations:
@@ -114,6 +125,9 @@ def apply_patch(asset:dict,base_revision:int,operations:list[dict])->dict:
                     raise ValueError("Invalid MIDI note changes")
                 notes[ident]=_note({**notes[ident],**changes},current["duration_samples"])
     current["notes"]=list(notes.values())
+    if update_percussion:
+        if percussion is None:current.pop("percussion",None)
+        else:current["percussion"]=percussion
     current["revision"]+=1
     return validate(current)
 
@@ -146,6 +160,7 @@ def list_assets(job_root:Path)->list[dict]:
             item=validate(json.loads(path.read_text(encoding="utf-8")))
             items.append({"asset_id":item["asset_id"],"revision":item["revision"],
                           "source":item["source"],"note_count":len(item["notes"]),
-                          "duration_samples":item["duration_samples"]})
+                          "duration_samples":item["duration_samples"],
+                          "percussion":item.get("percussion")})
         except (ValueError,KeyError,TypeError,OSError,json.JSONDecodeError):continue
     return items

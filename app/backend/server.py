@@ -1268,7 +1268,7 @@ class MidiMockProposalRequest(BaseModel):
     base_revision: int = Field(ge=0)
     source_track_id: str = Field(min_length=1,max_length=100)
     target_stem: str = Field(min_length=1,max_length=20)
-    section_ids: list[str] = Field(min_length=1,max_length=8)
+    section_ids: list[str] = Field(min_length=1,max_length=64)
     velocity_delta: int = Field(default=5,ge=-20,le=20)
 
 
@@ -1466,8 +1466,8 @@ class SectionInstrumentOverride(BaseModel):
 
 
 class SectionalMidiRenderRequest(PolyphonicRenderRequest):
-    section_ids: list[str] = Field(min_length=1,max_length=8)
-    section_instruments: list[SectionInstrumentOverride] = Field(default_factory=list,max_length=8)
+    section_ids: list[str] = Field(min_length=1,max_length=64)
+    section_instruments: list[SectionInstrumentOverride] = Field(default_factory=list,max_length=64)
 
 
 @app.post("/api/projects/{ident}/midi-arrangements/{asset_id}/render-sections")
@@ -1648,7 +1648,7 @@ def render_bass_midi_candidate(ident:str,candidate_id:str,request:Request,
 
 
 class ComposeMidiSectionsRequest(BaseModel):
-    candidate_ids: list[str] = Field(min_length=1,max_length=8)
+    candidate_ids: list[str] = Field(min_length=1,max_length=64)
 
 
 @app.post("/api/projects/{ident}/bass-midi/compose-sections")

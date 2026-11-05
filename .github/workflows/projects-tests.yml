@@ -32,6 +32,8 @@ jobs:
           # Separate Python processes preserve test isolation.
           patterns=(
             test_instrument_library.py
+            test_sfz_pack.py
+            test_sfz_sample_recovery.py
             test_bass_midi.py
             test_midi_arrangements.py
             test_drum_transcription.py

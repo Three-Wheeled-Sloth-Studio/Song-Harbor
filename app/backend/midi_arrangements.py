@@ -13,6 +13,7 @@ import re
 import uuid
 from pathlib import Path
 import drum_keymaps
+import section_instrument_selection
 
 SCHEMA_VERSION=1
 MAX_NOTES=20000
@@ -70,6 +71,9 @@ def validate(asset:dict)->dict:
         missing={n["pitch"] for n in notes}-{lane["pitch"] for lane in keymap["lanes"]}
         if missing:raise ValueError("Unmapped drum pitches: "+", ".join(map(str,sorted(missing))))
         clean["percussion"]={"mode":"drums","keymap":keymap}
+    if "instrument_sections" in clean:
+        clean["instrument_sections"]=section_instrument_selection.validate_recipe(
+            clean["instrument_sections"])
     clean["notes"]=sorted(notes,key=lambda n:(n["start_sample"],n["pitch"],n["id"]))
     return clean
 
@@ -93,7 +97,9 @@ def create(track_id:str,start_seconds:float,duration_seconds:float,notes:list[di
            "notes":rows}
     return validate(asset)
 
-def apply_patch(asset:dict,base_revision:int,operations:list[dict],percussion:dict|None=None,*,update_percussion:bool=False)->dict:
+def apply_patch(asset:dict,base_revision:int,operations:list[dict],
+                percussion:dict|None=None,*,update_percussion:bool=False,
+                instrument_sections:dict|None=None,update_instrument_sections:bool=False)->dict:
     """Atomic edit transaction. Operations: add, update, remove.
 
     Update explicitly supplies a patch of note fields. No silent moving of
@@ -101,7 +107,7 @@ def apply_patch(asset:dict,base_revision:int,operations:list[dict],percussion:di
     """
     current=validate(asset)
     if base_revision!=current["revision"]:raise ValueError("Stale MIDI revision")
-    if not isinstance(operations,list) or len(operations)>MAX_OPERATIONS or (not operations and not update_percussion):
+    if not isinstance(operations,list) or len(operations)>MAX_OPERATIONS or (not operations and not update_percussion and not update_instrument_sections):
         raise ValueError("Invalid MIDI edit transaction")
     notes={n["id"]:n for n in current["notes"]}
     for op in operations:
@@ -128,6 +134,9 @@ def apply_patch(asset:dict,base_revision:int,operations:list[dict],percussion:di
     if update_percussion:
         if percussion is None:current.pop("percussion",None)
         else:current["percussion"]=percussion
+    if update_instrument_sections:
+        if instrument_sections is None:current.pop("instrument_sections",None)
+        else:current["instrument_sections"]=instrument_sections
     current["revision"]+=1
     return validate(current)
 
@@ -161,6 +170,7 @@ def list_assets(job_root:Path)->list[dict]:
             items.append({"asset_id":item["asset_id"],"revision":item["revision"],
                           "source":item["source"],"note_count":len(item["notes"]),
                           "duration_samples":item["duration_samples"],
-                          "percussion":item.get("percussion")})
+                          "percussion":item.get("percussion"),
+                          "instrument_sections":item.get("instrument_sections")})
         except (ValueError,KeyError,TypeError,OSError,json.JSONDecodeError):continue
     return items

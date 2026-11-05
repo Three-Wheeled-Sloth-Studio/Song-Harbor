@@ -1006,7 +1006,7 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-roll-popout-header strong{font-size:14px}
 .song-roll-popout-header>span{font-size:11px;color:var(--tws-color-text-muted)}
 .song-roll-popout-header>button{margin-left:auto;min-width:29px;min-height:29px;font-size:18px}
-.song-roll-popout .song-roll-scroller{flex:1 1 auto;resize:none;min-height:0;max-height:none;overflow:auto}
+.song-roll-popout .song-roll-scroller{flex:1 0 260px;resize:none;min-height:180px;max-height:none;overflow:auto}
 .song-roll-popout .song-roll-toolbar{flex:0 0 auto}
 .song-roll-popout>small{flex:0 0 auto;line-height:1.3}
 .song-roll-popout .song-roll-toolbar button{min-width:28px;min-height:27px}
@@ -1052,3 +1052,82 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-midi-audition-status{padding:4px 7px;font-size:11px;color:var(--tws-color-text-muted);border-left:2px solid var(--tws-color-action-primary,#88bed6)}
 .song-midi-section-batch>label{display:inline-flex;align-items:center;gap:4px;font-size:11px}
 .song-midi-section-batch>label input{min-width:75px;width:126px;max-width:190px}
+
+/* Direction-first MIDI authoring: only the next action and status stay in
+   the primary workflow. Inspectors float above the editor, never above its
+   height budget. The surrounding popout can scroll without trapping notes. */
+.song-roll-popout.song-roll-modeless{
+  position:relative;overflow-y:auto;overflow-x:hidden;
+  scrollbar-gutter:stable;
+}
+.song-roll-direction-row{
+  display:flex;align-items:center;gap:7px;flex:0 0 auto;min-width:0;
+}
+.song-roll-direction-row textarea{
+  flex:1 1 auto;min-width:130px;min-height:53px;max-height:110px;
+  resize:vertical;padding:8px;line-height:1.35;
+  color:var(--tws-color-text-primary,#ecf0ee);
+  background:var(--tws-color-surface-inset,#15212b);
+  border:1px solid var(--tws-color-border-strong,#6c8793);border-radius:5px;
+}
+.song-roll-direction-row textarea::placeholder{color:var(--tws-color-text-muted,#a9b8bf)}
+.song-roll-direction-row .song-roll-primary-action{
+  flex:0 0 auto;min-height:36px;min-width:123px;padding:5px 12px;
+  border:1px solid #8bdbd5;background:#24696b;color:#f7ffff;
+  border-radius:7px;font-size:12px;font-weight:650;cursor:pointer;
+}
+.song-roll-direction-row .song-roll-primary-action:not(:disabled):hover{background:#33858a}
+.song-roll-direction-row .song-roll-primary-action:disabled{opacity:.46;cursor:default}
+.song-roll-direction-row .song-roll-status-icon{
+  flex:0 0 30px;width:30px;height:32px;padding:0;border-radius:50%;
+  border:1px solid var(--tws-color-border-strong,#6c8793);
+  background:#233744;color:#c7d5dc;font-size:17px;cursor:pointer;
+}
+.song-roll-direction-row .song-roll-status-icon.is-ready{
+  border-color:#6acc9b;background:#204c3b;color:#b2f6c9;
+}
+.song-roll-direction-row .song-roll-status-icon.is-error{
+  border-color:#d98e79;background:#512f2d;color:#ffbdaf;
+}
+.song-roll-direction-row .song-roll-status-icon.is-working{
+  border-color:#d9b766;background:#4d4124;color:#fff0ac;
+}
+.song-roll-direction-row .song-roll-status-icon[aria-expanded="true"]{
+  outline:2px solid #9fd9d8;outline-offset:1px;
+}
+.song-roll-direction-row .song-roll-accept-action{
+  flex:0 0 32px;height:32px;border-radius:50%;
+  border:1px solid #87d9b0;background:#255c45;color:#d7ffeb;
+  font-size:18px;cursor:pointer;
+}
+.song-roll-direction-row button:focus-visible,.song-roll-inspector button:focus-visible{
+  outline:2px solid #b8ece9;outline-offset:2px;
+}
+.song-roll-compact-status{
+  display:flex;align-items:center;gap:9px;flex:0 0 auto;min-height:18px;
+  color:var(--tws-color-text-muted,#a9b8bf);font-size:11px;
+}
+.song-roll-compact-status button{min-height:20px;padding:1px 6px}
+.song-roll-compact-status .song-roll-error-trigger{color:#ffd2c6}
+.song-roll-inspector{
+  position:absolute;z-index:10;top:100px;right:10px;
+  width:min(425px,calc(100% - 25px));max-height:calc(100% - 113px);
+  min-height:100px;padding:10px;overflow:auto;
+  background:#1c2d38;color:#ecf0ee;
+  border:1px solid #638291;border-radius:8px;
+  box-shadow:0 10px 28px #0009;
+  display:flex;flex-direction:column;align-items:stretch;gap:9px;
+}
+.song-roll-inspector header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.song-roll-inspector header button{min-width:26px;min-height:26px;cursor:pointer}
+.song-roll-inspector label{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.song-roll-inspector select{width:min(230px,65%);min-width:90px}
+.song-roll-inspector p,.song-roll-inspector small{margin:0;color:#b9cad1;line-height:1.45}
+.song-roll-inspector button{cursor:pointer}
+.song-roll-inspector div{line-height:1.4}
+@media(max-width:730px){
+ .song-roll-direction-row{flex-wrap:wrap}
+ .song-roll-direction-row textarea{flex-basis:100%}
+ .song-roll-direction-row .song-roll-primary-action{flex:1 1 auto}
+ .song-roll-inspector{top:145px}
+}

@@ -127,6 +127,72 @@ class SFZPackTests(unittest.TestCase):
         self.assertTrue((imported / "Programs" / "Cello.sfz").is_file())
         self.assertTrue((imported / "Samples" / "C4.wav").is_file())
 
+    def test_muldjord_style_txt_includes_macros_and_same_line_directives(self):
+        """Text fragments and sample macros are data, not external dependencies."""
+        self.make_zip({
+            "Kit/Stereo/Kit.sfz": (
+                '#include "../Data/keymap.txt"\n'
+                '#include "../Data/macro.txt"\n'
+                '<global> #include "../Data/stereo/Kdrum.txt" '
+                '#include "../Data/stereo/Snare.txt"\n'
+            ),
+            "Kit/Data/keymap.txt": "#define $kick 36\n#define $snare 38\n",
+            "Kit/Data/macro.txt": (
+                "#define $sample_dir ../Samples\n"
+                "#define $ext flac\n"
+                "default_path=$sample_dir/\n"
+            ),
+            "Kit/Data/stereo/Kdrum.txt": (
+                '#define $mic OHL\n'
+                '#include "../Data/group/Kdrum.txt"\n'
+            ),
+            "Kit/Data/group/Kdrum.txt": (
+                '#define $instr Kdrum\n'
+                '<region> key=$kick sample=$instr/1-$instr-$mic.$ext '
+                'seq_length=2 seq_position=1\n'
+            ),
+            "Kit/Data/stereo/Snare.txt": (
+                '#define $mic OHR\n'
+                '#include "../Data/group/Snare.txt"\n'
+            ),
+            "Kit/Data/group/Snare.txt": (
+                '#define $instr Snare\n'
+                '<region> key=$snare sample=$instr/1-$instr-$mic.$ext\n'
+            ),
+            "Kit/Samples/Kdrum/1-Kdrum-OHL.flac": b"kick",
+            "Kit/Samples/Snare/1-Snare-OHR.flac": b"snare",
+            "Kit/README.txt": b"Informational, not executed",
+        })
+        result=sfz_pack.install_zip(self.root,self.archive,"Muldjord pattern")
+        self.assertEqual(result["instruments"],1)
+        self.assertEqual(result["unavailable_program_count"],0)
+        folder=next((self.root/"instrument-packs").iterdir())
+        self.assertTrue((folder/"Kit"/"Data"/"macro.txt").is_file())
+
+    def test_muldjord_txt_include_missing_sample_is_still_rejected(self):
+        self.make_zip({
+            "Stereo/Kit.sfz": (
+                '#include "../Data/macro.txt"\n'
+                '#include "../Data/region/Kick.txt"\n'
+            ),
+            "Data/macro.txt": "#define $sample_dir ../Samples\n"
+                              "#define $ext flac\n"
+                              "default_path=$sample_dir/\n",
+            "Data/region/Kick.txt": '#define $instr Kick\n'
+                                    '<region> sample=$instr/1.$ext\n',
+        })
+        with self.assertRaisesRegex(ValueError,"missing or external sample"):
+            sfz_pack.install_zip(self.root,self.archive,"Incomplete kit")
+
+    def test_txt_include_cannot_escape_pack(self):
+        self.make_zip({
+            "Stereo/Kit.sfz": '#include "../../external.txt"\n',
+            "Data/region.txt": "<region> sample=kick.wav\n",
+            "Samples/kick.wav": b"sample",
+        })
+        with self.assertRaisesRegex(ValueError,"missing or external include"):
+            sfz_pack.install_zip(self.root,self.archive,"Unsafe text")
+
     def test_big_rusty_style_nested_includes_and_key_definitions(self):
         self.make_zip({
             "Programs/02-basic.sfz": (

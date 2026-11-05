@@ -784,7 +784,7 @@ async def add_project_track(ident: str, request: Request,
                 if verified.get("section_masks"):
                     replacement_regions=[(float(row["start_seconds"]),float(row["end_seconds"]))
                                          for row in verified["section_masks"]]
-                    if len(replacement_regions)>8:
+                    if len(replacement_regions)>64:
                         raise ValueError("Too many section regions")
                 else:
                     # A full-score MIDI candidate is one continuous accepted

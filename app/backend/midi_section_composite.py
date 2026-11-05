@@ -13,7 +13,7 @@ MAX_FRAMES=RATE*600
 
 def compose(clips:list[tuple[Path,float,float]],output:Path)->tuple[float,list[dict]]:
     """clips: (source WAV, absolute start seconds, declared duration seconds)."""
-    if not 1<=len(clips)<=8:raise ValueError("Select 1 to 8 clips")
+    if not 1<=len(clips)<=64:raise ValueError("Select 1 to 64 clips")
     ordered=sorted(clips,key=lambda row:row[1])
     start=round(ordered[0][1]*RATE)
     if start<0:raise ValueError("Invalid first clip timestamp")

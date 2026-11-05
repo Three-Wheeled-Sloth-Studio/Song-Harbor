@@ -5,7 +5,7 @@ previews. Existing section-composition then produces one stem for the part.
 """
 from __future__ import annotations
 
-MAX_SECTIONS = 8
+MAX_SECTIONS = 64
 
 
 def resolve(selected_ids: list[str], assignments: list[dict], default_pack: str,
@@ -14,7 +14,7 @@ def resolve(selected_ids: list[str], assignments: list[dict], default_pack: str,
         any(not isinstance(x,str) or not x for x in selected_ids)
         or len(set(selected_ids))!=len(selected_ids)
     ):
-        raise ValueError("Choose 1 to 8 unique song sections")
+        raise ValueError("Choose 1 to 64 unique song sections")
     if not isinstance(assignments,list) or len(assignments)>MAX_SECTIONS:
         raise ValueError("Too many section instrument overrides")
     available={(row.get("pack_id"),row.get("id")):row for row in catalogue.get("instruments",[])
@@ -65,7 +65,7 @@ def validate_recipe(recipe: dict) -> dict:
     if not isinstance(selected,list) or not 1<=len(selected)<=MAX_SECTIONS or any(
         not isinstance(ident,str) or not 1<=len(ident)<=100 for ident in selected
     ) or len(set(selected))!=len(selected):
-        raise ValueError("Saved instrument recipe requires 1 to 8 distinct sections")
+        raise ValueError("Saved instrument recipe requires 1 to 64 distinct sections")
     seen=set()
     rows=[]
     for override in overrides:

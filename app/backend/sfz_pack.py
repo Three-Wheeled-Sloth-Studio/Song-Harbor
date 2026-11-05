@@ -138,35 +138,64 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                         raise ValueError("SFZ ZIP entry has an unexpected size")
         definitions = sorted(p for p in destination.rglob("*")
                              if p.suffix.lower() == ".sfz" and p.is_file())
+        # Work out which .sfz files are mapping fragments. All are still
+        # data-only, but only root programs are advertised to the user.
         included: set[Path] = set()
         for definition in definitions:
             text = definition.read_text(encoding="utf-8-sig")
-            for directive in SFZ_DIRECTIVE.finditer(text):
-                if directive.group(1).casefold() not in {"include", "define"}:
-                    raise ValueError("SFZ definition uses unsupported preprocessing")
             for found in INCLUDE_REF.finditer(text):
-                included.add(resolve_pack_reference(
-                    definition, found.group(1), destination,
-                    allowed={".sfz"}, purpose="include"))
-            defaults = [match.group(1).strip().strip('"').replace("\\\\", "/")
-                        for match in DEFAULT_PATH.finditer(text)]
-            if len(defaults) > 1:
-                raise ValueError("Multiple SFZ default_path assignments are unsupported")
-            prefix = defaults[0] if defaults else ""
-            if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
-                raise ValueError("SFZ default_path escapes the imported pack")
-            for found in SAMPLE_REF.finditer(text):
-                sample = found.group(1).strip().strip('"').replace("\\\\", "/")
-                # SFZ defines *silence as an internal, sample-free region.
-                # It is not a path and must not be resolved against the ZIP.
-                if sample == "*silence":
-                    continue
-                resolve_pack_reference(definition, prefix + sample, destination,
-                                       allowed=EXTENSIONS - {".sfz"}, purpose="sample")
+                try:
+                    included.add(resolve_pack_reference(
+                        definition, found.group(1), destination,
+                        allowed={".sfz"}, purpose="include"))
+                except ValueError:
+                    # Validate the complete dependency when the corresponding
+                    # playable program is inspected, not for unrelated patches.
+                    pass
+
+        def validate_program(definition: Path, active: set[Path],
+                             *, inherited_path: str = "") -> None:
+            definition = definition.resolve()
+            if definition in active:
+                raise ValueError("SFZ includes contain a cycle")
+            active.add(definition)
+            try:
+                text = definition.read_text(encoding="utf-8-sig")
+                for directive in SFZ_DIRECTIVE.finditer(text):
+                    if directive.group(1).casefold() not in {"include", "define"}:
+                        raise ValueError("SFZ definition uses unsupported preprocessing")
+                defaults = [match.group(1).strip().strip('"').replace("\\", "/")
+                            for match in DEFAULT_PATH.finditer(text)]
+                if len(defaults) > 1:
+                    raise ValueError("Multiple SFZ default_path assignments are unsupported")
+                prefix = defaults[0] if defaults else inherited_path
+                if prefix.startswith("/") or re.match(r"^[A-Za-z]:", prefix):
+                    raise ValueError("SFZ default_path escapes the imported pack")
+                for found in SAMPLE_REF.finditer(text):
+                    sample = found.group(1).strip().strip('"').replace("\\", "/")
+                    if sample == "*silence":
+                        continue
+                    resolve_pack_reference(definition, prefix + sample, destination,
+                                           allowed=EXTENSIONS - {".sfz"}, purpose="sample")
+                for found in INCLUDE_REF.finditer(text):
+                    child = resolve_pack_reference(
+                        definition, found.group(1), destination,
+                        allowed={".sfz"}, purpose="include")
+                    validate_program(child, active, inherited_path=prefix)
+            finally:
+                active.remove(definition)
+
         manifest_instruments = []
-        # Included mapping snippets are not standalone playable instruments.
+        unavailable_programs = []
         for definition in definitions:
             if definition.resolve() in included:
+                continue
+            try:
+                validate_program(definition, set())
+            except (ValueError, OSError, UnicodeError) as exc:
+                unavailable_programs.append({
+                    "name": definition.stem[:100],
+                    "reason": str(exc)[:180]})
                 continue
             relative = definition.relative_to(destination).as_posix()
             manifest_instruments.append({
@@ -174,7 +203,10 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                 "name": definition.stem[:100],
                 "sfz_path": relative, "program": 0, "bank": 0})
         if not manifest_instruments:
-            raise ValueError("SFZ pack contains no standalone instrument programs")
+            details = "; ".join(item["name"] + ": " + item["reason"]
+                                for item in unavailable_programs[:3])
+            raise ValueError("SFZ pack contains no complete instrument programs" +
+                             (": " + details if details else ""))
         digest = hashlib.sha256()
         for path in sorted(p for p in destination.rglob("*") if p.is_file()):
             digest.update(path.relative_to(destination).as_posix().encode("utf-8"))
@@ -189,7 +221,9 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                     "sha256": digest.hexdigest(), "instruments": manifest_instruments}
         (destination / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return {"pack_id": identifier, "instruments": len(manifest_instruments),
-                "ignored_support_files": ignored_files}
+                "ignored_support_files": ignored_files,
+                "unavailable_programs": unavailable_programs[:20],
+                "unavailable_program_count": len(unavailable_programs)}
     except Exception:
         shutil.rmtree(destination, ignore_errors=True)
         raise

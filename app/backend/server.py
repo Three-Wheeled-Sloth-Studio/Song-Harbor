@@ -1330,7 +1330,7 @@ def render_polyphonic_arrangement(ident:str,asset_id:str,request:Request,
             raise HTTPException(409,"Saved MIDI arrangement has changed; reopen its latest revision")
         selected,font=instrument_library.resolve_instrument(DATA_ROOT,body.pack_id,body.instrument_id)
         if asset.get("percussion"):
-            if not body.percussion or body.drum_keymap != asset["percussion"]["keymap"]:
+            if not body.percussion or drum_keymaps.validate_keymap(body.drum_keymap) != asset["percussion"]["keymap"]:
                 raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
         if selected["engine"] not in ("sf2","sfz"):
             raise HTTPException(400,"Select an installed SF2 or SFZ instrument for arrangement rendering")
@@ -1366,7 +1366,7 @@ def render_midi_sections(ident:str,asset_id:str,request:Request,
         selected,font=instrument_library.resolve_instrument(
             DATA_ROOT,body.pack_id,body.instrument_id)
         if asset.get("percussion"):
-            if not body.percussion or body.drum_keymap != asset["percussion"]["keymap"]:
+            if not body.percussion or drum_keymaps.validate_keymap(body.drum_keymap) != asset["percussion"]["keymap"]:
                 raise ValueError("Saved drum kit mapping differs from render request; reopen the arrangement")
         if selected["engine"] not in ("sf2","sfz"):
             raise HTTPException(400,"Select installed SF2 or SFZ instrument")

@@ -208,11 +208,15 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
                     if extracted != member.file_size:
                         raise ValueError("SFZ ZIP entry has an unexpected size")
         manifest_instruments, unavailable_programs = audit_pack(destination)
-        if not manifest_instruments:
+        if not manifest_instruments and not curated_id:
             details = "; ".join(item["name"] + ": " + item["reason"]
                                 for item in unavailable_programs[:3])
             raise ValueError("SFZ pack contains no complete instrument programs" +
                              (": " + details if details else ""))
+        # Retain incomplete curated packs for an explicitly approved repair,
+        # never publish their incomplete SFZ programs as usable instruments.
+        if not manifest_instruments and not unavailable_programs:
+            raise ValueError("SFZ pack contains no instrument programs")
         digest = hashlib.sha256()
         for path in sorted(p for p in destination.rglob("*") if p.is_file()):
             digest.update(path.relative_to(destination).as_posix().encode("utf-8"))

@@ -60,6 +60,35 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual([x["name"] for x in manifest["instruments"]],["Kit"])
         self.assertTrue(manifest["repair_provenance"]["official_files"])
 
+    def test_unavailable_official_sample_leaves_original_pack_unchanged(self):
+        result=self.install({"Programs/Kit.sfz":"<region> sample=../Samples/kick/missing.flac"})
+        folder=self.root/"instrument-packs"/result["pack_id"]
+        original=(folder/"manifest.json").read_bytes()
+        with patch.object(recovery,"_download_exact",return_value=False):
+            outcome=recovery.repair(self.root,result["pack_id"])
+        self.assertEqual(outcome["status"],"unavailable")
+        self.assertEqual(outcome["repaired"],0)
+        self.assertEqual(outcome["unavailable_program_count"],1)
+        self.assertEqual((folder/"manifest.json").read_bytes(),original)
+        self.assertFalse((folder/"Samples"/"kick"/"missing.flac").exists())
+
+    def test_existing_playable_program_not_replaced_during_repair(self):
+        result=self.install({
+            "Programs/01-basic.sfz":"<region> sample=../Samples/Basic.flac",
+            "Programs/02-extra.sfz":"<region> sample=../Samples/Extra.flac",
+            "Samples/Basic.flac":FLAC,
+        })
+        folder=self.root/"instrument-packs"/result["pack_id"]
+        basic=(folder/"Samples"/"Basic.flac").read_bytes()
+        def fake_fetch(_entry,_relative,target):
+            target.write_bytes(FLAC+b"extra")
+            return True
+        with patch.object(recovery,"_download_exact",side_effect=fake_fetch):
+            outcome=recovery.repair(self.root,result["pack_id"])
+        self.assertEqual(outcome["playable"],2)
+        self.assertEqual((folder/"Samples"/"Basic.flac").read_bytes(),basic)
+        self.assertEqual(outcome["from_publisher"],1)
+
     def test_unapproved_pack_never_attempts_publisher_download(self):
         # Noncurated incomplete packs fail before any repair or network action.
         with patch.object(recovery,"_download_exact",side_effect=AssertionError("Network forbidden")):

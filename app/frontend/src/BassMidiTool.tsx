@@ -253,6 +253,8 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  function revert(){setNotes(candidate?.original_notes.map(n=>({...n}))||[]);setPreviewReady(false);engine?.clearCandidatePreview();setMessage("Notes restored.");}
  async function analyze(){
    if(!trackId||!inBounds||busy)return;
+   if(rollDirty&&!window.confirm("Discard unsaved piano-roll edits before extracting new MIDI?"))return;
+   setAutoOpenRollAssetId("");
    setBusy(true);setError("");setMessage("");setArrangementId("");engine?.clearCandidatePreview();setPreviewReady(false);
    try{
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},

@@ -46,6 +46,17 @@ class CompositeTests(unittest.TestCase):
             w.setpos(2*RATE)
             self.assertNotEqual(w.readframes(1),b"\x00"*4)
 
+    def test_twelve_regions_still_create_one_stereo_stem(self):
+        path=self.root/"part.wav"
+        wav(path,RATE//10,700)
+        clips=[(path,float(i),0.1) for i in range(12)]
+        first,regions=midi_section_composite.compose(clips,self.root/"combined.wav")
+        self.assertEqual(first,0)
+        self.assertEqual(len(regions),12)
+        with wave.open(str(self.root/"combined.wav"),"rb") as render:
+            self.assertEqual(render.getnchannels(),2)
+            self.assertEqual(render.getnframes(),round(11.1*RATE))
+
     def test_overlap_rejected_without_publishing_audio(self):
         a=self.root/"a.wav";b=self.root/"b.wav";wav(a,RATE);wav(b,RATE)
         target=self.root/"combined.wav"

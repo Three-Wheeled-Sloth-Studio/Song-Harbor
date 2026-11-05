@@ -79,7 +79,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    return a.name.localeCompare(b.name);
  });
  const selectedPack=catalogue.packs.find(p=>p.id===packFilter);
- const recoveryTarget=sfzRecovery?.packId===sfzOutcome?.packId?sfzRecovery:
+ const recoveryTarget=sfzOutcome&&sfzRecovery?.packId===sfzOutcome.packId?sfzRecovery:
    (selectedPack?.curated_id&&selectedPack.unavailable_program_count
     ?{packId:selectedPack.id,missing:selectedPack.unavailable_program_count}:null);
  const recoveryPack=catalogue.packs.find(p=>p.id===recoveryTarget?.packId);

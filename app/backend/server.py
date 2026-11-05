@@ -1241,7 +1241,7 @@ class MidiProposalPreviewRequest(BaseModel):
     source_track_id: str
     target_stem: str
     sections: list[dict[str,Any]]
-    operations: list[dict[str,Any]] = Field(default_factory=list,max_length=200)
+    operations: list[dict[str,Any]] = Field(default_factory=list,max_length=2000)
     instrument_sections: dict[str,Any] | None = None
 
 

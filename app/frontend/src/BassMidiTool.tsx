@@ -256,8 +256,17 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
    try{
      const data=await req<Candidate>(base+"/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:duration})});
+     // Extract is now an editable production asset, not a stranded legacy note list.
+     // Persist the exact candidate transcription first, then let the piano roll load it.
+     // Do not silently classify a monophonic pitched estimate as drum transcription.
+     const saved=await req<Arrangement>("/api/projects/"+jobId+"/midi-arrangements/from-candidate",{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({candidate_id:data.candidate_id})});
      setCandidate(data);setNotes(data.notes.map(n=>({...n})));setNotePage(0);
-     setMessage(data.notes.length+" notes extracted.");
+     setArrangementId(saved.asset_id);
+     setMessage(data.notes.length+" notes extracted and opened as an editable MIDI score."+
+       (selectedTrack?.stem_alias.toLowerCase()==="drums"?
+         " Drum warning: this is a pitched-note estimate, not kick/snare/hat classification.":""));
    }catch(e){setError(String(e));}finally{setBusy(false);}
  }
  async function render(){

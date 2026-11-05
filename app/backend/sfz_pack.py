@@ -13,8 +13,8 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 
-MAX_ARCHIVE_BYTES = 768 * 1024 * 1024
-MAX_UNPACKED_BYTES = 1536 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 4 * 1024 * 1024 * 1024  # Large local sample libraries
+MAX_UNPACKED_BYTES = 8 * 1024 * 1024 * 1024  # Still bounded against ZIP bombs
 MAX_FILES = 12000
 MAX_SFZ_BYTES = 2 * 1024 * 1024
 EXTENSIONS = {".sfz", ".wav", ".flac", ".aif", ".aiff", ".ogg"}
@@ -187,6 +187,13 @@ def install_zip(runtime: Path, archive: Path, name: str, *, curated_id: str = ""
     destination = root / identifier
     destination.mkdir()
     ignored_files = 0
+    # ZIP metadata was validated before creating the destination. Ensure ample
+    # storage for the declared unpacked payload plus a small free-space reserve.
+    declared=sum(m.file_size for m in members if not m.is_dir() and not is_ignorable_member(safe_member(m.filename)))
+    required=declared + 512 * 1024 * 1024
+    if shutil.disk_usage(root).free < required:
+        shutil.rmtree(destination,ignore_errors=True)
+        raise ValueError("Not enough disk space for SFZ samples (need unpacked size plus 512 MiB reserve)")
     try:
         with zipfile.ZipFile(archive) as z:
             for member in members:

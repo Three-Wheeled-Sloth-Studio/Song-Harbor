@@ -71,3 +71,19 @@ CI: new SFZ tests passed in workflow `42103474987`; the overall backend workflow
 **Attribution:** User confirms all releases using Muldjord sample material will include the license-required attribution. Preserve creator/license/source/version alongside imported sample pack metadata and in release preparation. Do not automatically alter the existing Infra Choir standard credit block without user approval; add an appropriate separate samples credit when applicable.
 
 Source: https://github.com/sfzinstruments/DrumGizmo.MuldjordKit
+
+## 2026-11-05 Muldjord audio QA and expanded lane exploration
+
+User confirmed Muldjord imports cleanly, rendered candidate loudness is appropriate, and the kit is fuller and generally sounds better than Big Rusty. Still somewhat artificial and thin, with under-represented deep-register hits and overly crisp isolated attacks. Existing extracted score screenshot showed 565 MIDI notes, mostly estimated Kick/Snare, with Closed hat as the only other named lane. This is a transcription limitation, not evidence that the Muldjord samples lack those kit pieces.
+
+Implemented on DEV:
+- The new conservative spectral drum classifier separates five attack bands, uses local onset novelty, and proposes kick (36), snare (38), closed hat (42), low tom (41), and crash (49) hypotheses, with occasional simultaneous kick/snare or bright/snare event estimates if both attack components are strong. No forced quantization or edited source PCM. All classifications remain exploratory; no measured recall or precision on real song yet.
+- MIDI piano roll displays only mapped drum lanes plus any unmapped notes (rather than 54 empty semitone rows), and up/down note nudges move among those visible lanes. Melodic piano roll retains its full chromatic view.
+- When selected SFZ instrument is `DrumGizmo MuldjordKit`, a `Muldjord map` button loads verified publisher note assignments from Data/keymap.txt. Includes two kicks, snare/rimstick, closed/open hats, four toms, two crashes, china, rides/tips/bells. Does not create, transpose or reclassify notes and requires Save for persistence. It does not include choke-control notes as playable drums.
+- Earlier extracted score stays unchanged; users must explicitly Extract again to create a new versioned arrangement and compare it with their previously saved production score. The newly provided map is an editable label mapping, not a drum-hit classifier or sample import.
+
+Important unresolved design: Accurate overlapping drum transcription and actual frequency-band separation require source evaluation and better multi-label detection, likely trained model or reference-driven template matching. Preserve sample one-shot tails and apply naturally recorded room/overhead layers. The Muldjord source includes loop_mode=one_shot and sample round-robin sequences, but actual sfizz interpretation and acoustic tail carryover require Windows listen tests. Renderer may still impose voice/group settings. Do not claim this is solved by MIDI label additions.
+
+QA after DEV update: (1) open old saved score to ensure it is unchanged; (2) Extract a new short passage, inspect five estimated lanes and ensure notes remain editable; (3) select the stereo DrumGizmo MuldjordKit program and click Muldjord map, verify names including 35/36, 37/38, 41/45/47/48, 42/46, 49/57, 51/59 and 52; (4) save then render and compare. Check same-pitch retriggers and audible cymbal tails; (5) classify a manually identified kick/snare/cymbal passage for objective errors before changing thresholds.
+
+Release attribution remains required when Muldjord sampled material is used.

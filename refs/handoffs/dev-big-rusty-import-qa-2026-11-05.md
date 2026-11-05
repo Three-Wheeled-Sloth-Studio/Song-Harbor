@@ -72,3 +72,30 @@ Immediate drum QA gate:
 - Establish audible kick, snare, closed/open hats, toms, crash and ride with appropriate velocities; note silent notes and unknown mappings.
 - Only then proceed to drum onset classification, editable key mapping, and one combined stereo drum replacement stem with reversible original-volume masks.
 - No changes to `main`; this appendix is documentation only.
+
+
+## 2026-11-05 follow-on: drums extract, quiet renders and musical energy QA
+
+User reports:
+- Extract produces notes but does not load them into the piano roll.
+- Rendered instruments are consistently too quiet and require major manual lift.
+- Big Rusty `01-full` produces several drum families, but the resulting arrangement is snare-dominant, weak in kick/bass, and lacking energy/aggression.
+- User expects natural-language directions to influence drum arrangement, not just swap the preset.
+
+Work completed on DEV:
+- `BassMidiTool.analyze()` now uses the existing `/midi-arrangements/from-candidate` API and immediately opens its saved arrangement in `MidiPianoRoll`, retaining the candidate and extracted notes. The extraction path is no longer a dead-end legacy note editor. Existing extract is a CPU monophonic *pitched-note estimator*, NOT validated kick/snare/hat transient classification; this warning is shown when the source alias is Drums.
+- New `midi_candidate_level.py`: post-render **boost-only** bounded peak leveling for SF2/SFZ preview candidate WAVs. Target max -6.02 dBFS, +12.04 dB maximum, no boost below approximately -36 dBFS, no attenuation or compression. Original source stems never modified. SFZ and SF2 candidate render pipelines both call it before publishing the complete WAV. Test module: `app/backend/tests/test_midi_candidate_level.py`.
+- This fixes render headroom for many quiet instruments but does NOT imply equal perceived loudness, powerful bass/kick, note balance, compression, master loudness, or verified current-track rendering.
+- To verify on Windows: Extract Drums and confirm the piano roll shows an editable saved MIDI asset automatically; render the same test excerpt with 01-full and compare new candidate level to old at matched playback trim; ensure no clipping/unnatural pumping and A/B acceptance matches exported level. Confirm frontend and backend GitHub Actions builds before QA sign-off.
+
+Important discovery:
+- The existing natural-language `proposal-direction` route and frontend direction textbox primarily choose **installed instrument presets**; they do not yet perform genuine note/beat composition or expressive drum edits. The mock proposal can modify note velocities but is explicitly a deterministic test, not an LLM. Do not represent preset matching as full language-guided drum arrangement.
+
+Next implementation design: explicit arrangement-level *drum direction* contract:
+1. After actual drum onset classification + validated custom SFZ keymap, represent lanes (kick, snare, hats, toms, cymbals, optional industrial/taiko accents), not pitched monophonic estimates.
+2. Accept natural-language goals such as `More aggressive kick with stronger downbeats, snare -3 dB relative to kick, denser hats before chorus, preserve groove`. Interpret to a provider-neutral, bounded proposal affecting note lanes, velocities (1-127), onsets/density, accents, and optionally rendered stem gain/pan. No silent edits; no extrapolation beyond selected sections.
+3. Show lane-level before/after counts, key changes, note diff, listening A/B, per-section preview and undo. Do not conflate MIDI velocity with dB; actual gain/balance requires renderer/mixer controls.
+4. Add a rhythm-specialized source-to-MIDI pipeline rather than using existing pitched salience extraction for drums. Prioritize accurate kick/snare/hats separation and manually editable mapping/velocity.
+5. Preserve original source and accepted WAV as reversible assets; avoid sound changes automatically on import or based only on word `aggressive`.
+
+Status: patch committed on DEV, automated build/Windows listening QA outstanding. `main` untouched.

@@ -8,6 +8,20 @@ export type Arrangement={asset_id:string;revision:number;sample_rate:number;dura
 type Summary={asset_id:string;revision:number;source:Arrangement["source"];note_count:number;duration_samples:number};
 type Operation={op:"add";note:RollNote}|{op:"remove";id:string}|{op:"update";id:string;changes:Partial<Omit<RollNote,"id">>};
 type InstrumentOption={id:string;pack_id:string;name:string;engine:string};
+type ProposalPart="Bass"|"Drums"|"Guitar"|"Piano"|"Other";
+type MidiProposal={
+ schema_version:number;base_revision:number;source_track_id:string;target_stem:ProposalPart;
+ sections:{section_id:string;intent:string}[];
+ operations:Operation[];instrument_sections:SavedInstrumentRecipe|null;
+};
+type ProposalReview={
+ status:string;base_revision:number;note_diff:{added:RollNote[];removed:RollNote[];
+ changed:{before:RollNote;after:RollNote}[]};
+ instrument_before:SavedInstrumentRecipe|null;instrument_after:SavedInstrumentRecipe|null;
+ selected_sections:string[];mutated:boolean;
+};
+type MockProposalResponse={provider:string;proposal:MidiProposal;review:ProposalReview};
+
 type InstrumentRef={pack_id:string;instrument_id:string};
 type SavedInstrumentRecipe={schema_version:1;default:InstrumentRef;section_ids:string[];
  overrides:({section_id:string}&InstrumentRef)[]};
@@ -64,6 +78,12 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const [directionBusy,setDirectionBusy]=useState(false);
  const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
  const [directionError,setDirectionError]=useState("");
+ const [proposalPart,setProposalPart]=useState<ProposalPart>("Bass");
+ const [mockVelocity,setMockVelocity]=useState(5);
+ const [proposalBusy,setProposalBusy]=useState(false);
+ const [proposalDraft,setProposalDraft]=useState<MockProposalResponse|null>(null);
+ const [proposalError,setProposalError]=useState("");
+
 
  const [position,setPosition]=useState({x:0,y:0});
  const moveWindow=useRef<{x:number;y:number;left:number;top:number}|null>(null);
@@ -138,11 +158,11 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
  const toY=(pitch:number)=>(topPitch-pitch)*ROW;
  function edit(updated:RollNote[],record=true){
   if(record){setHistory(old=>[...old.slice(-99),clone(notesRef.current)]);setFuture([]);}
-  setNotes(updated);notesRef.current=updated;
+  setNotes(updated);notesRef.current=updated;setProposalDraft(null);
  }
  function undo(){if(!history.length)return;setFuture(v=>[clone(notesRef.current),...v]);const last=history[history.length-1];setHistory(v=>v.slice(0,-1));edit(clone(last),false);}
  function redo(){if(!future.length)return;setHistory(v=>[...v,clone(notesRef.current)]);const first=future[0];setFuture(v=>v.slice(1));edit(clone(first),false);}
- function open(value:Arrangement){
+ function open(value:Arrangement){setProposalDraft(null);setProposalError("");
   setSelectedSections(value.instrument_sections?.section_ids||[]);
   setSectionPresetKeys(Object.fromEntries((value.instrument_sections?.overrides||[]).map(row=>[
    row.section_id,row.pack_id+"::"+row.instrument_id])));
@@ -338,6 +358,39 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
   setDirectionMatch(null);
   setMessage("Verified presets assigned. Review section dropdowns before rendering one instrument stem.");
  }
+ async function makeMockProposal(){
+  if(!asset||dirty||proposalBusy||busy||!selectedSections.length)return;
+  setProposalBusy(true);setProposalError("");setProposalDraft(null);
+  try{
+   const result=await request<MockProposalResponse>(
+    root+"/"+asset.asset_id+"/proposal-mock",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({base_revision:asset.revision,source_track_id:asset.source.track_id,
+      target_stem:proposalPart,section_ids:selectedSections,velocity_delta:mockVelocity})});
+   setProposalDraft(result);
+  }catch(error){setProposalError(String(error));}
+  finally{setProposalBusy(false);}
+ }
+ async function acceptMockProposal(){
+  if(!asset||!proposalDraft||proposalBusy||busy||dirty)return;
+  if(proposalDraft.proposal.base_revision!==asset.revision){
+   setProposalError("Saved score changed. Generate a fresh proposal.");setProposalDraft(null);return;
+  }
+  const changes=proposalDraft.review.note_diff;
+  const count=changes.added.length+changes.removed.length+changes.changed.length;
+  if(!window.confirm("Accept "+count+" reviewed MIDI note changes into a new saved revision? This does not render or replace audio."))return;
+  setProposalBusy(true);setProposalError("");
+  try{
+   const response=await request<{asset:Arrangement;accepted:boolean}>(
+    root+"/"+asset.asset_id+"/proposal-accept",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify(proposalDraft.proposal)});
+   open(response.asset);
+   setMessage("Mock proposal accepted as saved MIDI revision "+response.asset.revision+". No audio changed.");
+   void refresh();
+  }catch(error){setProposalError(String(error));setProposalDraft(null);}
+  finally{setProposalBusy(false);}
+ }
  function startWindowDrag(event:ReactPointerEvent<HTMLElement>){
    if((event.target as HTMLElement).closest("button,input,select"))return;
    event.currentTarget.setPointerCapture(event.pointerId);
@@ -386,6 +439,35 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
       {matchErrors.map((error,index)=><small key={index} role="alert">{error}</small>)}
       <button type="button" disabled={matchErrors.length>0||busy||directionBusy} onClick={applyDirection}>Apply verified presets</button>
       <button type="button" onClick={()=>setDirectionMatch(null)}>Discard preview</button>
+     </div>}
+   </div>}
+   {asset&&<div className="song-roll-toolbar song-roll-options" aria-label="Mock MIDI proposal review">
+     <strong>Arrangement proposal (offline mock)</strong>
+     <small>Test the review workflow with a bounded velocity adjustment. No AI is called and no audio is generated.</small>
+     <label>Part <select aria-label="Proposal part" value={proposalPart}
+      onChange={event=>{setProposalPart(event.target.value as ProposalPart);setProposalDraft(null);}}>
+      {(["Bass","Drums","Guitar","Piano","Other"] as const).map(part=><option key={part} value={part}>{part}</option>)}
+     </select></label>
+     <label>Velocity change <input type="number" min={-20} max={20} step={1}
+      aria-label="Mock velocity change" value={mockVelocity}
+      onChange={event=>{setMockVelocity(Number(event.target.value));setProposalDraft(null);}}/></label>
+     <button type="button" disabled={busy||proposalBusy||dirty||!selectedSections.length||mockVelocity===0||!Number.isInteger(mockVelocity)||Math.abs(mockVelocity)>20}
+      onClick={()=>void makeMockProposal()}>{proposalBusy?"Working...":"Preview proposal"}</button>
+     {dirty&&<small>Save current MIDI and preset edits before making a proposal.</small>}
+     {!selectedSections.length&&<small>Select 1 to 8 timeline sections for this proposal.</small>}
+     {proposalError&&<small role="alert">{proposalError}</small>}
+     {proposalDraft&&<div style={{flex:"1 1 100%"}} aria-label="MIDI proposal diff">
+      <strong>Review proposed changes (not saved)</strong>
+      <div>Provider: offline mock | Base revision: {proposalDraft.proposal.base_revision} | Sections: {proposalDraft.review.selected_sections.length}</div>
+      <div>Added: {proposalDraft.review.note_diff.added.length} | Removed: {proposalDraft.review.note_diff.removed.length} | Changed: {proposalDraft.review.note_diff.changed.length}</div>
+      {proposalDraft.review.note_diff.changed.slice(0,30).map(row=><div key={row.before.id}>
+       MIDI {row.before.pitch} at {(row.before.start_sample/RATE).toFixed(2)}s:
+       velocity {row.before.velocity} to {row.after.velocity}
+      </div>)}
+      {proposalDraft.review.note_diff.changed.length>30&&<small>Showing first 30 changed notes; total shown above.</small>}
+      <button type="button" disabled={proposalBusy||busy||dirty} onClick={()=>void acceptMockProposal()}>Accept MIDI edits</button>
+      <button type="button" disabled={proposalBusy} onClick={()=>{setProposalDraft(null);setProposalError("");}}>Discard proposal</button>
+      <small>Accept saves a new MIDI revision only. The source stem, existing rendered audio and accepted tracks remain unchanged.</small>
      </div>}
    </div>}
    {asset&&selectedSections.length>0&&<div className="song-roll-toolbar song-roll-options" aria-label="Per-section instrument presets">

@@ -495,7 +495,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <a href={pack.source_page} target="_blank" rel="noopener noreferrer" title={"Publisher and licensing information for "+pack.name}>Source</a>
        </div>)}
      </div>}
-     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} requestedAssetId={arrangementId}
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} targetStem={selectedTrack?.stem_alias||"Other"} requestedAssetId={arrangementId}
        sections={sections} instruments={catalogue.instruments} selectedInstrument={instrumentPack+"::"+instrument}
        onInstrumentChange={key=>{const [pack,id]=key.split("::");setPackFilter("all");chooseInstrument(pack,id);}}
        onDirtyChange={setRollDirty} onUse={useArrangement} onError={onError}/>

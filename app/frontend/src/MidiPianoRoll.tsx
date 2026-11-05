@@ -163,7 +163,7 @@ export function MidiPianoRoll({jobId,sourceTrackId,requestedAssetId,sections=[],
     start_sample:n.start_sample+delta,end_sample:n.end_sample+delta}:n));
  }
  function addAt(x:number,pitch:number){if(!asset)return;
-  const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*(drumMode?.15:.5));
+  const start=fromX(x),end=Math.min(asset.duration_samples,start+RATE*(drumMode ? 0.15 : 0.5));
   if(end-start<MIN_NOTE)return;
   const note:RollNote={id:crypto.randomUUID().replace(/-/g,""),start_sample:start,end_sample:Math.round(end),pitch,velocity:85,channel:drumMode?9:0};
   edit([...notesRef.current,note]);selectOne(note.id);scrollerRef.current?.focus();}

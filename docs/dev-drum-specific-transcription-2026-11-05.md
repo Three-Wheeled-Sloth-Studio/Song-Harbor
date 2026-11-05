@@ -57,3 +57,17 @@ Big Rusty remains the QA baseline. Compare the same MIDI score and measured rend
 QA required: Windows upload of large ZIP, safe rejection of malformed archives, instrument listing, verified SFZ note mapping, real audio tails and velocity behavior, disk space, side effects and restoration.
 
 Sources: https://sfzinstruments.github.io/drums/muldjord_kit/ ; https://github.com/sfzinstruments/DrumGizmo.MuldjordKit ; https://freepats.zenvoid.org/Percussion/acoustic-drum-kit.html
+
+## 2026-11-05: Muldjord SFZ text-fragment import fix and release attribution
+
+User attempted the approximately 338 MB `DrumGizmo.MuldjordKit-master.zip` SFZ conversion and received: `SFZ pack contains no complete instrument programs: Ambience left: SFZ references a missing or external include: ../Data/keymap.txt`.
+
+Verified directly against `sfzinstruments/DrumGizmo.MuldjordKit` master: `Stereo/DrumGizmo MuldjordKit.sfz` and `Multi/Ambience left.sfz` explicitly include `../Data/keymap.txt`, `macro.txt`, `control/*.txt`, and many `Data/stereo/*.txt` or `Data/multi/*.txt` fragments. `Data/macro.txt` uses `#define $sample_dir ../Samples`, `#define $ext flac`, `default_path=$sample_dir/`, and inline multiple `#define`s. Region fragments build exact paths such as `$instr/1-$instr-$mic.$ext`, and the stereo program has multiple `#include` directives on one line. These are legitimate SFZ 2.0 include conventions, not a missing or external sample.
+
+DEV `app/backend/sfz_pack.py` now retains bounded `.txt` SFZ include fragments (data-only, never executed), scans include/define directives anywhere within a line, follows nested pack-contained references, expands macros for sample path validation in order, and limits include recursion/visits and total referenced samples per program. It preserves current ZIP path, sample, size, and unresolved dependency safeguards. Coverage added to `app/backend/tests/test_sfz_pack.py` for Muldjord-style include/macros, missing samples, and traversal denial.
+
+CI: new SFZ tests passed in workflow `42103474987`; the overall backend workflow still fails in the pre-existing `test_section_production` parser test. Live Windows import and sfizz sound output have not yet been verified; next step is retry importing the same ~338 MB SFZ ZIP, identify the `Stereo/DrumGizmo MuldjordKit` program, map pitches, and audition. The full multi microphone programs are not a default stereo mixed kit.
+
+**Attribution:** User confirms all releases using Muldjord sample material will include the license-required attribution. Preserve creator/license/source/version alongside imported sample pack metadata and in release preparation. Do not automatically alter the existing Infra Choir standard credit block without user approval; add an appropriate separate samples credit when applicable.
+
+Source: https://github.com/sfzinstruments/DrumGizmo.MuldjordKit

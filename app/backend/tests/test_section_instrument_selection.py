@@ -45,6 +45,21 @@ class SectionInstrumentSelectionTests(unittest.TestCase):
   with self.assertRaises(ValueError):
    choice.resolve([str(n) for n in range(9)],[],"pack-growly","dirty",LIBRARY)
 
+ def test_saved_recipe_exact_scope_and_installed_resolution(self):
+  recipe={"schema_version":1,
+          "default":{"pack_id":"pack-growly","instrument_id":"dirty"},
+          "section_ids":["bridge","verse","chorus"],
+          "overrides":[{"section_id":"bridge","pack_id":"pack-growly","instrument_id":"shifty"},
+                       {"section_id":"chorus","pack_id":"pack-growly","instrument_id":"angry"}]}
+  normalized=choice.validate_recipe(recipe)
+  self.assertEqual(normalized["section_ids"],["bridge","chorus","verse"])
+  result=choice.resolve_recipe(normalized,["verse","chorus","bridge"],LIBRARY)
+  self.assertEqual(result["verse"]["instrument_id"],"dirty")
+  self.assertEqual(result["chorus"]["instrument_id"],"angry")
+  self.assertEqual(result["bridge"]["instrument_id"],"shifty")
+  with self.assertRaisesRegex(ValueError,"differ"):
+   choice.resolve_recipe(normalized,["verse","chorus"],LIBRARY)
+
  def test_pure_no_mutation(self):
   overrides=[{"section_id":"chorus","pack_id":"pack-growly","instrument_id":"angry"}]
   before=[dict(row) for row in overrides]

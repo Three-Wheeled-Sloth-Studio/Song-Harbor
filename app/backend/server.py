@@ -45,6 +45,7 @@ import midi_section_slices
 import midi_section_composite
 import polyphonic_midi
 import drum_keymaps
+import instrument_direction_match
 import sfz_pack
 import curated_sfz
 import sfz_render_adapter
@@ -1298,6 +1299,20 @@ def _render_saved_midi_candidate(project_root:Path,asset_id:str,asset:dict,
     except Exception:
         shutil.rmtree(folder,ignore_errors=True)
         raise
+
+
+class InstrumentMatchRequest(BaseModel):
+    instruction: str = Field(min_length=1,max_length=3000)
+
+
+@app.post("/api/instruments/match-direction")
+def match_instrument_direction(body:InstrumentMatchRequest,request:Request)->dict[str,Any]:
+    """Preview grounded installed-library matches before LLM interpretation."""
+    require_local_origin(request)
+    try:
+        return instrument_direction_match.resolve(body.instruction,instrument_library.catalogue(DATA_ROOT))
+    except (ValueError,KeyError,TypeError) as exc:
+        raise HTTPException(400,str(exc)) from exc
 
 
 @app.get("/api/instruments/drum-keymap/gm")

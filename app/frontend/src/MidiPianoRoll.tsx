@@ -78,6 +78,21 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
  const [directionMatch,setDirectionMatch]=useState<DirectionMatch|null>(null);
  const [directionError,setDirectionError]=useState("");
  const [inspector,setInspector]=useState<"mapping"|"diff"|"presets"|"test"|null>(null);
+ useEffect(()=>{
+  const direction=directionText.trim();
+  if(!direction){setDirectionMatch(null);return;}
+  let live=true;
+  const controller=new AbortController();
+  const timer=window.setTimeout(()=>{
+   void request<DirectionMatch>("/api/instruments/match-direction",{
+    method:"POST",headers:{"Content-Type":"application/json"},
+    signal:controller.signal,body:JSON.stringify({instruction:direction})
+   }).then(result=>{if(live)setDirectionMatch(result);})
+     .catch(error=>{if(live&&!(error instanceof DOMException&&error.name==="AbortError"))
+       setDirectionError(String(error));});
+  },400);
+  return()=>{live=false;window.clearTimeout(timer);controller.abort();};
+ },[directionText]);
  const [proposalPart,setProposalPart]=useState<ProposalPart>("Bass");
  const [mockVelocity,setMockVelocity]=useState(5);
  const [proposalBusy,setProposalBusy]=useState(false);
@@ -331,7 +346,8 @@ export function MidiPianoRoll({jobId,sourceTrackId,targetStem="Other",requestedA
  const mappingReady=directionMatch?.status==="matched"&&
   directionMatch.assignments.some(row=>row.section==="default");
  const mappingState=directionBusy?"working":mappingReady?"ready":
-  directionError||proposalError?"error":directionText.trim()?"unchecked":"empty";
+  directionError||proposalError||(directionMatch&&directionMatch.status!=="matched")
+   ?"error":directionText.trim()?"unchecked":"empty";
  async function generateDirectionProposal(){
   if(!asset||!directionText.trim()||dirty||busy||proposalBusy||!scopeIds.length||scopeError)return;
   setDirectionBusy(true);setProposalBusy(true);setDirectionError("");setProposalError("");

@@ -11,8 +11,8 @@ def propose(asset:dict,sections:list[dict],selected_ids:list[str],
     score=midi_arrangements.validate(asset)
     if type(velocity_delta) is not int or not -20<=velocity_delta<=20 or velocity_delta==0:
         raise ValueError("Mock velocity adjustment must be between -20 and 20, excluding zero")
-    if not isinstance(selected_ids,list) or not 1<=len(selected_ids)<=8 or len(set(selected_ids))!=len(selected_ids):
-        raise ValueError("Select 1 to 8 distinct song sections")
+    if not isinstance(selected_ids,list) or not 1<=len(selected_ids)<=64 or len(set(selected_ids))!=len(selected_ids):
+        raise ValueError("Select 1 to 64 distinct song sections")
     lookup={row.get("id"):row for row in sections if isinstance(row,dict)}
     origin=score["source"]["start_sample"]
     ranges=[]

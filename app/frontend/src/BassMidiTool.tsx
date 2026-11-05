@@ -45,6 +45,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const [sectionIndex,setSectionIndex]=useState(persisted?.index||0);
  const [acceptedSectionIds,setAcceptedSectionIds]=useState<string[]>(persisted?.acceptedSectionIds||[]);
  const [arrangementId,setArrangementId]=useState(persisted?.candidates[persisted.index]?.arrangement_id||"");
+ const [autoOpenRollAssetId,setAutoOpenRollAssetId]=useState("");
  const [rollDirty,setRollDirty]=useState(false);
  useEffect(()=>{if(rollDirty){setPreviewReady(false);engine?.clearCandidatePreview();}},[rollDirty,engine]);
  const [notes,setNotes]=useState<Note[]>([]);
@@ -263,7 +264,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
        method:"POST",headers:{"Content-Type":"application/json"},
        body:JSON.stringify({candidate_id:data.candidate_id})});
      setCandidate(data);setNotes(data.notes.map(n=>({...n})));setNotePage(0);
-     setArrangementId(saved.asset_id);
+     setArrangementId(saved.asset_id);setAutoOpenRollAssetId(saved.asset_id);
      setMessage(data.notes.length+" notes extracted and opened as an editable MIDI score."+
        (selectedTrack?.stem_alias.toLowerCase()==="drums"?
          " Drum warning: this is a pitched-note estimate, not kick/snare/hat classification.":""));
@@ -578,7 +579,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
          <a href={pack.source_page} target="_blank" rel="noopener noreferrer" title={"Publisher and licensing information for "+pack.name}>Source</a>
        </div>)}
      </div>}
-     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} targetStem={selectedTrack?.stem_alias||"Other"} requestedAssetId={arrangementId}
+     <MidiPianoRoll jobId={jobId} sourceTrackId={trackId} targetStem={selectedTrack?.stem_alias||"Other"} requestedAssetId={arrangementId} autoOpenAssetId={autoOpenRollAssetId}
        sections={sections} instruments={catalogue.instruments} selectedInstrument={instrumentPack+"::"+instrument}
        onInstrumentChange={key=>{const [pack,id]=key.split("::");setPackFilter("all");chooseInstrument(pack,id);}}
        onDirtyChange={setRollDirty} onUse={useArrangement}

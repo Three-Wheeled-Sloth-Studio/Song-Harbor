@@ -20,6 +20,7 @@ import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import {findingReviewKey,markReviewed} from "./FindingReview";
 import type {SectionInsight} from "./SectionInsights.ts";
+import {NarrativeDynamicsPanel,SectionComparisonPanel} from "./NarrativeDynamicsPanel";
 import {CleanupReview} from "./CleanupReview";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
 import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
@@ -1101,6 +1102,17 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     finally{setCorrectionSaving(false);}
   }
 
+  const setComparisonTrim=useCallback((db:number)=>{
+    audio.current?.setPreviewMatchTrimDb(db);
+  },[]);
+  function auditionSection(from:number,to:number){
+    const start=Math.max(0,Math.min(from,duration));
+    const end=Math.max(start+0.1,Math.min(to,duration));
+    setLoopIn(start);setLoopOut(end);setLoopEnabled(true);
+    seek(start);
+    if(!playRef.current)void togglePlayback();
+  }
+
   async function analyzeMix(){
     const engine=audio.current;
     if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
@@ -1516,7 +1528,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           }}/>
 
         </>}
+        {tool==="narrative"&&<NarrativeDynamicsPanel sections={timelineSections}
+          insights={sectionInsights} scanned={cleanupScanned} stale={cleanupStale}
+          analyzing={analyzing} ready={audioReady} onAnalyze={()=>{void analyzeMix();}}
+          onAudition={auditionSection}/>}
         {tool==="ab"&&<>
+        <SectionComparisonPanel sections={timelineSections} insights={sectionInsights}
+          scanned={cleanupScanned} stale={cleanupStale} ready={audioReady}
+          playing={playing} onAnalyze={()=>{void analyzeMix();}}
+          onAudition={auditionSection} onTrim={setComparisonTrim}/>
         <details className="production-tool-detail" aria-label="A/B audition" open>
           <summary>◉ A/B comparison &amp; bypass</summary>
           <div className="timeline-loop-controls">

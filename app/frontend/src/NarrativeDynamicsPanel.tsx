@@ -11,8 +11,7 @@ export function NarrativeDynamicsPanel({sections,insights,scanned,stale,analyzin
   const byId=new Map(insights.map(i=>[i.sectionId,i]));
   const named=new Map(sections.map(s=>[s.id,s]));
   const [showAll,setShowAll]=useState(false);
-  const rows=(!stale&&scanned)?inspectNarrativeShifts(sections.flatMap(s=>{const i=byId.get(s.id);return i?[i]:[]}))
-    .filter(row=>showAll||row.tags.length>0):[];
+  const rows=(!stale&&scanned)?inspectNarrativeShifts(sections.flatMap(s=>{const i=byId.get(s.id);return i?[i]:[]}),showAll):[];
   return <div className="timeline-loop-controls" aria-label="Narrative dynamics analysis">
     <p>Observations about how the rendered mix changes between sections, not judgments about creative intent.</p>
     <div className="production-tool-actions">

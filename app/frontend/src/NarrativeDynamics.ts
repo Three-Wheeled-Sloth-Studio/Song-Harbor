@@ -26,7 +26,7 @@ const finite=(value:number)=>Number.isFinite(value);
 const crest=(row:SectionInsight)=>row.peakDbfs-row.rmsDbfs;
 
 /** Compare adjacent sections without declaring a creative choice to be a defect. */
-export function inspectNarrativeShifts(rows:readonly SectionInsight[]):NarrativeShift[]{
+export function inspectNarrativeShifts(rows:readonly SectionInsight[],includeSmall=false):NarrativeShift[]{
   const result:NarrativeShift[]=[];
   for(let i=1;i<rows.length;i++){
     const a=rows[i-1],b=rows[i];
@@ -43,13 +43,13 @@ export function inspectNarrativeShifts(rows:readonly SectionInsight[]):Narrative
     if(density<=-2)tags.push("density-rise");
     if(density>=2)tags.push("density-drop");
     if(Math.abs(balance)>=2)tags.push("balance-shift");
-    if(tags.length===0)continue;
+    if(tags.length===0&&!includeSmall)continue;
     result.push({
       fromId:a.sectionId,toId:b.sectionId,
       rmsDeltaDb:round(loud),peakDeltaDb:round(b.peakDbfs-a.peakDbfs),
       widthDeltaDb:round(width),balanceDeltaDb:round(balance),
       tags,
-      description:tags.map(t=>({
+      description:tags.length===0?"No large change at configured thresholds":tags.map(t=>({
         "level-rise":"average level rises","level-drop":"average level falls",
         "width-rise":"stereo side/mid ratio increases","width-drop":"stereo side/mid ratio decreases",
         "density-rise":"crest factor decreases","density-drop":"crest factor increases",

@@ -1,6 +1,6 @@
 # Narrative dynamics and section-to-section audition
 
-Status: 2026-11-09 first pure-analysis slice committed to dev. Browser integration and local build/listening QA not yet completed.
+Status: 2026-11-09 floating-tool UI and section audition integration committed on dev. Frontend build and local browser/audio QA still required.
 
 ## User goal
 Make section dynamics legible as narrative movement. Compare sections or versions without louder automatically winning. Never auto-correct a deliberate artistic choice.
@@ -15,7 +15,7 @@ Make section dynamics legible as narrative movement. Compare sections or version
 - NarrativeDynamics.ts exposes inspectNarrativeShifts(): adjacent section differences, detecting changes in RMS, crest-factor proxy, stereo width and balance. These are observations, not defect labels.
 - sectionMatchTrim() calculates a bounded, peak-aware RMS gain suggestion for a proposed A/B preview. It does not modify saved automation or audio.
 - Unit tests cover level/width changes, silent inputs, clipping limits and adjustment limits.
-- Full app integration, LUFS normalization and listening QA remain outstanding.
+- Floating-tool UI added in NarrativeDynamicsPanel.tsx, registered in WorkbenchTools, and connected to StemMixer. Preview-only monitor gain added to SharedClockAudition. LUFS normalization, prior-render comparison and local listening QA remain outstanding.
 
 ## Next implementation slice: narrative analysis UI
 1. Add a 'Narrative dynamics' tool within existing floating-tool system or as a subpanel of Sound cleanup. No giant new modal.
@@ -47,3 +47,11 @@ Make section dynamics legible as narrative movement. Compare sections or version
 Expected user-defined arc: genuine communal triumph, subtle unease, mechanical takeover, celebratory final chorus, ambiguous eerie outro. Detect and display changes objectively. Do NOT automatically lower outro or narrow final chorus. Compare 0:55.876-1:21.653 against 2:34.421-3:02.469; then 2:34.421-3:02.469 against 3:02.469-3:47.280. Keep 'Raise the flags and pour the black' unchanged.
 
 Future: compare alternate production renders, narrative target overlay, automated *suggestions* linked to reversible section scripting; never infer genre or author intent from volume alone.
+
+## 2026-11-09 integrated UI slice
+
+- Open **Narrative dynamics** in the right floating-tools palette. Click **Analyze mix**; findings show chronological transitions and a **Listen across transition** action that loops a short boundary window. **Show small changes** includes transitions below the default threshold.
+- Open **A/B comparison** and use **Section A** and **Section B**, then **Play A** or **Play B**. The comparison loops the chosen full section. RMS match for B is on by default; turn it off to hear the intended original loudness contrast. Analysis must be fresh for calculated gain; otherwise audition is available without matching.
+- Gain matching is audition-only in SharedClockAudition's master monitoring stage; no save/export path is changed. Stopping or closing the tool restores gain. Limit is +/-12 dB with a peak headroom guard based on the last scan.
+- Explicitly NOT included: a crossfade between A/B, equal-length windows, integrated LUFS, on-disk prior-version A/B, or automatic narrative corrections. These still need work and should not be described as shipped.
+- QA status: GitHub connector successfully wrote the files; no CI statuses or PR-triggered Actions runs were reported for the latest commit. **No build or audible browser smoke test has been executed.** Run npm run build --prefix app/frontend and frontend tests before treating this as release-ready.

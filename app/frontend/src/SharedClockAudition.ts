@@ -67,6 +67,7 @@ export class SharedClockAudition {
   private reverbSends=new Map<string,GainNode>();
   private renderedLevels:Record<string,number>={};
   private monitorLevel=0.75;
+  private previewMatchTrimDb=0;
   private outputTrimDb=0;
   private nodes:ActiveNode[]=[];
   private candidatePreview:CandidatePreview|null=null;
@@ -468,9 +469,15 @@ export class SharedClockAudition {
     this.outputTrimDb=value;
     this.updateMasterOutput();
   }
+  /** Audition-only comparison attenuation/amplification; excluded from offline render. */
+  setPreviewMatchTrimDb(value:number){
+    if(!Number.isFinite(value)||value< -12||value>12)throw Error("Invalid preview match adjustment");
+    this.previewMatchTrimDb=value;
+    this.updateMasterOutput();
+  }
   private updateMasterOutput(){
     this.master.gain.setTargetAtTime(
-      this.monitorLevel*Math.pow(10,this.outputTrimDb/20),
+      this.monitorLevel*Math.pow(10,(this.outputTrimDb+this.previewMatchTrimDb)/20),
       this.context.currentTime,0.015);
   }
   /** End-anchored fade attenuates the dry mix and reverb excitation; existing wet decay survives. */

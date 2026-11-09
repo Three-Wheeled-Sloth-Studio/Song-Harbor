@@ -1,11 +1,12 @@
 import {useEffect,useRef,useState,type ReactNode,type PointerEvent} from "react";
-export type WorkbenchTool="songText"|"sectionEdit"|"cleanup"|"accompaniment"|"bassMidi"|"ab"|"ending"|"zoom"|"loop"|"channels"|"download";
+export type WorkbenchTool="songText"|"sectionEdit"|"cleanup"|"accompaniment"|"bassMidi"|"ab"|"ending"|"zoom"|"loop"|"channels"|"download"|"narrative";
 export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"sectionEdit",icon:"≡",label:"Edit sections"},
   {id:"cleanup",icon:"◇",label:"Sound cleanup & forensics"},
   {id:"accompaniment",icon:"♫",label:"Generate accompaniment"},
   {id:"bassMidi",icon:"◷",label:"Stem tools"},
   {id:"ab",icon:"◉",label:"A/B comparison"},
+  {id:"narrative",icon:"≋",label:"Narrative dynamics"},
   {id:"ending",icon:"⇥",label:"Ending"},
   {id:"zoom",icon:"⌕",label:"Zoom"},
   {id:"loop",icon:"↻",label:"Region loop"},

@@ -398,6 +398,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     transportGeneration.current+=1;
     playRef.current=false;
     audio.current?.pause();
+    audio.current?.setPreviewMatchTrimDb(0);
     setPlaying(false);
     setPosition(audio.current?.position??0);
   },[]);

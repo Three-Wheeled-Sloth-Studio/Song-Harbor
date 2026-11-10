@@ -142,3 +142,20 @@ roadmap:
     horizon: later
     status: deferred-pending-evidence
     summary: Surgical sub-section audio editing; first determine whether adding or resizing ordinary song sections already provides the needed user value.
+
+  - id: SH-RM-280
+    horizon: next
+    status: planned-after-current-release
+    summary: Add in-app shared model root and optional MOSS download/verification/registration, load/unload and local benchmark. Use existing models when present, never auto-install.
+  - id: SH-RM-285
+    horizon: next
+    status: planned-after-current-release
+    summary: Versioned Shared Musical Understanding asset records sources, time-aligned objective measures, confidence, model observations and authored narrative constraints with selective invalidation.
+  - id: SH-RM-290
+    horizon: next
+    status: planned-after-current-release
+    summary: Benchmark MOSS-Music-8B-Instruct and smaller alternatives, then generate reviewed schema-validated accompaniment and mix proposals through existing ACE and section-script A/B.
+  - id: SH-RM-295
+    horizon: next-track
+    status: deferred-by-user
+    summary: Explore YuE2 score and arrangement accompaniment, independent instrument rendering and provider integration only after Parade for the Drowned King release.

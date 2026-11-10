@@ -12,6 +12,8 @@ import time
 import urllib.error
 import urllib.request
 import json
+import socket
+import atexit
 from pathlib import Path
 
 import model_registry
@@ -19,6 +21,7 @@ import model_registry
 LOCK = threading.RLock()
 _ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None}
 PORT = 18791
+STARTUP_TIMEOUT_SECONDS = 180
 
 
 def _probe(expected_name: str | None = None) -> bool:
@@ -31,7 +34,7 @@ def _probe(expected_name: str | None = None) -> bool:
             if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
                 return False
             names = [str(item.get("id", "")) for item in payload["data"] if isinstance(item, dict)]
-            return any(expected_name.lower() in name.lower() for name in names) if expected_name else bool(names)
+            return any(os.path.normcase(os.path.normpath(expected_name)) == os.path.normcase(os.path.normpath(name)) for name in names) if expected_name else bool(names)
     except (OSError, ValueError, urllib.error.URLError):
         return False
 
@@ -50,6 +53,9 @@ def status() -> dict:
                 _ACTIVE["log"] = None
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         ready = _probe(_ACTIVE["model_name"])
+        if not ready and time.time() - _ACTIVE["started_at"] > STARTUP_TIMEOUT_SECONDS:
+            _ACTIVE["error"] = "ERROR: Model startup timed out after 180 seconds. Model not loaded."
+            return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         return {"status": "ready" if ready else "starting", "model_id": _ACTIVE["id"],
                 "started_at": _ACTIVE["started_at"], "error": "",
                 "port": PORT}
@@ -59,7 +65,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
          custom_code_approved: bool) -> dict:
     if not custom_code_approved:
         raise ValueError("ERROR: MOSS requires custom checkpoint code. Review and explicitly approve before loading.")
-    if not Path(python_executable).is_absolute() or not Path(python_executable).is_file():
+    if not Path(python_executable).is_absolute() or not Path(python_executable).is_file() or Path(python_executable).name.lower() not in ("python.exe", "python3.exe", "python"):
         raise ValueError("ERROR: Select an existing isolated SGLang Python executable. Model not loaded.")
     inventory = model_registry.list_models(app_root, model_root)["registered"]
     record = next((m for m in inventory if m["id"] == identifier), None)
@@ -68,8 +74,10 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
     with LOCK:
         if _ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None:
             raise ValueError("ERROR: Unload the current model before loading another. Model not loaded.")
-        if _probe():
-            raise ValueError(f"ERROR: Local port {PORT} already has a model service. Model not loaded.")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            if sock.connect_ex(("127.0.0.1", PORT)) == 0:
+                raise ValueError(f"ERROR: Local port {PORT} already in use. Model not loaded.")
         # Never allow Hugging Face to auto-fetch missing weights or code.
         env = os.environ.copy()
         env["HF_HUB_OFFLINE"] = "1"
@@ -91,7 +99,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
             log.close()
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
-                        "error": "", "log": log, "model_name": record["name"]})
+                        "error": "", "log": log, "model_name": record["path"]})
     return status()
 
 

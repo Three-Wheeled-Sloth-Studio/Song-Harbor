@@ -115,7 +115,7 @@ repo_id,root_str,identifier=sys.argv[1:]
 root=Path(root_str).resolve()
 api=HfApi()
 info=api.model_info(repo_id,files_metadata=True)
-license_id=str((info.card_data or {}).get("license","")).lower()
+license_id=str(getattr(info.card_data,"license","") or "").lower()
 if license_id not in ("apache-2.0","apache 2.0"):
     raise RuntimeError("License not verified as Apache-2.0. Download refused.")
 sizes=[getattr(s,"size",None) for s in info.siblings or [] if not str(s.rfilename).startswith(".")]

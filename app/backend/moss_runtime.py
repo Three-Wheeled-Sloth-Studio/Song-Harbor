@@ -160,6 +160,9 @@ def unload() -> dict:
     with LOCK:
         process = _ACTIVE["process"]
         if process is None:
+            if _ATTACHED["id"] is not None:
+                _ATTACHED.update({"id": None, "model_name": None})
+                return {"status": "unloaded", "model_id": None, "external": True, "service_stopped": False, "error": ""}
             return status()
         _stop_process(process)
         _ACTIVE["process"] = None
@@ -169,3 +172,21 @@ def unload() -> dict:
             _ACTIVE["log"].close()
             _ACTIVE["log"] = None
         return {"status": "unloaded", "model_id": None, "error": ""}
+
+
+def attach(app_root: Path, model_root: Path, identifier: str) -> dict:
+    """Connect to external localhost WSL service; never spawn or kill it."""
+    registered = model_registry.list_models(app_root, model_root)["registered"]
+    record = next((item for item in registered if item["id"] == identifier), None)
+    if record is None or record.get("status") != "present-unverified":
+        raise ValueError("ERROR: Register a complete MOSS checkpoint first. Model not connected.")
+    expected = "songharbor-moss-" + identifier
+    with LOCK:
+        if _ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None:
+            raise ValueError("ERROR: Unload managed MOSS before connecting. Model not connected.")
+        if _ATTACHED["id"] is not None:
+            raise ValueError("ERROR: Disconnect current service first. Model not connected.")
+        if not _probe(expected):
+            raise ValueError("ERROR: No matching MOSS service at localhost:18791. Set --served-model-name " + expected + ". Model not connected.")
+        _ATTACHED.update({"id": identifier, "model_name": expected})
+    return status()

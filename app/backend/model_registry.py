@@ -52,9 +52,9 @@ def _atomic_write(app_root: Path, registry: dict) -> None:
 
 def _identify(config: dict) -> str | None:
     types = " ".join(str(config.get(k, "")) for k in ("model_type", "architectures", "auto_map")).lower()
-    if "moss_music" in types or "moss-music" in types:
+    if "moss_music" in types or "moss-music" in types or "mossmusic" in types:
         return "moss_music"
-    if "moss_audio" in types or "moss-audio" in types:
+    if "moss_audio" in types or "moss-audio" in types or "mossaudio" in types:
         return "moss_audio"
     return None
 

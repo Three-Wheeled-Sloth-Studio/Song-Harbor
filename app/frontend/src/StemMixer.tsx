@@ -237,6 +237,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
+  const [sourceAudioRevision,setSourceAudioRevision]=useState(0);
   const [cleanupLocked,setCleanupLocked]=useState(false);
   const [deshimmerJobId,setDeshimmerJobId]=useState<string|null>(null);
   const setCleanupLock=useCallback((locked:boolean)=>setCleanupLocked(locked),[]);
@@ -460,7 +461,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       if(audio.current===engine)audio.current=null;
       void engine.dispose();
     };
-  },[files,jobId,expectedDuration,routingVersion,trackIdentities]);
+  },[files,jobId,expectedDuration,routingVersion,trackIdentities,sourceAudioRevision]);
 
   useEffect(()=>{
     const levels:Record<string,{gain:number}>={};
@@ -1500,7 +1501,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </>}
         {tool==="cleanup"&&<DeshimmerCleanup jobId={jobId}
           tracks={trackIdentities} engine={audio.current} playing={playing} onPlay={togglePlayback} onLocked={setCleanupLock} onJobId={setDeshimmerJobId}
-          onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
+          onPause={stop} onInserted={({project,job})=>{setSourceAudioRevision(v=>v+1);setMixUrl(null);setCleanupStale(true);onTrackAdded?.(project,job);}}
           onError={setError}/>}
         {tool==="cleanup"&&declickDraft&&<>
           <DeclickWorkbench draft={declickDraft} sources={audio.current?.declickSourceKeys||[]}

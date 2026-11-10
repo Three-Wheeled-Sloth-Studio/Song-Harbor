@@ -319,6 +319,20 @@ def discover_local_models() -> dict[str, Any]:
     return model_registry.list_models(APP_ROOT, SHARED_MODEL_ROOT)
 
 
+class RegisterWslModelRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    path: str = Field(min_length=1, max_length=2048)
+
+
+@app.post("/api/settings/models/register-wsl")
+def register_wsl_model(body: RegisterWslModelRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return model_registry.register_wsl(APP_ROOT, body.distro, body.path)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/settings/models/register")
 def register_local_model(body: RegisterModelRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)

@@ -9,6 +9,7 @@ import hashlib
 import os
 import shutil
 import uuid
+import channel_split
 from pathlib import Path
 
 def digest(path: Path) -> str:
@@ -23,14 +24,13 @@ def _current(project: dict, filename: str) -> dict:
                   if row.get("working_filename") == filename), None)
     if not track:
         raise ValueError("Source stem identity is missing")
-    if project.get("channel_children", {}).get(filename, {}).get("active"):
-        raise ValueError("Disable L/R split on this stem before cleaning; a split needs regeneration")
     if any(mask.get("source_filename") == filename for mask in project.get("replacement_masks", [])):
         raise ValueError("Remove existing replacement layers for this stem before accepting a cleaned version")
     return track
 
 def adopt(root: Path, project: dict, filename: str, candidate: Path,
-          expected_hash: str, candidate_id: str, save) -> dict:
+          expected_hash: str, candidate_id: str, save,
+          ffmpeg: str | None = None, ffprobe: str | None = None) -> dict:
     """Atomically publish a repaired working WAV and manifest, rolling back on failure.
 
     save(project) persists the complete project and is dependency-injected for tests.
@@ -57,17 +57,29 @@ def adopt(root: Path, project: dict, filename: str, candidate: Path,
         "source_hash": expected_hash, "candidate_hash": new_hash,
         "candidate_id": candidate_id,
         "backup": "stem_versions/" + version_id + "/previous.wav",
+        "prior_channel_children": copy.deepcopy(project.get("channel_children", {}).get(filename)),
     })
     replaced = False
+    new_export: Path | None = None
     try:
         os.replace(staging, target)
         replaced = True
+        if project.get("channel_children", {}).get(filename, {}).get("active"):
+            if not ffmpeg or not ffprobe:
+                raise ValueError("L/R split tools unavailable; cleaned stem not accepted")
+            # Generate a new immutable derived export BEFORE publishing its routing.
+            new_export = channel_split.split_stems(root, updated, [filename], ffmpeg, ffprobe)
+            updated.setdefault("channel_children", {})[filename] = {
+                "export": new_export.name, "active": True
+            }
         save(updated)
         return updated
     except Exception:
         if replaced:
             shutil.copy2(previous, staging)
             os.replace(staging, target)
+        if new_export is not None:
+            shutil.rmtree(new_export, ignore_errors=True)
         raise
     finally:
         staging.unlink(missing_ok=True)
@@ -89,6 +101,12 @@ def undo(root: Path, project: dict, filename: str, save) -> dict:
         raise ValueError("Backup hash mismatch; refusing undo")
     updated = copy.deepcopy(project)
     updated["stem_cleanup_versions"] = [row for row in records if row["id"] != record["id"]]
+    # Restore exactly the routing that belonged to the prior audio version.
+    if "prior_channel_children" in record:
+        if record["prior_channel_children"] is None:
+            updated.get("channel_children", {}).pop(filename, None)
+        else:
+            updated.setdefault("channel_children", {})[filename] = copy.deepcopy(record["prior_channel_children"])
     staging = target.parent / ("." + uuid.uuid4().hex + ".undo.wav")
     accepted = target.parent / ("." + uuid.uuid4().hex + ".accepted.wav")
     shutil.copy2(target, accepted)

@@ -68,3 +68,28 @@ To make Connect WSL available:
 3. In Settings > Models, click Connect WSL. A matching /v1/models response yields Connected. Disconnect removes only the Song Harbor connection and does not stop the Linux process. Shut it down inside WSL using its own terminal/supervisor.
 
 WSL launcher installation, executable discovery, direct WSL process start/stop, quantized 12 GB profiles and GPU resource coordination with ACE are follow-up engineering work, not completed in this slice. No actual Windows/WSL MOSS run has been verified.
+
+## 2026-11-10: D-drive WSL discovery and loader visibility update
+User QA: dev relaunch clean, but Load was effectively hidden until a checkpoint was registered. Corrected to a visible Settings > Models > MOSS loader section with WSL distro selection, Inspect, a registered-model picker and explicit Load MOSS / Unload actions. Compact inline blockers now explain missing checkpoint, Python path, or custom-code approval.
+
+### WSL installation
+- Discover registered distros through `wsl.exe --list --quiet`, handling Windows UTF-16 output; never reinstall an existing distro.
+- Explicit optional Ubuntu install from Settings requires a new dedicated non-system-drive location and an approval checkbox. Uses documented `wsl.exe --install --distribution Ubuntu --location <folder> --no-launch`, after checking CLI support for `--location`. Install is asynchronous, with status and log under the shared model root.
+- Installing Ubuntu may require administrator rights, network transfer and/or restart. No install has been run on the test machine.
+- This does not relocate an existing distro. In particular, the user's D: WSL installation must be discovered and reused without mutation.
+- Installing compatible SGLang, CUDA dependencies, or model checkpoints is NOT implemented by the Ubuntu installer and requires a separate explicit install workflow once runtime compatibility is verified.
+
+### Runtime and checkpoint discovery
+- Inspect WSL distro for Python candidates and basic GPU-tool visibility; candidate locations can be edited.
+- Register an existing checkpoint via a Windows-accessible path OR a Linux path inside the selected WSL distribution. Linux checkpoint metadata is inspected through bounded Python commands in the selected distro without importing model code or loading weights.
+- Managed WSL launch uses the registered checkpoint, an existing WSL Python environment with importable SGLang, localhost model identity, and offline Hugging Face settings. Cache paths are located beneath the shared model root (set this to D: before launch).
+- WSL worker shutdown attempts to terminate only the owned uniquely named SGLang server; refuses to report Unloaded if the server is still present. No actual WSL model launch or stop was tested.
+- A visible Load control is not proof that the required model, compatible SGLang fork, quantization or VRAM profile is present. Full model install/verification remains a separate gate.
+
+### QA for the next relaunch
+1. Settings > Models should open with visible MOSS loader even with zero models. Detect WSL should list the existing D: Linux distribution without installing anything.
+2. Inspect should show Python candidates and GPU visibility; missing optional nvidia-smi or virtualenv must not be displayed as a fatal crash.
+3. Try Register WSL path to an existing MOSS checkpoint, if one exists; otherwise confirm explicit refusal without side effects.
+4. Do not attempt full inference on the active workstation until the exact SGLang MOSS branch and 12 GB VRAM/offload profile are verified.
+5. If testing optional Ubuntu installation, choose a new D: directory and verify no distro overwrite, download/start approval, status feedback and safe error on unsupported WSL CLI.
+6. Tests: `test_model_registry.py`, `test_wsl_model_bridge.py`, `test_shared_model_settings.py`. Frontend CI and single-server smoke must be green before promotion.

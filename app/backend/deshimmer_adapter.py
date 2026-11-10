@@ -26,11 +26,15 @@ PROBE = (
 )
 
 
-def probe(python_executable: str | None = None, timeout_seconds: int = 15) -> dict:
+def resolve_python(python_executable: str | None = None) -> str:
+    """Discover the configured executable without importing slow DSP dependencies.
+
+    Deshimmer can take well over 15 seconds to cold-import on Windows. Job
+    creation should not require the independent UI/service to be running.
+    The actual worker validates imports and reports failures asynchronously.
+    """
     configured = python_executable or os.environ.get("SONG_HARBOR_DESHIMMER_PYTHON")
     if not configured:
-        # Non-invasive discovery of the existing local Windows checkout.
-        # The user can always override with SONG_HARBOR_DESHIMMER_PYTHON.
         candidates = [
             Path("D:/Apps/deshimmer/.venv/Scripts/python.exe"),
             Path("D:/Apps/Tools/deshimmer/.venv/Scripts/python.exe"),
@@ -43,7 +47,13 @@ def probe(python_executable: str | None = None, timeout_seconds: int = 15) -> di
     executable = Path(configured).expanduser().resolve()
     if not executable.is_file():
         raise DeshimmerUnavailable("Configured Deshimmer Python executable does not exist")
-    if not 1 <= timeout_seconds <= 30:
+    return str(executable)
+
+
+def probe(python_executable: str | None = None, timeout_seconds: int = 90) -> dict:
+    """Optional full health check; not invoked when starting each cleanup job."""
+    executable = resolve_python(python_executable)
+    if not 1 <= timeout_seconds <= 180:
         raise DeshimmerUnavailable("Invalid Deshimmer probe timeout")
     try:
         outcome = subprocess.run(

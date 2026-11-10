@@ -20,6 +20,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [runtime,setRuntime]=useState<ModelRuntime|null>(null);
   const [locatePath,setLocatePath]=useState("");
   const [runtimePython,setRuntimePython]=useState("");
+  const [savedRuntimePython,setSavedRuntimePython]=useState("");
   const [approveCode,setApproveCode]=useState(false);
   const [modelPath,setModelPath]=useState("");
   const [showModels,setShowModels]=useState(false);
@@ -44,6 +45,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void refreshModels();
+    void response<{python_executable:string}>("/api/settings/models/runtime/config","GET").then(x=>{setRuntimePython(x.python_executable);setSavedRuntimePython(x.python_executable);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
     void fetch("/api/settings/sfizz").then(async r=>{
@@ -150,6 +152,11 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
             </div>
             <div className="setting-controls setting-component-path">
               <input aria-label="SGLang Python executable" value={runtimePython} onChange={e=>setRuntimePython(e.target.value)} placeholder="Isolated SGLang python.exe (existing)"/>
+              <Button size="compact" variant="secondary" disabled={busy||!runtimePython.trim()||runtimePython===savedRuntimePython} onClick={()=>void act(async()=>{
+                const x=await response<{python_executable:string}>("/api/settings/models/runtime/config","PUT",{path:runtimePython});
+                setSavedRuntimePython(x.python_executable);setRuntimePython(x.python_executable);
+                setNotice("Runtime executable saved. No model started.");
+              })}>Save runtime</Button>
             </div>
             <label className="setting-tool-row"><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I reviewed and approve this checkpoint's custom Python code</label>
             {runtime?.status==="starting"&&<p role="status">Starting model. Readiness check pending...</p>}

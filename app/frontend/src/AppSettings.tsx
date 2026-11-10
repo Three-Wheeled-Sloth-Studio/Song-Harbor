@@ -10,6 +10,7 @@ type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:s
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
 type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
 type WslStatus={available:boolean;distros:string[];message:string};
+type WslInstall={state:"idle"|"installing"|"completed"|"failed";destination:string;message:string};
 type WslProbe={distro:string;python_candidates:string[];probe_ok:boolean;gpu_visible:boolean;message:string};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
@@ -27,6 +28,10 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [modelPath,setModelPath]=useState("");
   const [showModels,setShowModels]=useState(true);
   const [wsl,setWsl]=useState<WslStatus|null>(null);
+  const [wslInstall,setWslInstall]=useState<WslInstall|null>(null);
+  const [wslInstallFolder,setWslInstallFolder]=useState("");
+  const [wslInstallApproved,setWslInstallApproved]=useState(false);
+  const [showWslInstall,setShowWslInstall]=useState(false);
   const [wslDistro,setWslDistro]=useState("");
   const [wslProbe,setWslProbe]=useState<WslProbe|null>(null);
   const [wslPython,setWslPython]=useState("");
@@ -52,6 +57,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void refreshModels();
+    void response<WslInstall>("/api/settings/models/wsl/install","GET").then(setWslInstall).catch(e=>setError(String(e)));
     void response<WslStatus>("/api/settings/models/wsl","GET").then(x=>{
       setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
     }).catch(e=>setError(String(e)));
@@ -149,6 +155,29 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               })}>Inspect</Button>
             </div>
             {wsl?.message&&<p role="status">{wsl.message}</p>}
+            <div className="setting-tool-row">
+              <span>WSL setup <Status tone={wsl?.distros.length?"success":"warning"}>{wsl?.distros.length?"Installed":"Check setup"}</Status></span>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setShowWslInstall(v=>!v)}>{showWslInstall?"Hide setup":"Install WSL"}</Button>
+            </div>
+            {showWslInstall&&<div className="setting-tools">
+              <div className="setting-controls setting-component-path">
+                <input aria-label="New Ubuntu WSL installation directory" value={wslInstallFolder}
+                  onChange={e=>setWslInstallFolder(e.target.value)} placeholder="D:\\WSL\\SongHarborUbuntu (new folder)"/>
+                <Button size="compact" variant="primary" disabled={busy||wslInstall?.state==="installing"||!wsl?.available||!wslInstallFolder.trim()||!wslInstallApproved||(wsl?.distros||[]).includes("Ubuntu")}
+                  onClick={()=>void act(async()=>{
+                    const x=await response<WslInstall>("/api/settings/models/wsl/install","POST",{distro:"Ubuntu",destination:wslInstallFolder,approved:wslInstallApproved});
+                    setWslInstall(x);
+                  })}>Install Ubuntu</Button>
+              </div>
+              <label className="setting-tool-row"><input type="checkbox" checked={wslInstallApproved}
+                onChange={e=>setWslInstallApproved(e.target.checked)}/> Approve Ubuntu download and installation in selected folder</label>
+              {wslInstall?.message&&<p role="status">{wslInstall.message}</p>}
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                setWslInstall(await response<WslInstall>("/api/settings/models/wsl/install","GET"));
+                const x=await response<WslStatus>("/api/settings/models/wsl","GET");setWsl(x);
+              })}>Check installation</Button>
+            </div>}
+
             {wslProbe&&<div className="setting-controls setting-component-path">
               <input aria-label="WSL SGLang Python path" value={wslPython} onChange={e=>setWslPython(e.target.value)} placeholder="/home/user/.venv/bin/python"/>
               <Status tone={wslProbe.gpu_visible?"success":"warning"}>{wslProbe.gpu_visible?"GPU visible":"GPU unverified"}</Status>

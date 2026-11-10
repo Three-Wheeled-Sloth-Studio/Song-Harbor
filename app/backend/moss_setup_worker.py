@@ -118,7 +118,7 @@ info=api.model_info(repo_id,files_metadata=True)
 license_id=str(getattr(info.card_data,"license","") or "").lower()
 if license_id not in ("apache-2.0","apache 2.0"):
     raise RuntimeError("License not verified as Apache-2.0. Download refused.")
-sizes=[getattr(s,"size",None) for s in info.siblings or [] if not str(s.rfilename).startswith(".")]
+sizes=[getattr(s,"size",None) for s in info.siblings or [] if str(s.rfilename).endswith(".safetensors")]
 if not sizes or any(not isinstance(size,int) for size in sizes):
     raise RuntimeError("Model download size unavailable. Disk preflight failed closed.")
 total=sum(sizes)
@@ -131,7 +131,16 @@ if destination.exists():
     raise RuntimeError("Checkpoint destination already exists. No files overwritten.")
 staging.parent.mkdir(parents=True,exist_ok=True)
 if staging.exists():
-    raise RuntimeError("Previous staging directory found. Inspect before retry; nothing overwritten.")
+    marker=staging/".songharbor-staging.json"
+    if not marker.is_file():
+        raise RuntimeError("Unrecognized staging folder. Existing files preserved.")
+    identity=json.loads(marker.read_text())
+    if identity.get("repo")!=repo_id or identity.get("revision")!=info.sha:
+        raise RuntimeError("Staging does not match pinned repository revision. No files overwritten.")
+    print("RESUME: matching incomplete checkpoint download",flush=True)
+else:
+    staging.mkdir(parents=True)
+    (staging/".songharbor-staging.json").write_text(json.dumps({"repo":repo_id,"revision":info.sha}))
 print("DOWNLOAD: "+repo_id+" revision "+info.sha+" bytes "+str(total),flush=True)
 snapshot_download(repo_id=repo_id,revision=info.sha,local_dir=staging)
 files=list(p for p in staging.rglob("*") if p.is_file() and ".cache" not in p.parts)
@@ -162,6 +171,7 @@ for p in files:
 manifest={"schema_version":1,"repo":repo_id,"revision":info.sha,"license":license_id,
           "family":family,"inventory":inventory,"verification":"local-sha256","complete":True}
 (staging/"song-harbor-install.json").write_text(json.dumps(manifest,indent=2),encoding="utf-8")
+(staging/".songharbor-staging.json").unlink(missing_ok=True)
 destination.parent.mkdir(parents=True,exist_ok=True)
 staging.rename(destination)
 print("MODEL READY: "+str(destination),flush=True)

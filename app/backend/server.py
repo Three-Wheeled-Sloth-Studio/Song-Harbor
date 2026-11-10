@@ -1927,11 +1927,12 @@ def accept_deshimmer_version(ident: str, candidate_id: str, request: Request) ->
             record["source_tracks"] = rows
             result = deshimmer_versions.adopt(
                 DATA_ROOT, record, filename, candidate, state["source_hash"], candidate_id,
-                lambda updated: projects.write_project(DATA_ROOT, updated))
+                lambda updated: projects.write_project(DATA_ROOT, updated),
+                ffmpeg=dependency_tool("ffmpeg"), ffprobe=dependency_tool("ffprobe"))
             deshimmer_stem_jobs.consume(ident, candidate_id)
         except KeyError as exc:
             raise HTTPException(409, str(exc)) from exc
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, RuntimeError, subprocess.SubprocessError) as exc:
             raise HTTPException(409, str(exc)) from exc
         job["message"] = "Stem cleanup accepted"
         return {"project": result, "job": snapshot(job), "stem": filename}

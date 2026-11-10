@@ -13,7 +13,7 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"channels",icon:"◫",label:"Split channels"},
   {id:"download",icon:"⇩",label:"Download"}
 ];
-export function ToolWindow({name,onClose,children,order=0,onFocus,locked=false}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void;locked?:boolean}){
+export function ToolWindow({name,onClose,children,order=0,onFocus,locked=false,onCancelLocked}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void;locked?:boolean;onCancelLocked?:()=>void}){
   const [pos,setPos]=useState<{x:number;y:number}|null>(null);
   const [aceStatus,setAceStatus]=useState<"ready"|"unavailable"|"unknown">("unknown");
   const initialPlacement=useRef({right:75+order*24,top:90+order*26});
@@ -66,6 +66,7 @@ export function ToolWindow({name,onClose,children,order=0,onFocus,locked=false}:
       <strong>Audio cleanup running</strong>
       <span>Deshimmer is analyzing, optimizing or rendering the selected stem.</span>
       <small>Window locked until processing completes. Original audio remains unchanged.</small>
+      {onCancelLocked&&<button type="button" onClick={onCancelLocked}>Cancel cleanup</button>}
     </div>}
   </section>;
 }

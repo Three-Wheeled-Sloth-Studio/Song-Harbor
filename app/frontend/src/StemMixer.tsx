@@ -22,6 +22,7 @@ import {findingReviewKey,markReviewed} from "./FindingReview";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {NarrativeDynamicsPanel,SectionComparisonPanel} from "./NarrativeDynamicsPanel";
 import {CleanupReview} from "./CleanupReview";
+import {DeshimmerCleanup} from "./DeshimmerCleanup";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
 import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
@@ -236,6 +237,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
+  const [cleanupLocked,setCleanupLocked]=useState(false);
+  const setCleanupLock=useCallback((locked:boolean)=>setCleanupLocked(locked),[]);
   const [cleanupStale,setCleanupStale]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
   const [cleanupError,setCleanupError]=useState("");
@@ -1347,8 +1350,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       <aside className="song-tool-rail" aria-label="Production tools">
         {TOOL_ITEMS.map(item=><button type="button" key={item.id}
           className="song-tool-icon" title={item.label} aria-label={"Open "+item.label+" tool"}
+          disabled={item.id==="cleanup"&&cleanupLocked}
           aria-pressed={openTools.includes(item.id)}
           onClick={()=>{
+            if(item.id==="cleanup"&&cleanupLocked)return;
             if(item.id==="sectionEdit")setSectionEditId(current=>current||timelineSections[0]?.id||"");
             if(item.id==="cleanup"&&openTools.includes("cleanup")){setCorrection(null);setDeclickDraft(null);}
             if(item.id==="sectionEdit"&&openTools.includes("sectionEdit")){setSectionPreviewActive(false);setSectionPreview(null);}
@@ -1359,10 +1364,11 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </button>)}
       </aside>
       {openTools.map((tool,order)=><ToolWindow key={tool}
-        name={tool==="songText"?"Whole-song section text":TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order}
+        name={tool==="songText"?"Whole-song section text":TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order} locked={tool==="cleanup"&&cleanupLocked}
         onFocus={()=>setOpenTools(current=>current[current.length-1]===tool?current:
           [...current.filter(item=>item!==tool),tool])}
         onClose={()=>{
+          if(tool==="cleanup"&&cleanupLocked)return;
           setOpenTools(items=>items.filter(item=>item!==tool));
           if(tool==="sectionEdit"){setSectionPreviewActive(false);setSectionPreview(null);}
           if(tool==="cleanup"){setCorrection(null);setDeclickDraft(null);}
@@ -1488,6 +1494,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
               setEnding(data.ending);setMixUrl(null);setScriptRevision(v=>v+1);
             }}/>
         </>}
+        {tool==="cleanup"&&<DeshimmerCleanup jobId={jobId}
+          tracks={trackIdentities} engine={audio.current} onLocked={setCleanupLock}
+          onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
+          onError={setError}/>}
         {tool==="cleanup"&&declickDraft&&<>
           <DeclickWorkbench draft={declickDraft} sources={audio.current?.declickSourceKeys||[]}
             locked={declickBusy} onChange={setDeclickDraft}

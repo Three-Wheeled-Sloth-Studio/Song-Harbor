@@ -294,6 +294,24 @@ class LoadMossRequest(BaseModel):
     custom_code_approved: bool = False
 
 
+class RuntimePythonRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
+@app.get("/api/settings/models/runtime/config")
+def model_runtime_config() -> dict[str, Any]:
+    return {"python_executable": shared_model_settings.configured_runtime_python(APP_ROOT)}
+
+
+@app.put("/api/settings/models/runtime/config")
+def save_model_runtime_config(body: RuntimePythonRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"python_executable": shared_model_settings.save_runtime_python(APP_ROOT, body.path)}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/api/settings/models/discover")
 def discover_local_models() -> dict[str, Any]:
     return model_registry.list_models(APP_ROOT, SHARED_MODEL_ROOT)

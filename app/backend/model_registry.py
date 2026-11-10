@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 import workspace_settings
+import wsl_model_bridge
 
 _LOCK = threading.RLock()
 FAMILIES = {
@@ -131,13 +132,18 @@ def list_models(app_root: Path, root: Path) -> dict:
     for key, record in registry["models"].items():
         if not isinstance(record, dict) or not isinstance(record.get("path"), str):
             continue
-        check = inspect(Path(record["path"]))
+        check = (wsl_model_bridge.inspect_checkpoint(record["distro"], record["path"])
+                 if record.get("storage") == "wsl" and isinstance(record.get("distro"), str)
+                 else inspect(Path(record["path"])))
         if check is None:
             registered.append({"id": key, "name": record.get("name", key), "path": record["path"],
                                "status": "missing-or-unrecognized", "loaded": False})
         else:
             check["id"] = key
             check["registered"] = True
+            if record.get("storage") == "wsl":
+                check["storage"] = "wsl"
+                check["distro"] = record["distro"]
             registered.append(check)
             by_path.pop(check["path"], None)
     return {"registered": registered, "discovered": list(by_path.values()), "scan_limit": MAX_DIRECTORIES}
@@ -170,3 +176,19 @@ def unregister(app_root: Path, identifier: str) -> None:
         del registry["models"][identifier]
         _atomic_write(app_root, registry)
     # Never delete any model files.
+
+
+def register_wsl(app_root: Path, distro: str, linux_folder: str) -> dict:
+    """Register a checkpoint residing entirely inside an existing WSL distribution."""
+    import hashlib
+    info = wsl_model_bridge.inspect_checkpoint(distro, linux_folder)
+    if info is None or info.get("status") != "present-unverified":
+        raise ValueError("ERROR: WSL checkpoint missing, incomplete, or unrecognized. Model not registered.")
+    identifier = hashlib.sha256((distro + ":" + info["path"]).encode("utf-8")).hexdigest()[:20]
+    with _LOCK:
+        registry = _load(app_root)
+        registry["models"][identifier] = {
+            "path": info["path"], "name": info["name"], "family": info["family"],
+            "storage": "wsl", "distro": distro}
+        _atomic_write(app_root, registry)
+    return {**info, "id": identifier, "registered": True, "storage": "wsl", "distro": distro}

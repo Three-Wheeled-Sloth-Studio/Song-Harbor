@@ -1259,3 +1259,17 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 }
 .song-deshimmer-switch button:focus-visible,
 .song-deshimmer-play:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Cleanup failures must never resemble informational status. */
+.song-deshimmer-error {
+  color: #ffe4e4;
+  background: rgba(147, 24, 35, 0.24);
+  border: 2px solid #e04b55;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.8rem;
+  font-weight: 550;
+}
+.song-deshimmer-error strong {
+  color: #ff6f79;
+  font-weight: 850;
+}

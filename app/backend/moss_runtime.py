@@ -54,6 +54,15 @@ def status() -> dict:
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         ready = _probe(_ACTIVE["model_name"])
         if not ready and time.time() - _ACTIVE["started_at"] > STARTUP_TIMEOUT_SECONDS:
+            try:
+                _stop_process(process)
+            except Exception as exc:
+                _ACTIVE["error"] = f"ERROR: Model startup timed out; shutdown failed: {exc}"
+                return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
+            _ACTIVE["process"] = None
+            if _ACTIVE["log"] is not None:
+                _ACTIVE["log"].close()
+                _ACTIVE["log"] = None
             _ACTIVE["error"] = "ERROR: Model startup timed out after 180 seconds. Model not loaded."
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         return {"status": "ready" if ready else "starting", "model_id": _ACTIVE["id"],
@@ -103,24 +112,42 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
     return status()
 
 
+def _stop_process(process: subprocess.Popen) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        result = subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, text=True, timeout=12)
+        if result.returncode != 0 and process.poll() is None:
+            raise RuntimeError("ERROR: Unable to stop Windows model process tree.")
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    if process.poll() is None:
+        raise RuntimeError("ERROR: Model process is still running. Unload not confirmed.")
+
+
+def cleanup_on_exit() -> None:
+    with LOCK:
+        proc = _ACTIVE["process"]
+        if proc is not None:
+            try:
+                _stop_process(proc)
+            except Exception:
+                pass
+
+
+atexit.register(cleanup_on_exit)
+
 def unload() -> dict:
     with LOCK:
         process = _ACTIVE["process"]
         if process is None:
             return status()
-        if process.poll() is None:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                               capture_output=True, text=True, timeout=12)
-            else:
-                process.terminate()
-            try:
-                process.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
-        if process.poll() is None:
-            raise RuntimeError("ERROR: Model process is still running. Unload not confirmed.")
+        _stop_process(process)
         _ACTIVE["process"] = None
         _ACTIVE["id"] = None
         _ACTIVE["error"] = ""

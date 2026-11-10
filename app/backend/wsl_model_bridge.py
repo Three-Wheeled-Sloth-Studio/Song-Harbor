@@ -79,3 +79,39 @@ def preflight(distro: str, python_path: str) -> None:
                   "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec('sglang') else 2)"], timeout=15)
     if check.returncode:
         raise ValueError("ERROR: SGLang is unavailable in the selected WSL Python environment. Model not loaded.")
+
+
+def inspect_checkpoint(distro: str, linux_folder: str) -> dict | None:
+    """Read only model metadata and shard presence inside an existing WSL directory."""
+    validate_distro(distro)
+    if not isinstance(linux_folder, str) or not linux_folder.startswith("/") or any(c in linux_folder for c in "\r\n\x00"):
+        raise ValueError("ERROR: Enter an absolute Linux model directory. Model not registered.")
+    script = """
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1]).expanduser().resolve()
+cfg=p/'config.json'
+if not p.is_dir() or not cfg.is_file() or cfg.is_symlink() or cfg.stat().st_size>1048576: sys.exit(3)
+data=json.loads(cfg.read_text())
+if not isinstance(data,dict): sys.exit(3)
+type_text=' '.join(str(data.get(k,'')) for k in ('model_type','architectures','auto_map')).lower()
+family=('moss_music' if any(x in type_text for x in ('moss_music','moss-music','mossmusic')) else
+        'moss_audio' if any(x in type_text for x in ('moss_audio','moss-audio','mossaudio')) else None)
+if not family: sys.exit(3)
+index=p/'model.safetensors.index.json'
+if index.is_file() and not index.is_symlink() and index.stat().st_size<4194304:
+    files=list(set(json.loads(index.read_text())['weight_map'].values()))
+else:
+    files=['model.safetensors'] if (p/'model.safetensors').is_file() else []
+if not files or len(files)>64 or any(not isinstance(n,str) or Path(n).name!=n or not n.endswith('.safetensors') for n in files): sys.exit(3)
+complete=all((p/n).is_file() and not (p/n).is_symlink() for n in files)
+print(json.dumps({'path':str(p),'name':p.name,'family':family,'status':'present-unverified' if complete else 'incomplete','files':len(files),'bytes_present':sum((p/n).stat().st_size for n in files if (p/n).is_file())}))
+"""
+    result = _run(["wsl.exe", "-d", distro, "--exec", "python3", "-c", script, linux_folder], timeout=15)
+    if result.returncode:
+        return None
+    try:
+        value = __import__("json").loads(result.stdout)
+        return value if isinstance(value, dict) else None
+    except ValueError:
+        return None

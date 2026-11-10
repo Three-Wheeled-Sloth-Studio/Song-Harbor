@@ -1499,7 +1499,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             }}/>
         </>}
         {tool==="cleanup"&&<DeshimmerCleanup jobId={jobId}
-          tracks={trackIdentities} engine={audio.current} onLocked={setCleanupLock} onJobId={setDeshimmerJobId}
+          tracks={trackIdentities} engine={audio.current} playing={playing} onPlay={togglePlayback} onLocked={setCleanupLock} onJobId={setDeshimmerJobId}
           onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           onError={setError}/>}
         {tool==="cleanup"&&declickDraft&&<>

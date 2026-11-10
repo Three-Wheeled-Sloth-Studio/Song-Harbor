@@ -20,6 +20,7 @@ import model_registry
 
 LOCK = threading.RLock()
 _ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None}
+_ATTACHED = {"id": None, "model_name": None}
 PORT = 18791
 STARTUP_TIMEOUT_SECONDS = 180
 
@@ -43,6 +44,11 @@ def status() -> dict:
     with LOCK:
         process = _ACTIVE["process"]
         if process is None:
+            if _ATTACHED["id"] is not None:
+                if _probe(_ATTACHED["model_name"]):
+                    return {"status": "connected", "model_id": _ATTACHED["id"], "external": True, "port": PORT, "error": ""}
+                _ATTACHED.update({"id": None, "model_name": None})
+                return {"status": "failed", "model_id": None, "error": "ERROR: External MOSS service disconnected."}
             return {"status": "unloaded", "model_id": None, "error": _ACTIVE["error"]}
         code = process.poll()
         if code is not None:
@@ -81,6 +87,8 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
     if record is None or record.get("status") != "present-unverified":
         raise ValueError("ERROR: Register a complete supported checkpoint before loading. Model not loaded.")
     with LOCK:
+        if _ATTACHED["id"] is not None:
+            raise ValueError("ERROR: Disconnect external MOSS before loading. Model not loaded.")
         if _ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None:
             raise ValueError("ERROR: Unload the current model before loading another. Model not loaded.")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:

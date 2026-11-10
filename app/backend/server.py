@@ -32,6 +32,7 @@ import model_registry
 import moss_runtime
 import wsl_model_bridge
 import wsl_model_install
+import moss_setup_jobs
 import projects
 import sections
 import section_import
@@ -382,6 +383,28 @@ def install_wsl_distro(body: InstallWslRequest, request: Request) -> dict[str, A
     require_local_origin(request)
     try:
         return wsl_model_install.install(SHARED_MODEL_ROOT, body.distro, body.destination, body.approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MossSetupRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    operation: Literal["runtime", "checkpoint"]
+    model: str | None = None
+    approved: bool = False
+
+
+@app.get("/api/settings/models/setup")
+def moss_setup_status(distro: str = "") -> dict[str, Any]:
+    return moss_setup_jobs.status(APP_ROOT, SHARED_MODEL_ROOT, distro or None)
+
+
+@app.post("/api/settings/models/setup")
+def start_moss_setup(body: MossSetupRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_setup_jobs.start(APP_ROOT, SHARED_MODEL_ROOT,
+                                     body.distro, body.operation, body.model, body.approved)
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(400, str(exc)) from exc
 

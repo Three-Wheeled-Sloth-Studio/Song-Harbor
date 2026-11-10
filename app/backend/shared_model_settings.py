@@ -79,7 +79,7 @@ def save_runtime_python(app_root: Path, value: str) -> str:
         raise ValueError("ERROR: Select an existing Python executable from an isolated SGLang environment. Runtime not saved.")
     cfg = workspace_settings.read(app_root)
     cfg["moss_runtime_python"] = str(candidate.resolve())
-    path = settings_path(app_root)
+    path = workspace_settings.settings_path(app_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = None
     try:

@@ -57,3 +57,10 @@ Use project+source revision and evidence:
 - refs/planning/decisions.yaml
 - TWS-Design-Principles/apps/App-Design-Principles.md
 - TWS-Design-Principles/apps/Studio-UI-Style-Guide.md
+
+## Current state at thread handoff (2026-11-10)
+- User reports Song Harbor dev relaunch clean and Deshimmer split-channel acceptance appears to pass QA. Previous attempts had failed on active L/R splits without updating any stem. After correction, user is **redoing cleanup work now**. Do NOT assume the new cleanup work is complete, frozen or exported. Do not touch this project, its stem files, its WAV exports or its Deshimmer runtime while active.
+- Latest split-acceptance and blocking-error fixes are documented in docs/audio-aware-production-and-deshimmer-2026-11-10.md. Earlier legacy Clean_* stems were recovered by a coding agent. The new acceptance keeps original track IDs/aliases and regenerates split L/R audio, with rollback and explicit red ERROR / Stem not updated messaging.
+- Infra Choir "Parade for the Drowned King" release work is primary today; base track artwork has already been generated. Music project and channel are separate from Song Harbor product identity.
+- MOSS installer and SMU work is **approved but not implemented**. Roadmap IDs SH-RM-280, 285, 290; YuE2 follow-up SH-RM-295 reserved for next track.
+- Priority when explicitly resumed: first inspect live dev implementation and user settings/model-path conventions; then implement a small safe model-folder/configuration slice without touching the active audio project. Do not begin multi-gigabyte model downloads until user opts in and destination/space are verified.

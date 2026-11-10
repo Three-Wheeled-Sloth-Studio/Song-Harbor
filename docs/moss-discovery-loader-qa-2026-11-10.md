@@ -58,3 +58,13 @@ These have NOT been run by the GitHub connector environment.
 5. With a compatible runtime and checkpoint, explicitly Load and inspect Starting -> Ready, model ID match, Unload -> Unloaded, no orphan child processes, and no network downloads.
 6. Simulate failing SGLang startup; confirm Failed and error log path. Confirm timeout cleanup of child processes.
 7. Build: `npm run build --prefix app/frontend`. Backend: `python -m unittest discover -s app/backend/tests -p 'test_*model*.py' -v`; also test shared model settings explicitly.
+
+## Windows host / WSL2 integration note
+Official SGLang deployment commonly targets Linux/WSL2, not native Windows. The managed Python loader is source implemented but not a validated native Windows execution path. A separate Connect WSL action now attaches to a server already running on localhost port 18791; it does not launch WSL, download weights, or kill the external service on Disconnect.
+
+To make Connect WSL available:
+1. Register a checkpoint folder visible to Song Harbor (existing Windows folder / WSL-mounted volume; no copying).
+2. Start your **existing** compatible SGLang installation inside WSL2 with the model path translated to its Linux path and with flags `--host 127.0.0.1 --port 18791 --trust-remote-code --served-model-name songharbor-moss-<registered-id>`. The registered ID comes from the registry API; do not substitute the model display name.
+3. In Settings > Models, click Connect WSL. A matching /v1/models response yields Connected. Disconnect removes only the Song Harbor connection and does not stop the Linux process. Shut it down inside WSL using its own terminal/supervisor.
+
+WSL launcher installation, executable discovery, direct WSL process start/stop, quantized 12 GB profiles and GPU resource coordination with ACE are follow-up engineering work, not completed in this slice. No actual Windows/WSL MOSS run has been verified.

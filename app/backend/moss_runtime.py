@@ -17,9 +17,10 @@ import atexit
 from pathlib import Path
 
 import model_registry
+import wsl_model_bridge
 
 LOCK = threading.RLock()
-_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None}
+_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None}
 _ATTACHED = {"id": None, "model_name": None}
 PORT = 18791
 STARTUP_TIMEOUT_SECONDS = 180
@@ -122,7 +123,54 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
             log.close()
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
-                        "error": "", "log": log, "model_name": "songharbor-moss-" + identifier})
+                        "error": "", "log": log, "model_name": "songharbor-moss-" + identifier, "kind": "native", "distro": None})
+    return status()
+
+
+
+def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
+             python_path: str, custom_code_approved: bool) -> dict:
+    """Start preinstalled WSL SGLang. Never install or download anything."""
+    if not custom_code_approved:
+        raise ValueError("ERROR: Approve checkpoint custom code before loading. Model not loaded.")
+    records = model_registry.list_models(app_root, model_root)["registered"]
+    record = next((item for item in records if item["id"] == identifier), None)
+    if record is None or record.get("status") != "present-unverified":
+        raise ValueError("ERROR: Register a complete checkpoint first. Model not loaded.")
+    wsl_model_bridge.preflight(distro, python_path)
+    linux_model = wsl_model_bridge.linux_path(distro, record["path"])
+    linux_root = wsl_model_bridge.linux_path(distro, str(model_root))
+    served = "songharbor-moss-" + identifier
+    with LOCK:
+        if _ATTACHED["id"] is not None or (_ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None):
+            raise ValueError("ERROR: Another model worker is active. Model not loaded.")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            if sock.connect_ex(("127.0.0.1", PORT)) == 0:
+                raise ValueError("ERROR: Port 18791 is already in use. Model not loaded.")
+        logdir = model_root / ".song-harbor" / "logs"
+        logdir.mkdir(parents=True, exist_ok=True)
+        log = (logdir / "moss-wsl.log").open("ab")
+        cache = linux_root + "/.song-harbor"
+        command = ["wsl.exe", "-d", distro, "--exec", "env",
+                   "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1",
+                   "HF_HOME=" + cache + "/hf-cache",
+                   "HUGGINGFACE_HUB_CACHE=" + cache + "/hf-cache/hub",
+                   "XDG_CACHE_HOME=" + cache + "/cache",
+                   "TORCH_HOME=" + cache + "/torch",
+                   python_path, "-m", "sglang.launch_server",
+                   "--model-path", linux_model, "--served-model-name", served,
+                   "--host", "127.0.0.1", "--port", str(PORT), "--trust-remote-code"]
+        try:
+            process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+                                       stdout=log, stderr=subprocess.STDOUT,
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        except Exception:
+            log.close()
+            raise
+        _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
+                        "error": "", "log": log, "model_name": served,
+                        "kind": "wsl", "distro": distro})
     return status()
 
 

@@ -430,7 +430,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         sources.push({key:filename+":right",filename,url:split.tracks.right.url,pan:1,...sourceMeta});
       }else{
         sources.push({key:filename,filename,
-          url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename),pan:0,...sourceMeta});
+          url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename)+"?sourceRevision="+sourceAudioRevision,pan:0,...sourceMeta});
       }
     }
     setAudioLoad({ready:0,total:sources.length});

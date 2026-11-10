@@ -122,3 +122,13 @@ User QA screenshot: WSL Ubuntu discovered, zero registered checkpoints, Load dis
 5. Explicitly approve checkpoint code and load from the production tool. Confirm starting, ready/error, no unintended inference, unload process cleanup.
 6. Simulate insufficient disk space, disconnected network and interrupted transfer; verify clear errors, unchanged files and safe resumability.
 7. Do not promote until actual Windows runtime results, smoke tests and unaffected active song verified. CI backend's two unrelated test failures are tracked separately.
+
+## 2026-11-10 Ubuntu ensurepip bootstrap failure and repair
+User reported explicit Install MOSS runtime failed immediately: `/usr/bin/python3 -m venv` returned `ensurepip is not available`, suggesting `python3.12-venv`. This occurs before SGLang, model checkpoint download or GPU inference. No project/audio changes.
+
+- Root cause: our bootstrap incorrectly required the system Python `venv` and `pip`, even though the selected Ubuntu distro may not include Debian's optional `python3-venv` package.
+- Repair: remove system `venv`/`pip` dependency from `ensure_uv`. Use a pinned standalone Astral uv 0.13.7 Linux binary downloaded into the selected shared model directory (`tools/uv-0.13.7`), verify the release archive against the published `.sha256`, extract only the standalone executable and verify its version. If uv is already available at our validated path, reuse it. Does not use shell-piped installer scripts, apt, sudo, or system Python modifications.
+- The failed `bootstrap/` folder is left untouched and ignored by the new bootstrap path. No manual cleanup should be needed for retry. The user must explicitly click Install MOSS runtime again after updating dev. No downloads are performed on application launch.
+- Installer now surfaces the last `ERROR:` from its log in the main error indicator, rather than only the generic 'See job log' message. The expandable log remains available.
+- Tests added for synthetic standalone uv tar checksum success, checksum failure, and precise error reporting, without network access or executing downloaded model code.
+- This repair solves the immediate ensurepip failure path. Full real WSL runtime package resolution, WSL NTFS (drvfs) executable/symlink behavior, and model loading are still awaiting Windows QA. An error in a subsequent stage should be reported with exact log text; don't treat successful uv bootstrap as proof of SGLang compatibility.

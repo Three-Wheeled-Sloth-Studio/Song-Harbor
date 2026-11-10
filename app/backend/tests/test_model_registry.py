@@ -96,6 +96,25 @@ class ModelRegistryTests(unittest.TestCase):
         finally:
             moss_runtime._ATTACHED.update({"id": None, "model_name": None})
 
+    def test_wsl_registration_does_not_copy_or_download_model(self):
+        metadata = {"path": "/home/sloth/models/MOSS-Music", "name": "MOSS-Music",
+                    "family": "moss_music", "status": "present-unverified",
+                    "files": 2, "bytes_present": 4096}
+        with patch.object(model_registry.wsl_model_bridge, "inspect_checkpoint", return_value=metadata) as probe:
+            record = model_registry.register_wsl(self.root, "Ubuntu", metadata["path"])
+            inventory = model_registry.list_models(self.root, self.models)
+            probe.assert_called_with("Ubuntu", metadata["path"])
+        self.assertEqual(inventory["registered"][0]["storage"], "wsl")
+        self.assertEqual(inventory["registered"][0]["distro"], "Ubuntu")
+        self.assertEqual(inventory["registered"][0]["id"], record["id"])
+        self.assertFalse(self.models.joinpath(".song-harbor").exists())
+
+    def test_wsl_registration_rejects_incomplete(self):
+        with patch.object(model_registry.wsl_model_bridge, "inspect_checkpoint",
+                          return_value={"status": "incomplete"}):
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                model_registry.register_wsl(self.root, "Ubuntu", "/home/sloth/incomplete")
+
     def test_load_refuses_without_explicit_trusted_code_approval(self):
         with self.assertRaisesRegex(ValueError, "explicitly approve"):
             moss_runtime.load(self.root, self.models, "unused", sys.executable, False)

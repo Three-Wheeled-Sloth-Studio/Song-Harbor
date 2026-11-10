@@ -31,6 +31,7 @@ import shared_model_settings
 import model_registry
 import moss_runtime
 import wsl_model_bridge
+import wsl_model_install
 import projects
 import sections
 import section_import
@@ -349,6 +350,26 @@ class WslModelLoadRequest(BaseModel):
     distro: str = Field(min_length=1, max_length=100)
     python_path: str = Field(min_length=1, max_length=2048)
     custom_code_approved: bool = False
+
+
+class InstallWslRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    destination: str = Field(min_length=1, max_length=2048)
+    approved: bool = False
+
+
+@app.get("/api/settings/models/wsl/install")
+def wsl_install_status() -> dict[str, Any]:
+    return wsl_model_install.status()
+
+
+@app.post("/api/settings/models/wsl/install")
+def install_wsl_distro(body: InstallWslRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return wsl_model_install.install(SHARED_MODEL_ROOT, body.distro, body.destination, body.approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/settings/models/wsl")

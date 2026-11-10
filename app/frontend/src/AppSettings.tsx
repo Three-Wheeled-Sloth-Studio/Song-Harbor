@@ -169,6 +169,12 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
                 })}>Unload</Button>}
             </div>
             {!inventory?.registered.length&&<div role="status" className="setting-path">No registered MOSS model. Scan or register a checkpoint below to enable Load.</div>}
+            {wsl&&!wsl.available&&<div role="alert" className="error-message">ERROR: WSL is not installed or wsl.exe is unavailable. No model loaded.</div>}
+            {wsl?.available&&!wsl.distros.length&&<div role="status" className="setting-path">No WSL distribution detected. Use WSL setup below; existing D: installations will not be replaced.</div>}
+            {!!wslDistro&&!wslProbe&&<div role="status" className="setting-path">Inspect the selected WSL distribution to locate Python and check GPU visibility.</div>}
+            {!!wslProbe&&!wslPython&&<div role="status" className="setting-path">Enter the existing SGLang Python path inside WSL to enable Load.</div>}
+            {!!selectedModel&&!!wslPython&&!approveCode&&<div role="status" className="setting-path">Review and approve the registered model's custom code before loading.</div>}
+
             <div className="setting-tool-row">
               <span>Local checkpoints <Status tone="neutral">{(inventory?.registered.length||0)} registered</Status></span>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>
@@ -176,14 +182,6 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
             {(inventory?.registered||[]).map(item=><div className="setting-tool-row" key={item.id} title={item.path}>
               <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
               <div className="setting-controls">
-                {runtime?.model_id===item.id&&runtime?.status!=="failed"
-                  ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>{runtime?.status==="connected"?"Disconnect":"Unload"}</Button>
-                  :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||runtime?.status==="connected"||!runtimePython.trim()||!approveCode}
-                    title="Explicitly start isolated offline SGLang. Requires reviewed custom model code and a configured runtime."
-                    onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load","POST",{model_id:item.id,python_executable:runtimePython,custom_code_approved:approveCode}));})}>Load</Button>}
-                <Button size="compact" variant="secondary" title="Connect to an existing WSL2 MOSS server on localhost:18791; this does not start or stop WSL." disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||runtime?.status==="connected"} onClick={()=>void act(async()=>{
-                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/attach","POST",{model_id:item.id}));
-                })}>Connect WSL</Button>
                 <Button size="compact" variant="secondary" disabled={busy||runtime?.model_id===item.id} onClick={()=>void act(async()=>{
                   await response<{unregistered:boolean}>("/api/settings/models/register/"+encodeURIComponent(item.id||""),"DELETE");
                   await refreshModels();

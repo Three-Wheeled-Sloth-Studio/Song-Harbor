@@ -8,7 +8,7 @@ type Health = {ready:boolean;separator_ready:boolean;model:string;model_director
 type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
 type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
-type ModelRuntime={status:"unloaded"|"starting"|"ready"|"failed";model_id:string|null;error:string;port?:number};
+type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
@@ -128,10 +128,13 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
               <div className="setting-controls">
                 {runtime?.model_id===item.id&&runtime?.status!=="failed"
-                  ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>Unload</Button>
-                  :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||!runtimePython.trim()||!approveCode}
+                  ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>{runtime?.status==="connected"?"Disconnect":"Unload"}</Button>
+                  :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||runtime?.status==="connected"||!runtimePython.trim()||!approveCode}
                     title="Explicitly start isolated offline SGLang. Requires reviewed custom model code and a configured runtime."
                     onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load","POST",{model_id:item.id,python_executable:runtimePython,custom_code_approved:approveCode}));})}>Load</Button>}
+                <Button size="compact" variant="secondary" title="Connect to an existing WSL2 MOSS server on localhost:18791; this does not start or stop WSL." disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||runtime?.status==="connected"} onClick={()=>void act(async()=>{
+                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/attach","POST",{model_id:item.id}));
+                })}>Connect WSL</Button>
                 <Button size="compact" variant="secondary" disabled={busy||runtime?.model_id===item.id} onClick={()=>void act(async()=>{
                   await response<{unregistered:boolean}>("/api/settings/models/register/"+encodeURIComponent(item.id||""),"DELETE");
                   await refreshModels();
@@ -160,6 +163,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
             </div>
             <label className="setting-tool-row"><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I reviewed and approve this checkpoint's custom Python code</label>
             {runtime?.status==="starting"&&<p role="status">Starting model. Readiness check pending...</p>}
+            {runtime?.status==="connected"&&<p role="status">Connected to external WSL model. Disconnect leaves the external server running.</p>}
             {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
             {runtime?.status==="ready"&&<p role="status">Local model endpoint responding on port {runtime.port}. Audio inference not yet validated.</p>}
           </>}

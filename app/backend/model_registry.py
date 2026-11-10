@@ -132,12 +132,16 @@ def list_models(app_root: Path, root: Path) -> dict:
     for key, record in registry["models"].items():
         if not isinstance(record, dict) or not isinstance(record.get("path"), str):
             continue
-        check = (wsl_model_bridge.inspect_checkpoint(record["distro"], record["path"])
-                 if record.get("storage") == "wsl" and isinstance(record.get("distro"), str)
-                 else inspect(Path(record["path"])))
+        try:
+            check = (wsl_model_bridge.inspect_checkpoint(record["distro"], record["path"])
+                     if record.get("storage") == "wsl" and isinstance(record.get("distro"), str)
+                     else inspect(Path(record["path"])))
+        except (ValueError, OSError, RuntimeError):
+            check = None
         if check is None:
             registered.append({"id": key, "name": record.get("name", key), "path": record["path"],
-                               "status": "missing-or-unrecognized", "loaded": False})
+                               "status": "missing-or-unrecognized", "loaded": False,
+                               "storage": record.get("storage", "windows"), "distro": record.get("distro")})
         else:
             check["id"] = key
             check["registered"] = True

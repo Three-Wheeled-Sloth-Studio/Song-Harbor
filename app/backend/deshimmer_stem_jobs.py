@@ -58,6 +58,9 @@ def start(root: Path, song_id: str, filename: str) -> dict:
 def _run(job: dict) -> None:
     global _active
     try:
+        with _state_lock:
+            if job["status"] == "cancelled":
+                return
         output = job["folder"] / "candidate.wav"
         metadata = job["folder"] / "recipe.json"
         # Shell-free invocation; the external environment imports its own package.
@@ -68,6 +71,9 @@ def _run(job: dict) -> None:
                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         with _state_lock:
             job["process"] = process
+            cancelled = job["status"] == "cancelled"
+        if cancelled:
+            process.kill()
         assert process.stdout is not None
         for raw in process.stdout:
             line = raw.strip()
@@ -89,8 +95,13 @@ def _run(job: dict) -> None:
         if not output.is_file() or not metadata.is_file():
             raise RuntimeError("Deshimmer did not write a candidate and recipe")
         with wave.open(str(output), "rb") as wav:
+            candidate_format = (wav.getframerate(), wav.getnchannels(), wav.getnframes())
             if wav.getsampwidth() != 3 or wav.getnframes() < 1 or wav.getnchannels() not in (1,2):
                 raise RuntimeError("Candidate is not valid 24-bit PCM")
+        with wave.open(str(job["source"]), "rb") as wav:
+            original_format = (wav.getframerate(), wav.getnchannels(), wav.getnframes())
+        if candidate_format != original_format:
+            raise RuntimeError("Candidate sample rate, channel layout or length differs from source")
         if _sha(job["source"]) != job["source_hash"]:
             raise RuntimeError("Original stem changed during processing; candidate rejected")
         with _state_lock:

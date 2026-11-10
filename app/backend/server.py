@@ -64,7 +64,8 @@ import deshimmer_versions
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
-MODEL_ROOT = shared_model_settings.configured_root(APP_ROOT)
+MODEL_ROOT = Path(os.environ.get("SONG_HARBOR_MODELS", str(APP_ROOT / "models"))).resolve()
+SHARED_MODEL_ROOT = shared_model_settings.configured_root(APP_ROOT)
 SEPARATOR = Path(sys.executable).with_name("audio-separator.exe")
 MODEL = "htdemucs_6s.yaml"
 UI_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
@@ -261,7 +262,7 @@ def configure_working_files(body: WorkingDirectoryRequest, request: Request) -> 
 
 @app.get("/api/settings/models")
 def shared_models_status() -> dict[str, Any]:
-    return shared_model_settings.status(APP_ROOT, MODEL_ROOT)
+    return shared_model_settings.status(APP_ROOT, SHARED_MODEL_ROOT)
 
 
 @app.put("/api/settings/models")
@@ -295,7 +296,7 @@ class LoadMossRequest(BaseModel):
 
 @app.get("/api/settings/models/discover")
 def discover_local_models() -> dict[str, Any]:
-    return model_registry.list_models(APP_ROOT, MODEL_ROOT)
+    return model_registry.list_models(APP_ROOT, SHARED_MODEL_ROOT)
 
 
 @app.post("/api/settings/models/register")
@@ -328,7 +329,7 @@ def moss_runtime_status() -> dict[str, Any]:
 def load_moss_model(body: LoadMossRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)
     try:
-        return moss_runtime.load(APP_ROOT, MODEL_ROOT, body.model_id, body.python_executable,
+        return moss_runtime.load(APP_ROOT, SHARED_MODEL_ROOT, body.model_id, body.python_executable,
                                  body.custom_code_approved)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc

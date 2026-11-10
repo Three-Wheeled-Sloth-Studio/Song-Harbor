@@ -138,7 +138,12 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
     if record is None or record.get("status") != "present-unverified":
         raise ValueError("ERROR: Register a complete checkpoint first. Model not loaded.")
     wsl_model_bridge.preflight(distro, python_path)
-    linux_model = wsl_model_bridge.linux_path(distro, record["path"])
+    if record.get("storage") == "wsl":
+        if record.get("distro") != distro:
+            raise ValueError("ERROR: The checkpoint belongs to a different WSL distribution. Model not loaded.")
+        linux_model = record["path"]
+    else:
+        linux_model = wsl_model_bridge.linux_path(distro, record["path"])
     linux_root = wsl_model_bridge.linux_path(distro, str(model_root))
     served = "songharbor-moss-" + identifier
     with LOCK:

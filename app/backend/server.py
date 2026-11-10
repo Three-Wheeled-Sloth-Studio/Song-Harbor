@@ -64,7 +64,7 @@ import deshimmer_versions
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
-MODEL_ROOT = Path(os.environ.get("SONG_HARBOR_MODELS", str(APP_ROOT / "models"))).resolve()
+MODEL_ROOT = shared_model_settings.configured_root(APP_ROOT)
 SEPARATOR = Path(sys.executable).with_name("audio-separator.exe")
 MODEL = "htdemucs_6s.yaml"
 UI_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"

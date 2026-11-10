@@ -12,7 +12,7 @@ import threading
 import uuid
 import wave
 from pathlib import Path
-from deshimmer_adapter import probe, DeshimmerUnavailable
+from deshimmer_adapter import resolve_python, DeshimmerUnavailable
 
 WORKER = "\"\"\"Runs within the separately configured Deshimmer Python interpreter.\n\nContract: python -c WORKER input.wav output.wav metadata.json\nNo network, UI, project writes or external file choices.\n\"\"\"\nfrom dataclasses import asdict\nimport json\nimport os\nimport sys\nimport numpy as np\nimport soundfile as sf\nfrom deshimmer.autotune import analyze, refine, pick_regions\nfrom deshimmer.api import process_audio\nfrom deshimmer.core import MasterParams\n\nsource, destination, metadata = sys.argv[1:4]\naudio, rate = sf.read(source, dtype=\"float32\", always_2d=True)\nif rate < 8000 or rate > 192000 or audio.shape[0] < rate or audio.shape[1] not in (1, 2):\n    raise ValueError(\"Unsupported Deshimmer source format\")\nif not np.isfinite(audio).all():\n    raise ValueError(\"Input contains nonfinite samples\")\nprint(\"STAGE:analyzing\", flush=True)\nregions = pick_regions(audio, rate, n=4, dur=min(4.0, max(1.0, audio.shape[0] / rate / 4.0)))\nparams, _master, report = analyze(audio, rate, regions=regions)\nprint(\"STAGE:optimizing\", flush=True)\nparams, optimization = refine(\n    audio, rate, base_params=params, regions=regions,\n    aggressiveness=0.35, n_trials_per_stage=4, refine_dur=2.0,\n    debug_dir=os.path.dirname(metadata), transition_aware=True,\n)\nprint(\"STAGE:rendering\", flush=True)\ncleaned, info = process_audio(audio, rate, params=params,\n    master_params=MasterParams(enabled=False), include_residuals=False)\ncleaned = np.asarray(cleaned)\nif cleaned.ndim == 1:\n    cleaned = cleaned[:, None]\nif cleaned.shape != audio.shape or not np.isfinite(cleaned).all():\n    raise ValueError(\"Deshimmer returned invalid audio dimensions or samples\")\npeak = float(np.max(np.abs(cleaned)))\nif peak > 1.0:\n    raise ValueError(\"Deshimmer candidate exceeds 0 dBFS; no automatic clipping or limiter applied\")\nsf.write(destination, cleaned, rate, subtype=\"PCM_24\")\nwith open(metadata, \"w\", encoding=\"utf-8\") as handle:\n    json.dump({\"sample_rate\":rate,\"frames\":len(audio),\"channels\":audio.shape[1],\n               \"peak\":peak,\"params\":asdict(params),\n               \"optimizer\":{\"aggressiveness\":0.35,\"trials_per_stage\":4}},handle, indent=2)\nprint(\"STAGE:complete\", flush=True)\n"
 _state_lock = threading.Lock()
@@ -36,7 +36,7 @@ def start(root: Path, song_id: str, filename: str) -> dict:
         raise ValueError("Invalid song identifier")
     if Path(filename).name != filename or not filename.lower().endswith(".wav"):
         raise ValueError("Invalid working stem filename")
-    python = probe()["configured_python"]
+    python = resolve_python()
     source = root / "jobs" / song_id / "stems" / filename
     if not source.is_file():
         raise ValueError("Stem audio unavailable")

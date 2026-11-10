@@ -76,6 +76,19 @@ class MossSetupTests(unittest.TestCase):
                 moss_setup_worker.ensure_uv(self.models)
         self.assertFalse((self.models / "tools" / ("uv-" + moss_setup_worker.UV_VERSION)).exists())
 
+    def test_failed_install_surfaces_specific_blocking_error(self):
+        from unittest.mock import Mock
+        log_dir = self.models / ".song-harbor" / "logs"
+        log_dir.mkdir(parents=True)
+        (log_dir / "moss-setup.log").write_text("ERROR: ensurepip unavailable. Installation not completed.\\n")
+        process = Mock()
+        process.poll.return_value = 1
+        process.returncode = 1
+        moss_setup_jobs._JOB.update({"process": process, "state": "running", "operation": "runtime"})
+        result = moss_setup_jobs.status(self.app, self.models)
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("ensurepip unavailable", result["error"])
+
     def test_runtime_uses_pinned_sglang_revision(self):
         self.assertEqual(len(moss_setup_worker.SGLANG_REVISION), 40)
         self.assertTrue(all(c in "0123456789abcdef" for c in moss_setup_worker.SGLANG_REVISION))

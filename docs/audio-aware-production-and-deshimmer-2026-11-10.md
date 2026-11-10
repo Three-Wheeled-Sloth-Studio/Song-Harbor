@@ -82,3 +82,14 @@ For Parade for the Drowned King, compare first chorus (55.876-81.653) with final
 - Fix: cleanup candidate shows a play/pause icon with an Original/Cleaned segmented toggle. Play loads preview and starts synchronized Song Harbor playback; switching version changes the preview without restarting transport. Accept/Discard remain adjacent. Removed persistent instructional paragraphs, redundant per-toggle notices and duplicated busy text.
 - Source changes are committed on dev; no machine-local frontend build or actual audio A/B was executed in the connector environment. Validate fresh launch with external Deshimmer UI closed, switching during playback, pause/resume, Accept/Discard and output parity.
 - Model limitation to address separately: cleaned preview is still a candidate layer at the master bus rather than full post-stem effects insertion. Do not treat audition as mathematically identical to final accepted render until parity is verified.
+
+
+## 2026-11-10 blocking split-stem QA incident and correction
+- User reported EVERY optimized stem displayed `Disable L/R split on this stem before cleaning; a split needs regeneration`. This was a **blocking rejection**; no cleaned audio was adopted when that exception occurred. Showing it as ordinary text cost the user approximately two hours of lost work.
+- Non-negotiable UX: all blocked cleanup accept errors render in prominent red, prefixed `ERROR:` and suffixed `Stem not updated.`. Never allow status-looking copy to mask a failed operation. Keep accepted/discarded/cancelled states distinct.
+- New adopt path: a versioned replacement may target a split-active stem. After staging new parent audio, regenerate its L/R channels in a new immutable channel export using the existing split pipeline; update `channel_children[filename]` to the new export ONLY in the same manifest commit as the stem version. Keep all prior split export files. Failure rolls back parent WAV and does not publish new channel routing.
+- Undo restores the exact prior parent WAV and prior `channel_children` routing; all existing source track IDs and script aliases, including `Stem-left`/`Stem-right` automation, stay unchanged.
+- Frontend audio engine source URLs for L/R now include a version query so acceptance reloads fresh split PCM rather than cached previous channels.
+- Regression tests added for successful resplit, unchanged automation and identifiers, undo routing, split failure rollback, and unavailable FFmpeg/FFprobe.
+- Source committed to dev; no backend Windows FFmpeg split test or frontend/audio listening test performed here. Do not mark release-QA complete until real split-active cleaning Accept, reload, export and Undo pass.
+- Operational note: a failed Accept leaves the optimized candidate in the active backend session, but backend restart may lose in-memory candidate state. Do not claim prior attempted cleans were accepted.

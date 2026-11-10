@@ -134,6 +134,17 @@ def candidate(song_id: str, candidate_id: str) -> Path:
             raise ValueError("Original stem changed; reprocess before using candidate")
         return job["folder"] / "candidate.wav"
 
+def consume(song_id: str, candidate_id: str) -> dict:
+    """Mark an accepted candidate without touching or deleting its evidence."""
+    with _state_lock:
+        job = _jobs.get(candidate_id)
+        if not job or job["song_id"] != song_id or job["status"] != "ready":
+            raise KeyError("Candidate not ready for acceptance")
+        job["status"] = "accepted"
+        job["message"] = "Applied to stem version"
+        return _public(job)
+
+
 def cancel(song_id: str, candidate_id: str) -> dict:
     with _state_lock:
         job = _jobs.get(candidate_id)

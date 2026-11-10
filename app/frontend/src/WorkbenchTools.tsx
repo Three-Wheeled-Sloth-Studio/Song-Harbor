@@ -63,9 +63,7 @@ export function ToolWindow({name,onClose,children,order=0,onFocus,locked=false,o
     <div className="song-floating-tool-content" onWheel={event=>{event.stopPropagation();}}>{children}</div>
     {locked&&<div className="song-tool-busy-shield" role="status" aria-live="polite">
       <div className="song-deshimmer-spinner" aria-hidden="true"/>
-      <strong>Audio cleanup running</strong>
-      <span>Deshimmer is analyzing, optimizing or rendering the selected stem.</span>
-      <small>Window locked until processing completes. Original audio remains unchanged.</small>
+      <strong>Cleaning stem...</strong>
       {onCancelLocked&&<button type="button" onClick={onCancelLocked}>Cancel cleanup</button>}
     </div>}
   </section>;

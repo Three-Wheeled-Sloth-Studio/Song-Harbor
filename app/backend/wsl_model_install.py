@@ -66,7 +66,8 @@ def install(model_root: Path, distro: str, destination: str, approved: bool) -> 
         raise ValueError("ERROR: Ubuntu already registered. Select the existing WSL distribution instead.")
     helper = subprocess.run(["wsl.exe", "--help"], capture_output=True, timeout=8,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if b"--location" not in helper.stdout:
+    help_text = (helper.stdout.decode("utf-16-le", errors="replace") if b"\\x00" in helper.stdout else helper.stdout.decode(errors="replace"))
+    if "--location" not in help_text:
         raise ValueError("ERROR: Installed WSL version does not support --location. Update WSL first; nothing installed.")
     with _LOCK:
         if _JOB["process"] is not None and _JOB["process"].poll() is None:

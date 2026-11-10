@@ -6,6 +6,9 @@ import {AceServiceControls} from "./AceServiceControls";
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
 type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
+type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
+type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
+type ModelRuntime={status:"unloaded"|"starting"|"ready"|"failed";model_id:string|null;error:string;port?:number};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
@@ -13,6 +16,11 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   focus?:"fluidsynth"|"sfizz"|null;
 }) {
   const [models,setModels]=useState<ModelSettings|null>(null);
+  const [inventory,setInventory]=useState<ModelInventory|null>(null);
+  const [runtime,setRuntime]=useState<ModelRuntime|null>(null);
+  const [locatePath,setLocatePath]=useState("");
+  const [runtimePython,setRuntimePython]=useState("");
+  const [approveCode,setApproveCode]=useState(false);
   const [modelPath,setModelPath]=useState("");
   const [showModels,setShowModels]=useState(false);
   const [data,setData]=useState<Working|null>(null);
@@ -35,6 +43,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
+    void refreshModels();
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
     void fetch("/api/settings/sfizz").then(async r=>{
@@ -43,6 +52,20 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     }).then(x=>{setSfizz(x);setSfizzPath(x.configured_path||x.resolved_path||"");})
       .catch(e=>setError(String(e)));
   },[open,focus]);
+  async function refreshModels(){
+    try {
+      const [found,state]=await Promise.all([
+        response<ModelInventory>("/api/settings/models/discover","GET"),
+        response<ModelRuntime>("/api/settings/models/runtime","GET")
+      ]);
+      setInventory(found);setRuntime(state);
+    } catch(e) {setError(e instanceof Error?e.message:String(e));}
+  }
+  useEffect(()=>{
+    if(!open||!showModels||runtime?.status!=="starting")return;
+    const handle=window.setInterval(()=>{void refreshModels();},3000);
+    return ()=>window.clearInterval(handle);
+  },[open,showModels,runtime?.status]);
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
     try{await operation();}catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -95,6 +118,43 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
                 setNotice("Model folder saved. Relaunch to activate. No models moved or downloaded.");
               })}>Save location</Button>
             </div>
+            <div className="setting-tool-row">
+              <span>Local checkpoints <Status tone="neutral">{(inventory?.registered.length||0)} registered</Status></span>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>
+            </div>
+            {(inventory?.registered||[]).map(item=><div className="setting-tool-row" key={item.id} title={item.path}>
+              <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime.status:item.status}</Status></span>
+              <div className="setting-controls">
+                {runtime?.model_id===item.id&&runtime.status!=="failed"
+                  ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>Unload</Button>
+                  :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||!runtimePython.trim()||!approveCode}
+                    title="Explicitly start isolated offline SGLang. Requires reviewed custom model code and a configured runtime."
+                    onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load","POST",{model_id:item.id,python_executable:runtimePython,custom_code_approved:approveCode}));})}>Load</Button>}
+                <Button size="compact" variant="secondary" disabled={busy||runtime?.model_id===item.id} onClick={()=>void act(async()=>{
+                  await response<{unregistered:boolean}>("/api/settings/models/register/"+encodeURIComponent(item.id||""),"DELETE");
+                  await refreshModels();
+                })}>Unlink</Button>
+              </div>
+            </div>)}
+            {(inventory?.discovered||[]).map(item=><div className="setting-tool-row" key={item.path} title={item.path}>
+              <span>{item.name} <Status tone={item.status==="incomplete"?"warning":"neutral"}>{item.status}</Status></span>
+              <Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"} onClick={()=>void act(async()=>{
+                await response<DiscoveredModel>("/api/settings/models/register","POST",{path:item.path});await refreshModels();
+              })}>Register</Button>
+            </div>)}
+            <div className="setting-controls setting-component-path">
+              <input aria-label="Existing MOSS checkpoint directory" value={locatePath} onChange={e=>setLocatePath(e.target.value)} placeholder="Existing checkpoint folder"/>
+              <Button size="compact" variant="secondary" disabled={busy||!locatePath.trim()} onClick={()=>void act(async()=>{
+                await response<DiscoveredModel>("/api/settings/models/register","POST",{path:locatePath});setLocatePath("");await refreshModels();
+              })}>Register path</Button>
+            </div>
+            <div className="setting-controls setting-component-path">
+              <input aria-label="SGLang Python executable" value={runtimePython} onChange={e=>setRuntimePython(e.target.value)} placeholder="Isolated SGLang python.exe (existing)"/>
+            </div>
+            <label className="setting-tool-row"><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I reviewed and approve this checkpoint's custom Python code</label>
+            {runtime?.status==="starting"&&<p role="status">Starting model. Readiness check pending...</p>}
+            {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
+            {runtime?.status==="ready"&&<p role="status">Local model endpoint responding on port {runtime.port}. Audio inference not yet validated.</p>}
           </>}
         </div>
         <div className="setting-tools">

@@ -74,6 +74,28 @@ class ModelRegistryTests(unittest.TestCase):
         (folder / "model.safetensors").write_bytes(b"data")
         self.assertEqual(model_registry.scan(self.models), [])
 
+    def test_external_wsl_attach_checks_served_model_identity(self):
+        folder = self.make_model()
+        registered = model_registry.register(self.root, str(folder))
+        expected = "songharbor-moss-" + registered["id"]
+        with patch.object(moss_runtime, "_probe", return_value=False) as probe:
+            with self.assertRaisesRegex(ValueError, "No matching MOSS service"):
+                moss_runtime.attach(self.root, self.models, registered["id"])
+            probe.assert_called_once_with(expected)
+        self.assertIsNone(moss_runtime._ATTACHED["id"])
+
+    def test_external_wsl_disconnect_does_not_kill_process(self):
+        moss_runtime._ATTACHED.update({"id": "test", "model_name": "songharbor-moss-test"})
+        try:
+            with patch.object(moss_runtime, "_probe", return_value=True):
+                self.assertEqual(moss_runtime.status()["status"], "connected")
+            with patch.object(moss_runtime, "_stop_process") as stop:
+                result = moss_runtime.unload()
+                self.assertFalse(result["service_stopped"])
+                stop.assert_not_called()
+        finally:
+            moss_runtime._ATTACHED.update({"id": None, "model_name": None})
+
     def test_load_refuses_without_explicit_trusted_code_approval(self):
         with self.assertRaisesRegex(ValueError, "explicitly approve"):
             moss_runtime.load(self.root, self.models, "unused", sys.executable, False)

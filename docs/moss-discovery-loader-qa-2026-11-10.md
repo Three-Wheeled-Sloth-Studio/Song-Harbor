@@ -93,3 +93,32 @@ User QA: dev relaunch clean, but Load was effectively hidden until a checkpoint 
 4. Do not attempt full inference on the active workstation until the exact SGLang MOSS branch and 12 GB VRAM/offload profile are verified.
 5. If testing optional Ubuntu installation, choose a new D: directory and verify no distro overwrite, download/start approval, status feedback and safe error on unsupported WSL CLI.
 6. Tests: `test_model_registry.py`, `test_wsl_model_bridge.py`, `test_shared_model_settings.py`. Frontend CI and single-server smoke must be green before promotion.
+
+## 2026-11-10: in-app installer and workbench loader correction
+User QA screenshot: WSL Ubuntu discovered, zero registered checkpoints, Load disabled. Requirement explicitly clarified: installation AND loading must be initiated from the Song Harbor function, not manual command-line configuration. This is a product bug, not a missing instruction.
+
+### Implemented on dev
+- In Settings > Models, new **Install MOSS** area with explicit **Install MOSS runtime** and **Download model** actions. Downloads only happen after selecting the action and checking approval. WSL is reused, not reinstalled. This area is separate from the optional Ubuntu distro installer.
+- Setup runs a repo-owned Python worker inside existing WSL using wsl.exe argument vectors, not a user-authored shell command. Source and generated files stay under the shared model directory, including uv-managed Python 3.12, isolated SGLang runtime, cache, staging, logs and model weights. Configure the model root on D: first.
+- SGLang installation pins the official OpenMOSS moss-audio branch at commit `c28a945853c7fee357f55d976b8abce51874bd94`. Installs SGLang from that source plus pinned recommended CuDNN and huggingface_hub. Does not start inference.
+- Checkpoint download choices are allowlisted to `OpenMOSS-Team/MOSS-Audio-4B-Instruct` and `OpenMOSS-Team/MOSS-Music-8B-Instruct`. Hugging Face info is checked for Apache-2.0 license, pinned snapshot SHA and weight-file sizes before an explicit download. Downloads go to a revision-specific staging folder, check shard presence, record local SHA-256 inventory and atomically publish. A matching interrupted staging directory can resume. Local SHA-256 is an integrity baseline, not independently verified upstream authenticity.
+- A completed checkpoint is automatically registered for model selection after manifest inspection. No manual folder pasting should be necessary for this install path.
+- The Song Harbor production tool palette includes **MOSS music understanding**. Its popover exposes current model status, model selection, direct Load/Unload, and **Set up models**, which opens the model installer in Settings. This keeps tool use close to the authoring workflow and Settings responsible for infrequent installation.
+- The underlying MOSS listening/SMU analysis workflow is **not implemented**, and model readiness does not mean audio inference is working.
+
+### Safety gates and limitations
+- The existing WSL Ubuntu distro on D: must not be replaced, relocated, or reinstalled. No model is installed or launched automatically on app launch.
+- The 8B model has no validated 12 GB VRAM profile; don't claim it fits. Prefer explicit 4B initial runtime testing after approving model code. Load can still fail due GPU/runtime compatibility, with error states and logs.
+- The pinned SGLang installer is source implemented, not yet run on the user's WSL installation. Actual pip/uv resolution, 4B load, WSL stop and Windows application navigation require validation.
+- The separate **Install WSL** action is for users with no Linux distribution; it should not be used on this workstation.
+- Installer setup state is in-memory during a backend session; verified completed files and manifest persist. Unexpected restarts may leave a partial download staging folder which can be resumed only if the repository and revision marker match.
+- Do not modify song projects, audio files, source stems, scripting, or approved candidates.
+
+### QA next
+1. Relaunch dev; verify new MOSS production tool icon opens its own model control and its Set up models action opens Settings > Models.
+2. Select existing Ubuntu and inspect. Confirm active model root is on D:, rather than system drive.
+3. With explicit approval, click Install MOSS runtime; verify stage/status/log, pinned commit, isolated Python and path on D:. No automatic model download occurs.
+4. Explicitly choose MOSS-Audio-4B-Instruct and Download model; verify disk preflight, staged transfer, manifest, registration and dropdown selection.
+5. Explicitly approve checkpoint code and load from the production tool. Confirm starting, ready/error, no unintended inference, unload process cleanup.
+6. Simulate insufficient disk space, disconnected network and interrupted transfer; verify clear errors, unchanged files and safe resumability.
+7. Do not promote until actual Windows runtime results, smoke tests and unaffected active song verified. CI backend's two unrelated test failures are tracked separately.

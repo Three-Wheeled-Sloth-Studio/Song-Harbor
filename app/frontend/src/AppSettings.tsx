@@ -56,7 +56,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
 
   useEffect(()=>{
     if(!open)return;
-    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");setShowModels(focus==="models"||showModels);
+    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");if(focus==="models")setShowModels(true);
     void fetch("/api/settings/working-files").then(async r=>{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
@@ -84,6 +84,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
         response<ModelRuntime>("/api/settings/models/runtime","GET")
       ]);
       setInventory(found);setRuntime(state);
+      setSelectedModel(current=>found.registered.some(item=>item.id===current&&item.status==="present-unverified")?current:found.registered.find(item=>item.status==="present-unverified")?.id||"");
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
   }
   useEffect(()=>{

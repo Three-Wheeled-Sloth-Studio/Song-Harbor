@@ -238,6 +238,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [cleanupLocked,setCleanupLocked]=useState(false);
+  const [deshimmerJobId,setDeshimmerJobId]=useState<string|null>(null);
   const setCleanupLock=useCallback((locked:boolean)=>setCleanupLocked(locked),[]);
   const [cleanupStale,setCleanupStale]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
@@ -1364,7 +1365,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </button>)}
       </aside>
       {openTools.map((tool,order)=><ToolWindow key={tool}
-        name={tool==="songText"?"Whole-song section text":TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order} locked={tool==="cleanup"&&cleanupLocked}
+        name={tool==="songText"?"Whole-song section text":TOOL_ITEMS.find(item=>item.id===tool)?.label||"Tool"} order={order} locked={tool==="cleanup"&&cleanupLocked} onCancelLocked={tool==="cleanup"&&deshimmerJobId?()=>{
+          void fetch("/api/projects/"+encodeURIComponent(jobId)+"/cleanup/deshimmer/"+deshimmerJobId+"/cancel",{method:"POST"})
+            .catch(e=>setError(e instanceof Error?e.message:"Cancellation failed"));
+        }:undefined}
         onFocus={()=>setOpenTools(current=>current[current.length-1]===tool?current:
           [...current.filter(item=>item!==tool),tool])}
         onClose={()=>{
@@ -1495,7 +1499,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             }}/>
         </>}
         {tool==="cleanup"&&<DeshimmerCleanup jobId={jobId}
-          tracks={trackIdentities} engine={audio.current} onLocked={setCleanupLock}
+          tracks={trackIdentities} engine={audio.current} onLocked={setCleanupLock} onJobId={setDeshimmerJobId}
           onPause={stop} onInserted={({project,job})=>onTrackAdded?.(project,job)}
           onError={setError}/>}
         {tool==="cleanup"&&declickDraft&&<>

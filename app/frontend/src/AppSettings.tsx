@@ -10,6 +10,8 @@ type DiscoveredModel={id?:string;name:string;path:string;family?:string;storage?
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
 type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
 type WslStatus={available:boolean;distros:string[];message:string};
+type MossSetupCatalog={id:string;name:string;repo:string;license:string;fit:string;installed:boolean;path:string};
+type MossSetup={state:"idle"|"running"|"finished"|"failed";operation:string|null;model:string|null;distro:string|null;runtime_installed:boolean;runtime_python:string;catalog:MossSetupCatalog[];error:string;log_tail:string};
 type WslInstall={state:"idle"|"installing"|"completed"|"failed";destination:string;message:string};
 type WslProbe={distro:string;python_candidates:string[];probe_ok:boolean;gpu_visible:boolean;message:string};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
@@ -29,6 +31,9 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [modelPath,setModelPath]=useState("");
   const [showModels,setShowModels]=useState(true);
   const [wsl,setWsl]=useState<WslStatus|null>(null);
+  const [mossSetup,setMossSetup]=useState<MossSetup|null>(null);
+  const [setupModel,setSetupModel]=useState("moss-audio-4b");
+  const [approveSetup,setApproveSetup]=useState(false);
   const [wslInstall,setWslInstall]=useState<WslInstall|null>(null);
   const [wslInstallFolder,setWslInstallFolder]=useState("");
   const [wslInstallApproved,setWslInstallApproved]=useState(false);
@@ -58,6 +63,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void refreshModels();
+    void response<MossSetup>("/api/settings/models/setup","GET").then(setMossSetup).catch(e=>setError(String(e)));
     void response<WslInstall>("/api/settings/models/wsl/install","GET").then(setWslInstall).catch(e=>setError(String(e)));
     void response<WslStatus>("/api/settings/models/wsl","GET").then(x=>{
       setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
@@ -85,6 +91,26 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     const handle=window.setInterval(()=>{void refreshModels();},3000);
     return ()=>window.clearInterval(handle);
   },[open,showModels,runtime?.status]);
+  useEffect(()=>{
+    if(!open||!showModels||mossSetup?.state!=="running")return;
+    const handle=window.setInterval(()=>{
+      void response<MossSetup>("/api/settings/models/setup?distro="+encodeURIComponent(wslDistro),"GET").then(next=>{
+        setMossSetup(next);
+        if(next.state==="finished"){
+          if(next.runtime_python)setWslPython(next.runtime_python);
+          void refreshModels();
+        }
+      }).catch(e=>setError(String(e)));
+    },2500);
+    return ()=>window.clearInterval(handle);
+  },[open,showModels,mossSetup?.state,wslDistro]);
+  async function startMossSetup(operation:"runtime"|"checkpoint"){
+    if(!wslDistro)throw Error("ERROR: Select an installed WSL distribution.");
+    const x=await response<MossSetup>("/api/settings/models/setup","POST",{
+      distro:wslDistro,operation,model:operation==="checkpoint"?setupModel:null,approved:approveSetup
+    });
+    setMossSetup(x);setApproveSetup(false);
+  }
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
     try{await operation();}catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -183,6 +209,30 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               <input aria-label="WSL SGLang Python path" value={wslPython} onChange={e=>setWslPython(e.target.value)} placeholder="/home/user/.venv/bin/python"/>
               <Status tone={wslProbe.gpu_visible?"success":"warning"}>{wslProbe.gpu_visible?"GPU visible":"GPU unverified"}</Status>
             </div>}
+            <div className="setting-tool-row">
+              <strong>Install MOSS</strong>
+              <Status tone={mossSetup?.state==="failed"?"warning":mossSetup?.runtime_installed?"success":"neutral"}>
+                {mossSetup?.state==="running"?"Installing":mossSetup?.runtime_installed?"Runtime installed":"Setup needed"}
+              </Status>
+            </div>
+            <div className="setting-controls">
+              <Button size="compact" variant="secondary"
+                disabled={busy||!wslDistro||!approveSetup||mossSetup?.state==="running"||!!mossSetup?.runtime_installed}
+                onClick={()=>void act(async()=>{await startMossSetup("runtime");})}>Install MOSS runtime</Button>
+              <select aria-label="MOSS checkpoint to download" value={setupModel} onChange={e=>setSetupModel(e.target.value)}>
+                {(mossSetup?.catalog||[]).map(item=><option key={item.id} value={item.id}>{item.name}{item.installed?" (installed)":""}</option>)}
+              </select>
+              <Button size="compact" variant="secondary"
+                disabled={busy||!wslDistro||!approveSetup||!mossSetup?.runtime_installed||mossSetup?.state==="running"||!!mossSetup?.catalog.find(x=>x.id===setupModel)?.installed}
+                onClick={()=>void act(async()=>{await startMossSetup("checkpoint");})}>Download model</Button>
+            </div>
+            <label className="setting-tool-row"><input type="checkbox" checked={approveSetup} onChange={e=>setApproveSetup(e.target.checked)}/>
+              Approve selected download/install to the shared model drive</label>
+            {mossSetup?.state==="running"&&<div role="status" className="setting-path">Installing {mossSetup.operation==="runtime"?"MOSS runtime":mossSetup.model}. View current log below.</div>}
+            {mossSetup?.state==="failed"&&<div role="alert" className="error-message">{mossSetup.error}</div>}
+            {(mossSetup?.state==="running"||mossSetup?.state==="failed")&&<details><summary>Installation log</summary>
+              <pre style={{whiteSpace:"pre-wrap",maxHeight:"150px",overflow:"auto"}}>{mossSetup.log_tail||"Initializing..."}</pre>
+            </details>}
             <div className="setting-controls setting-component-path">
               <select aria-label="MOSS model to load" value={selectedModel} onChange={e=>setSelectedModel(e.target.value)}>
                 <option value="">Select registered MOSS model</option>

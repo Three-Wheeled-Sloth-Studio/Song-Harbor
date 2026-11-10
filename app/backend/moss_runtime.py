@@ -87,6 +87,11 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
             sock.settimeout(1.0)
             if sock.connect_ex(("127.0.0.1", PORT)) == 0:
                 raise ValueError(f"ERROR: Local port {PORT} already in use. Model not loaded.")
+        probe = subprocess.run([python_executable, "-c", "import importlib.util,sys;sys.exit(0 if importlib.util.find_spec(\'sglang\') else 2)"],
+                               stdin=subprocess.DEVNULL, capture_output=True, timeout=12,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if probe.returncode != 0:
+            raise ValueError("ERROR: SGLang is not installed in this Python environment. Model not loaded.")
         # Never allow Hugging Face to auto-fetch missing weights or code.
         env = os.environ.copy()
         env["HF_HUB_OFFLINE"] = "1"

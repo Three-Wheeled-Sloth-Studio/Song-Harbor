@@ -79,6 +79,8 @@ jobs:
             test_track_routing.py
             test_waveform_peaks.py
             test_workspace_settings.py
+            test_shared_model_settings.py
+            test_model_registry.py
           )
           failures=()
           for pattern in "${patterns[@]}"; do

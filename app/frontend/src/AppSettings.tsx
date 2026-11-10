@@ -6,7 +6,7 @@ import {AceServiceControls} from "./AceServiceControls";
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
 type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
-type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
+type DiscoveredModel={id?:string;name:string;path:string;family?:string;storage?:string;distro?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
 type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
 type WslStatus={available:boolean;distros:string[];message:string};
@@ -22,6 +22,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [inventory,setInventory]=useState<ModelInventory|null>(null);
   const [runtime,setRuntime]=useState<ModelRuntime|null>(null);
   const [locatePath,setLocatePath]=useState("");
+  const [wslModelPath,setWslModelPath]=useState("");
   const [runtimePython,setRuntimePython]=useState("");
   const [savedRuntimePython,setSavedRuntimePython]=useState("");
   const [approveCode,setApproveCode]=useState(false);
@@ -209,7 +210,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>
             </div>
             {(inventory?.registered||[]).map(item=><div className="setting-tool-row" key={item.id} title={item.path}>
-              <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
+              <span>{item.name}{item.storage==="wsl"?" (WSL "+item.distro+")":""} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
               <div className="setting-controls">
                 <Button size="compact" variant="secondary" disabled={busy||runtime?.model_id===item.id} onClick={()=>void act(async()=>{
                   await response<{unregistered:boolean}>("/api/settings/models/register/"+encodeURIComponent(item.id||""),"DELETE");
@@ -228,6 +229,14 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               <Button size="compact" variant="secondary" disabled={busy||!locatePath.trim()} onClick={()=>void act(async()=>{
                 await response<DiscoveredModel>("/api/settings/models/register","POST",{path:locatePath});setLocatePath("");await refreshModels();
               })}>Register path</Button>
+            </div>
+            <div className="setting-controls setting-component-path">
+              <input aria-label="Existing checkpoint path inside WSL" value={wslModelPath} onChange={e=>setWslModelPath(e.target.value)}
+                placeholder="/home/user/models/MOSS-Music-8B-Instruct"/>
+              <Button size="compact" variant="secondary" disabled={busy||!wslDistro||!wslModelPath.trim()} onClick={()=>void act(async()=>{
+                await response<DiscoveredModel>("/api/settings/models/register-wsl","POST",{distro:wslDistro,path:wslModelPath});
+                setWslModelPath("");await refreshModels();
+              })}>Register WSL path</Button>
             </div>
             <div className="setting-controls setting-component-path">
               <input aria-label="SGLang Python executable" value={runtimePython} onChange={e=>setRuntimePython(e.target.value)} placeholder="Isolated SGLang python.exe (existing)"/>

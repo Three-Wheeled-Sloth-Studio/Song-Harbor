@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import wave
 from pathlib import Path
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import deshimmer_versions as versions
 
@@ -66,15 +67,57 @@ class VersionTests(unittest.TestCase):
             versions.adopt(self.root,self.project,self.project["files"][0],
                            self.candidate,self.original_hash,"cand_a",fail)
         self.assertEqual(versions.digest(self.source),self.original_hash)
-    def test_rejects_split_active_and_existing_replacement(self):
+    def test_split_active_resplits_and_preserves_scripts_and_undo(self):
         x=copy.deepcopy(self.project)
-        x["channel_children"]={self.project["files"][0]:{"active":True}}
-        with self.assertRaisesRegex(ValueError,"split"):
-            versions.adopt(self.root,x,x["files"][0],self.candidate,self.original_hash,"a",self.save)
+        name=x["files"][0]
+        x["channel_children"]={name:{"active":True,"export":"Channels-old"}}
+        x["section_production"]["abc"].append({"track":"Vocals-left","kind":"reverb","value":20})
+        def split(root,project,filenames,ffmpeg,ffprobe):
+            self.assertEqual(versions.digest(self.source),versions.digest(self.candidate))
+            self.assertEqual(filenames,[name])
+            self.assertEqual(ffmpeg,"ffmpeg")
+            self.assertEqual(ffprobe,"ffprobe")
+            folder=root/"jobs"/x["id"]/"exports"/"Channels-new"
+            folder.mkdir(parents=True)
+            return folder
+        with patch.object(versions.channel_split,"split_stems",side_effect=split) as mock:
+            result=versions.adopt(self.root,x,name,self.candidate,self.original_hash,
+                                  "a",self.save,ffmpeg="ffmpeg",ffprobe="ffprobe")
+        self.assertEqual(mock.call_count,1)
+        self.assertEqual(result["channel_children"][name],{"active":True,"export":"Channels-new"})
+        self.assertEqual(result["section_production"],x["section_production"])
+        self.assertEqual(result["source_tracks"],x["source_tracks"])
+        restored=versions.undo(self.root,result,name,self.save)
+        self.assertEqual(restored["channel_children"],x["channel_children"])
+        self.assertEqual(versions.digest(self.source),self.original_hash)
+
+    def test_split_failure_rolls_back_stem_and_manifest(self):
+        x=copy.deepcopy(self.project)
+        name=x["files"][0]
+        x["channel_children"]={name:{"active":True,"export":"Channels-old"}}
+        def broken(*args,**kwargs):
+            raise RuntimeError("FFmpeg failed")
+        with patch.object(versions.channel_split,"split_stems",side_effect=broken):
+            with self.assertRaisesRegex(RuntimeError,"FFmpeg failed"):
+                versions.adopt(self.root,x,name,self.candidate,self.original_hash,
+                               "a",self.save,ffmpeg="ffmpeg",ffprobe="ffprobe")
+        self.assertEqual(versions.digest(self.source),self.original_hash)
+        self.assertIsNone(self.saved)
+
+    def test_missing_split_tools_does_not_accept(self):
+        x=copy.deepcopy(self.project)
+        name=x["files"][0]
+        x["channel_children"]={name:{"active":True,"export":"Channels-old"}}
+        with self.assertRaisesRegex(ValueError,"unavailable"):
+            versions.adopt(self.root,x,name,self.candidate,self.original_hash,"a",self.save)
+        self.assertEqual(versions.digest(self.source),self.original_hash)
+
+    def test_rejects_existing_replacement(self):
         x=copy.deepcopy(self.project)
         x["replacement_masks"]=[{"source_filename":x["files"][0]}]
         with self.assertRaisesRegex(ValueError,"replacement"):
-            versions.adopt(self.root,x,x["files"][0],self.candidate,self.original_hash,"a",self.save)
+            versions.adopt(self.root,x,x["files"][0],self.candidate,self.original_hash,
+                           "a",self.save)
     def test_stale_source_rejected(self):
         wav(self.source,3500)
         with self.assertRaisesRegex(ValueError,"changed"):

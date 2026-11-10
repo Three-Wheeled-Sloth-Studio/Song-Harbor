@@ -90,15 +90,19 @@ def undo(root: Path, project: dict, filename: str, save) -> dict:
     updated = copy.deepcopy(project)
     updated["stem_cleanup_versions"] = [row for row in records if row["id"] != record["id"]]
     staging = target.parent / ("." + uuid.uuid4().hex + ".undo.wav")
+    accepted = target.parent / ("." + uuid.uuid4().hex + ".accepted.wav")
+    shutil.copy2(target, accepted)
     shutil.copy2(backup, staging)
+    replaced = False
     try:
         os.replace(staging, target)
-        try:
-            save(updated)
-        except Exception:
-            shutil.copy2(backup, staging)  # preserve staging then restore from accepted candidate below
-            # Rollback must use accepted content, not the prior version.
-            raise
+        replaced = True
+        save(updated)
         return updated
+    except Exception:
+        if replaced:
+            os.replace(accepted, target)
+        raise
     finally:
         staging.unlink(missing_ok=True)
+        accepted.unlink(missing_ok=True)

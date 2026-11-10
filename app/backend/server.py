@@ -30,6 +30,7 @@ import workspace_settings
 import shared_model_settings
 import model_registry
 import moss_runtime
+import wsl_model_bridge
 import projects
 import sections
 import section_import
@@ -270,7 +271,7 @@ def configure_shared_models(body: WorkingDirectoryRequest, request: Request) -> 
     require_local_origin(request)
     try:
         shared_model_settings.save(APP_ROOT, body.path)
-        return shared_model_settings.status(APP_ROOT, MODEL_ROOT)
+        return shared_model_settings.status(APP_ROOT, SHARED_MODEL_ROOT)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -341,6 +342,46 @@ def unregister_local_model(model_id: str, request: Request) -> dict[str, Any]:
 @app.get("/api/settings/models/runtime")
 def moss_runtime_status() -> dict[str, Any]:
     return moss_runtime.status()
+
+
+class WslModelLoadRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=128)
+    distro: str = Field(min_length=1, max_length=100)
+    python_path: str = Field(min_length=1, max_length=2048)
+    custom_code_approved: bool = False
+
+
+@app.get("/api/settings/models/wsl")
+def discover_wsl_for_models() -> dict[str, Any]:
+    return wsl_model_bridge.distros()
+
+
+class WslDistroRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+
+
+@app.post("/api/settings/models/wsl/probe")
+def probe_wsl_for_models(body: WslDistroRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return wsl_model_bridge.discover_runtime(body.distro)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/runtime/load-wsl")
+def load_wsl_moss(body: WslModelLoadRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy:
+        raise HTTPException(409, "ERROR: Audio processing is active. Model not loaded.")
+    try:
+        return moss_runtime.load_wsl(APP_ROOT, SHARED_MODEL_ROOT, body.model_id,
+                                     body.distro, body.python_path, body.custom_code_approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class AttachMossRequest(BaseModel):

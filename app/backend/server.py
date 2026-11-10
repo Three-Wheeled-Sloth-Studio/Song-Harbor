@@ -28,6 +28,8 @@ from pydantic import BaseModel, Field
 import dependencies
 import workspace_settings
 import shared_model_settings
+import model_registry
+import moss_runtime
 import projects
 import sections
 import section_import
@@ -279,6 +281,66 @@ def browse_shared_models(request: Request) -> dict[str, Any]:
         return {"path": shared_model_settings.browse()}
     except (OSError, RuntimeError) as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+class RegisterModelRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
+class LoadMossRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=128)
+    python_executable: str = Field(min_length=1, max_length=4096)
+    custom_code_approved: bool = False
+
+
+@app.get("/api/settings/models/discover")
+def discover_local_models() -> dict[str, Any]:
+    return model_registry.list_models(APP_ROOT, MODEL_ROOT)
+
+
+@app.post("/api/settings/models/register")
+def register_local_model(body: RegisterModelRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return model_registry.register(APP_ROOT, body.path)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/settings/models/register/{model_id}")
+def unregister_local_model(model_id: str, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    if moss_runtime.status().get("model_id") == model_id:
+        raise HTTPException(409, "ERROR: Unload the model before unregistering. Nothing changed.")
+    try:
+        model_registry.unregister(APP_ROOT, model_id)
+        return {"unregistered": True, "files_removed": False}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/settings/models/runtime")
+def moss_runtime_status() -> dict[str, Any]:
+    return moss_runtime.status()
+
+
+@app.post("/api/settings/models/runtime/load")
+def load_moss_model(body: LoadMossRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.load(APP_ROOT, MODEL_ROOT, body.model_id, body.python_executable,
+                                 body.custom_code_approved)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/runtime/unload")
+def unload_moss_model(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.unload()
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        raise HTTPException(500, "ERROR: Unable to stop model process. Check runtime status.") from exc
 
 
 class FfmpegLocation(BaseModel):

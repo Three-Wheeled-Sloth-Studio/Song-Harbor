@@ -13,7 +13,7 @@ export const TOOL_ITEMS:{id:WorkbenchTool;icon:string;label:string}[]=[
   {id:"channels",icon:"◫",label:"Split channels"},
   {id:"download",icon:"⇩",label:"Download"}
 ];
-export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void}){
+export function ToolWindow({name,onClose,children,order=0,onFocus,locked=false}:{name:string;onClose:()=>void;children:ReactNode;order?:number;onFocus?:()=>void;locked?:boolean}){
   const [pos,setPos]=useState<{x:number;y:number}|null>(null);
   const [aceStatus,setAceStatus]=useState<"ready"|"unavailable"|"unknown">("unknown");
   const initialPlacement=useRef({right:75+order*24,top:90+order*26});
@@ -53,12 +53,12 @@ export function ToolWindow({name,onClose,children,order=0,onFocus}:{name:string;
   return <section className="song-floating-tool" role="dialog" aria-label={name}
       onPointerDown={onFocus}
       style={{...(pos?{left:pos.x,top:pos.y,right:"auto"}:initialPlacement.current),zIndex:110+order}}
-      onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();onClose();}}}>
-    <div className="song-floating-tool-header" onPointerDown={begin} onPointerMove={move}
+      onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();if(!locked)onClose();}}}>
+    <div className="song-floating-tool-header" onPointerDown={locked?undefined:begin} onPointerMove={move}
       onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}}>
       <strong>{name}</strong>
       {name==="Generate accompaniment"&&<span className={"song-ace-header-status is-"+aceStatus} title={"ACE service: "+aceStatus} aria-label={"ACE service "+aceStatus}/>}
-      <button ref={first} type="button" aria-label={"Close "+name} title="Dismiss tool" onPointerDown={e=>e.stopPropagation()} onClick={onClose}>×</button>
+      <button ref={first} type="button" aria-label={"Close "+name} onPointerDown={e=>e.stopPropagation()} onClick={onClose} disabled={locked} title={locked?"Processing audio; wait for operation to finish":"Dismiss tool"}>×</button>
     </div>
     <div className="song-floating-tool-content" onWheel={event=>{event.stopPropagation();}}>{children}</div>
   </section>;

@@ -426,8 +426,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
       const sourceMeta={startSeconds:identity?.start_seconds||0,timelinePositioned:Boolean(identity?.imported)};
       const split=channels[filename];
       if(split?.active){
-        sources.push({key:filename+":left",filename,url:split.tracks.left.url,pan:-1,...sourceMeta});
-        sources.push({key:filename+":right",filename,url:split.tracks.right.url,pan:1,...sourceMeta});
+        sources.push({key:filename+":left",filename,url:split.tracks.left.url+(split.tracks.left.url.includes("?")?"&":"?")+"sourceRevision="+sourceAudioRevision,pan:-1,...sourceMeta});
+        sources.push({key:filename+":right",filename,url:split.tracks.right.url+(split.tracks.right.url.includes("?")?"&":"?")+"sourceRevision="+sourceAudioRevision,pan:1,...sourceMeta});
       }else{
         sources.push({key:filename,filename,
           url:"/api/jobs/"+jobId+"/stream/"+encodeURIComponent(filename)+"?sourceRevision="+sourceAudioRevision,pan:0,...sourceMeta});

@@ -57,6 +57,7 @@ import curated_sfz
 import sfz_render_adapter
 import sfz_candidate_audio
 import deshimmer_stem_jobs
+import deshimmer_versions
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1900,6 +1901,65 @@ def cancel_deshimmer_stem(ident: str, candidate_id: str, request: Request) -> di
         return deshimmer_stem_jobs.cancel(ident, candidate_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/api/projects/{ident}/cleanup/deshimmer/{candidate_id}/accept")
+def accept_deshimmer_version(ident: str, candidate_id: str, request: Request) -> dict:
+    """Replace only the existing stem's working AUDIO VERSION, preserving its identity.
+
+    Never add a Clean_* track, change source alias or add a replacement mask.
+    """
+    require_local_origin(request)
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(409, "Completed song not available")
+    with lock:
+        record = projects.read_project(DATA_ROOT, ident)
+        if not record:
+            raise HTTPException(404, "Song not found")
+        try:
+            candidate = deshimmer_stem_jobs.candidate(ident, candidate_id)
+            state = deshimmer_stem_jobs.status(ident, candidate_id)
+            filename = state["filename"]
+            if filename not in record.get("files", []):
+                raise ValueError("Stem no longer exists in project")
+            rows = track_lifecycle.ensure_identities(record)
+            record["source_tracks"] = rows
+            result = deshimmer_versions.adopt(
+                DATA_ROOT, record, filename, candidate, state["source_hash"], candidate_id,
+                lambda updated: projects.write_project(DATA_ROOT, updated))
+            deshimmer_stem_jobs.consume(ident, candidate_id)
+        except KeyError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except (ValueError, OSError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        job["message"] = "Stem cleanup accepted"
+        return {"project": result, "job": snapshot(job), "stem": filename}
+
+
+class UndoDeshimmerRequest(BaseModel):
+    filename: str
+
+
+@app.post("/api/projects/{ident}/cleanup/deshimmer/undo")
+def undo_deshimmer_version(ident: str, request: Request, body: UndoDeshimmerRequest) -> dict:
+    """Restore last accepted cleanup for a stem, leaving aliases/scripts intact."""
+    require_local_origin(request)
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(409, "Song not available")
+    with lock:
+        record = projects.read_project(DATA_ROOT, ident)
+        if not record or body.filename not in record.get("files", []):
+            raise HTTPException(404, "Stem unavailable")
+        try:
+            result = deshimmer_versions.undo(
+                DATA_ROOT, record, body.filename,
+                lambda updated: projects.write_project(DATA_ROOT, updated))
+        except (ValueError, OSError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        job["message"] = "Stem cleanup undone"
+        return {"project": result, "job": snapshot(job), "stem": body.filename}
 
 
 @app.get("/api/projects/{ident}/tracks")

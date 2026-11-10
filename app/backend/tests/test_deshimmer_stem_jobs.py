@@ -37,7 +37,7 @@ class DeshimmerStemJobsTests(unittest.TestCase):
             runner.start(self.root,"../../bad",self.filename)
 
     def test_rejects_missing_stem(self):
-        with patch.object(runner,"probe",return_value={"configured_python":sys.executable}):
+        with patch.object(runner,"resolve_python",return_value=sys.executable):
             with self.assertRaisesRegex(ValueError,"unavailable"):
                 runner.start(self.root,self.ident,"missing.wav")
 

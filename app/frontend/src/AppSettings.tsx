@@ -18,7 +18,7 @@ type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
-  focus?:"fluidsynth"|"sfizz"|null;
+  focus?:"fluidsynth"|"sfizz"|"models"|null;
 }) {
   const [models,setModels]=useState<ModelSettings|null>(null);
   const [inventory,setInventory]=useState<ModelInventory|null>(null);
@@ -56,7 +56,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
 
   useEffect(()=>{
     if(!open)return;
-    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");
+    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");setShowModels(focus==="models"||showModels);
     void fetch("/api/settings/working-files").then(async r=>{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;

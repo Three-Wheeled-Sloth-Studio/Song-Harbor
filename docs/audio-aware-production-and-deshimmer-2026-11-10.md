@@ -73,3 +73,12 @@ For Parade for the Drowned King, compare first chorus (55.876-81.653) with final
 - `docs/section-intelligence-sprint.md`
 - Upstream Deshimmer Python API https://github.com/TheApeMachine/deshimmer/blob/main/docs/api.md
 - MOSS-Music https://github.com/OpenMOSS/MOSS-Music
+
+
+## 2026-11-10 Deshimmer UX correction
+- Reported QA: App reload clean, busy overlay looks good; launching Deshimmer from Song Harbor failed when Deshimmer UI was closed due to short cold-import probe; A/B buttons gave no obvious playback; excess explanatory copy breached the studio UI rules.
+- Reviewed canonical `Three-Wheeled-Sloth-Studio/TWS-Design-Principles/apps/App-Design-Principles.md` and `apps/Studio-UI-Style-Guide.md`: clarity of state/action, icon-first affordance, minimum necessary text, contextual dependency recovery and compact controls.
+- Fix: `deshimmer_adapter.resolve_python` resolves installed Python without import; the worker imports Deshimmer itself, independently of its UI. Explicit full probe retained with 90s timeout for diagnostics only.
+- Fix: cleanup candidate shows a play/pause icon with an Original/Cleaned segmented toggle. Play loads preview and starts synchronized Song Harbor playback; switching version changes the preview without restarting transport. Accept/Discard remain adjacent. Removed persistent instructional paragraphs, redundant per-toggle notices and duplicated busy text.
+- Source changes are committed on dev; no machine-local frontend build or actual audio A/B was executed in the connector environment. Validate fresh launch with external Deshimmer UI closed, switching during playback, pause/resume, Accept/Discard and output parity.
+- Model limitation to address separately: cleaned preview is still a candidate layer at the master bus rather than full post-stem effects insertion. Do not treat audition as mathematically identical to final accepted render until parity is verified.

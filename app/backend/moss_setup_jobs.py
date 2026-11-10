@@ -39,7 +39,13 @@ def status(app_root: Path, model_root: Path, distro: str | None = None) -> dict:
         if process is not None and process.poll() is not None:
             code = process.returncode
             _JOB["state"] = "finished" if code == 0 else "failed"
-            _JOB["error"] = "" if code == 0 else "ERROR: MOSS setup failed. See job log for details."
+            if code == 0:
+                _JOB["error"] = ""
+            else:
+                log_tail = _log_tail(model_root / ".song-harbor" / "logs" / "moss-setup.log")
+                failures = [line.removeprefix("ERROR: ").strip() for line in log_tail.splitlines() if line.startswith("ERROR: ")]
+                message = failures[-1] if failures else "Installer exited unsuccessfully. Inspect installation log."
+                _JOB["error"] = "ERROR: " + message[:600] + " Model runtime not installed."
             if code == 0 and _JOB["operation"] == "checkpoint":
                 try:
                     folder = model_root / "checkpoints" / _JOB["model"]

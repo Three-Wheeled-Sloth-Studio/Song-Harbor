@@ -39,3 +39,22 @@ Source tests: app/backend/tests/test_model_registry.py
 Run: python -m unittest discover -s app/backend/tests -p 'test_model_registry.py' -v
 Build: npm run build --prefix app/frontend
 These have NOT been run by the GitHub connector environment.
+
+## 2026-11-10 loader hardening after main promotion
+- Production main was fast-forwarded to clean-build dev commit 4cabca8. All further work here stays on dev.
+- Runtime executable now persists in machine-local Settings and is validated as an existing Python executable; no automatic environment installation.
+- Loader lightweight preflight checks the selected Python environment can locate the SGLang module. Missing runtime is a blocking error before model load.
+- Local port is tested for occupancy before launching. A unique served model ID `songharbor-moss-<registry-id>` is provided to SGLang and must match /v1/models to become Ready.
+- Startup deadline is 180 seconds; a timeout attempts to terminate the owned process tree and reports a blocking error. Windows worker process trees are terminated on Unload. A best-effort shutdown handler is registered for ordinary backend exits.
+- New model launches are rejected while Song Harbor audio processing jobs are active. Other external GPU services (including ACE) are not yet governed by a shared scheduler: do not attempt concurrent heavy loads.
+- Discovery recognizes both `MossMusicModel` and `MossAudioModel` config architecture strings. Model files are inspected, not deserialized or hashed.
+- A clean frontend build was reported by the user on the pre-promotion head. These subsequent loader commits have NOT yet been built or runtime-tested on Windows. Treat this as a source implementation pending QA.
+
+## Additional Windows QA
+1. Settings > Models: save runtime Python path; reopen Settings and relaunch to ensure persistence. A missing path must show an explicit failure without changing configuration.
+2. Scan directories and register both MOSS architecture families; verify registered model state survives restart.
+3. Attempt Load without checkbox; confirm explicit error. Attempt Load with non-SGLang Python executable; confirm blocking preflight error and no child process.
+4. Confirm an occupied port 18791 refuses launch even if /v1/models is unavailable.
+5. With a compatible runtime and checkpoint, explicitly Load and inspect Starting -> Ready, model ID match, Unload -> Unloaded, no orphan child processes, and no network downloads.
+6. Simulate failing SGLang startup; confirm Failed and error log path. Confirm timeout cleanup of child processes.
+7. Build: `npm run build --prefix app/frontend`. Backend: `python -m unittest discover -s app/backend/tests -p 'test_*model*.py' -v`; also test shared model settings explicitly.

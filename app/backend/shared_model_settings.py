@@ -66,3 +66,28 @@ def save(app_root: Path, value: str) -> dict:
 
 def browse() -> str | None:
     return workspace_settings.choose_directory()
+
+
+def configured_runtime_python(app_root: Path) -> str:
+    value = workspace_settings.read(app_root).get("moss_runtime_python", "")
+    return value if isinstance(value, str) else ""
+
+
+def save_runtime_python(app_root: Path, value: str) -> str:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute() or not candidate.is_file() or candidate.name.lower() not in ("python.exe", "python3.exe", "python"):
+        raise ValueError("ERROR: Select an existing Python executable from an isolated SGLang environment. Runtime not saved.")
+    cfg = workspace_settings.read(app_root)
+    cfg["moss_runtime_python"] = str(candidate.resolve())
+    path = settings_path(app_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, suffix=".tmp", delete=False) as handle:
+            temp = Path(handle.name)
+            json.dump(cfg, handle, indent=2)
+        os.replace(temp, path)
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
+    return str(candidate.resolve())

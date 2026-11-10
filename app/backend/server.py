@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import dependencies
 import workspace_settings
+import shared_model_settings
 import projects
 import sections
 import section_import
@@ -253,6 +254,30 @@ def configure_working_files(body: WorkingDirectoryRequest, request: Request) -> 
     try:
         return workspace_settings.stage(APP_ROOT, body.path)
     except (OSError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/settings/models")
+def shared_models_status() -> dict[str, Any]:
+    return shared_model_settings.status(APP_ROOT, MODEL_ROOT)
+
+
+@app.put("/api/settings/models")
+def configure_shared_models(body: WorkingDirectoryRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        shared_model_settings.save(APP_ROOT, body.path)
+        return shared_model_settings.status(APP_ROOT, MODEL_ROOT)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/browse")
+def browse_shared_models(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"path": shared_model_settings.browse()}
+    except (OSError, RuntimeError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 

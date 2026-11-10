@@ -56,6 +56,7 @@ import sfz_sample_recovery
 import curated_sfz
 import sfz_render_adapter
 import sfz_candidate_audio
+import deshimmer_stem_jobs
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -1845,6 +1846,60 @@ def get_bass_midi_file(ident:str,candidate_id:str)->FileResponse:
         if not path.is_file():raise ValueError("Render candidate before MIDI export")
         return FileResponse(path,media_type="audio/midi",filename="bass-to-cello.mid")
     except (ValueError,OSError) as exc:raise HTTPException(404,str(exc)) from exc
+
+
+class DeshimmerStemRequest(BaseModel):
+    filename: str
+
+
+@app.post("/api/projects/{ident}/cleanup/deshimmer")
+def begin_deshimmer_stem(ident: str, request: Request, body: DeshimmerStemRequest) -> dict:
+    """Start asynchronous processing of an existing, server-owned working stem."""
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not record or not job or job.get("status") != "complete":
+        raise HTTPException(404, "Completed song not found")
+    if body.filename not in record.get("files", []):
+        raise HTTPException(400, "Choose a stem in the current song")
+    try:
+        return deshimmer_stem_jobs.start(DATA_ROOT, ident, body.filename)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (ValueError, OSError, ImportError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/cleanup/deshimmer/{candidate_id}")
+def deshimmer_stem_status(ident: str, candidate_id: str) -> dict:
+    if not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    try:
+        return deshimmer_stem_jobs.status(ident, candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/cleanup/deshimmer/{candidate_id}/audio")
+def deshimmer_stem_audio(ident: str, candidate_id: str) -> FileResponse:
+    if not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    try:
+        path = deshimmer_stem_jobs.candidate(ident, candidate_id)
+        return FileResponse(path, media_type="audio/wav", filename="deshimmer-candidate.wav")
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/api/projects/{ident}/cleanup/deshimmer/{candidate_id}/cancel")
+def cancel_deshimmer_stem(ident: str, candidate_id: str, request: Request) -> dict:
+    require_local_origin(request)
+    if not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    try:
+        return deshimmer_stem_jobs.cancel(ident, candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.get("/api/projects/{ident}/tracks")

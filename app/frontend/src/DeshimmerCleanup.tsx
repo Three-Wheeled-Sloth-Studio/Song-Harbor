@@ -5,9 +5,10 @@ type Job={id:string;status:string;message:string;filename:string;source_hash:str
 type Track={track_id:string;working_filename:string;stem_alias:string;display_name:string};
 const isRunning=(status:string)=>["queued","analyzing","optimizing","rendering"].includes(status);
 export function DeshimmerCleanup({
-  jobId,tracks,engine,onLocked,onJobId,onInserted,onPause,onError
+  jobId,tracks,engine,playing,onPlay,onLocked,onJobId,onInserted,onPause,onError
 }:{
   jobId:string;tracks:readonly Track[];engine:SharedClockAudition|null;
+  playing:boolean;onPlay:()=>Promise<void>|void;
   onLocked:(locked:boolean)=>void;onJobId:(id:string|null)=>void;onInserted:(value:{project:unknown;job:unknown})=>void;
   onPause:()=>void;onError:(value:string)=>void;
 }){
@@ -16,7 +17,7 @@ export function DeshimmerCleanup({
   const [busy,setBusy]=useState(false);
   const [previewBusy,setPreviewBusy]=useState(false);
   const [error,setError]=useState("");
-  const [notice,setNotice]=useState("");
+  const [loadedId,setLoadedId]=useState<string|null>(null);
   const [listen,setListen]=useState<"original"|"cleaned">("original");
   const base="/api/projects/"+encodeURIComponent(jobId)+"/cleanup/deshimmer";
   const locked=busy||previewBusy||Boolean(job&&isRunning(job.status));
@@ -41,7 +42,7 @@ export function DeshimmerCleanup({
   async function start(){
     if(locked||!selected||!engine?.ready)return;
     engine.clearCandidatePreview();
-    setJob(null);setError("");setNotice("");setListen("original");
+    setJob(null);setError("");setLoadedId(null);setListen("original");
     setBusy(true);
     try{
       const response=await fetch(base,{method:"POST",headers:{"Content-Type":"application/json"},
@@ -52,30 +53,39 @@ export function DeshimmerCleanup({
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
   }
-  async function preview(cleaned:boolean){
-    if(!job||job.status!=="ready"||!engine?.ready||previewBusy)return;
+  /** Load only once. Keep this on the existing Song Harbor shared clock. */
+  async function ensurePreview():Promise<boolean>{
+    if(!job||job.status!=="ready"||!engine?.ready)return false;
+    if(loadedId===job.id)return true;
     setPreviewBusy(true);setError("");
     try{
-      const url=base+"/"+job.id+"/audio";
-      await engine.loadCandidatePreview(url,0);
+      await engine.loadCandidatePreview(base+"/"+job.id+"/audio",0);
       engine.setCandidateOriginalMix(job.filename,0);
-      engine.setCandidatePreviewBlend(cleaned?100:0);
       engine.setCandidatePreviewSolo(false);
-      setListen(cleaned?"cleaned":"original");
-      setNotice(cleaned?"Cleaned stem active in mix preview":"Original stem active in mix preview");
-    }catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setPreviewBusy(false);}
+      engine.setCandidatePreviewBlend(listen==="cleaned"?100:0);
+      setLoadedId(job.id);
+      return true;
+    }catch(e){
+      setError(e instanceof Error?e.message:String(e));
+      return false;
+    }finally{setPreviewBusy(false);}
   }
-  function toggle(cleaned:boolean){
-    if(!job||job.status!=="ready"||!engine?.ready)return;
-    if(listen==="original"&&cleaned){void preview(true);return;}
-    engine.setCandidatePreviewBlend(cleaned?100:0);
-    setListen(cleaned?"cleaned":"original");
+  async function togglePlayback(){
+    if(!engine?.ready||!job||job.status!=="ready")return;
+    if(playing){onPause();return;}
+    if(!await ensurePreview())return;
+    await onPlay();
+  }
+  async function switchVersion(next:"original"|"cleaned"){
+    if(!engine?.ready||!job||job.status!=="ready")return;
+    if(!await ensurePreview())return;
+    engine.setCandidatePreviewBlend(next==="cleaned"?100:0);
+    setListen(next);
   }
   async function discard(){
     if(locked)return;
     engine?.clearCandidatePreview();
-    setJob(null);setNotice("Candidate discarded. Original stem unchanged.");
+    setJob(null);setLoadedId(null);
     setListen("original");
   }
   async function accept(){
@@ -100,43 +110,43 @@ export function DeshimmerCleanup({
       const value=await saved.json() as {project?:unknown;job?:unknown;detail?:string};
       if(!saved.ok||!value.project||!value.job)throw Error(value.detail||"Could not accept cleaned stem");
       engine?.clearCandidatePreview();
-      setNotice("Cleaned stem accepted as a replacement layer; original remains recoverable.");
-      setJob(null);
+      setJob(null);setLoadedId(null);
       onInserted({project:value.project,job:value.job});
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
     finally{setBusy(false);}
   }
   const candidateReady=job?.status==="ready";
   return <section aria-label="Deshimmer stem cleanup" className="song-deshimmer-tool"
-      style={{position:"relative",display:"grid",gap:"0.6rem",padding:"0.5rem 0"}}>
-    <strong>Deshimmer: optimize and clean stem</strong>
-    <small>Local CPU processing. The source is preserved. No mastering or automatic acceptance.</small>
-    <label>Source stem
-      <select aria-label="Stem to clean" disabled={locked} value={selected} onChange={e=>setSelected(e.target.value)}>
-        <option value="">Select a stem</option>
+      style={{display:"grid",gap:"0.5rem",padding:"0.25rem 0"}}>
+    <div className="song-deshimmer-setup">
+      <label htmlFor="deshimmer-source">Stem</label>
+      <select id="deshimmer-source" aria-label="Stem to clean" disabled={locked}
+        value={selected} onChange={e=>setSelected(e.target.value)}>
+        <option value="">Select stem</option>
         {tracks.map(track=><option key={track.track_id} value={track.working_filename}>{track.display_name}</option>)}
       </select>
-    </label>
-    <button type="button" disabled={locked||!selected||!engine?.ready} onClick={()=>void start()}>Optimize and clean</button>
-    {candidateReady&&<>
-      <div className="production-tool-actions">
-        <button type="button" aria-pressed={listen==="original"} onClick={()=>toggle(false)}>A: Original</button>
-        <button type="button" aria-pressed={listen==="cleaned"} onClick={()=>toggle(true)}>B: Cleaned</button>
+      <button type="button" disabled={locked||!selected||!engine?.ready}
+        onClick={()=>void start()}>Optimize</button>
+    </div>
+    {candidateReady&&<div className="song-deshimmer-audition" aria-label="Cleanup audition">
+      <button type="button" className="song-deshimmer-play"
+        aria-label={playing?"Pause cleanup audition":"Play cleanup audition"}
+        title={playing?"Pause":"Play"} disabled={locked}
+        onClick={()=>void togglePlayback()}>{playing?"⏸":"▶"}</button>
+      <div className="song-deshimmer-switch" role="group" aria-label="Audition version">
+        <button type="button" title="Original" aria-label="Original audio"
+          aria-pressed={listen==="original"} className={listen==="original"?"is-active":""}
+          disabled={locked} onClick={()=>void switchVersion("original")}>◯ <span>Original</span></button>
+        <button type="button" title="Cleaned" aria-label="Cleaned audio"
+          aria-pressed={listen==="cleaned"} className={listen==="cleaned"?"is-active":""}
+          disabled={locked} onClick={()=>void switchVersion("cleaned")}>✦ <span>Cleaned</span></button>
       </div>
-      <small>Use the main transport to audition in context. A/B uses the shared audio clock.</small>
-      <div className="production-tool-actions">
-        <button type="button" disabled={locked} onClick={()=>void accept()}>Accept replacement</button>
-        <button type="button" disabled={locked} onClick={()=>void discard()}>Discard</button>
-      </div>
-    </>}
-    {job&&!candidateReady&&<p role="status">{job.message}</p>}
-    {notice&&<p role="status">{notice}</p>}
-    {error&&<p role="alert">{error}</p>}
-    {locked&&<div className="song-deshimmer-lock" role="status" aria-live="polite" aria-label="Deshimmer working, cleanup controls locked">
-      <div className="song-deshimmer-spinner" aria-hidden="true"/>
-      <strong>Deshimmer working</strong>
-      <span>{job?.message||"Preparing cleanup"}</span>
-      <small>Cleanup controls locked while processing. Existing audio is untouched.</small>
+      <button type="button" title="Accept cleaned replacement" disabled={locked}
+        onClick={()=>void accept()}>Accept</button>
+      <button type="button" title="Discard candidate" disabled={locked}
+        onClick={()=>void discard()}>Discard</button>
     </div>}
+    {job?.status==="failed"&&<p role="alert">{job.message}</p>}
+    {error&&<p role="alert">{error}</p>}
   </section>;
 }

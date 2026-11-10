@@ -1,5 +1,8 @@
 """No-download tests for the in-app MOSS setup controller."""
 import sys
+import io
+import hashlib
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,6 +48,33 @@ class MossSetupTests(unittest.TestCase):
         with patch.object(sys, "argv", ["moss_setup_worker.py", "runtime", "/", "none"]):
             with self.assertRaises(ValueError):
                 moss_setup_worker.main()
+
+    def test_standalone_uv_bootstrap_never_uses_venv(self):
+        payload = b"dummy-uv-executable"
+        tar_bytes = io.BytesIO()
+        with tarfile.open(fileobj=tar_bytes, mode="w:gz") as archive:
+            entry = tarfile.TarInfo("uv-x86_64-unknown-linux-gnu/uv")
+            entry.size = len(payload)
+            archive.addfile(entry, io.BytesIO(payload))
+        archive_bytes = tar_bytes.getvalue()
+        digest = hashlib.sha256(archive_bytes).hexdigest()
+        with patch.object(moss_setup_worker.platform, "system", return_value="Linux"), \
+             patch.object(moss_setup_worker.platform, "machine", return_value="x86_64"), \
+             patch.object(moss_setup_worker, "_download_bytes", side_effect=[
+                 (digest + "  uv-x86_64-unknown-linux-gnu.tar.gz").encode(), archive_bytes
+             ]), patch.object(moss_setup_worker.subprocess, "run") as runner:
+            binary = moss_setup_worker.ensure_uv(self.models)
+            self.assertEqual(Path(binary).read_bytes(), payload)
+            self.assertEqual(runner.call_count, 1)
+            self.assertEqual(runner.call_args.args[0][-1], "--version")
+
+    def test_bootstrap_refuses_checksum_mismatch_without_installing(self):
+        with patch.object(moss_setup_worker.platform, "system", return_value="Linux"), \
+             patch.object(moss_setup_worker.platform, "machine", return_value="x86_64"), \
+             patch.object(moss_setup_worker, "_download_bytes", side_effect=[b"0"*64, b"invalid"]):
+            with self.assertRaisesRegex(RuntimeError, "SHA-256 mismatch"):
+                moss_setup_worker.ensure_uv(self.models)
+        self.assertFalse((self.models / "tools" / ("uv-" + moss_setup_worker.UV_VERSION)).exists())
 
     def test_runtime_uses_pinned_sglang_revision(self):
         self.assertEqual(len(moss_setup_worker.SGLANG_REVISION), 40)

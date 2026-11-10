@@ -104,6 +104,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
         logdir.mkdir(parents=True, exist_ok=True)
         log = (logdir / "moss-runtime.log").open("ab")
         command = [python_executable, "-m", "sglang.launch_server", "--model-path", record["path"],
+                   "--served-model-name", "songharbor-moss-" + identifier,
                    "--host", "127.0.0.1", "--port", str(PORT), "--trust-remote-code"]
         try:
             process = subprocess.Popen(command, cwd=str(model_root), env=env,
@@ -113,7 +114,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
             log.close()
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
-                        "error": "", "log": log, "model_name": record["path"]})
+                        "error": "", "log": log, "model_name": "songharbor-moss-" + identifier})
     return status()
 
 

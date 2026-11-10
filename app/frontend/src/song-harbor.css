@@ -1223,3 +1223,39 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   .song-deshimmer-spinner { animation-duration: 3s; }
 }
 .song-deshimmer-lock { display: none; }
+
+/* Compact Deshimmer A/B transport follows TWS App Design Principles. */
+.song-deshimmer-setup, .song-deshimmer-audition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .45rem;
+}
+.song-deshimmer-setup select { min-width: 9rem; flex: 1 1 9rem; max-width: 100%; }
+.song-deshimmer-audition button { cursor: pointer; }
+.song-deshimmer-play {
+  width: 2.5rem; height: 2.5rem;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+.song-deshimmer-switch {
+  display: inline-flex;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-color, #667085);
+}
+.song-deshimmer-switch button {
+  border: 0;
+  border-radius: 0;
+  padding: .4rem .65rem;
+  background: transparent;
+}
+.song-deshimmer-switch button.is-active {
+  background: var(--accent-color, #237d87);
+  color: #fff;
+  font-weight: 650;
+}
+.song-deshimmer-switch button:focus-visible,
+.song-deshimmer-play:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

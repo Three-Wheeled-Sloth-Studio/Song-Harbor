@@ -17,18 +17,21 @@ from pathlib import Path
 import model_registry
 
 LOCK = threading.RLock()
-_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None}
+_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None}
 PORT = 18791
 
 
-def _probe() -> bool:
+def _probe(expected_name: str | None = None) -> bool:
     try:
         request = urllib.request.Request(f"http://127.0.0.1:{PORT}/v1/models")
         with urllib.request.urlopen(request, timeout=1.5) as response:
             if response.status != 200:
                 return False
             payload = json.loads(response.read(1024 * 1024))
-            return isinstance(payload, dict) and isinstance(payload.get("data"), list) and len(payload["data"]) > 0
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                return False
+            names = [str(item.get("id", "")) for item in payload["data"] if isinstance(item, dict)]
+            return any(expected_name.lower() in name.lower() for name in names) if expected_name else bool(names)
     except (OSError, ValueError, urllib.error.URLError):
         return False
 
@@ -46,7 +49,7 @@ def status() -> dict:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
-        ready = _probe()
+        ready = _probe(_ACTIVE["model_name"])
         return {"status": "ready" if ready else "starting", "model_id": _ACTIVE["id"],
                 "started_at": _ACTIVE["started_at"], "error": "",
                 "port": PORT}
@@ -88,7 +91,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
             log.close()
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
-                        "error": "", "log": log})
+                        "error": "", "log": log, "model_name": record["name"]})
     return status()
 
 
@@ -98,7 +101,11 @@ def unload() -> dict:
         if process is None:
             return status()
         if process.poll() is None:
-            process.terminate()
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                               capture_output=True, text=True, timeout=12)
+            else:
+                process.terminate()
             try:
                 process.wait(timeout=8)
             except subprocess.TimeoutExpired:

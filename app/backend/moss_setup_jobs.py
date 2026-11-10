@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import threading
 from pathlib import Path
@@ -39,6 +40,19 @@ def status(app_root: Path, model_root: Path, distro: str | None = None) -> dict:
             code = process.returncode
             _JOB["state"] = "finished" if code == 0 else "failed"
             _JOB["error"] = "" if code == 0 else "ERROR: MOSS setup failed. See job log for details."
+            if code == 0 and _JOB["operation"] == "checkpoint":
+                try:
+                    folder = model_root / "checkpoints" / _JOB["model"]
+                    manifest = json.loads((folder / "song-harbor-install.json").read_text(encoding="utf-8"))
+                    expected = next(item["repo"] for item in CATALOG if item["id"] == _JOB["model"])
+                    found = model_registry.inspect(folder)
+                    if (manifest.get("repo") != expected or not manifest.get("complete")
+                            or found is None or found["status"] != "present-unverified"):
+                        raise ValueError("Checkpoint manifest or weight inventory invalid")
+                    model_registry.register(app_root, str(folder))
+                except (ValueError, OSError, KeyError, StopIteration) as exc:
+                    _JOB["state"] = "failed"
+                    _JOB["error"] = "ERROR: Checkpoint installed but registration failed: " + str(exc)
             _JOB["process"] = None
             if _JOB["log"] is not None:
                 _JOB["log"].close()
@@ -51,7 +65,7 @@ def status(app_root: Path, model_root: Path, distro: str | None = None) -> dict:
     for item in CATALOG:
         folder = model_root / "checkpoints" / item["id"]
         manifest = folder / "song-harbor-install.json"
-        installed = bool(manifest.is_file() and model_registry.inspect(folder))
+        installed = bool(manifest.is_file() and (info := model_registry.inspect(folder)) and info["status"] == "present-unverified")
         found.append({**item, "installed": installed, "path": str(folder) if installed else ""})
     runtime_found = (model_root / "runtime-manifest.json").is_file() and (model_root / "runtime").is_dir()
     python_path = ""

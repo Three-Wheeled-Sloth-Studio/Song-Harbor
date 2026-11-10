@@ -5,12 +5,16 @@ import {AceServiceControls} from "./AceServiceControls";
 
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
+type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
   focus?:"fluidsynth"|"sfizz"|null;
 }) {
+  const [models,setModels]=useState<ModelSettings|null>(null);
+  const [modelPath,setModelPath]=useState("");
+  const [showModels,setShowModels]=useState(false);
   const [data,setData]=useState<Working|null>(null);
   const [path,setPath]=useState("");
   const [busy,setBusy]=useState(false);
@@ -30,6 +34,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
+    void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
     void fetch("/api/settings/sfizz").then(async r=>{
@@ -71,6 +76,27 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
           <Button size="compact" variant="secondary" disabled={busy||!data} onClick={()=>setPath(data?.default_directory||"")}>Use default</Button>
         </div>
         <p className="setting-warning">Changing locations does not migrate existing songs. To share between computers, use a Google Drive mirrored folder and allow synchronization to finish before opening Song Harbor on another PC. Do not run two copies against the same synced Library database simultaneously.</p>
+        <div className="setting-tools">
+          <button type="button" className="setting-tools-toggle" aria-expanded={showModels} onClick={()=>setShowModels(v=>!v)}>Models <span>{showModels?"▴":"▾"}</span></button>
+          {showModels&&<>
+            <div className="setting-tool-row"><span>Shared model folder <Status tone={models?.restart_required?"warning":"neutral"}>{models?.restart_required?"Restart needed":"Local"}</Status></span></div>
+            <div className="setting-path" title={models?.active_directory}>Active: {models?.active_directory||"Loading..."}</div>
+            <div className="setting-controls setting-component-path">
+              <input aria-label="Shared model directory" value={modelPath} onChange={e=>setModelPath(e.target.value)} placeholder="Dedicated model directory"/>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                const x=await response<{path:string|null}>("/api/settings/models/browse","POST");
+                if(x.path)setModelPath(x.path);
+              })}>Browse</Button>
+            </div>
+            <div className="setting-controls">
+              <Button size="compact" variant="primary" disabled={busy||!modelPath.trim()||modelPath===models?.configured_directory} onClick={()=>void act(async()=>{
+                const x=await response<ModelSettings>("/api/settings/models","PUT",{path:modelPath});
+                setModels(x);setModelPath(x.configured_directory);
+                setNotice("Model folder saved. Relaunch to activate. No models moved or downloaded.");
+              })}>Save location</Button>
+            </div>
+          </>}
+        </div>
         <div className="setting-tools">
           <button type="button" className="setting-tools-toggle" aria-expanded={showTools} onClick={()=>setShowTools(v=>!v)}>Components <span>{showTools?"▴":"▾"}</span></button>
           {showTools&&<><div className="setting-tool-row">

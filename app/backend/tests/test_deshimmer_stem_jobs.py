@@ -14,7 +14,7 @@ def wav(path: Path, frames=4800):
         w.setnchannels(2)
         w.setsampwidth(2)
         w.setframerate(48000)
-        w.writeframes(b"\\x00\\x00"*2*frames)
+        w.writeframes(bytes(4*frames))
 
 class DeshimmerStemJobsTests(unittest.TestCase):
     def setUp(self):

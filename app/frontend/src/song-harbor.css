@@ -1189,3 +1189,37 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-sfz-repair{justify-content:space-between}
 .song-sfz-repair>span{flex:1 1 150px}
 .song-sfz-repair button{white-space:normal}
+
+/* Deshimmer cleanup state: explicit modal busy shield inside the floating tool. */
+.song-floating-tool { position: fixed; }
+.song-tool-busy-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(8,12,19,0.88);
+  color: #f5f7fc;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  text-align: center;
+  padding: 1.25rem;
+  cursor: progress;
+  border-radius: inherit;
+}
+.song-tool-busy-shield small { opacity: 0.8; max-width: 28rem; }
+.song-deshimmer-spinner {
+  width: 3.2rem;
+  height: 3.2rem;
+  border: 0.35rem solid rgba(255,255,255,0.16);
+  border-top-color: #7ef2d6;
+  border-right-color: #8cc3f7;
+  border-radius: 50%;
+  animation: song-deshimmer-spin 0.9s linear infinite;
+}
+@keyframes song-deshimmer-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .song-deshimmer-spinner { animation-duration: 3s; }
+}
+.song-deshimmer-lock { display: none; }

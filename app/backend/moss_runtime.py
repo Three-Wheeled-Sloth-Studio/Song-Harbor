@@ -174,8 +174,38 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
     return status()
 
 
+def _stop_wsl_worker() -> None:
+    """Stop only the exact owned SGLang service identified by its served-model ID."""
+    distro = _ACTIVE.get("distro")
+    served = _ACTIVE.get("model_name")
+    if not distro or not served or not served.startswith("songharbor-moss-"):
+        raise RuntimeError("ERROR: Cannot safely identify the WSL worker to unload.")
+    script = (
+        "import os,signal,sys,time;"
+        "needle=sys.argv[1].encode();"
+        "targets=[];"
+        "[(targets.append(int(d)) if d.isdigit() and int(d)!=os.getpid()"
+        " and (lambda a: b'sglang.launch_server' in a and b'--served-model-name' in a and needle in a)"
+        "(open('/proc/'+d+'/cmdline','rb').read().split(b'\\0')) else None)"
+        " for d in os.listdir('/proc') if d.isdigit()"
+        " and os.path.isfile('/proc/'+d+'/cmdline')];"
+        "[(os.kill(p,signal.SIGTERM)) for p in targets];"
+        "time.sleep(1);"
+        "sys.exit(0)"
+    )
+    result = subprocess.run(["wsl.exe", "-d", distro, "--exec", "python3", "-c", script, served],
+                            capture_output=True, text=True, timeout=12,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode:
+        raise RuntimeError("ERROR: WSL worker shutdown command failed. Model not confirmed unloaded.")
+
+
 def _stop_process(process: subprocess.Popen) -> None:
+    if _ACTIVE.get("process") is process and _ACTIVE.get("kind") == "wsl":
+        _stop_wsl_worker()
     if process.poll() is not None:
+        if _ACTIVE.get("kind") == "wsl" and _probe(_ACTIVE.get("model_name")):
+            raise RuntimeError("ERROR: WSL model endpoint remains active. Unload not confirmed.")
         return
     if os.name == "nt":
         result = subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, text=True, timeout=12)
@@ -188,8 +218,8 @@ def _stop_process(process: subprocess.Popen) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=5)
-    if process.poll() is None:
-        raise RuntimeError("ERROR: Model process is still running. Unload not confirmed.")
+    if process.poll() is None or (_ACTIVE.get("kind") == "wsl" and _probe(_ACTIVE.get("model_name"))):
+        raise RuntimeError("ERROR: Model process or service is still running. Unload not confirmed.")
 
 
 def cleanup_on_exit() -> None:

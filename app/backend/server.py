@@ -343,6 +343,19 @@ def moss_runtime_status() -> dict[str, Any]:
     return moss_runtime.status()
 
 
+class AttachMossRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/api/settings/models/runtime/attach")
+def attach_moss_model(body: AttachMossRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.attach(APP_ROOT, SHARED_MODEL_ROOT, body.model_id)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/settings/models/runtime/load")
 def load_moss_model(body: LoadMossRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)

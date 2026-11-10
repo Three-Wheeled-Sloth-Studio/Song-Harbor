@@ -63,8 +63,9 @@ def discover_runtime(distro: str) -> dict:
     validate_distro(distro)
     # Only fixed commands; no shell text from the user.
     result = _run(["wsl.exe", "-d", distro, "--exec", "sh", "-c",
-                   'command -v python3; command -v nvidia-smi; test -x "$HOME/.venv/bin/python" && echo "$HOME/.venv/bin/python"'], timeout=12)
+                   'command -v python3; command -v nvidia-smi; test -x "$HOME/.venv/bin/python" && echo "$HOME/.venv/bin/python"; true'], timeout=12)
     lines = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("/")]
+    lines = sorted(set(lines), key=lambda item: ("/.venv/" not in item, item))
     return {"distro": distro, "python_candidates": lines[:6], "probe_ok": result.returncode == 0,
             "gpu_visible": "nvidia-smi" in result.stdout,
             "message": "" if result.returncode == 0 else "WSL runtime probe incomplete."}

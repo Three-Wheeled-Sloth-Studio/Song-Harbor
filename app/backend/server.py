@@ -346,9 +346,15 @@ def moss_runtime_status() -> dict[str, Any]:
 @app.post("/api/settings/models/runtime/load")
 def load_moss_model(body: LoadMossRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running") or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy:
+        raise HTTPException(409, "ERROR: Song Harbor is processing audio. Finish current jobs before loading a model. Model not loaded.")
     try:
         return moss_runtime.load(APP_ROOT, SHARED_MODEL_ROOT, body.model_id, body.python_executable,
                                  body.custom_code_approved)
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(408, "ERROR: SGLang runtime preflight timed out. Model not loaded.") from exc
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

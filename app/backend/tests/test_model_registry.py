@@ -55,6 +55,18 @@ class ModelRegistryTests(unittest.TestCase):
         (folder / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"a": "../outside.safetensors"}}))
         self.assertIsNone(model_registry.inspect(folder))
 
+    def test_upstream_architecture_names_detected(self):
+        folder = self.models / "upstream-music"
+        folder.mkdir()
+        (folder / "config.json").write_text(json.dumps({"architectures": ["MossMusicModel"], "model_type": "custom"}))
+        (folder / "model.safetensors").write_bytes(b"weights")
+        self.assertEqual(model_registry.inspect(folder)["family"], "moss_music")
+        other = self.models / "upstream-audio"
+        other.mkdir()
+        (other / "config.json").write_text(json.dumps({"architectures": ["MossAudioModel"], "model_type": "moss_audio"}))
+        (other / "model.safetensors").write_bytes(b"weights")
+        self.assertEqual(model_registry.inspect(other)["family"], "moss_audio")
+
     def test_unrecognized_model_does_not_register(self):
         folder = self.models / "random"
         folder.mkdir()

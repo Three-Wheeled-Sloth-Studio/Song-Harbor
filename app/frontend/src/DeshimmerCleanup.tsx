@@ -5,10 +5,10 @@ type Job={id:string;status:string;message:string;filename:string;source_hash:str
 type Track={track_id:string;working_filename:string;stem_alias:string;display_name:string};
 const isRunning=(status:string)=>["queued","analyzing","optimizing","rendering"].includes(status);
 export function DeshimmerCleanup({
-  jobId,tracks,engine,onLocked,onInserted,onPause,onError
+  jobId,tracks,engine,onLocked,onJobId,onInserted,onPause,onError
 }:{
   jobId:string;tracks:readonly Track[];engine:SharedClockAudition|null;
-  onLocked:(locked:boolean)=>void;onInserted:(value:{project:unknown;job:unknown})=>void;
+  onLocked:(locked:boolean)=>void;onJobId:(id:string|null)=>void;onInserted:(value:{project:unknown;job:unknown})=>void;
   onPause:()=>void;onError:(value:string)=>void;
 }){
   const [selected,setSelected]=useState("");
@@ -21,7 +21,8 @@ export function DeshimmerCleanup({
   const base="/api/projects/"+encodeURIComponent(jobId)+"/cleanup/deshimmer";
   const locked=busy||previewBusy||Boolean(job&&isRunning(job.status));
   useEffect(()=>{onLocked(locked);},[locked,onLocked]);
-  useEffect(()=>()=>{onLocked(false);engine?.clearCandidatePreview();},[engine,onLocked]);
+  useEffect(()=>{onJobId(locked?job?.id||null:null);},[locked,job?.id,onJobId]);
+  useEffect(()=>()=>{onLocked(false);onJobId(null);engine?.clearCandidatePreview();},[engine,onLocked,onJobId]);
   useEffect(()=>{
     if(!job||!isRunning(job.status))return;
     let alive=true;

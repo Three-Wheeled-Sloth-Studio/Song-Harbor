@@ -44,7 +44,7 @@ def status() -> dict:
         code = process.poll()
         if code is not None:
             _ACTIVE["process"] = None
-            _ACTIVE["error"] = f"ERROR: Model process stopped (exit {code}). Model not loaded."
+            _ACTIVE["error"] = f"ERROR: Model process stopped (exit {code}). Model not loaded. See .song-harbor/logs/moss-runtime.log."
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None
@@ -111,6 +111,8 @@ def unload() -> dict:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
+        if process.poll() is None:
+            raise RuntimeError("ERROR: Model process is still running. Unload not confirmed.")
         _ACTIVE["process"] = None
         _ACTIVE["id"] = None
         _ACTIVE["error"] = ""

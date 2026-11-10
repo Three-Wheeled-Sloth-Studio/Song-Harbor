@@ -90,27 +90,16 @@ export function DeshimmerCleanup({
   }
   async function accept(){
     if(!job||job.status!=="ready"||locked)return;
-    const source=tracks.find(t=>t.working_filename===job.filename);
-    if(!source){setError("Source stem identity missing; reopen the song.");return;}
     setBusy(true);setError("");
     try{
       onPause();
-      const response=await fetch(base+"/"+job.id+"/audio",{cache:"no-store"});
-      if(!response.ok)throw Error("Candidate audio unavailable");
-      const blob=await response.blob();
-      const alias=("Clean_"+source.stem_alias).replace(/[^a-zA-Z0-9_-]/g,"").slice(0,32);
-      const form=new FormData();
-      form.append("file",new File([blob],"deshimmer-"+job.id.slice(0,8)+".wav",{type:"audio/wav"}));
-      form.append("stem_alias",alias);
-      form.append("display_name","Cleaned "+source.display_name);
-      form.append("start_seconds","0");
-      form.append("original_gain_percent","0");
-      form.append("replace_source_track_id",source.track_id);
-      const saved=await fetch("/api/projects/"+encodeURIComponent(jobId)+"/tracks/add",{method:"POST",body:form});
+      const saved=await fetch(base+"/"+job.id+"/accept",{method:"POST"});
       const value=await saved.json() as {project?:unknown;job?:unknown;detail?:string};
-      if(!saved.ok||!value.project||!value.job)throw Error(value.detail||"Could not accept cleaned stem");
+      if(!saved.ok||!value.project||!value.job)
+        throw Error(value.detail||"Could not accept cleaned stem");
       engine?.clearCandidatePreview();
-      setJob(null);setLoadedId(null);
+      // Preserve the tool/window; only candidate context is cleared.
+      setJob(null);setLoadedId(null);setListen("original");setSelected("");
       onInserted({project:value.project,job:value.job});
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
     finally{setBusy(false);}

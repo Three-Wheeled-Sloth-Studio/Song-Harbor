@@ -135,7 +135,11 @@ export function DeshimmerCleanup({
       <button type="button" title="Discard candidate" disabled={locked}
         onClick={()=>void discard()}>Discard</button>
     </div>}
-    {job?.status==="failed"&&<p role="alert">{job.message}</p>}
-    {error&&<p role="alert">{error}</p>}
+    {job?.status==="failed"&&<p role="alert" className="song-deshimmer-error">
+      <strong>ERROR:</strong> {job.message}. Stem not updated.
+    </p>}
+    {error&&<p role="alert" className="song-deshimmer-error">
+      <strong>ERROR:</strong> {error.replace(/[.! ]+$/,"")}. Stem not updated.
+    </p>}
   </section>;
 }

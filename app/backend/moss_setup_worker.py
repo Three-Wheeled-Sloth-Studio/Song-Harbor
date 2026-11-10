@@ -11,6 +11,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
+import platform
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,20 +48,71 @@ def environment(root: Path) -> None:
         os.environ[key] = str(path)
 
 
-def ensure_uv(root: Path) -> str:
-    present = shutil.which("uv")
-    if present:
-        return present
-    announce("Installing uv into isolated bootstrap environment on selected model drive")
-    bootstrap = root / "bootstrap"
-    if not (bootstrap / "bin/python").exists():
-        run(sys.executable, "-m", "venv", str(bootstrap))
-    run(str(bootstrap / "bin/python"), "-m", "pip", "install", "uv")
-    binary = bootstrap / "bin/uv"
-    if not binary.is_file():
-        raise RuntimeError("uv bootstrap failed. Python venv/pip may need setup in WSL.")
-    return str(binary)
+UV_VERSION = "0.13.7"
+UV_RELEASE = "https://github.com/astral-sh/uv/releases/download/" + UV_VERSION
+UV_ARCHIVES = {
+    "x86_64": "uv-x86_64-unknown-linux-gnu.tar.gz",
+    "aarch64": "uv-aarch64-unknown-linux-gnu.tar.gz",
+}
+UV_MAX_ARCHIVE_BYTES = 60 * 1024 * 1024
 
+
+def _download_bytes(url: str, limit: int) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "Song-Harbor-MOSS-Setup"})
+    with urllib.request.urlopen(request, timeout=45) as response:
+        length = response.headers.get("Content-Length")
+        if length and int(length) > limit:
+            raise RuntimeError("uv release asset exceeds the permitted size.")
+        data = response.read(limit + 1)
+    if len(data) > limit:
+        raise RuntimeError("uv release asset exceeds the permitted size.")
+    return data
+
+
+def ensure_uv(root: Path) -> str:
+    """Install the pinned standalone uv executable; never use system venv/pip/ensurepip."""
+    target = root / "tools" / ("uv-" + UV_VERSION)
+    if target.is_file():
+        result = subprocess.run([str(target), "--version"], capture_output=True, text=True, timeout=12)
+        if result.returncode == 0 and result.stdout.strip() == "uv " + UV_VERSION:
+            return str(target)
+        raise RuntimeError("Existing uv executable has an unexpected version. Nothing overwritten.")
+    if platform.system() != "Linux" or platform.machine().lower() not in UV_ARCHIVES:
+        raise RuntimeError("Automatic uv bootstrap supports Linux x86_64 and aarch64 only.")
+    asset = UV_ARCHIVES[platform.machine().lower()]
+    announce("Downloading pinned standalone uv " + UV_VERSION + " (no Ubuntu venv/ensurepip required)")
+    digest_line = _download_bytes(UV_RELEASE + "/" + asset + ".sha256", 1024).decode("ascii").strip()
+    expected = digest_line.split()[0].lower()
+    if len(expected) != 64 or any(ch not in "0123456789abcdef" for ch in expected):
+        raise RuntimeError("Official uv release checksum is invalid. No executable installed.")
+    archive = _download_bytes(UV_RELEASE + "/" + asset, UV_MAX_ARCHIVE_BYTES)
+    actual = hashlib.sha256(archive).hexdigest()
+    if actual != expected:
+        raise RuntimeError("uv archive SHA-256 mismatch. No executable installed.")
+    import io
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
+        members = [item for item in tar if item.name.endswith("/uv") and item.isfile()]
+        if len(members) != 1 or members[0].size > UV_MAX_ARCHIVE_BYTES:
+            raise RuntimeError("Unexpected uv release archive layout. No executable installed.")
+        stream = tar.extractfile(members[0])
+        if stream is None:
+            raise RuntimeError("uv executable missing from release archive.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".uv-", delete=False) as output:
+            tmp = Path(output.name)
+            try:
+                shutil.copyfileobj(stream, output)
+            except Exception:
+                tmp.unlink(missing_ok=True)
+                raise
+    try:
+        tmp.chmod(0o755)
+        subprocess.run([str(tmp), "--version"], check=True, capture_output=True, timeout=12)
+        os.replace(tmp, target)
+    finally:
+        tmp.unlink(missing_ok=True)
+    announce("Verified uv bootstrap: " + str(target))
+    return str(target)
 
 def runtime(root: Path) -> None:
     uv = ensure_uv(root)

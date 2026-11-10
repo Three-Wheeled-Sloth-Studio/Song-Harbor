@@ -29,6 +29,14 @@ PROBE = (
 def probe(python_executable: str | None = None, timeout_seconds: int = 15) -> dict:
     configured = python_executable or os.environ.get("SONG_HARBOR_DESHIMMER_PYTHON")
     if not configured:
+        # Non-invasive discovery of the existing local Windows checkout.
+        # The user can always override with SONG_HARBOR_DESHIMMER_PYTHON.
+        candidates = [
+            Path("D:/Apps/deshimmer/.venv/Scripts/python.exe"),
+            Path("D:/Apps/Tools/deshimmer/.venv/Scripts/python.exe"),
+        ]
+        configured = next((str(path) for path in candidates if path.is_file()), None)
+    if not configured:
         raise DeshimmerUnavailable(
             "Configure SONG_HARBOR_DESHIMMER_PYTHON to the Deshimmer environment's Python executable"
         )

@@ -27,6 +27,7 @@ import {AccompanimentGenerator} from "./AccompanimentGenerator";
 import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
+import {MossModelTool} from "./MossModelTool";
 import type { SongSection } from "./SectionEditor";
 
 type SectionPreview =
@@ -69,11 +70,12 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, midiSession, onMidiSessionChange, settingsOpen }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, onConfigureModels, midiSession, onMidiSessionChange, settingsOpen }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   onConfigureFluidSynth?:()=>void;
   onConfigureSfizz?:()=>void;
+  onConfigureModels?:()=>void;
   midiSession?:MidiRenderSession|null;
   onMidiSessionChange?:(value:MidiRenderSession|null)=>void;
   settingsOpen?:boolean;
@@ -1586,6 +1588,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
+        {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}/>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
           sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name,working_filename:t.working_filename}))}
           engine={audio.current} playing={playing} position={position} onSeek={seek}

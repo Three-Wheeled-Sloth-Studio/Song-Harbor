@@ -123,9 +123,9 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>
             </div>
             {(inventory?.registered||[]).map(item=><div className="setting-tool-row" key={item.id} title={item.path}>
-              <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime.status:item.status}</Status></span>
+              <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
               <div className="setting-controls">
-                {runtime?.model_id===item.id&&runtime.status!=="failed"
+                {runtime?.model_id===item.id&&runtime?.status!=="failed"
                   ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>Unload</Button>
                   :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||!runtimePython.trim()||!approveCode}
                     title="Explicitly start isolated offline SGLang. Requires reviewed custom model code and a configured runtime."

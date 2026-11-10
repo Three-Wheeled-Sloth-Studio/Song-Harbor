@@ -9,6 +9,8 @@ type ModelSettings={configured_directory:string;active_directory:string;restart_
 type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
 type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
+type WslStatus={available:boolean;distros:string[];message:string};
+type WslProbe={distro:string;python_candidates:string[];probe_ok:boolean;gpu_visible:boolean;message:string};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
@@ -23,7 +25,12 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [savedRuntimePython,setSavedRuntimePython]=useState("");
   const [approveCode,setApproveCode]=useState(false);
   const [modelPath,setModelPath]=useState("");
-  const [showModels,setShowModels]=useState(false);
+  const [showModels,setShowModels]=useState(true);
+  const [wsl,setWsl]=useState<WslStatus|null>(null);
+  const [wslDistro,setWslDistro]=useState("");
+  const [wslProbe,setWslProbe]=useState<WslProbe|null>(null);
+  const [wslPython,setWslPython]=useState("");
+  const [selectedModel,setSelectedModel]=useState("");
   const [data,setData]=useState<Working|null>(null);
   const [path,setPath]=useState("");
   const [busy,setBusy]=useState(false);
@@ -45,6 +52,9 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void refreshModels();
+    void response<WslStatus>("/api/settings/models/wsl","GET").then(x=>{
+      setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
+    }).catch(e=>setError(String(e)));
     void response<{python_executable:string}>("/api/settings/models/runtime/config","GET").then(x=>{setRuntimePython(x.python_executable);setSavedRuntimePython(x.python_executable);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
@@ -120,6 +130,45 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
                 setNotice("Model folder saved. Relaunch to activate. No models moved or downloaded.");
               })}>Save location</Button>
             </div>
+            <div className="setting-tool-row">
+              <strong>MOSS loader</strong>
+              <Status tone={runtime?.status==="ready"||runtime?.status==="connected"?"success":runtime?.status==="failed"?"warning":"neutral"}>{runtime?.status||"Checking"}</Status>
+            </div>
+            <div className="setting-controls">
+              <span>WSL</span>
+              <select aria-label="WSL distribution" value={wslDistro} onChange={e=>{setWslDistro(e.target.value);setWslProbe(null);setWslPython("");}}>
+                <option value="">Select distribution</option>
+                {(wsl?.distros||[]).map(name=><option key={name} value={name}>{name}</option>)}
+              </select>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                const x=await response<WslStatus>("/api/settings/models/wsl","GET");setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
+              })}>Detect WSL</Button>
+              <Button size="compact" variant="secondary" disabled={busy||!wslDistro} onClick={()=>void act(async()=>{
+                const x=await response<WslProbe>("/api/settings/models/wsl/probe","POST",{distro:wslDistro});
+                setWslProbe(x);setWslPython(x.python_candidates[0]||"");
+              })}>Inspect</Button>
+            </div>
+            {wsl?.message&&<p role="status">{wsl.message}</p>}
+            {wslProbe&&<div className="setting-controls setting-component-path">
+              <input aria-label="WSL SGLang Python path" value={wslPython} onChange={e=>setWslPython(e.target.value)} placeholder="/home/user/.venv/bin/python"/>
+              <Status tone={wslProbe.gpu_visible?"success":"warning"}>{wslProbe.gpu_visible?"GPU visible":"GPU unverified"}</Status>
+            </div>}
+            <div className="setting-controls setting-component-path">
+              <select aria-label="MOSS model to load" value={selectedModel} onChange={e=>setSelectedModel(e.target.value)}>
+                <option value="">Select registered MOSS model</option>
+                {(inventory?.registered||[]).filter(item=>item.status==="present-unverified").map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <Button size="compact" variant="primary" disabled={busy||!selectedModel||!wslDistro||!wslPython.trim()||!approveCode||runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected"}
+                title={!selectedModel?"Register a checkpoint first":!wslPython?"Inspect WSL or select its Python environment":!approveCode?"Approve reviewed checkpoint code first":"Start MOSS in WSL explicitly"}
+                onClick={()=>void act(async()=>{
+                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load-wsl","POST",{model_id:selectedModel,distro:wslDistro,python_path:wslPython,custom_code_approved:approveCode}));
+                })}>Load MOSS</Button>
+              {(runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected")&&
+                <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));
+                })}>Unload</Button>}
+            </div>
+            {!inventory?.registered.length&&<div role="status" className="setting-path">No registered MOSS model. Scan or register a checkpoint below to enable Load.</div>}
             <div className="setting-tool-row">
               <span>Local checkpoints <Status tone="neutral">{(inventory?.registered.length||0)} registered</Status></span>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>

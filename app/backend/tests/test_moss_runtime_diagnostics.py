@@ -94,6 +94,30 @@ class MossRuntimeDiagnosticsTests(unittest.TestCase):
             self.assertEqual(moss_runtime.status()["status"], "ready")
             self.assertEqual(moss_runtime._ACTIVE["last_used"], 2.0)
 
+    def test_current_run_kv_oom_detected_without_old_log_contamination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "moss-wsl.log"
+            old = "RuntimeError: Not enough memory. mem_fraction_static=0.696\\n"
+            path.write_text(old + "New run initialized\\n")
+            with patch.object(moss_runtime, "_LOG_PATH", path), \
+                 patch.dict(moss_runtime._ACTIVE, {"log_start": len(old)}, clear=False):
+                self.assertIsNone(moss_runtime._startup_failure())
+                with path.open("a") as stream:
+                    stream.write("RuntimeError: Not enough memory. Current value: mem_fraction_static=0.696\\n")
+                self.assertIn("KV cache", moss_runtime._startup_failure())
+
+    def test_known_4b_on_12gb_refused_before_any_model_process(self):
+        with patch.object(moss_runtime.model_registry, "list_models", return_value={
+            "registered": [{"id": "4b", "name": "moss-audio-4b", "path": "/tmp/4b",
+                            "status": "present-unverified", "bytes_present": 8 * 1024**3}]
+        }), patch.object(moss_runtime.wsl_model_bridge, "libnuma_status",
+                  return_value={"ready": True}), \
+             patch.object(moss_runtime.wsl_model_bridge, "gpu_memory",
+                  return_value={"verified": True, "total_mib": 12288, "free_mib": 12288}), \
+             patch.object(moss_runtime.subprocess, "Popen") as spawn:
+            with self.assertRaisesRegex(ValueError, "previously exhausted"):
+                moss_runtime.load_wsl(Path("/tmp"), Path("/tmp"), "4b", "Ubuntu", "/bin/python", True)
+            spawn.assert_not_called()
     def test_diagnostics_are_read_only_and_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "moss-wsl.log"

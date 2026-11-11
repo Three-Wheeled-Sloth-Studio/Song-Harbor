@@ -18,6 +18,7 @@ from pathlib import Path
 
 import model_registry
 import wsl_model_bridge
+import app_logs
 
 LOCK = threading.RLock()
 _ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None}
@@ -27,8 +28,8 @@ STARTUP_TIMEOUT_SECONDS = 180
 _LOG_PATH: Path | None = None
 
 
-def _runtime_log(model_root: Path, kind: str) -> Path:
-    return model_root / ".song-harbor" / "logs" / ("moss-wsl.log" if kind == "wsl" else "moss-runtime.log")
+def _runtime_log(app_root: Path, kind: str) -> Path:
+    return app_logs.log_path(app_root, "moss-wsl.log" if kind == "wsl" else "moss-runtime.log")
 
 
 def _tail(path: Path | None, limit: int = 5000) -> str:
@@ -143,7 +144,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
         env["XDG_CACHE_HOME"] = str(model_root / ".song-harbor" / "cache")
         env["TORCH_HOME"] = str(model_root / ".song-harbor" / "torch")
         global _LOG_PATH
-        _LOG_PATH = _runtime_log(model_root, "native")
+        _LOG_PATH = _runtime_log(app_root, "native")
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         log = _LOG_PATH.open("ab")
         command = [python_executable, "-m", "sglang.launch_server", "--model-path", record["path"],
@@ -188,7 +189,7 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
             if sock.connect_ex(("127.0.0.1", PORT)) == 0:
                 raise ValueError("ERROR: Port 18791 is already in use. Model not loaded.")
         global _LOG_PATH
-        _LOG_PATH = _runtime_log(model_root, "wsl")
+        _LOG_PATH = _runtime_log(app_root, "wsl")
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         log = _LOG_PATH.open("ab")
         cache = linux_root + "/.song-harbor"

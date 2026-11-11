@@ -362,6 +362,14 @@ def moss_runtime_status() -> dict[str, Any]:
     return moss_runtime.status()
 
 
+@app.post("/api/settings/logs/open")
+def open_song_harbor_logs(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return app_logs.open_logs_folder(APP_ROOT)
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(400, "ERROR: Unable to open Song Harbor logs folder.") from exc
+
 @app.get("/api/settings/models/runtime/diagnostics")
 def moss_runtime_diagnostics() -> dict[str, Any]:
     return moss_runtime.diagnostics()

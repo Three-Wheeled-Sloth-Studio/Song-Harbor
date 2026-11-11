@@ -196,3 +196,58 @@ def register_wsl(app_root: Path, distro: str, linux_folder: str) -> dict:
             "storage": "wsl", "distro": distro}
         _atomic_write(app_root, registry)
     return {**info, "id": identifier, "registered": True, "storage": "wsl", "distro": distro}
+
+
+def _trust_fingerprint(record: dict) -> str | None:
+    """Trust only installed checkpoint provenance with a verified local manifest.
+
+    The manifest is installer-produced and contains a pinned upstream revision
+    plus a local file inventory. An unverified manually registered directory
+    never gets persistent trust.
+    """
+    import hashlib
+    if record.get("storage") == "wsl":
+        return None
+    path = Path(record.get("path", ""))
+    manifest = path / "song-harbor-install.json"
+    if not manifest.is_file() or manifest.stat().st_size > 4 * 1024 * 1024:
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if not data.get("complete") or not isinstance(data.get("revision"), str) or not isinstance(data.get("inventory"), dict):
+            return None
+        if not all(isinstance(v, dict) and isinstance(v.get("sha256"), str) and len(v["sha256"]) == 64
+                   for v in data["inventory"].values()):
+            return None
+        return hashlib.sha256(json.dumps({
+            "revision": data["revision"], "repo": data.get("repo"), "inventory": data["inventory"]
+        }, sort_keys=True).encode()).hexdigest()
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def trust_status(app_root: Path, identifier: str) -> dict:
+    with _LOCK:
+        registry = _load(app_root)
+        record = registry["models"].get(identifier)
+        if not isinstance(record, dict):
+            raise ValueError("ERROR: Model is not registered.")
+        fingerprint = _trust_fingerprint(record)
+        return {"model_id": identifier, "trusted": fingerprint is not None and
+                record.get("approved_fingerprint") == fingerprint,
+                "persistent_trust_available": fingerprint is not None}
+
+
+def approve_trust(app_root: Path, identifier: str) -> dict:
+    with _LOCK:
+        registry = _load(app_root)
+        record = registry["models"].get(identifier)
+        if not isinstance(record, dict):
+            raise ValueError("ERROR: Model is not registered.")
+        fingerprint = _trust_fingerprint(record)
+        if fingerprint is None:
+            # Unverified/WSL-only models still require each-load authorization.
+            return {"model_id": identifier, "trusted": False, "persistent_trust_available": False}
+        record["approved_fingerprint"] = fingerprint
+        _atomic_write(app_root, registry)
+        return {"model_id": identifier, "trusted": True, "persistent_trust_available": True}

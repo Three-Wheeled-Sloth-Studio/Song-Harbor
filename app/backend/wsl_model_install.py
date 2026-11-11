@@ -12,6 +12,7 @@ import subprocess
 import threading
 from pathlib import Path
 import wsl_model_bridge
+import app_logs
 
 _LOCK = threading.RLock()
 _JOB = {"process": None, "log": None, "state": "idle", "message": "", "destination": ""}
@@ -51,7 +52,7 @@ def status() -> dict:
                 "message": _JOB["message"]}
 
 
-def install(model_root: Path, distro: str, destination: str, approved: bool) -> dict:
+def install(app_root: Path, distro: str, destination: str, approved: bool) -> dict:
     if not approved:
         raise ValueError("ERROR: Approve the WSL distribution installation and download explicitly.")
     if os.name != "nt" or not shutil.which("wsl.exe"):
@@ -72,9 +73,7 @@ def install(model_root: Path, distro: str, destination: str, approved: bool) -> 
     with _LOCK:
         if _JOB["process"] is not None and _JOB["process"].poll() is None:
             raise ValueError("ERROR: Another WSL install is already running.")
-        logdir = model_root / ".song-harbor" / "logs"
-        logdir.mkdir(parents=True, exist_ok=True)
-        log = (logdir / "wsl-install.log").open("ab")
+        log = app_logs.open_log(app_root, "wsl-install.log")
         try:
             process = subprocess.Popen(["wsl.exe", "--install", "--distribution", distro,
                                         "--location", path, "--no-launch"],

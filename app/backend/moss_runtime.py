@@ -84,7 +84,10 @@ def status() -> dict:
             _ACTIVE["process"] = None
             details = diagnostics()
             log_location = details["log_path"] or "unknown"
-            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {log_location}."
+            causes = [text.strip() for text in details["log_tail"].splitlines()
+                      if any(keyword in text.lower() for keyword in ("error:", "exception:", "out of memory", "oom", "killed"))]
+            cause = (" Reason: " + causes[-1][:250]) if causes else " Open Failure details to inspect startup output."
+            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {log_location}." + cause
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None

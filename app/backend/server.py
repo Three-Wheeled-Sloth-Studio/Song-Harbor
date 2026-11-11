@@ -387,7 +387,7 @@ def moss_q4_install_status() -> dict[str, Any]:
 def moss_q4_install(body: MossQ4InstallRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)
     try:
-        return moss_q4_installer.start(SHARED_MODEL_ROOT, body.kind, body.approved)
+        return moss_q4_installer.start(APP_ROOT, SHARED_MODEL_ROOT, body.kind, body.approved)
     except (OSError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

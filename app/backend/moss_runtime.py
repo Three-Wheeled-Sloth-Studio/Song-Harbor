@@ -24,6 +24,32 @@ _ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": 
 _ATTACHED = {"id": None, "model_name": None}
 PORT = 18791
 STARTUP_TIMEOUT_SECONDS = 180
+_LOG_PATH: Path | None = None
+
+
+def _runtime_log(model_root: Path, kind: str) -> Path:
+    return model_root / ".song-harbor" / "logs" / ("moss-wsl.log" if kind == "wsl" else "moss-runtime.log")
+
+
+def _tail(path: Path | None, limit: int = 5000) -> str:
+    if path is None or not path.is_file():
+        return ""
+    try:
+        with path.open("rb") as handle:
+            handle.seek(max(0, path.stat().st_size - limit))
+            return handle.read().decode("utf-8", errors="replace")[-limit:]
+    except OSError:
+        return ""
+
+
+def diagnostics() -> dict:
+    with LOCK:
+        path = _LOG_PATH
+        return {"log_path": str(path) if path else None,
+                "log_tail": _tail(path),
+                "runtime_kind": _ACTIVE.get("kind"),
+                "model_id": _ACTIVE.get("id")}
+
 
 
 def _probe(expected_name: str | None = None) -> bool:
@@ -54,7 +80,8 @@ def status() -> dict:
         code = process.poll()
         if code is not None:
             _ACTIVE["process"] = None
-            _ACTIVE["error"] = f"ERROR: Model process stopped (exit {code}). Model not loaded. See .song-harbor/logs/moss-runtime.log."
+            details = diagnostics()
+            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {details[\'log_path\'] or \'unknown\'}."
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None
@@ -109,9 +136,10 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
         env["HUGGINGFACE_HUB_CACHE"] = str(model_root / ".song-harbor" / "hf-cache" / "hub")
         env["XDG_CACHE_HOME"] = str(model_root / ".song-harbor" / "cache")
         env["TORCH_HOME"] = str(model_root / ".song-harbor" / "torch")
-        logdir = model_root / ".song-harbor" / "logs"
-        logdir.mkdir(parents=True, exist_ok=True)
-        log = (logdir / "moss-runtime.log").open("ab")
+        global _LOG_PATH
+        _LOG_PATH = _runtime_log(model_root, "native")
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log = _LOG_PATH.open("ab")
         command = [python_executable, "-m", "sglang.launch_server", "--model-path", record["path"],
                    "--served-model-name", "songharbor-moss-" + identifier,
                    "--host", "127.0.0.1", "--port", str(PORT), "--trust-remote-code"]
@@ -153,9 +181,10 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
             sock.settimeout(1.0)
             if sock.connect_ex(("127.0.0.1", PORT)) == 0:
                 raise ValueError("ERROR: Port 18791 is already in use. Model not loaded.")
-        logdir = model_root / ".song-harbor" / "logs"
-        logdir.mkdir(parents=True, exist_ok=True)
-        log = (logdir / "moss-wsl.log").open("ab")
+        global _LOG_PATH
+        _LOG_PATH = _runtime_log(model_root, "wsl")
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log = _LOG_PATH.open("ab")
         cache = linux_root + "/.song-harbor"
         command = ["wsl.exe", "-d", distro, "--exec", "env",
                    "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1",

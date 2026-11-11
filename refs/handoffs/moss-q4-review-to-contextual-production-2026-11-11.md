@@ -144,3 +144,10 @@ Implementation on dev:
 7. Next follow-up: capture explicit source-stem IDs and authoritative saved project/recipe revisions in the metadata once the existing project revision contract is identified; current source hash provides real rendered-audio invalidation, not the full semantic dependency graph. Move to Slice C SMU aggregation only after Windows QA.
 
 **Q4 trust gate remains unchanged:** repeated 237.6-second freeform responses were internally inconsistent. No automatic recommendations or accepts are authorized.
+
+
+### Additional Slice B implementation notes
+- Follow-up commit sequence through `a39c6e6` adds active working-stem provenance: track ID, working filename, displayed name, gain percentage, mute and solo values. The cache does not yet record a complete effect-by-effect recipe or canonical project revision. The actual rendered mix PCM and full-mix SHA-256 are authoritative for listening.
+- Section scope now supports inclusive **From/To** selection instead of a single-section picker. The backend hashes the uploaded full mix, slices selected PCM in bounded chunks, hashes the resulting Q4 input WAV, and retains both scope and source identities. The full upload has a 600 MiB transfer guard while the final Q4 input has the existing 200 MiB bound.
+- UI changes and backend tests remain unverified on the user's Windows machine after these commits. Do not assert build success based on earlier Slice A QA. Automated CLI test execution is not available through the repository connector.
+- Remaining before declaring full Slice B acceptance: end-to-end validation of current mix vs export with effects, safe section playback continuity, full source identity/effect recipe revision, cache reuse across matching renders, and stale asset eviction under repeated sessions. The current seven-day cache cleanup runs when creating a new snapshot.

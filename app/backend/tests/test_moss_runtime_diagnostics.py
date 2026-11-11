@@ -14,6 +14,7 @@ class MossRuntimeDiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             logfile = moss_runtime._runtime_log(root, "wsl")
+            self.assertEqual(logfile, root / "logs" / "moss-wsl.log")
             logfile.parent.mkdir(parents=True)
             logfile.write_text("Loading model\nRuntimeError: CUDA out of memory\n")
             proc = Mock()

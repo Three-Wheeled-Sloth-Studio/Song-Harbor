@@ -5,6 +5,8 @@ type Model={id:string;name:string;status:string};
 type Inventory={registered:Model[]};
 type Runtime={status:string;model_id:string|null;error:string;port?:number};
 type Setup={state:string;runtime_installed:boolean;runtime_python:string;error:string};
+type Trust={model_id:string;trusted:boolean;persistent_trust_available:boolean};
+type Diagnostics={log_path:string|null;log_tail:string;runtime_kind:string|null;model_id:string|null};
 
 async function api<T>(path:string,method="GET",body?:object):Promise<T>{
   const response=await fetch(path,{method,headers:body?{"Content-Type":"application/json"}:undefined,
@@ -22,6 +24,8 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
   const [runtime,setRuntime]=useState<Runtime|null>(null);
   const [setup,setSetup]=useState<Setup|null>(null);
   const [approved,setApproved]=useState(false);
+  const [trust,setTrust]=useState<Trust|null>(null);
+  const [diagnostics,setDiagnostics]=useState<Diagnostics|null>(null);
   const [confirmLoad,setConfirmLoad]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -42,6 +46,19 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   },[]);
   useEffect(()=>{void refresh();},[refresh]);
+  useEffect(()=>{
+    if(!model){setTrust(null);return;}
+    let alive=true;
+    void api<Trust>("/api/settings/models/"+encodeURIComponent(model)+"/trust")
+      .then(value=>{if(alive)setTrust(value);})
+      .catch(e=>{if(alive)setError(e instanceof Error?e.message:String(e));});
+    return ()=>{alive=false;};
+  },[model]);
+  useEffect(()=>{
+    if(runtime?.status!=="failed"&&!runtime?.error)return;
+    void api<Diagnostics>("/api/settings/models/runtime/diagnostics").then(setDiagnostics)
+      .catch(e=>setError(e instanceof Error?e.message:String(e)));
+  },[runtime?.status,runtime?.error]);
   useEffect(()=>{
     if(!distro)return;
     void api<Setup>("/api/settings/models/setup?distro="+encodeURIComponent(distro)).then(setSetup)
@@ -78,17 +95,18 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     </div>:<>
       <Button size="compact" variant="primary"
         disabled={busy||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed}
-        onClick={()=>setConfirmLoad(true)}>Load MOSS</Button>
+        onClick={()=>{if(trust?.trusted){void act(async()=>{setRuntime(await api<Runtime>("/api/settings/models/runtime/load-wsl","POST",{model_id:model,distro,python_path:setup?.runtime_python,custom_code_approved:false}));});}else{setConfirmLoad(true);}}}>Load MOSS</Button>
       {confirmLoad&&<div className="song-moss-confirm" role="group" aria-label="Confirm MOSS model loading">
-        <strong>Load {models.find(item=>item.id===model)?.name||"selected MOSS model"}?</strong>
+        <strong>Trust and load {models.find(item=>item.id===model)?.name||"selected MOSS model"}?</strong>
         <label><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>
-          I approve running this checkpoint's custom code in WSL.</label>
+          I approve this checkpoint's custom code in WSL. For a verified installed model, this approval is remembered until the checkpoint changes.</label>
         <div className="setting-controls">
           <Button size="compact" variant="primary" disabled={busy||!approved} onClick={()=>void act(async()=>{
             setRuntime(await api<Runtime>("/api/settings/models/runtime/load-wsl","POST",{
               model_id:model,distro,python_path:setup?.runtime_python,custom_code_approved:true
             }));
             setApproved(false);setConfirmLoad(false);
+            setTrust(current=>current?.persistent_trust_available?{...current,trusted:true}:current);
           })}>Confirm load</Button>
           <Button size="compact" variant="secondary" onClick={()=>{setConfirmLoad(false);setApproved(false);}}>Cancel</Button>
         </div>
@@ -99,6 +117,11 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     {runtime?.status==="ready"&&<div role="status">Model service ready. Audio listening is not connected yet.</div>}
     {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Starting model service...</div>}
     {error&&<p role="alert" className="error-message">{error}</p>}
-    {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
+    {runtime?.error&&<p role="alert" className="error-message">{runtime.error}</p>}
+    {diagnostics?.log_path&&runtime?.error&&<details className="song-moss-diagnostics"><summary>Failure details</summary>
+      <div className="setting-path">Log: {diagnostics.log_path}</div>
+      <Button size="compact" variant="secondary" onClick={()=>void navigator.clipboard?.writeText(diagnostics.log_path||"")}>Copy path</Button>
+      <pre>{diagnostics.log_tail||"Log empty. Process may have exited before writing diagnostics."}</pre>
+    </details>}
   </div>;
 }

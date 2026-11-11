@@ -184,6 +184,20 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
         if dependencies["missing_package"] == "libnuma1":
             raise ValueError("ERROR: Ubuntu is missing libnuma.so.1 (libnuma1). Use Repair dependency in MOSS, then retry. Model not loaded.")
         raise ValueError("ERROR: WSL system dependencies could not be verified. Model not loaded: " + dependencies["message"])
+    gpu = wsl_model_bridge.gpu_memory(distro)
+    weight_mib = record.get("bytes_present", 0) / (1024 * 1024)
+    # Ordinary unquantized SGLang load has no weight offload configured.
+    # Reserve headroom for activations, KV cache and CUDA workspace.
+    if gpu["verified"] and weight_mib > gpu["total_mib"] * 0.90:
+        raise ValueError(
+            "ERROR: Checkpoint weights alone require about %.1f GiB, but the GPU has %.1f GiB total. "
+            "No validated quantization/offload profile is configured. Choose a smaller model. Model not loaded."
+            % (weight_mib / 1024, gpu["total_mib"] / 1024))
+    if gpu["verified"] and weight_mib > gpu["free_mib"] * 0.90:
+        raise ValueError(
+            "ERROR: Insufficient free VRAM for checkpoint weights (%.1f GiB weights, %.1f GiB free). "
+            "Unload other GPU models or choose a smaller checkpoint. Model not loaded."
+            % (weight_mib / 1024, gpu["free_mib"] / 1024))
     wsl_model_bridge.preflight(distro, python_path)
     if record.get("storage") == "wsl":
         if record.get("distro") != distro:

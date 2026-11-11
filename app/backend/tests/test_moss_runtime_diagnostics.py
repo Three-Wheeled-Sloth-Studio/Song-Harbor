@@ -74,6 +74,26 @@ class MossRuntimeDiagnosticsTests(unittest.TestCase):
                 moss_runtime.load_wsl(Path("/tmp"), Path("/tmp"), "big", "Ubuntu", "/bin/python", True)
             spawn.assert_not_called()
 
+    def test_orphan_recovery_never_runs_without_approval(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(moss_runtime.subprocess, "run") as execute:
+                with self.assertRaisesRegex(ValueError, "Approve"):
+                    moss_runtime.release_orphan(Path(tmp), False)
+                execute.assert_not_called()
+
+    def test_idle_release_is_not_extended_by_status_poll(self):
+        process = Mock()
+        process.poll.return_value = None
+        with patch.dict(moss_runtime._ACTIVE, {
+            "process": process, "id": "model", "started_at": 1.0,
+            "model_name": "songharbor-moss-model", "kind": "wsl",
+            "log": None, "error": "", "ready_at": 2.0, "last_used": 2.0
+        }), patch.object(moss_runtime, "_probe", return_value=True), \
+             patch.object(moss_runtime.time, "time", return_value=2000), \
+             patch.object(moss_runtime.time, "monotonic", return_value=100):
+            self.assertEqual(moss_runtime.status()["status"], "ready")
+            self.assertEqual(moss_runtime._ACTIVE["last_used"], 2.0)
+
     def test_diagnostics_are_read_only_and_bounded(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "moss-wsl.log"

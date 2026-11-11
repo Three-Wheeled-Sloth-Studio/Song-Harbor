@@ -128,6 +128,17 @@ def _tail(path: Path, offset: int, limit: int = 5000) -> str:
         return ""
 
 
+def _watch_process(app_root: Path, process: subprocess.Popen) -> None:
+    """Enforce timeout even when the user closes the MOSS tool."""
+    while process.poll() is None:
+        time.sleep(3)
+        with LOCK:
+            if _JOB["process"] is not process:
+                return
+        status(app_root)
+    status(app_root)
+
+
 def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
     if not approved:
         raise ValueError("ERROR: Explicit approval is required before experimental Q4 inference.")
@@ -165,6 +176,8 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         _JOB.update({"process": process, "log": handle, "started": time.monotonic(),
                      "state": "running", "error": "", "result": "", "audio": str(source),
                      "log_start": offset})
+        threading.Thread(target=_watch_process, args=(app_root, process),
+                         name="moss-q4-experiment-watchdog", daemon=True).start()
     return status(app_root)
 
 

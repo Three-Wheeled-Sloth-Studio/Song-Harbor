@@ -76,7 +76,9 @@ def status() -> dict:
                     return {"status": "connected", "model_id": _ATTACHED["id"], "external": True, "port": PORT, "error": ""}
                 _ATTACHED.update({"id": None, "model_name": None})
                 return {"status": "failed", "model_id": None, "error": "ERROR: External MOSS service disconnected."}
-            return {"status": "unloaded", "model_id": None, "error": _ACTIVE["error"]}
+            if _ACTIVE["error"]:
+                return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
+            return {"status": "unloaded", "model_id": None, "error": ""}
         code = process.poll()
         if code is not None:
             _ACTIVE["process"] = None

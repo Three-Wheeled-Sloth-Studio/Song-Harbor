@@ -233,29 +233,28 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
 
 
 def _stop_wsl_worker() -> None:
-    """Stop only the exact owned SGLang service identified by its served-model ID."""
+    """Stop only the supervisor-owned process group for this model."""
     distro = _ACTIVE.get("distro")
     served = _ACTIVE.get("model_name")
-    if not distro or not served or not served.startswith("songharbor-moss-"):
-        raise RuntimeError("ERROR: Cannot safely identify the WSL worker to unload.")
-    script = (
-        "import os,signal,sys,time;"
-        "needle=sys.argv[1].encode();"
-        "targets=[];"
-        "[(targets.append(int(d)) if d.isdigit() and int(d)!=os.getpid()"
-        " and (lambda a: b'sglang.launch_server' in a and b'--served-model-name' in a and needle in a)"
-        "(open('/proc/'+d+'/cmdline','rb').read().split(b'\\0')) else None)"
-        " for d in os.listdir('/proc') if d.isdigit()"
-        " and os.path.isfile('/proc/'+d+'/cmdline')];"
-        "[(os.kill(p,signal.SIGTERM)) for p in targets];"
-        "time.sleep(1);"
-        "sys.exit(0)"
-    )
-    result = subprocess.run(["wsl.exe", "-d", distro, "--exec", "python3", "-c", script, served],
-                            capture_output=True, text=True, timeout=12,
+    state = _ACTIVE.get("worker_state")
+    script = _ACTIVE.get("supervisor")
+    if not distro or not served or not state or not script or not served.startswith("songharbor-moss-"):
+        raise RuntimeError("ERROR: Cannot identify owned WSL model process. Unload not confirmed.")
+    if not state.is_file():
+        if _ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None:
+            raise RuntimeError("ERROR: WSL worker state missing while launcher is active. Unload not confirmed.")
+        return
+    linux_app_root = wsl_model_bridge.linux_path(distro, str(state.parent.parent))
+    linux_state = linux_app_root + "/logs/moss-wsl-worker.json"
+    result = subprocess.run(["wsl.exe", "-d", distro, "--exec", "python3", script,
+                             "stop", "--state", linux_state, "--served", served],
+                            capture_output=True, text=True, timeout=25,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     if result.returncode:
-        raise RuntimeError("ERROR: WSL worker shutdown command failed. Model not confirmed unloaded.")
+        reason = (result.stderr or result.stdout or "Unknown stop error").strip()[-500:]
+        raise RuntimeError("ERROR: WSL model shutdown not verified: " + reason)
+    if state.is_file():
+        raise RuntimeError("ERROR: Model worker state remains after stop; release not confirmed.")
 
 
 def _stop_process(process: subprocess.Popen) -> None:

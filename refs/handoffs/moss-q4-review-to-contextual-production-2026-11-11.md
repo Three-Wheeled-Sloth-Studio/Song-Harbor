@@ -175,3 +175,23 @@ User ground-truth notes for the track:
 - Quoted lyrics: **unverified** until compared with authored section lyrics.
 
 Use these as human-authored validation annotations in the future SMU observation/correction layer. Preserve original model observations and record confirmations/uncertainty independently; do not rewrite MOSS text or mark all inferred details as confirmed. No new inference or automatic project modifications authorized by this feedback.
+
+
+## 2026-11-11 approved Slice C direction: multi-tool composition intelligence
+
+User explicitly approves the four next analysis workstreams:
+1. **Tempo map**: strong approval. Build a time-positioned, section-aware musical pulse/tempo map supporting multiple real tempo changes, uncertain segments, meter changes where corroborated, and half-/double-time alternatives. Do not force one global BPM. Keep measured onset/pulse evidence, authored tempo information, existing MIDI timings and candidate revisions distinct. The editable map should be a reusable composition asset for arranging, scoring, accompaniment alignment, beat-aware edits and playback/render workflows, not just a diagnostic output.
+2. **Section and lyrics context**: approved. Use canonical section IDs/boundaries, author's section text and lyrics, separate expressive intention from executable production directives, and preserve source/provenance.
+3. **Stem-aware identification**: approved. Cross-check listening claims against actual existing stems and working aliases/routing. Model-observed sonic texture is not a verified instrument identity. Allow overlap, bleed, layered sounds and uncertainty.
+4. **Harmonic analysis**: approved. Prefer existing scored MIDI as evidence, then supported signal analysis and candidate score extraction where useful; do not auto-overwrite a composition asset with machine guesses.
+
+**Architectural principle, explicitly approved by user**: Song Harbor is a complete composition toolkit that combines multiple tools, sometimes with overlapping capabilities. Avoid a "one magical model/tool" strategy or architectural coupling to MOSS. Each provider/analyzer contributes separately versioned observations, measurements, authored data, scored data or candidate interpretations with capability, scope, evidence, uncertainty and dependency tracking through SMU v0 / the evolving composition graph. Contradictions are useful review signals; no forced consensus, auto-accept, or production mutation. Allow corroboration and human correction without erasing alternate evidence.
+
+Suggested implementation sequence after Slice B QA:
+- Define a provider-neutral, versioned tempo-map/beat-grid candidate schema and edit/accept/invalidate rules, aligned with canonical section timeline and sample positions.
+- Reuse deterministic DSP and existing MIDI/transcription components for local tempo/beat/harmonic estimates; layer MOSS observations as optional independent hints, never the source of truth.
+- Aggregate section lyrics/intention and working stems by source IDs and revisions; show corroboration/conflicts in compact review UI.
+- Add editable candidate scoring and multi-provider reconciliation, with explicit approval before accepting map/score changes or generating accompaniment.
+- Validate measured tempo changes, mixed meter/halftime cases, variable-tempo song, percussion-free passage, sparse atmospheric passage and a controlled known click/tempo-transition fixture.
+
+Approval covers the design and priorities, not unattended Q4 inference or automatic mutation of the active song.

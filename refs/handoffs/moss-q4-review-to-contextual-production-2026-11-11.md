@@ -113,3 +113,12 @@ Source commits: `dbec7b5`, `d1e0f39`, `23d13e7`, `563b4ea`, `e5ff6ed`.
 - Added offline regression test `app/backend/tests/test_moss_q4_review.py` (not executed by connector). **TypeScript build, Python tests, and Windows live QA have not been run since these commits.** The user's prior clean build predates this change.
 - Next QA: refresh `dev`, check `tsc --noEmit`/Vite build and Python test, then inspect installed Q4 panel. Confirm no checkbox or installer actions on default view, advanced installation confirm, source/run identity, concise review, expandable raw diagnostics, cancellation, and missing-delimiter behavior. Rerun only if user deliberately initiates another test. The first-pass result still cannot justify enabling production suggestions.
 - Following accepted QA, proceed to Slice B active-project snapshot and SMU context pipeline.
+
+
+## 2026-11-11 Slice A Windows QA and repeat-run result
+
+User QA: updated dev build clean; Q4 displays Ready; old download approval checkbox gone. These checks pass. Advanced UI layout, cancel, failure, and installation confirmation still lack explicit interactive QA.
+
+Latest complete run: `moss-q4-74682cdddf11450b9debd4097520b7a7.txt`, CrispASR v0.8.53, RTX 4070, 237.6 s, nine reported slices, 44.69 s CLI-reported transcription time (not a separately measured whole-process benchmark). Compared the model-answer portion after the final `crispasr: transcribed` marker with previous `moss-q4-c952750b95c341f3b5a3bfbd3ea5305f.txt`; **exact match**. Repeated C/F chord looping, incompatible BPM/genre/instrument/voice claims remain. Output capture and UI were improved, not model quality.
+
+Gate: Q4 is a usable experimental CLI listener, **not approved as a grounded musical-analysis source or automatic script/accompaniment adviser**. Preserve raw/provenance; no forced re-run. Next slice may advance independent active-mix snapshots and SMU context, but Q4 observations remain unvalidated and must not trigger mutations. A separate short, ground-truth instrument-change clip is still needed to decide whether the Q4 backend has any reliable local listening utility.

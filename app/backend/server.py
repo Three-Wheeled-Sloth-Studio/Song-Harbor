@@ -393,8 +393,9 @@ def moss_q4_test(body: MossQ4TestRequest, request: Request) -> dict[str, Any]:
     with lock:
         busy = any(j.get("status") in ("uploading", "queued", "running")
                    or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
-    if busy or moss_runtime.status().get("status") in ("ready", "starting", "connected"):
-        raise HTTPException(409, "ERROR: Audio processing or another MOSS model is active. Q4 test not started.")
+    if (busy or moss_runtime.status().get("status") in ("ready", "starting", "connected")
+            or moss_runtime.orphan_status(APP_ROOT).get("present")):
+        raise HTTPException(409, "ERROR: Audio processing or unresolved MOSS worker is active. Q4 test not started.")
     try:
         return moss_q4_experiment.start(APP_ROOT, body.audio, body.prompt, body.approved)
     except (ValueError, OSError, subprocess.SubprocessError) as exc:

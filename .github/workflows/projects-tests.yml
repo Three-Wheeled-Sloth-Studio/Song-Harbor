@@ -85,6 +85,7 @@ jobs:
             test_wsl_dependency_repair.py
             test_moss_setup_jobs.py
             test_moss_runtime_diagnostics.py
+            test_moss_wsl_supervisor.py
           )
           failures=()
           for pattern in "${patterns[@]}"; do

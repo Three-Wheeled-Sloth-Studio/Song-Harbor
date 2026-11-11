@@ -145,7 +145,8 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         </>}
       </>}
       {dependency.repair.state==="running"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Installing libnuma1 in WSL...</div>}
-      {dependency.repair.state==="failed"&&<div role="alert" className="error-message">{dependency.repair.error} Log: {dependency.repair_log_path}</div>}
+      {dependency.repair.state==="failed"&&<><div role="alert" className="error-message">{dependency.repair.error} Log: {dependency.repair_log_path}</div>
+        <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{await api<{requested:boolean}>("/api/settings/logs/open","POST");})}>Open logs folder</Button></>}
       {dependency.repair.state==="completed"&&!dependency.dependencies.ready&&<div role="status">Verifying dependency installation...</div>}
     </div>}
     {!models.length&&<div className="setting-path" role="status">Install or register a model in Settings to enable Load.</div>}

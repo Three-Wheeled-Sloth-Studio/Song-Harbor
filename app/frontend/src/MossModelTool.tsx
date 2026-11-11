@@ -20,7 +20,7 @@ async function api<T>(path:string,method="GET",body?:object):Promise<T>{
 }
 
 /** In-workbench model control. Never edits song state or triggers inference. */
-export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
+export function MossModelTool({onConfigure,mixSource}:{onConfigure:()=>void;mixSource?:{projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>}}){
   const [models,setModels]=useState<Model[]>([]);
   const [model,setModel]=useState("");
   const [distro,setDistro]=useState("");
@@ -170,7 +170,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     {!!models.length&&!setup?.runtime_installed&&<div className="setting-path" role="status">Install the MOSS WSL runtime in Settings before loading.</div>}
     {runtime?.status==="ready"&&<div role="status">Model service ready. Automatically unloaded after 10 minutes without an inference request.</div>}
     {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/><span>{runtime.phase||"Initializing MOSS"}... {runtime.elapsed_seconds!==undefined?Math.floor(runtime.elapsed_seconds/60)+"m "+(runtime.elapsed_seconds%60)+"s elapsed":""} <small>Startup is capped at {runtime.startup_timeout_seconds?Math.floor(runtime.startup_timeout_seconds/60):15} minutes. Cancel loading releases the owned worker.</small></span></div>}
-    <MossQ4Experiment/>
+    <MossQ4Experiment mixSource={mixSource}/>
     {error&&<p role="alert" className="error-message">{error}</p>}
     {runtime?.error&&<p role="alert" className="error-message">{runtime.error}</p>}
     {diagnostics?.log_path&&runtime?.error&&<details className="song-moss-diagnostics"><summary>Failure details</summary>

@@ -115,3 +115,19 @@ print(json.dumps({'path':str(p),'name':p.name,'family':family,'status':'present-
         return value if isinstance(value, dict) else None
     except ValueError:
         return None
+
+
+def libnuma_status(distro: str) -> dict:
+    """Check loader presence without importing GPU extensions or starting inference."""
+    validate_distro(distro)
+    result = _run(["wsl.exe", "-d", distro, "--exec", "python3", "-c",
+                   "import ctypes; ctypes.CDLL('libnuma.so.1')"], timeout=12)
+    if result.returncode == 0:
+        return {"ready": True, "missing_package": None, "message": "libnuma.so.1 available"}
+    # An unrelated Python/WSL failure is not evidence that libnuma is missing.
+    details = (result.stderr or "") + (result.stdout or "")
+    if "libnuma.so.1" in details and ("No such file" in details or "cannot open shared object" in details):
+        return {"ready": False, "missing_package": "libnuma1",
+                "message": "Missing Ubuntu library libnuma.so.1 (package libnuma1)."}
+    return {"ready": False, "missing_package": None,
+            "message": "WSL dependency probe failed; check WSL Python before loading."}

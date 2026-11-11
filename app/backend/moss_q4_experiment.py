@@ -18,7 +18,7 @@ LOCK = threading.RLock()
 _JOB = {"process": None, "log": None, "started": None, "state": "idle",
         "error": "", "result": "", "audio": "", "log_start": 0,
         "run_file": None, "run_id": None, "output_truncated": False,
-        "review": None}
+        "review": None, "snapshot": None}
 MAX_AUDIO_BYTES = 200 * 1024 * 1024
 MAX_MODEL_BYTES = 16 * 1024**3
 TIMEOUT_SECONDS = 600
@@ -176,6 +176,7 @@ def status(app_root: Path) -> dict:
                 "log_path": str(_JOB["run_file"] or _log(app_root)),
                 "log_tail": _tail(_JOB["run_file"], 0) if _JOB.get("run_file") else "",
                 "result": _JOB["result"], "review": _JOB.get("review"),
+                "snapshot": _JOB.get("snapshot"),
                 "audio": _JOB["audio"],
                 "run_id": _JOB.get("run_id"),
                 "output_truncated": _JOB.get("output_truncated", False),
@@ -203,7 +204,7 @@ def _watch_process(app_root: Path, process: subprocess.Popen) -> None:
     status(app_root)
 
 
-def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
+def start(app_root: Path, audio: str, prompt: str, approved: bool,\n          snapshot: dict | None = None) -> dict:
     if not approved:
         raise ValueError("ERROR: Explicit approval is required before experimental Q4 inference.")
     settings = config(app_root)
@@ -244,7 +245,7 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         _JOB.update({"process": process, "log": None, "started": time.monotonic(),
                      "state": "running", "error": "", "result": "", "audio": str(source),
                      "run_file": run_file, "run_id": run_id, "output_truncated": False,
-                     "review": None,
+                     "review": None, "snapshot": snapshot,
                      "log_start": offset})
         threading.Thread(target=_watch_process, args=(app_root, process),
                          name="moss-q4-experiment-watchdog", daemon=True).start()

@@ -119,7 +119,7 @@ class ModelRegistryTests(unittest.TestCase):
         folder = self.make_model()
         manifest = folder / "song-harbor-install.json"
         manifest.write_text(json.dumps({"complete": True, "repo": "vendor/MOSS-Music",
-            "revision": "revision-1", "inventory": {"model.safetensors": {"sha256": "a" * 64}}}))
+            "revision": "revision-1", "inventory": {"model-00001-of-00002.safetensors": {"sha256": "a" * 64, "size": len(b"fake-weight")}}}))
         record = model_registry.register(self.root, str(folder))
         self.assertFalse(model_registry.trust_status(self.root, record["id"])["trusted"])
         approved = model_registry.approve_trust(self.root, record["id"])

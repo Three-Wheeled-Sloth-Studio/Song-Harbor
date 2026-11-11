@@ -2,7 +2,8 @@ import {useEffect,useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
 
 type Q4Job={state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string};
-type Q4Discovery={executables:string[];models:string[];configured:{executable:string;model:string};experiment:string;job:Q4Job};
+type Q4Install={state:string;kind:string|null;message:string;error:string;downloaded_bytes:number;total_bytes:number;started:number|null;artifact:string;runtime_installed:boolean;model_installed:boolean;runtime_path:string;model_path:string};
+type Q4Discovery={executables:string[];models:string[];configured:{executable:string;model:string};experiment:string;job:Q4Job;installer:Q4Install};
 
 async function request<T>(path:string,method="GET",body?:object):Promise<T>{
   const response=await fetch(path,{method,headers:body?{"Content-Type":"application/json"}:undefined,
@@ -22,15 +23,22 @@ export function MossQ4Experiment(){
   const [prompt,setPrompt]=useState("Describe the audible instruments, rhythm, arrangement, and changes in this excerpt.");
   const [job,setJob]=useState<Q4Job|null>(null);
   const [approved,setApproved]=useState(false);
+  const [installApproval,setInstallApproval]=useState(false);
+  const [installer,setInstaller]=useState<Q4Install|null>(null);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   async function refresh(){
     const next=await request<Q4Discovery>("/api/settings/models/q4");
-    setInventory(next);setJob(next.job);
-    setBinary(value=>value||next.configured.executable||next.executables[0]||"");
-    setModel(value=>value||next.configured.model||next.models[0]||"");
+    setInventory(next);setJob(next.job);setInstaller(next.installer);
+    setBinary(value=>next.installer.runtime_installed?next.installer.runtime_path:value||next.configured.executable||next.executables[0]||"");
+    setModel(value=>next.installer.model_installed?next.installer.model_path:value||next.configured.model||next.models[0]||"");
   }
   useEffect(()=>{if(!open)return;void refresh().catch(e=>setError(String(e)));},[open]);
+  useEffect(()=>{
+    if(!open||installer?.state!=="running")return;
+    const timer=window.setInterval(()=>{void refresh().catch(e=>setError(String(e)));},1500);
+    return ()=>window.clearInterval(timer);
+  },[open,installer?.state]);
   useEffect(()=>{
     if(!open||job?.state!=="running")return;
     const timer=window.setInterval(()=>{void refresh().catch(e=>setError(String(e)));},2500);
@@ -56,6 +64,30 @@ export function MossQ4Experiment(){
     </div>
     {open&&<>
       <div className="setting-tool-row"><a href="https://github.com/CrispStrobe/CrispASR/releases" target="_blank" rel="noopener noreferrer">CrispASR runtime</a><a href="https://huggingface.co/cstr/MOSS-Audio-4B-Instruct-GGUF" target="_blank" rel="noopener noreferrer">Q4 audio model</a></div>
+      <div className="song-moss-confirm">
+        <strong>Install Q4 locally</strong>
+        <div className="setting-path">Destination: configured shared model folder. Pinned, resumable downloads with SHA-256 verification.</div>
+        <div className="setting-controls">
+          <Button size="compact" variant="secondary" disabled={busy||!installApproval||installer?.state==="running"||!!installer?.runtime_installed}
+            onClick={()=>void act(async()=>{setInstaller(await request<Q4Install>("/api/settings/models/q4/install","POST",{kind:"runtime",approved:true}));})}>
+            {installer?.runtime_installed?"CrispASR installed":"Install CrispASR (CUDA 12.6, ~714 MB)"}
+          </Button>
+          <Button size="compact" variant="secondary" disabled={busy||!installApproval||installer?.state==="running"||!!installer?.model_installed}
+            onClick={()=>void act(async()=>{setInstaller(await request<Q4Install>("/api/settings/models/q4/install","POST",{kind:"model",approved:true}));})}>
+            {installer?.model_installed?"Q4 model installed":"Download Q4 model (~4.1 GB)"}
+          </Button>
+        </div>
+        <label className="setting-tool-row"><input type="checkbox" checked={installApproval} onChange={e=>setInstallApproval(e.target.checked)}/>
+          Approve selected download to shared model drive</label>
+        {installer?.state==="running"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/>
+          <span>{installer.message}: {installer.artifact}
+            <small>{(installer.downloaded_bytes/(1024**2)).toFixed(0)} / {installer.total_bytes?(installer.total_bytes/(1024**2)).toFixed(0)+" MiB":"size checking"} {installer.total_bytes?"("+Math.min(100,installer.downloaded_bytes/installer.total_bytes*100).toFixed(1)+"%)":""}</small>
+          </span>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setInstaller(await request<Q4Install>("/api/settings/models/q4/install/cancel","POST"));})}>Cancel</Button>
+        </div>}
+        {installer?.state==="failed"&&<p role="alert" className="error-message">{installer.error}</p>}
+        {installer?.state==="completed"&&<div role="status">{installer.message}. Files available for local configuration.</div>}
+      </div>
       <div className="setting-controls">
         <label className="setting-path">CrispASR executable
           <input aria-label="CrispASR executable path" list="moss-q4-binaries" value={binary} onChange={e=>setBinary(e.target.value)} placeholder="D:\\Apps\\...\\crispasr.exe"/>

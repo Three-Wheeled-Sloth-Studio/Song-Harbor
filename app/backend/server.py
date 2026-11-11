@@ -475,7 +475,7 @@ def moss_q4_snapshot_analyze(body: MossQ4SnapshotRunRequest, request: Request) -
         raise HTTPException(400, "ERROR: Explicit Q4 analysis approval required.")
     try:
         source = moss_q4_snapshots.read(APP_ROOT, body.snapshot_id)
-        result = moss_q4_experiment.start(APP_ROOT, source["audio_path"], body.prompt, True)
+        result = moss_q4_experiment.start(APP_ROOT, source["audio_path"], body.prompt, True,\n                                          snapshot={k: v for k, v in source.items() if k != "audio_path"})
         return {**result, "snapshot": {k: v for k, v in source.items() if k != "audio_path"}}
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise HTTPException(400, str(exc)) from exc

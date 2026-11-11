@@ -446,7 +446,7 @@ def _q4_busy_guard() -> None:
 @app.post("/api/settings/models/q4/snapshot")
 def moss_q4_snapshot(request: Request, audio: UploadFile = File(...),
                      project_id: str = Form(...), recipe_revision: str = Form(...),
-                     section_ids: str = Form("[]"),
+                     section_ids: str = Form("[]"), source_stems: str = Form("[]"),
                      start_seconds: float | None = Form(None),
                      end_seconds: float | None = Form(None)) -> dict[str, Any]:
     require_local_origin(request)
@@ -455,12 +455,15 @@ def moss_q4_snapshot(request: Request, audio: UploadFile = File(...),
         raise HTTPException(409, "ERROR: Q4 analysis already running; snapshot not prepared.")
     try:
         ids = json.loads(section_ids)
+        stems = json.loads(source_stems)
+        if not isinstance(stems, list) or len(source_stems) > 200000:
+            raise ValueError("ERROR: Invalid source-stem metadata.")
         if not isinstance(ids, list):
             raise ValueError("ERROR: Section IDs must be an array.")
         return moss_q4_snapshots.create(
             APP_ROOT, audio.file, project_id=project_id,
             recipe_revision=recipe_revision, start_seconds=start_seconds,
-            end_seconds=end_seconds, section_ids=ids)
+            end_seconds=end_seconds, section_ids=ids, source_stems=stems)
     except (OSError, ValueError, TypeError) as exc:
         raise HTTPException(400, str(exc)) from exc
     finally:

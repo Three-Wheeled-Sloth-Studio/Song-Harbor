@@ -23,7 +23,8 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
   const [model,setModel]=useState("");
   const [audio,setAudio]=useState("");
   const [source,setSource]=useState<"mix"|"section"|"external">("mix");
-  const [sectionId,setSectionId]=useState("");
+  const [fromId,setFromId]=useState("");
+  const [toId,setToId]=useState("");
   const [snapshot,setSnapshot]=useState<{snapshot_id:string;sha256:string;project_id:string;recipe_revision:string}|null>(null);
   const [prompt,setPrompt]=useState("Describe the audible instruments, rhythm, arrangement, and changes in this excerpt.");
   const [job,setJob]=useState<Q4Job|null>(null);
@@ -64,8 +65,10 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
   }
   async function createSnapshot(){
     if(!mixSource)throw Error("ERROR: No active mix renderer is available.");
-    const section=source==="section"?mixSource.sections.find(row=>row.id===sectionId):undefined;
-    if(source==="section"&&!section)throw Error("ERROR: Select a section first.");
+    const from=source==="section"?mixSource.sections.findIndex(row=>row.id===fromId):-1;
+    const to=source==="section"?mixSource.sections.findIndex(row=>row.id===toId):-1;
+    if(source==="section"&&(from<0||to<from))throw Error("ERROR: Select a valid inclusive From/To section range.");
+    const selected=source==="section"?mixSource.sections.slice(from,to+1):[];
     const blob=await mixSource.render();
     const hashBytes=await crypto.subtle.digest("SHA-256",await blob.arrayBuffer());
     const revision=Array.from(new Uint8Array(hashBytes)).map(value=>value.toString(16).padStart(2,"0")).join("");
@@ -73,10 +76,10 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
     form.append("audio",blob,"current-mix.wav");
     form.append("project_id",mixSource.projectId);
     form.append("recipe_revision",revision);
-    form.append("section_ids",JSON.stringify(section?[section.id]:[]));
-    if(section){
-      form.append("start_seconds",String(section.start_seconds));
-      form.append("end_seconds",String(section.end_seconds));
+    form.append("section_ids",JSON.stringify(selected.map(row=>row.id)));
+    if(selected.length){
+      form.append("start_seconds",String(selected[0].start_seconds));
+      form.append("end_seconds",String(selected[selected.length-1].end_seconds));
     }
     const response=await fetch("/api/settings/models/q4/snapshot",{method:"POST",body:form});
     const result=await response.json() as {snapshot_id?:string;sha256?:string;project_id?:string;recipe_revision?:string;detail?:string};
@@ -160,12 +163,20 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
             <option value="external">External WAV (QA)</option>
           </select>
         </label>
-        {source==="section"&&<label>Section
-          <select aria-label="Q4 section" value={sectionId} onChange={e=>{setSectionId(e.target.value);setSnapshot(null);}}>
-            <option value="">Choose section</option>
-            {mixSource?.sections.map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.start_seconds.toFixed(1)}s to {row.end_seconds.toFixed(1)}s)</option>)}
-          </select>
-        </label>}
+        {source==="section"&&<>
+          <label>From
+            <select aria-label="Q4 From section" value={fromId} onChange={e=>{setFromId(e.target.value);setToId(e.target.value);setSnapshot(null);}}>
+              <option value="">Choose first section</option>
+              {mixSource?.sections.map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.start_seconds.toFixed(1)}s)</option>)}
+            </select>
+          </label>
+          <label>To (inclusive)
+            <select aria-label="Q4 To section" value={toId} onChange={e=>{setToId(e.target.value);setSnapshot(null);}}>
+              <option value="">Choose last section</option>
+              {mixSource?.sections.filter(row=>!fromId||(mixSource.sections.findIndex(item=>item.id===row.id)>=mixSource.sections.findIndex(item=>item.id===fromId))).map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.end_seconds.toFixed(1)}s)</option>)}
+            </select>
+          </label>
+        </>}
         {source==="external"&&<label className="setting-path">Test WAV copy
           <input aria-label="Q4 test WAV path" value={audio} onChange={e=>setAudio(e.target.value)} placeholder="D:\\Audio\\test-clip.wav"/>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(()=>browse("audio"))}>Browse WAV</Button>
@@ -174,7 +185,7 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
           <textarea aria-label="Q4 audio question" value={prompt} maxLength={400} rows={2} onChange={e=>setPrompt(e.target.value)}/>
         </label>}
         {job?.state==="running"?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setJob(await request<Q4Job>("/api/settings/models/q4/cancel","POST"));})}>Cancel test</Button>:
-        <Button size="compact" variant="primary" disabled={busy||!prompt.trim()||!ready||(source==="external"?!audio.trim():!mixSource||(source==="section"&&!sectionId))}
+        <Button size="compact" variant="primary" disabled={busy||!prompt.trim()||!ready||(source==="external"?!audio.trim():!mixSource||(source==="section"&&(!fromId||!toId)))}
           onClick={()=>setConfirmTest(true)}>{busy?"Preparing mix...":"Analyze"}</Button>}
       </div>
       {open&&confirmTest&&job?.state!=="running"&&<div className="song-moss-confirm" role="group" aria-label="Confirm experimental Q4 test">

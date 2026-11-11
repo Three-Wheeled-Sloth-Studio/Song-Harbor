@@ -219,8 +219,20 @@ def _trust_fingerprint(record: dict) -> str | None:
         if not all(isinstance(v, dict) and isinstance(v.get("sha256"), str) and len(v["sha256"]) == 64
                    for v in data["inventory"].values()):
             return None
+        code_identity = {}
+        for relative, metadata in data["inventory"].items():
+            if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
+                return None
+            actual = (path / relative).resolve()
+            if not actual.is_relative_to(path.resolve()) or not actual.is_file():
+                return None
+            if actual.stat().st_size != metadata.get("size"):
+                return None
+            if actual.suffix.lower() in (".py", ".json", ".yaml", ".yml") and actual.stat().st_size <= 8 * 1024 * 1024:
+                code_identity[relative] = hashlib.sha256(actual.read_bytes()).hexdigest()
         return hashlib.sha256(json.dumps({
-            "revision": data["revision"], "repo": data.get("repo"), "inventory": data["inventory"]
+            "revision": data["revision"], "repo": data.get("repo"),
+            "inventory": data["inventory"], "code_identity": code_identity
         }, sort_keys=True).encode()).hexdigest()
     except (OSError, ValueError, TypeError):
         return None

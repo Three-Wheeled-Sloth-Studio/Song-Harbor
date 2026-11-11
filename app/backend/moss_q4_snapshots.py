@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shutil
+import time
 import uuid
 import wave
 from pathlib import Path
@@ -54,6 +54,16 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
         raise ValueError("ERROR: Invalid selected range. Nothing saved.")
     folder = _root(app_root)
     folder.mkdir(parents=True, exist_ok=True)
+    # Retain recent snapshots for review; only reclaim old immutable cache files.
+    for candidate in folder.glob("*.json"):
+        try:
+            if time.time() - candidate.stat().st_mtime > 7 * 24 * 3600:
+                stem = candidate.stem
+                if len(stem) == 32 and all(c in "0123456789abcdef" for c in stem):
+                    (folder / (stem + ".wav")).unlink(missing_ok=True)
+                    candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
     snapshot_id = uuid.uuid4().hex
     staging = folder / (snapshot_id + ".part")
     final = folder / (snapshot_id + ".wav")
@@ -81,26 +91,39 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
                     if first < 0 or last > frames or first >= last:
                         raise ValueError("ERROR: Selected sections exceed the rendered audio length.")
                     wav.setpos(first)
-                    selected_pcm = wav.readframes(last - first)
+                    selected_pcm = (first, last)
                 else:
                     selected_pcm = None
         except (wave.Error, EOFError) as exc:
             raise ValueError("ERROR: Invalid offline mix WAV; snapshot not saved.") from exc
+        source_digest = hashlib.sha256()
+        with staging.open("rb") as raw:
+            for block in iter(lambda: raw.read(1024 * 1024), b""):
+                source_digest.update(block)
+        if source_digest.hexdigest() != recipe_revision:
+            raise ValueError("ERROR: Rendered mix hash changed during transfer; snapshot not saved.")
         if selected_pcm is not None:
-            # Rewrite only the immutable analysis copy, never the active project's assets.
+            # Copy in bounded chunks; do not keep a whole selected region in RAM.
             trimmed = folder / (snapshot_id + ".trim")
-            with wave.open(str(trimmed), "wb") as wav:
-                wav.setnchannels(2)
-                wav.setsampwidth(3)
-                wav.setframerate(rate)
-                wav.writeframes(selected_pcm)
+            first, last = selected_pcm
+            with wave.open(str(staging), "rb") as source_wav, wave.open(str(trimmed), "wb") as out_wav:
+                out_wav.setnchannels(channels)
+                out_wav.setsampwidth(width)
+                out_wav.setframerate(rate)
+                source_wav.setpos(first)
+                remaining = last - first
+                while remaining:
+                    take = min(remaining, 65536)
+                    out_wav.writeframesraw(source_wav.readframes(take))
+                    remaining -= take
             os.replace(trimmed, staging)
         digest = hashlib.sha256()
         with staging.open("rb") as audio:
             for chunk in iter(lambda: audio.read(1024 * 1024), b""):
                 digest.update(chunk)
         info = {"snapshot_id": snapshot_id, "project_id": project_id,
-                "recipe_revision": recipe_revision, "section_ids": section_ids,
+                "recipe_revision": recipe_revision, "rendered_mix_sha256": recipe_revision,
+                "section_ids": section_ids,
                 "start_seconds": start_seconds if selected else 0,
                 "end_seconds": end_seconds if selected else frames / rate,
                 "sample_rate": rate, "channels": channels,

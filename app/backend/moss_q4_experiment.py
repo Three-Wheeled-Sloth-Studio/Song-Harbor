@@ -120,26 +120,26 @@ def _review_output(raw: str) -> dict:
     slice_count = None
     duration = None
     for line in lines:
-        matched = re.search(r"crispasr: processing (\\d+) slice\\(s\\)", line)
+        matched = re.search(r"crispasr: processing (\d+) slice\(s\)", line)
         if matched:
             slice_count = int(matched.group(1))
-        matched = re.search(r"crispasr: audio: .*?\\(([\\d.]+) s\\)", line)
+        matched = re.search(r"crispasr: audio: .*?\(([\d.]+) s\)", line)
         if matched:
             duration = float(matched.group(1))
     # This marker precedes the complete merged model response in tested CLI
     # builds. An absent marker must not cause debug output to be mislabelled.
     boundaries = [i for i, line in enumerate(lines)
                   if re.search(r"^crispasr: transcribed .*? audio in ", line)]
-    answer = "\\n".join(lines[boundaries[-1] + 1:]).strip() if boundaries else ""
+    answer = "\n".join(lines[boundaries[-1] + 1:]).strip() if boundaries else ""
     warnings = []
     if slice_count and slice_count > 1:
         warnings.append(f"CrispASR processed {slice_count} overlapping/unlabelled slices; "
                         "their combined response is not a section-aligned analysis.")
     if not boundaries:
         warnings.append("No recognized final-answer delimiter; inspect raw log.")
-    if re.search(r"(?:\\b[A-G](?:#|b)?(?:m|maj|dim|sus|7)?\\s*,\\s*){20,}", answer):
+    if re.search(r"(?:\b[A-G](?:#|b)?(?:m|maj|dim|sus|7)?\s*,\s*){20,}", answer):
         warnings.append("Long repeated chord sequence detected; harmonic claims require verification.")
-    if re.search(r"\\b(?:BPM|beats per minute)\\b", answer, flags=re.I):
+    if re.search(r"\b(?:BPM|beats per minute)\b", answer, flags=re.I):
         warnings.append("Tempo claims are model estimates, not measured BPM.")
     return {"answer": answer, "slices": slice_count, "duration_seconds": duration,
             "warnings": warnings, "validated": False, "aligned": False,

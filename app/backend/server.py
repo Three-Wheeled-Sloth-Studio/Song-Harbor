@@ -31,6 +31,7 @@ import shared_model_settings
 import model_registry
 import moss_runtime
 import moss_q4_experiment
+import moss_q4_snapshots
 import moss_q4_installer
 import wsl_model_bridge
 import wsl_dependency_repair
@@ -424,6 +425,59 @@ def moss_q4_configure(body: MossQ4ConfigureRequest, request: Request) -> dict[st
     try:
         return moss_q4_experiment.configure(APP_ROOT, body.executable, body.model)
     except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MossQ4SnapshotRunRequest(BaseModel):
+    snapshot_id: str = Field(min_length=32, max_length=32)
+    prompt: str = Field(min_length=1, max_length=400)
+    approved: bool = False
+
+
+def _q4_busy_guard() -> None:
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if (busy or moss_runtime.status().get("status") in ("ready", "starting", "connected")
+            or moss_runtime.orphan_status(APP_ROOT).get("present")):
+        raise HTTPException(409, "ERROR: Audio processing or unresolved MOSS worker is active. Q4 not started.")
+
+
+@app.post("/api/settings/models/q4/snapshot")
+def moss_q4_snapshot(request: Request, audio: UploadFile = File(...),
+                     project_id: str = Form(...), recipe_revision: str = Form(...),
+                     section_ids: str = Form("[]"),
+                     start_seconds: float | None = Form(None),
+                     end_seconds: float | None = Form(None)) -> dict[str, Any]:
+    require_local_origin(request)
+    _q4_busy_guard()
+    if moss_q4_experiment.status(APP_ROOT)["state"] == "running":
+        raise HTTPException(409, "ERROR: Q4 analysis already running; snapshot not prepared.")
+    try:
+        ids = json.loads(section_ids)
+        if not isinstance(ids, list):
+            raise ValueError("ERROR: Section IDs must be an array.")
+        return moss_q4_snapshots.create(
+            APP_ROOT, audio.file, project_id=project_id,
+            recipe_revision=recipe_revision, start_seconds=start_seconds,
+            end_seconds=end_seconds, section_ids=ids)
+    except (OSError, ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        audio.file.close()
+
+
+@app.post("/api/settings/models/q4/snapshot/analyze")
+def moss_q4_snapshot_analyze(body: MossQ4SnapshotRunRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    _q4_busy_guard()
+    if not body.approved:
+        raise HTTPException(400, "ERROR: Explicit Q4 analysis approval required.")
+    try:
+        source = moss_q4_snapshots.read(APP_ROOT, body.snapshot_id)
+        result = moss_q4_experiment.start(APP_ROOT, source["audio_path"], body.prompt, True)
+        return {**result, "snapshot": {k: v for k, v in source.items() if k != "audio_path"}}
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
 

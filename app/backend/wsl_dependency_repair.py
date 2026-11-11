@@ -22,8 +22,16 @@ def status() -> dict:
         if process is not None and process.poll() is not None:
             code = process.returncode
             _JOB["process"] = None
-            _JOB["state"] = "completed" if code == 0 else "failed"
-            _JOB["error"] = "" if code == 0 else "ERROR: libnuma1 package install failed. See repair log."
+            if code == 0:
+                try:
+                    verified = wsl_model_bridge.libnuma_status(_JOB["distro"])
+                except (ValueError, OSError, subprocess.TimeoutExpired):
+                    verified = {"ready": False}
+                _JOB["state"] = "completed" if verified["ready"] else "failed"
+                _JOB["error"] = "" if verified["ready"] else "ERROR: apt finished but libnuma.so.1 is still unavailable. See repair log."
+            else:
+                _JOB["state"] = "failed"
+                _JOB["error"] = "ERROR: libnuma1 package install failed. See repair log."
             if _JOB["log"] is not None:
                 _JOB["log"].close()
                 _JOB["log"] = None

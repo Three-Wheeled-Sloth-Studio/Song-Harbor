@@ -70,6 +70,30 @@ def _probe(expected_name: str | None = None) -> bool:
         return False
 
 
+def _session_log_text(limit: int = 65536) -> str:
+    """Read only the current launch log tail; exclude previous attempts."""
+    path = _LOG_PATH
+    if path is None or not path.is_file():
+        return ""
+    try:
+        with path.open("rb") as stream:
+            end = stream.seek(0, os.SEEK_END)
+            start = min(end, max(_ACTIVE.get("log_start") or 0, end - limit))
+            stream.seek(start)
+            return stream.read(limit).decode("utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _startup_failure() -> str | None:
+    output = _session_log_text()
+    if "RuntimeError: Not enough memory." in output and "mem_fraction_static" in output:
+        return ("ERROR: MOSS weights loaded but insufficient GPU memory remained for the KV cache. "
+                "Model not loaded. A validated low-memory profile or more VRAM is required.")
+    if "CUDA out of memory" in output or "torch.OutOfMemoryError" in output:
+        return "ERROR: CUDA ran out of memory while starting MOSS. Model not loaded."
+    return None
+
 def _startup_phase() -> str:
     # Do not infer progress from giant ServerArgs configuration dumps or ignored
     # optional-import warnings. Only recognize explicit loader progress messages.

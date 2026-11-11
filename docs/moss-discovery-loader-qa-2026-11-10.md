@@ -154,3 +154,19 @@ Changes on dev:
 - On the production tool, trusted loads no longer prompt for the checkbox; untrusted models show a contextual first-load code consent. Settings mirrors the behavior.
 
 Validation required: Windows relaunch, verify failure log path is absolute and details show process output, identify actual reason for exit code 1 before changing inference parameters. Confirm remembered approval on subsequent loads of the same installed model and re-prompt on manifest change. No model load attempted from this environment.
+
+## 2026-11-11: Missing libnuma1 / central log folder
+Observed Windows/WSL MOSS loader exit 1. SGLang startup reaches sgl_kernel import, which finds an architecture-specific .so, but loading the shared object fails due to `libnuma.so.1: cannot open shared object file`. The original trace also warns about Triton fallback and an older launch entrypoint; neither is proven to be the fatal issue. Do not arbitrarily upgrade sgl_kernel, reinstall CUDA, or change GPU quantization to fix a missing shared library.
+
+- Song Harbor now uses `<SongHarbor runtime root>/logs/` for newly written MOSS runtime, MOSS WSL runtime, model-setup, Ubuntu-distro-install, and dependency-repair logs. For this test installation, this means `D:\\Apps\\SongHarborDev\\logs\\`. Historical files in `models/.song-harbor/logs` remain intact, to avoid removing diagnostic evidence.
+- The production tool checks existing Ubuntu WSL for `libnuma.so.1` using a lightweight ctypes loader, before loading the model. If the library is confirmed missing, Load is blocked with an informative error and the MOSS tool offers **Repair dependency**.
+- Explicit repair requires a separate in-app confirmation to modify the selected Ubuntu WSL distro. Runs the fixed allowlisted command `wsl.exe -d <distro> -u root --exec /usr/bin/apt-get install -y libnuma1`. It does not run apt-get update, modify model files, fetch new checkpoints, or launch inference. Repair state and logs are visible in the MOSS tool.
+- If dependency probing fails for any unrelated reason, automatic repair refuses to install; do not mistake any WSL failure for a missing libnuma1.
+- Backend tests cover approval, exact command, central logs and missing-library classification. Actual WSL repair has not been run on user's machine. Other SGLang compatibility errors may become visible after libnuma1 is resolved.
+
+QA on dev:
+1. Relaunch and open MOSS from the production tool palette. Expected: Missing Ubuntu dependency, Repair dependency.
+2. Click Repair dependency and review the one-time system package confirmation. Cancel must make no system changes.
+3. Approve explicitly. Working state appears; verify completed status and libnuma preflight. Any apt error should point to `D:\\Apps\\SongHarborDev\\logs\\moss-repair.log`.
+4. With a compatible model and no active production job, retry Load MOSS. Check `D:\\Apps\\SongHarborDev\\logs\\moss-wsl.log` and in-app Failure details for any new issue.
+5. Verify Deshimmer, separation, ACE and the active project are unaffected. Do not promote until real Windows smoke and dependency repair QA pass.

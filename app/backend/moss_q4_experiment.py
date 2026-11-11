@@ -207,3 +207,30 @@ def cleanup() -> None:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=8)
+
+
+def browse(kind: str) -> dict:
+    """Native picker invoked only by an explicit Windows UI action."""
+    if os.name != "nt":
+        raise RuntimeError("ERROR: Q4 file browsing requires Windows.")
+    if kind not in ("executable", "model", "audio"):
+        raise ValueError("ERROR: Unsupported Q4 file selection.")
+    import tkinter
+    from tkinter import filedialog
+    filters = {
+        "executable": [("CrispASR executable", "*.exe"), ("All files", "*.*")],
+        "model": [("MOSS-Audio Q4 GGUF", "*.gguf"), ("All files", "*.*")],
+        "audio": [("WAV test clip", "*.wav")],
+    }
+    root = tkinter.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        path = filedialog.askopenfilename(
+            title={"executable": "Select CrispASR executable",
+                   "model": "Select full-audio MOSS Q4 GGUF",
+                   "audio": "Select non-active test WAV"}[kind],
+            filetypes=filters[kind])
+        return {"path": path or None}
+    finally:
+        root.destroy()

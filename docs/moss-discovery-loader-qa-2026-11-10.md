@@ -170,3 +170,24 @@ QA on dev:
 3. Approve explicitly. Working state appears; verify completed status and libnuma preflight. Any apt error should point to `D:\\Apps\\SongHarborDev\\logs\\moss-repair.log`.
 4. With a compatible model and no active production job, retry Load MOSS. Check `D:\\Apps\\SongHarborDev\\logs\\moss-wsl.log` and in-app Failure details for any new issue.
 5. Verify Deshimmer, separation, ACE and the active project are unaffected. Do not promote until real Windows smoke and dependency repair QA pass.
+
+## 2026-11-11: WSL 8B cold startup and GPU model lifecycle
+User QA: `libnuma1` repair appears successful. Unquantized 8B attempt timed out after 180 seconds; log shows SGLang ServerArgs initialization and ignored optional multimodal processor import warnings. There is NO evidence in the excerpt that weights finished loading, CUDA graph capture succeeded, or the service became ready. Ignore GlmAsrConfig optional-import warning for now; do not upgrade Transformers blindly.
+
+Source improvements on dev:
+- WSL cold start may take up to 900 seconds. The UI displays elapsed time and only recognizes phases supported by explicit runtime logs. Still no fake percentage. Cancel loading is distinct from Unload after Ready.
+- GPU read-only capacity probe via WSL nvidia-smi. If checkpoint weight bytes exceed 90% of total/free GPU memory, refuse the unquantized launch with an explicit size comparison. No auto quantization or unverified CPU offload. 8B FP16/BF16 typically exceeds a 12 GB RTX 4070 before KV/cache; smaller 4B should be validated first.
+- Owned WSL supervisor: starts each SGLang server in its own Linux process group and stores PID, start-time identity, model name and distro in the runtime root's `logs/moss-wsl-worker.json`. On Unload, timeout or graceful backend shutdown, stop only that verified group, escalate TERM to KILL after a bounded grace period, and confirm process-group exit. If verification fails, report an error, preserve recovery state and never claim success. External Connect WSL only disconnects; it does not kill externally managed services.
+- Backend idle watchdog releases an owned model 600 seconds after readiness or last real model-use lease. Polling status and leaving the MOSS window open does NOT count as inference activity. Future audio-analysis API must call `mark_model_used` at request start and hold a lease for long requests; no actual audio-listening endpoint exists yet.
+- After abnormal Windows backend termination, a prior worker may remain. The MOSS workbench now surfaces explicit **Release previous worker**. Recovery refuses to terminate unknown PIDs, mismatched model identity or unverified process groups. No automatic killing of unrelated WSL processes. The worker state is not a downloaded model and is not to be deleted blindly.
+- Graceful FastAPI shutdown registers an owned-worker release handler. Forced Windows process termination bypasses graceful events; recovery handles a surviving Linux worker.
+- GPU memory return to the driver is requested by worker termination; **VRAM reclaimed has not been measured on the user hardware**. Confirm using nvidia-smi before/after real use.
+
+QA gates:
+1. Confirm frontend and backend build after updating dev. Do not promote this unverified WSL lifecycle implementation to main.
+2. Start 4B (not unquantized 8B) on RTX 4070. Record GPU size/free snapshot, weight preflight, SGLang phases and readiness.
+3. Cancel an in-progress load. Check owned WSL process group shutdown, no responding endpoint and GPU memory recovery. Test ordinary Unload after Ready.
+4. Leave the model ready but unused for more than 10 minutes; verify automatic release and no orphan WSL workers. Polling/UI presence must not extend the idle timer.
+5. Simulate app exit or forced crash while loading. Relaunch and use Release previous worker. Verify exact process ownership and that unrelated WSL jobs are unaffected.
+6. Verify failed cleanup leaves clear error and recovery state rather than falsely reporting Unloaded. Repeat load must not proceed while an unresolved worker state exists.
+7. Validate that normal music production workflows and active audio project remain untouched.

@@ -83,6 +83,7 @@ jobs:
             test_model_registry.py
             test_wsl_model_bridge.py
             test_moss_setup_jobs.py
+            test_moss_runtime_diagnostics.py
           )
           failures=()
           for pattern in "${patterns[@]}"; do

@@ -1273,3 +1273,13 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
   color: #ff6f79;
   font-weight: 850;
 }
+
+/* MOSS setup: compact truthful activity and action-local code confirmation. */
+.song-moss-progress{display:flex;align-items:center;gap:9px;min-height:32px;padding:7px 9px;border:1px solid var(--tws-color-border-normal);border-radius:6px;color:var(--tws-color-text-primary);font-size:12px}
+.song-moss-progress .song-sfz-spinner{width:19px;height:19px;border-width:3px}
+.song-moss-progress small{display:block;color:var(--tws-color-text-muted);font-size:11px}
+.song-moss-confirm{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--tws-color-border-strong,#6c8793);border-radius:7px;background:var(--tws-color-surface-inset,#15212b);font-size:12px;max-width:100%}
+.song-moss-confirm label{display:flex;align-items:flex-start;gap:7px;line-height:1.45}
+.song-moss-confirm label input{flex:0 0 auto;margin-top:2px}
+.song-moss-confirm .setting-controls{display:flex;flex-wrap:wrap;gap:7px}
+@media(prefers-reduced-motion:reduce){.song-moss-progress .song-sfz-spinner{animation:none;border-top-style:dotted}}

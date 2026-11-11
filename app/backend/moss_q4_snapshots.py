@@ -10,6 +10,7 @@ import wave
 from pathlib import Path
 
 MAX_SNAPSHOT_BYTES = 200 * 1024 * 1024
+MAX_TRANSFER_BYTES = 600 * 1024 * 1024
 
 
 def _root(app_root: Path) -> Path:
@@ -76,8 +77,8 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
                 if not chunk:
                     break
                 total += len(chunk)
-                if total > MAX_SNAPSHOT_BYTES:
-                    raise ValueError("ERROR: Analysis mix exceeds 200 MiB. Choose a shorter range.")
+                if total > MAX_TRANSFER_BYTES:
+                    raise ValueError("ERROR: Offline mix transfer exceeds 600 MiB. Snapshot not saved.")
                 output.write(chunk)
         try:
             with wave.open(str(staging), "rb") as wav:
@@ -117,6 +118,8 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
                     out_wav.writeframesraw(source_wav.readframes(take))
                     remaining -= take
             os.replace(trimmed, staging)
+        if staging.stat().st_size > MAX_SNAPSHOT_BYTES:
+            raise ValueError("ERROR: Selected analysis audio exceeds 200 MiB. Choose a shorter section range.")
         digest = hashlib.sha256()
         with staging.open("rb") as audio:
             for chunk in iter(lambda: audio.read(1024 * 1024), b""):
@@ -130,7 +133,11 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
                 "sha256": digest.hexdigest(), "bytes": staging.stat().st_size,
                 "source": "song-harbor-offline-mix", "status": "unvalidated"}
         os.replace(staging, final)
-        metadata_path.write_text(json.dumps(info, indent=2), encoding="utf-8")
+        try:
+            metadata_path.write_text(json.dumps(info, indent=2), encoding="utf-8")
+        except Exception:
+            final.unlink(missing_ok=True)
+            raise
         return info
     finally:
         staging.unlink(missing_ok=True)

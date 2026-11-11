@@ -78,7 +78,7 @@ class MossSetupTests(unittest.TestCase):
 
     def test_failed_install_surfaces_specific_blocking_error(self):
         from unittest.mock import Mock
-        log_dir = self.models / ".song-harbor" / "logs"
+        log_dir = self.app / "logs"
         log_dir.mkdir(parents=True)
         (log_dir / "moss-setup.log").write_text("ERROR: ensurepip unavailable. Installation not completed.\\n")
         process = Mock()

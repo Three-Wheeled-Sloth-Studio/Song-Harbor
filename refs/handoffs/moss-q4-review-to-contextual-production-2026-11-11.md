@@ -151,3 +151,15 @@ Implementation on dev:
 - Section scope now supports inclusive **From/To** selection instead of a single-section picker. The backend hashes the uploaded full mix, slices selected PCM in bounded chunks, hashes the resulting Q4 input WAV, and retains both scope and source identities. The full upload has a 600 MiB transfer guard while the final Q4 input has the existing 200 MiB bound.
 - UI changes and backend tests remain unverified on the user's Windows machine after these commits. Do not assert build success based on earlier Slice A QA. Automated CLI test execution is not available through the repository connector.
 - Remaining before declaring full Slice B acceptance: end-to-end validation of current mix vs export with effects, safe section playback continuity, full source identity/effect recipe revision, cache reuse across matching renders, and stale asset eviction under repeated sessions. The current seven-day cache cleanup runs when creating a new snapshot.
+
+
+### 2026-11-11 live QA: single Verse 1 selected-range inference
+User ran the new active-project selected-range path on **Verse 1** and received a full Q4 response. This is evidence that a selected section can reach the model and produce output, but independent snapshot checksums, exact sample count, mix/export parity, and nonmutation checks were not supplied and are not marked passed.
+
+The answer consisted of two consecutive full-song-style passages, both describing slow introspective indie rock at **111 BPM**, female breathy lead, clean electric guitar arpeggios, bass/drums and synth pad. It proposed **A minor** with Am/F/G/C/D/Em chords and quoted lines including `I saw neon on the water / Like a bruise that would not fade` and `Saw the longshore saints keep working / For a half-dead promised wage`. None of these claims are independently verified here against source stems, authoritative lyrics or measured beat/chord estimates. The model incorrectly extrapolated verse-chorus/intro/bridge structure from a Verse 1-only clip. The repeated descriptions likely reflect the model's independent slice processing but the exact slice count and timing were not supplied for this run.
+
+Priorities after this QA:
+1. Preserve and display distinct Q4 audio slice text with bounded provenance where the CLI can provide it; never concatenate as one track-level claim or fabricate per-slice timestamps.
+2. Reduce prompt scope for short clips to **only what is audible in this excerpt**, prohibit guesses about unseen intro, bridge and chorus, distinguish quoted/transcribed lyrics from provided authored lyrics.
+3. Compare output with persisted section text/lyrics, current track identities, optional scored MIDI, and deterministic DSP; tag heard/derived/intended/unverified separately using SMU v0.
+4. Continue Slice B parity/source checks before declaring active mix integration fully validated.

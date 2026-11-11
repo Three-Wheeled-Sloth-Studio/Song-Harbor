@@ -205,15 +205,19 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         log = _LOG_PATH.open("ab")
         cache = linux_root + "/.song-harbor"
-        command = ["wsl.exe", "-d", distro, "--exec", "env",
-                   "HF_HUB_OFFLINE=1", "TRANSFORMERS_OFFLINE=1",
-                   "HF_HOME=" + cache + "/hf-cache",
-                   "HUGGINGFACE_HUB_CACHE=" + cache + "/hf-cache/hub",
-                   "XDG_CACHE_HOME=" + cache + "/cache",
-                   "TORCH_HOME=" + cache + "/torch",
-                   python_path, "-m", "sglang.launch_server",
-                   "--model-path", linux_model, "--served-model-name", served,
-                   "--host", "127.0.0.1", "--port", str(PORT), "--trust-remote-code"]
+        state = app_root / "logs" / "moss-wsl-worker.json"
+        supervisor_file = Path(__file__).with_name("moss_wsl_supervisor.py")
+        linux_supervisor = wsl_model_bridge.linux_path(distro, str(supervisor_file))
+        linux_app_root = wsl_model_bridge.linux_path(distro, str(app_root))
+        linux_state = linux_app_root + "/logs/moss-wsl-worker.json"
+        if state.exists():
+            raise ValueError("ERROR: Unresolved MOSS worker state exists. Inspect or unload it before a new load.")
+        state.parent.mkdir(parents=True, exist_ok=True)
+        command = ["wsl.exe", "-d", distro, "--exec", "python3",
+                   linux_supervisor, "run", "--python", python_path,
+                   "--model", linux_model, "--served", served,
+                   "--port", str(PORT), "--cache", cache,
+                   "--state", linux_state]
         try:
             process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                        stdout=log, stderr=subprocess.STDOUT,
@@ -223,7 +227,8 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
                         "error": "", "log": log, "model_name": served,
-                        "kind": "wsl", "distro": distro})
+                        "kind": "wsl", "distro": distro,
+                        "worker_state": state, "supervisor": linux_supervisor})
     return status()
 
 

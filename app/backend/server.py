@@ -30,6 +30,7 @@ import workspace_settings
 import shared_model_settings
 import model_registry
 import moss_runtime
+import moss_q4_experiment
 import wsl_model_bridge
 import wsl_dependency_repair
 import app_logs
@@ -84,6 +85,7 @@ for folder in (DATA_ROOT, MODEL_ROOT):
 app = FastAPI(title="Song Harbor local separator", docs_url=None, redoc_url=None)
 # Graceful API shutdown releases only Song Harbor-owned MOSS worker groups.
 app.router.add_event_handler("shutdown", moss_runtime.cleanup_on_exit)
+app.router.add_event_handler("shutdown", moss_q4_experiment.cleanup)
 lock = threading.Lock()
 jobs: dict[str, dict[str, Any]] = {}
 active: dict[str, subprocess.Popen[str] | None] = {"process": None}
@@ -357,6 +359,55 @@ def unregister_local_model(model_id: str, request: Request) -> dict[str, Any]:
         return {"unregistered": True, "files_removed": False}
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+class MossQ4ConfigureRequest(BaseModel):
+    executable: str = Field(min_length=1, max_length=2048)
+    model: str = Field(min_length=1, max_length=2048)
+
+
+class MossQ4TestRequest(BaseModel):
+    audio: str = Field(min_length=1, max_length=2048)
+    prompt: str = Field(min_length=1, max_length=400)
+    approved: bool = False
+
+
+@app.get("/api/settings/models/q4")
+def moss_q4_discovery() -> dict[str, Any]:
+    return {**moss_q4_experiment.discover(APP_ROOT, SHARED_MODEL_ROOT),
+            "job": moss_q4_experiment.status(APP_ROOT)}
+
+
+@app.post("/api/settings/models/q4/configure")
+def moss_q4_configure(body: MossQ4ConfigureRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.configure(APP_ROOT, body.executable, body.model)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/test")
+def moss_q4_test(body: MossQ4TestRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy or moss_runtime.status().get("status") in ("ready", "starting", "connected"):
+        raise HTTPException(409, "ERROR: Audio processing or another MOSS model is active. Q4 test not started.")
+    try:
+        return moss_q4_experiment.start(APP_ROOT, body.audio, body.prompt, body.approved)
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/cancel")
+def moss_q4_cancel(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.cancel(APP_ROOT)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise HTTPException(500, "ERROR: Q4 termination could not be verified.") from exc
 
 
 @app.get("/api/settings/models/runtime")

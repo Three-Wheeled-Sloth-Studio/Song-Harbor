@@ -71,13 +71,19 @@ def _probe(expected_name: str | None = None) -> bool:
 
 
 def _startup_phase() -> str:
-    text = _tail(_LOG_PATH, 4000).lower()
-    if "cuda graph" in text or "cudagraph" in text:
-        return "Preparing CUDA graphs"
-    if "loading weight" in text or "load_weight" in text or "load model" in text:
-        return "Loading checkpoint"
-    if "scheduler" in text:
-        return "Initializing scheduler"
+    # Do not infer progress from giant ServerArgs configuration dumps or ignored
+    # optional-import warnings. Only recognize explicit loader progress messages.
+    lines = _tail(_LOG_PATH, 12000).splitlines()
+    for line in reversed(lines):
+        line = line.strip().lower()
+        if len(line) > 350 or "ignore import error" in line or "serverargs(" in line:
+            continue
+        if "capturing cuda graph" in line or "cuda graph capture" in line:
+            return "Capturing CUDA graphs"
+        if "loading weights" in line or "loading model weights" in line or "load_weight=" in line:
+            return "Loading checkpoint"
+        if "scheduler initialized" in line or "initializing scheduler" in line:
+            return "Initializing scheduler"
     return "Initializing runtime"
 
 

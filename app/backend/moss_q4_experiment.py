@@ -63,11 +63,14 @@ def _validate(executable: str, model: str) -> tuple[Path, Path]:
     if not gguf.is_absolute() or not gguf.is_file() or gguf.is_symlink():
         raise ValueError("ERROR: Select an existing MOSS-Audio GGUF. Nothing launched.")
     if not (gguf.suffix.lower() == ".gguf" and "moss" in gguf.name.lower() and
-            "audio" in gguf.name.lower()):
+            "audio" in gguf.name.lower() and "q4" in gguf.name.lower()):
         raise ValueError("ERROR: Model must be a MOSS-Audio GGUF, not text-only MOSS-Music.")
     size = gguf.stat().st_size
     if not (1024 * 1024 <= size <= MAX_MODEL_BYTES):
         raise ValueError("ERROR: GGUF file size is invalid; inspect model before use.")
+    with gguf.open("rb") as stream:
+        if stream.read(4) != b"GGUF":
+            raise ValueError("ERROR: Invalid GGUF header. Model not configured.")
     return binary, gguf
 
 
@@ -136,6 +139,12 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         raise ValueError("ERROR: Select a local WAV test clip no larger than 200 MB. Nothing launched.")
     if not prompt.strip() or len(prompt) > 400:
         raise ValueError("ERROR: Provide a short audio question (1-400 characters).")
+    with source.open("rb") as stream:
+        riff = stream.read(4)
+        stream.seek(8)
+        wave = stream.read(4)
+        if riff != b"RIFF" or wave != b"WAVE":
+            raise ValueError("ERROR: Test input is not a RIFF/WAVE audio file.")
     with LOCK:
         if _JOB["process"] is not None and _JOB["process"].poll() is None:
             raise ValueError("ERROR: Q4 test already running. No duplicate inference.")

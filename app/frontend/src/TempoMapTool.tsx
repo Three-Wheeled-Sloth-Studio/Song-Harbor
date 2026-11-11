@@ -19,7 +19,7 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const [seconds,setSeconds]=useState("0");
-  const [bpm,setBpm]=useState("111");
+  const [bpm,setBpm]=useState("");
   const [transition,setTransition]=useState<"step"|"linear">("step");
   const [meter,setMeter]=useState("4/4");
   const [selectedSection,setSelectedSection]=useState("");
@@ -78,7 +78,7 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
       <>
         <div className="setting-controls">
           <label>Time (seconds)<input aria-label="Tempo anchor time seconds" type="number" min="0" max={durationSeconds} step=".001" value={seconds} onChange={e=>setSeconds(e.target.value)}/></label>
-          <label>BPM<input aria-label="Tempo BPM" type="number" min="20" max="320" step=".01" value={bpm} onChange={e=>setBpm(e.target.value)}/></label>
+          <label>BPM<input aria-label="Tempo BPM" type="number" min="20" max="320" step=".01" placeholder="Enter measured or authored BPM" value={bpm} onChange={e=>setBpm(e.target.value)}/></label>
           <label>Next transition<select aria-label="Tempo transition" value={transition} onChange={e=>setTransition(e.target.value as "step"|"linear")}>
             <option value="step">Step</option><option value="linear">Ramp toward next anchor</option>
           </select></label>

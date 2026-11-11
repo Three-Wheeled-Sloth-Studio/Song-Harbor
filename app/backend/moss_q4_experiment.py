@@ -204,7 +204,8 @@ def _watch_process(app_root: Path, process: subprocess.Popen) -> None:
     status(app_root)
 
 
-def start(app_root: Path, audio: str, prompt: str, approved: bool,\n          snapshot: dict | None = None) -> dict:
+def start(app_root: Path, audio: str, prompt: str, approved: bool,
+          snapshot: dict | None = None) -> dict:
     if not approved:
         raise ValueError("ERROR: Explicit approval is required before experimental Q4 inference.")
     settings = config(app_root)

@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
+import {MossQ4Experiment} from "./MossQ4Experiment";
 
 type Model={id:string;name:string;status:string};
 type Inventory={registered:Model[]};
@@ -169,6 +170,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     {!!models.length&&!setup?.runtime_installed&&<div className="setting-path" role="status">Install the MOSS WSL runtime in Settings before loading.</div>}
     {runtime?.status==="ready"&&<div role="status">Model service ready. Automatically unloaded after 10 minutes without an inference request.</div>}
     {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/><span>{runtime.phase||"Initializing MOSS"}... {runtime.elapsed_seconds!==undefined?Math.floor(runtime.elapsed_seconds/60)+"m "+(runtime.elapsed_seconds%60)+"s elapsed":""} <small>Startup is capped at {runtime.startup_timeout_seconds?Math.floor(runtime.startup_timeout_seconds/60):15} minutes. Cancel loading releases the owned worker.</small></span></div>}
+    <MossQ4Experiment/>
     {error&&<p role="alert" className="error-message">{error}</p>}
     {runtime?.error&&<p role="alert" className="error-message">{runtime.error}</p>}
     {diagnostics?.log_path&&runtime?.error&&<details className="song-moss-diagnostics"><summary>Failure details</summary>

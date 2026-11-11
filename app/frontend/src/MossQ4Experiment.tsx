@@ -1,7 +1,7 @@
 import {useEffect,useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
 
-type Q4Job={state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string};
+type Q4Job={state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string;run_id?:string|null;output_truncated?:boolean;output_path?:string|null};
 type Q4Install={state:string;kind:string|null;message:string;error:string;downloaded_bytes:number;total_bytes:number;started:number|null;artifact:string;runtime_installed:boolean;model_installed:boolean;runtime_path:string;model_path:string};
 type Q4Discovery={executables:string[];models:string[];configured:{executable:string;model:string};experiment:string;job:Q4Job;installer:Q4Install};
 
@@ -129,10 +129,16 @@ export function MossQ4Experiment(){
         </div>
       </div>}
       {job?.state==="running"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Processing test audio... {job.elapsed_seconds??0}s elapsed (10-minute cap)</div>}
-      {job?.state==="complete"&&<div role="status">Process exited successfully. Output below is unverified experimental data.</div>}
+      {job?.state==="complete"&&<div role="status">CrispASR finished. The response is experimental and may contain unsupported details, including tempo, key, lyrics, and instruments.</div>}
+      {job&&["complete","failed","cancelled"].includes(job.state)&&!!job.result&&<div className="song-moss-confirm">
+        <strong>Raw response from this test</strong>
+        <div className="setting-path">Source: {job.audio}{job.run_id?" | Run: "+job.run_id.slice(0,8):""}</div>
+        {job.output_truncated&&<p role="alert" className="error-message">ERROR: Output exceeded the display limit. Read the complete per-run file in the logs folder. This text is incomplete.</p>}
+        <pre style={{whiteSpace:"pre-wrap",maxHeight:360,overflow:"auto",overflowWrap:"anywhere"}}>{job.result}</pre>
+      </div>}
       {(error||job?.error)&&<p role="alert" className="error-message">{error||job?.error}</p>}
-      {job&&["complete","failed","cancelled"].includes(job.state)&&<details><summary>Q4 output and log</summary>
-        <div className="setting-path">{job.log_path}</div>
+      {job&&["complete","failed","cancelled"].includes(job.state)&&<details><summary>Raw run log and diagnostics</summary>
+        <div className="setting-path">One test only: {job.output_path||job.log_path}</div>
         <pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto"}}>{job.log_tail||"No output captured."}</pre>
       </details>}
     </>}

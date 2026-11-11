@@ -21,10 +21,10 @@ import wsl_model_bridge
 import app_logs
 
 LOCK = threading.RLock()
-_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None}
+_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None, "worker_state": None, "supervisor": None}
 _ATTACHED = {"id": None, "model_name": None}
 PORT = 18791
-STARTUP_TIMEOUT_SECONDS = 180
+STARTUP_TIMEOUT_SECONDS = 900
 _LOG_PATH: Path | None = None
 
 
@@ -82,6 +82,13 @@ def status() -> dict:
             return {"status": "unloaded", "model_id": None, "error": ""}
         code = process.poll()
         if code is not None:
+            if _ACTIVE.get("kind") == "wsl" and _ACTIVE.get("worker_state") is not None:
+                try:
+                    if _ACTIVE["worker_state"].is_file():
+                        _stop_wsl_worker()
+                except Exception as exc:
+                    _ACTIVE["error"] = "ERROR: WSL launcher exited but child cleanup is unverified: " + str(exc)
+                    return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
             _ACTIVE["process"] = None
             details = diagnostics()
             log_location = details["log_path"] or "unknown"
@@ -104,7 +111,7 @@ def status() -> dict:
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None
-            _ACTIVE["error"] = "ERROR: Model startup timed out after 180 seconds. Model not loaded."
+            _ACTIVE["error"] = "ERROR: MOSS was not ready after 15 minutes. Owned worker shutdown requested. Model not loaded."
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         return {"status": "ready" if ready else "starting", "model_id": _ACTIVE["id"],
                 "started_at": _ACTIVE["started_at"], "error": "",

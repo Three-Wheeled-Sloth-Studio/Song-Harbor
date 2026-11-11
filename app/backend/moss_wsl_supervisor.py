@@ -76,6 +76,16 @@ def stop(path: Path, served: str) -> int:
     data = _record(path, served)
     if data is None:
         # If stale, never kill arbitrary PIDs. Report inconclusive, not unloaded.
+        try:
+            old = json.loads(path.read_text(encoding="utf-8"))
+            pid = old.get("pid")
+            if (old.get("served") == served and isinstance(pid, int)
+                    and pid > 1 and not _group_alive(pid)):
+                path.unlink(missing_ok=True)
+                print("Stale worker state removed; no live worker group found.", flush=True)
+                return 0
+        except (OSError, ValueError, TypeError):
+            pass
         print("ERROR: Cannot verify owned WSL model process. Stop not confirmed.", flush=True)
         return 4
     pgid = data["pid"]
@@ -128,13 +138,14 @@ def run(args: argparse.Namespace) -> int:
         child.terminate()
         raise RuntimeError("Unable to establish owned model process identity.")
     _save(path, {"pid": child.pid, "start_ticks": ticks, "served": args.served,
-                 "started_at": time.time()})
+                 "distro": args.distro, "started_at": time.time()})
     try:
         return child.wait()
     finally:
         # Child has been reaped. Its process-group identifier is still ours, but
         # the leader no longer exists; do not use _record() (which needs leader).
         # We observed the group ownership at process creation in this process.
+        cleanup_verified = True
         if _group_alive(child.pid):
             try:
                 os.killpg(child.pid, signal.SIGTERM)
@@ -148,9 +159,12 @@ def run(args: argparse.Namespace) -> int:
                         time.sleep(0.2)
                 if _group_alive(child.pid):
                     print("ERROR: Orphaned model worker group remains. Cleanup not verified.", flush=True)
-            except (OSError, ProcessLookupError) as exc:
+                    cleanup_verified = False
+            except OSError as exc:
                 print("ERROR: Model worker cleanup uncertain: " + str(exc), flush=True)
-        path.unlink(missing_ok=True)
+                cleanup_verified = False
+        if cleanup_verified:
+            path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -163,6 +177,7 @@ def main() -> int:
     launch.add_argument("--port", type=int, required=True)
     launch.add_argument("--cache", required=True)
     launch.add_argument("--state", required=True)
+    launch.add_argument("--distro", required=True)
     shutdown = sub.add_parser("stop")
     shutdown.add_argument("--state", required=True)
     shutdown.add_argument("--served", required=True)

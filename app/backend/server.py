@@ -372,6 +372,19 @@ class MossQ4TestRequest(BaseModel):
     approved: bool = False
 
 
+class MossQ4BrowseRequest(BaseModel):
+    kind: Literal["executable", "model", "audio"]
+
+
+@app.post("/api/settings/models/q4/browse")
+def moss_q4_browse(body: MossQ4BrowseRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.browse(body.kind)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/api/settings/models/q4")
 def moss_q4_discovery() -> dict[str, Any]:
     return {**moss_q4_experiment.discover(APP_ROOT, SHARED_MODEL_ROOT),

@@ -282,6 +282,15 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
         raise ValueError("ERROR: WSL system dependencies could not be verified. Model not loaded: " + dependencies["message"])
     gpu = wsl_model_bridge.gpu_memory(distro)
     weight_mib = record.get("bytes_present", 0) / (1024 * 1024)
+    # Hardware QA on RTX 4070 12 GB: unquantized MOSS-Audio-4B consumed
+    # 10.79 GiB for weights and left 0 GiB for the KV cache. Do not repeat
+    # that exact unsupported profile without validated quantization/offload.
+    model_label = " ".join(str(record.get(field, "")) for field in ("name", "path", "id")).lower()
+    if gpu["verified"] and gpu["total_mib"] <= 12288 and "moss-audio-4b" in model_label:
+        raise ValueError(
+            "ERROR: Unquantized MOSS-Audio-4B previously exhausted a 12 GB GPU during KV-cache setup "
+            "(measured 10.79 GiB for weights, 0 GiB remaining). No validated low-memory profile is installed. "
+            "Loading blocked to avoid another lengthy failed run; model not loaded.")
     # Ordinary unquantized SGLang load has no weight offload configured.
     # Reserve headroom for activations, KV cache and CUDA workspace.
     if gpu["verified"] and weight_mib > gpu["total_mib"] * 0.90:

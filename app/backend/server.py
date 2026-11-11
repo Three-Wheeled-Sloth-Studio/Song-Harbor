@@ -31,6 +31,7 @@ import shared_model_settings
 import model_registry
 import moss_runtime
 import moss_q4_experiment
+import moss_q4_installer
 import wsl_model_bridge
 import wsl_dependency_repair
 import app_logs
@@ -372,6 +373,31 @@ class MossQ4TestRequest(BaseModel):
     approved: bool = False
 
 
+class MossQ4InstallRequest(BaseModel):
+    kind: Literal["runtime", "model"]
+    approved: bool = False
+
+
+@app.get("/api/settings/models/q4/install")
+def moss_q4_install_status() -> dict[str, Any]:
+    return moss_q4_installer.status(SHARED_MODEL_ROOT)
+
+
+@app.post("/api/settings/models/q4/install")
+def moss_q4_install(body: MossQ4InstallRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_installer.start(SHARED_MODEL_ROOT, body.kind, body.approved)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/install/cancel")
+def moss_q4_install_cancel(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return moss_q4_installer.cancel(SHARED_MODEL_ROOT)
+
+
 class MossQ4BrowseRequest(BaseModel):
     kind: Literal["executable", "model", "audio"]
 
@@ -388,7 +414,8 @@ def moss_q4_browse(body: MossQ4BrowseRequest, request: Request) -> dict[str, Any
 @app.get("/api/settings/models/q4")
 def moss_q4_discovery() -> dict[str, Any]:
     return {**moss_q4_experiment.discover(APP_ROOT, SHARED_MODEL_ROOT),
-            "job": moss_q4_experiment.status(APP_ROOT)}
+            "job": moss_q4_experiment.status(APP_ROOT),
+            "installer": moss_q4_installer.status(SHARED_MODEL_ROOT)}
 
 
 @app.post("/api/settings/models/q4/configure")

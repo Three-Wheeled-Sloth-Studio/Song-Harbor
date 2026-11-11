@@ -360,6 +360,18 @@ def moss_runtime_status() -> dict[str, Any]:
     return moss_runtime.status()
 
 
+@app.get("/api/settings/models/runtime/diagnostics")
+def moss_runtime_diagnostics() -> dict[str, Any]:
+    return moss_runtime.diagnostics()
+
+
+@app.get("/api/settings/models/{model_id}/trust")
+def moss_model_trust_status(model_id: str) -> dict[str, Any]:
+    try:
+        return model_registry.trust_status(APP_ROOT, model_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
 class WslModelLoadRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=128)
     distro: str = Field(min_length=1, max_length=100)
@@ -436,8 +448,14 @@ def load_wsl_moss(body: WslModelLoadRequest, request: Request) -> dict[str, Any]
     if busy:
         raise HTTPException(409, "ERROR: Audio processing is active. Model not loaded.")
     try:
-        return moss_runtime.load_wsl(APP_ROOT, SHARED_MODEL_ROOT, body.model_id,
-                                     body.distro, body.python_path, body.custom_code_approved)
+        trust = model_registry.trust_status(APP_ROOT, body.model_id)
+        if not (body.custom_code_approved or trust["trusted"]):
+            raise ValueError("ERROR: Approve checkpoint custom code before first load. Model not loaded.")
+        result = moss_runtime.load_wsl(APP_ROOT, SHARED_MODEL_ROOT, body.model_id,
+                                       body.distro, body.python_path, True)
+        if body.custom_code_approved:
+            model_registry.approve_trust(APP_ROOT, body.model_id)
+        return result
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(400, str(exc)) from exc
 

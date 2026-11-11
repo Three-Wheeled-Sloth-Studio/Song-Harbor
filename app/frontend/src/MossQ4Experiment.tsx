@@ -1,6 +1,7 @@
 import {useEffect,useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
 
+type MixSource={projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>};
 type Q4Review={answer:string;slices:number|null;duration_seconds:number|null;warnings:string[];validated:boolean;aligned:boolean;format:string};
 type Q4Job={review?:Q4Review|null;state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string;run_id?:string|null;output_truncated?:boolean;output_path?:string|null};
 type Q4Install={state:string;kind:string|null;message:string;error:string;downloaded_bytes:number;total_bytes:number;started:number|null;artifact:string;runtime_installed:boolean;model_installed:boolean;runtime_path:string;model_path:string};
@@ -15,12 +16,15 @@ async function request<T>(path:string,method="GET",body?:object):Promise<T>{
 }
 
 /** Separate, optional runtime. Never reads or edits the active project implicitly. */
-export function MossQ4Experiment(){
+export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
   const [open,setOpen]=useState(false);
   const [inventory,setInventory]=useState<Q4Discovery|null>(null);
   const [binary,setBinary]=useState("");
   const [model,setModel]=useState("");
   const [audio,setAudio]=useState("");
+  const [source,setSource]=useState<"mix"|"section"|"external">("mix");
+  const [sectionId,setSectionId]=useState("");
+  const [snapshot,setSnapshot]=useState<{snapshot_id:string;sha256:string;project_id:string;recipe_revision:string}|null>(null);
   const [prompt,setPrompt]=useState("Describe the audible instruments, rhythm, arrangement, and changes in this excerpt.");
   const [job,setJob]=useState<Q4Job|null>(null);
   const [confirmTest,setConfirmTest]=useState(false);
@@ -57,6 +61,30 @@ export function MossQ4Experiment(){
     setBusy(true);setError("");
     try{await fn();}catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
+  }
+  async function createSnapshot(){
+    if(!mixSource)throw Error("ERROR: No active mix renderer is available.");
+    const section=source==="section"?mixSource.sections.find(row=>row.id===sectionId):undefined;
+    if(source==="section"&&!section)throw Error("ERROR: Select a section first.");
+    const blob=await mixSource.render();
+    const hashBytes=await crypto.subtle.digest("SHA-256",await blob.arrayBuffer());
+    const revision=Array.from(new Uint8Array(hashBytes)).map(value=>value.toString(16).padStart(2,"0")).join("");
+    const form=new FormData();
+    form.append("audio",blob,"current-mix.wav");
+    form.append("project_id",mixSource.projectId);
+    form.append("recipe_revision",revision);
+    form.append("section_ids",JSON.stringify(section?[section.id]:[]));
+    if(section){
+      form.append("start_seconds",String(section.start_seconds));
+      form.append("end_seconds",String(section.end_seconds));
+    }
+    const response=await fetch("/api/settings/models/q4/snapshot",{method:"POST",body:form});
+    const result=await response.json() as {snapshot_id?:string;sha256?:string;project_id?:string;recipe_revision?:string;detail?:string};
+    if(!response.ok||!result.snapshot_id||!result.sha256||!result.project_id||!result.recipe_revision)
+      throw Error(result.detail||"ERROR: Analysis snapshot creation failed.");
+    setSnapshot({snapshot_id:result.snapshot_id,sha256:result.sha256,
+      project_id:result.project_id,recipe_revision:result.recipe_revision});
+    return result.snapshot_id;
   }
   const installed=!!installer?.runtime_installed&&!!installer?.model_installed;
   const ready=installed&&!!inventory?.configured.model;
@@ -125,23 +153,37 @@ export function MossQ4Experiment(){
         </details>
       </>}
       <div className="setting-controls">
-        <label className="setting-path">Test WAV copy (not current project)
+        <label>Source
+          <select aria-label="Listening source" value={source} onChange={e=>{setSource(e.target.value as "mix"|"section"|"external");setSnapshot(null);}}>
+            <option value="mix" disabled={!mixSource}>Current mix</option>
+            <option value="section" disabled={!mixSource||!mixSource.sections.length}>Selected section</option>
+            <option value="external">External WAV (QA)</option>
+          </select>
+        </label>
+        {source==="section"&&<label>Section
+          <select aria-label="Q4 section" value={sectionId} onChange={e=>{setSectionId(e.target.value);setSnapshot(null);}}>
+            <option value="">Choose section</option>
+            {mixSource?.sections.map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.start_seconds.toFixed(1)}s to {row.end_seconds.toFixed(1)}s)</option>)}
+          </select>
+        </label>}
+        {source==="external"&&<label className="setting-path">Test WAV copy
           <input aria-label="Q4 test WAV path" value={audio} onChange={e=>setAudio(e.target.value)} placeholder="D:\\Audio\\test-clip.wav"/>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(()=>browse("audio"))}>Browse WAV</Button>
-        </label>
+        </label>}
         {advanced&&<label className="setting-path">Audio question
           <textarea aria-label="Q4 audio question" value={prompt} maxLength={400} rows={2} onChange={e=>setPrompt(e.target.value)}/>
         </label>}
         {job?.state==="running"?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setJob(await request<Q4Job>("/api/settings/models/q4/cancel","POST"));})}>Cancel test</Button>:
-        <Button size="compact" variant="primary" disabled={busy||!audio.trim()||!prompt.trim()||!inventory?.configured.model}
-          onClick={()=>setConfirmTest(true)}>Analyze WAV</Button>}
+        <Button size="compact" variant="primary" disabled={busy||!prompt.trim()||!ready||(source==="external"?!audio.trim():!mixSource||(source==="section"&&!sectionId))}
+          onClick={()=>setConfirmTest(true)}>{busy?"Preparing mix...":"Analyze"}</Button>}
       </div>
       {open&&confirmTest&&job?.state!=="running"&&<div className="song-moss-confirm" role="group" aria-label="Confirm experimental Q4 test">
         <strong>Run experimental Q4 listening test?</strong>
-        <span>This will execute the selected local CrispASR program using your WAV test file. It will not modify the audio or active Song Harbor project.</span>
+        <span>This runs Q4 on a separate immutable audio snapshot or the selected external test WAV. It will not modify the current project.</span>
         <div className="setting-controls">
           <Button size="compact" variant="primary" disabled={busy} onClick={()=>void act(async()=>{
-            setJob(await request<Q4Job>("/api/settings/models/q4/test","POST",{audio,prompt,approved:true}));
+            if(source==="external")setJob(await request<Q4Job>("/api/settings/models/q4/test","POST",{audio,prompt,approved:true}));
+            else {const snapshotId=await createSnapshot();setJob(await request<Q4Job>("/api/settings/models/q4/snapshot/analyze","POST",{snapshot_id:snapshotId,prompt,approved:true}));}
             setConfirmTest(false);
           })}>Approve and run test</Button>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setConfirmTest(false)}>Cancel</Button>
@@ -151,7 +193,7 @@ export function MossQ4Experiment(){
       {job?.state==="complete"&&<div role="status">Q4 finished processing. Musical claims are unverified.</div>}
       {job&&["complete","failed","cancelled"].includes(job.state)&&<div className="song-moss-confirm">
         <strong>Listening review (unverified)</strong>
-        <div className="setting-path">Source: {job.audio}{job.run_id?" | Run: "+job.run_id.slice(0,8):""}</div>
+        <div className="setting-path">Source: {snapshot&&source!=="external"?"Active project "+snapshot.project_id+" | snapshot "+snapshot.sha256.slice(0,12):job.audio}{job.run_id?" | Run: "+job.run_id.slice(0,8):""}</div>
         {job.output_truncated&&<p role="alert" className="error-message">ERROR: Output exceeded 2 MiB. Review is incomplete; inspect the per-run log. No verified analysis produced.</p>}
         {!!job.review?.slices&&<div role="status">{job.review.slices} model slices{job.review.duration_seconds?" | "+job.review.duration_seconds.toFixed(1)+"s source":""}. Not time-aligned.</div>}
         {job.review?.warnings.map((warning,i)=><p key={i}>{warning}</p>)}

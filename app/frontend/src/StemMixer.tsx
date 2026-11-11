@@ -1588,7 +1588,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
-        {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}/>}
+        {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
+          mixSource={{projectId:jobId,sections:timelineSections,render:async()=>{
+            const engine=audio.current;
+            if(correction||sectionPreviewActive)throw Error("ERROR: Accept or discard section previews before analyzing the saved mix.");
+            if(!engine?.ready)throw Error("ERROR: Wait for synchronized audio to finish loading.");
+            if(!declickLoaded)throw Error("ERROR: Saved repairs are still loading; mix snapshot blocked.");
+            if(exporting)throw Error("ERROR: Mix export is running. Analysis snapshot not started.");
+            return engine.renderWav24();
+          }}}/>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
           sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name,working_filename:t.working_filename}))}
           engine={audio.current} playing={playing} position={position} onSeek={seek}

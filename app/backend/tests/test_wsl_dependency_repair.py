@@ -55,6 +55,17 @@ class DependencyRepairTests(unittest.TestCase):
                     wsl_dependency_repair.start(self.root, "Ubuntu", True)
                 spawn.assert_not_called()
 
+    def test_apt_exit_zero_is_not_success_without_library(self):
+        proc = Mock()
+        proc.poll.return_value = 0
+        proc.returncode = 0
+        wsl_dependency_repair._JOB.update({"process": proc, "distro": "Ubuntu", "state": "running", "log": None})
+        with patch.object(wsl_dependency_repair.wsl_model_bridge, "libnuma_status",
+                          return_value={"ready": False, "missing_package": "libnuma1"}):
+            result = wsl_dependency_repair.status()
+        self.assertEqual(result["state"], "failed")
+        self.assertIn("still unavailable", result["error"])
+
     def test_explicit_repair_uses_fixed_package_command_and_central_log(self):
         process = Mock()
         process.poll.return_value = None

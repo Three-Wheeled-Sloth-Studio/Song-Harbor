@@ -146,7 +146,8 @@ def _download(url: str, path: Path, expected_size: int, digest: str) -> Path:
     have = part.stat().st_size if part.exists() else 0
     if have > expected_size:
         raise RuntimeError("Existing partial file exceeds expected size. Nothing overwritten.")
-    reserve = expected_size - have + (256 * 1024 * 1024)
+    extraction_reserve = 2 * 1024**3 if url == RUNTIME_URL else 256 * 1024**2
+    reserve = expected_size - have + extraction_reserve
     if shutil.disk_usage(path.parent).free < reserve:
         raise RuntimeError("Insufficient free disk space on shared model drive.")
     if have == expected_size:
@@ -208,7 +209,7 @@ def _install_runtime(root: Path, downloaded: Path) -> None:
         raise RuntimeError("CrispASR installation already present. Nothing overwritten.")
     with zipfile.ZipFile(downloaded) as archive:
         entries = [x for x in archive.infolist() if not x.is_dir()]
-        if len(entries) > 100 or sum(x.file_size for x in entries) > 2 * 1024**3:
+        if len(entries) > 100 or sum(x.file_size for x in entries) > 4 * 1024**3:
             raise RuntimeError("CrispASR archive exceeds safe extraction bounds.")
         for info in entries:
             name = Path(info.filename.replace("\\", "/"))
@@ -223,16 +224,26 @@ def _install_runtime(root: Path, downloaded: Path) -> None:
             raise RuntimeError("Existing runtime staging directory requires inspection.")
         staging.mkdir(parents=True)
         try:
+            seen_paths: set[str] = set()
             for info in entries:
                 _cancelled()
                 # Flatten common package root only; retain DLLs beside executable.
                 relative = Path(*Path(info.filename.replace("\\", "/")).parts[1:]) if len(Path(info.filename.replace("\\", "/")).parts) > 1 else Path(info.filename)
                 if relative.is_absolute() or ".." in relative.parts:
                     raise RuntimeError("Unsafe relative installation path.")
+                normalized = str(relative).lower()
+                if normalized in seen_paths:
+                    raise RuntimeError("Duplicate extracted path in release archive.")
+                seen_paths.add(normalized)
                 output = staging / relative
                 output.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(info) as src, output.open("wb") as target:
-                    shutil.copyfileobj(src, target, _CHUNK)
+                    while True:
+                        _cancelled()
+                        chunk = src.read(_CHUNK)
+                        if not chunk:
+                            break
+                        target.write(chunk)
             if not (staging / "crispasr.exe").is_file():
                 raise RuntimeError("Expected CrispASR executable not found in installation staging.")
             _publish_json(staging / "song-harbor-install.json", {

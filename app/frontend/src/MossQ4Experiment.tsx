@@ -48,6 +48,7 @@ export function MossQ4Experiment(){
       <Button size="compact" variant="secondary" onClick={()=>setOpen(value=>!value)}>{open?"Hide":"Open"}</Button>
     </div>
     {open&&<>
+      <div className="setting-tool-row"><a href="https://github.com/CrispStrobe/CrispASR/releases" target="_blank" rel="noopener noreferrer">CrispASR runtime</a><a href="https://huggingface.co/cstr/MOSS-Audio-4B-Instruct-GGUF" target="_blank" rel="noopener noreferrer">Q4 audio model</a></div>
       <div className="setting-controls">
         <label className="setting-path">CrispASR executable
           <input aria-label="CrispASR executable path" list="moss-q4-binaries" value={binary} onChange={e=>setBinary(e.target.value)} placeholder="D:\\Apps\\...\\crispasr.exe"/>

@@ -87,6 +87,7 @@ jobs:
             test_moss_runtime_diagnostics.py
             test_moss_wsl_supervisor.py
             test_moss_q4_experiment.py
+            test_moss_q4_installer.py
           )
           failures=()
           for pattern in "${patterns[@]}"; do

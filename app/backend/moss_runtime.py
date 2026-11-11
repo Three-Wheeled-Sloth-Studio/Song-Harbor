@@ -248,6 +248,7 @@ def load(app_root: Path, model_root: Path, identifier: str, python_executable: s
         global _LOG_PATH
         _LOG_PATH = _runtime_log(app_root, "native")
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log_start = _LOG_PATH.stat().st_size if _LOG_PATH.exists() else 0
         log = _LOG_PATH.open("ab")
         command = [python_executable, "-m", "sglang.launch_server", "--model-path", record["path"],
                    "--served-model-name", "songharbor-moss-" + identifier,
@@ -312,6 +313,7 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
         global _LOG_PATH
         _LOG_PATH = _runtime_log(app_root, "wsl")
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log_start = _LOG_PATH.stat().st_size if _LOG_PATH.exists() else 0
         log = _LOG_PATH.open("ab")
         cache = linux_root + "/.song-harbor"
         state = app_root / "logs" / "moss-wsl-worker.json"
@@ -337,7 +339,7 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
                         "error": "", "log": log, "model_name": served,
                         "kind": "wsl", "distro": distro, "ready_at": None, "last_used": None,
-                        "worker_state": state, "supervisor": linux_supervisor})
+                        "worker_state": state, "supervisor": linux_supervisor, "log_start": log_start})
         _start_watchdog()
     return status()
 

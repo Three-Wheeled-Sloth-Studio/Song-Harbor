@@ -134,6 +134,15 @@ def _download(url: str, path: Path, expected_size: int, digest: str) -> Path:
     part = path.with_name(path.name + ".part")
     if path.exists():
         raise RuntimeError("Installation destination already exists; nothing overwritten.")
+    identity_file = part.with_name(part.name + ".json")
+    expected_identity = {"sha256": digest, "size": expected_size, "source": url}
+    if part.exists():
+        if _read_manifest(identity_file) != expected_identity:
+            raise RuntimeError("Partial download identity does not match current artifact. Nothing overwritten.")
+    else:
+        if identity_file.exists():
+            raise RuntimeError("Unmatched partial download marker exists. Inspect before retry.")
+        _publish_json(identity_file, expected_identity)
     have = part.stat().st_size if part.exists() else 0
     if have > expected_size:
         raise RuntimeError("Existing partial file exceeds expected size. Nothing overwritten.")
@@ -225,7 +234,7 @@ def _install_runtime(root: Path, downloaded: Path) -> None:
             raise
 
 
-def _run(root: Path, kind: str) -> None:
+def _run(app_root: Path, root: Path, kind: str) -> None:
     try:
         if kind == "runtime":
             _set(total=RUNTIME_BYTES, revision=RUNTIME_VERSION)
@@ -254,7 +263,7 @@ def _run(root: Path, kind: str) -> None:
         _set(thread=None)
 
 
-def start(root: Path, kind: str, approved: bool) -> dict:
+def start(app_root: Path, root: Path, kind: str, approved: bool) -> dict:
     if kind not in ("runtime", "model"):
         raise ValueError("ERROR: Unsupported Q4 installation type.")
     if not approved:
@@ -273,7 +282,7 @@ def start(root: Path, kind: str, approved: bool) -> dict:
                     error="", downloaded=0, total=0, started=time.time(),
                     artifact=RUNTIME_ASSET if kind == "runtime" else MODEL_FILE,
                     revision=None)
-        thread = threading.Thread(target=_run, args=(root, kind), daemon=True,
+        thread = threading.Thread(target=_run, args=(app_root, root, kind), daemon=True,
                                   name="moss-q4-download-" + kind)
         _JOB["thread"] = thread
         thread.start()

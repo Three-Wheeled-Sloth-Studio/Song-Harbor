@@ -132,3 +132,15 @@ User reported explicit Install MOSS runtime failed immediately: `/usr/bin/python
 - Installer now surfaces the last `ERROR:` from its log in the main error indicator, rather than only the generic 'See job log' message. The expandable log remains available.
 - Tests added for synthetic standalone uv tar checksum success, checksum failure, and precise error reporting, without network access or executing downloaded model code.
 - This repair solves the immediate ensurepip failure path. Full real WSL runtime package resolution, WSL NTFS (drvfs) executable/symlink behavior, and model loading are still awaiting Windows QA. An error in a subsequent stage should be reported with exact log text; don't treat successful uv bootstrap as proof of SGLang compatibility.
+
+## 2026-11-11: Installer progress and load approval UX
+User QA: WSL installed; runtime and two checkpoint entries visible. No activity animation for long runtime/checkpoint jobs; approval checkbox unexpectedly cleared after each install; model Load disabled by an unassociated custom-code checkbox below controls. Also requirement: production tool must handle selection/loading at point of use.
+
+Changes on dev:
+- Installation approval remains checked through sequential explicit actions, but each action still requires clicking Install/Download. Never automatically download or load based on checkbox state.
+- While backend job state is running, Settings shows a compact animated activity spinner, explicit runtime-install vs model-download label, and ongoing status. The existing expandable log continues to provide real output. No fabricated progress percent.
+- Settings Load no longer depends on a detached approval checkbox; pressing Load presents a contextual confirmation for the chosen model, with explicit custom-code approval and Confirm/Cancel beside the action. User agreement remains per-load, never persisted.
+- Same contextual Load confirmation in production tool. On opening the tool, installed checkpoints and WSL runtime are discovered; 4B is the preferred initial selection if available, but explicit user choices are preserved. Settings now also queries the installed runtime's Python path as soon as WSL is selected, without requiring Inspect.
+- No audio listening or Shared Musical Understanding analysis has been enabled yet; Ready must not be described as a completed musical recommendation. No changes to active project, rendering or scripting.
+
+QA: verify the busy indicator remains visible during long installs/downloads, including after reopening Settings; ensure approval remains checked after a completed operation, and that no new operation auto-starts. Verify contextual confirmation appears immediately when Load is clicked in the production tool; cancel performs no load. After confirm, Starting should show a spinner and transition only on actual runtime state. No inference tests without separate authorization.

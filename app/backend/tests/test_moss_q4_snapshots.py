@@ -17,7 +17,7 @@ def wave_bytes(seconds: float = 2.0, rate: int = 48000) -> bytes:
         stream.setnchannels(2)
         stream.setsampwidth(3)
         stream.setframerate(rate)
-        stream.writeframes(b"\\x00" * (round(seconds*rate)*6))
+        stream.writeframes(bytes([0]) * (round(seconds*rate)*6))
     return buffer.getvalue()
 
 

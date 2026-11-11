@@ -243,6 +243,7 @@ def _run(app_root: Path, root: Path, kind: str) -> None:
             _set(message="Extracting verified CrispASR runtime")
             _install_runtime(root, part)
             part.unlink(missing_ok=True)
+            part.with_name(part.name + ".json").unlink(missing_ok=True)
         else:
             revision, sha, size, url = _metadata()
             _set(total=size, revision=revision)
@@ -250,11 +251,17 @@ def _run(app_root: Path, root: Path, kind: str) -> None:
             part = _download(url, destination, size, sha)
             _cancelled()
             os.replace(part, destination)
+            part.with_name(part.name + ".json").unlink(missing_ok=True)
             _publish_json(_manifest_path(root, "model"), {
                 "verified": True, "repo": MODEL_REPO, "revision": revision,
                 "file": MODEL_FILE, "size": size, "sha256": sha,
                 "source": url})
-        _set(state="completed", message="Verified installation complete", error="")
+        both_installed = _installed(root, "runtime") and _installed(root, "model")
+        if both_installed:
+            moss_q4_experiment.configure(app_root, str(_destination(root, "runtime")),
+                                         str(_destination(root, "model")))
+        _set(state="completed", message=("Verified installation complete; Q4 hook configured"
+                if both_installed else "Verified installation complete"), error="")
     except InterruptedError as exc:
         _set(state="cancelled", error="", message=str(exc))
     except Exception as exc:

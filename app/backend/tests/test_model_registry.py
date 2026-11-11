@@ -115,6 +115,28 @@ class ModelRegistryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "incomplete"):
                 model_registry.register_wsl(self.root, "Ubuntu", "/home/sloth/incomplete")
 
+    def test_trust_is_checkpoint_specific_and_revoked_on_manifest_change(self):
+        folder = self.make_model()
+        manifest = folder / "song-harbor-install.json"
+        manifest.write_text(json.dumps({"complete": True, "repo": "vendor/MOSS-Music",
+            "revision": "revision-1", "inventory": {"model.safetensors": {"sha256": "a" * 64}}}))
+        record = model_registry.register(self.root, str(folder))
+        self.assertFalse(model_registry.trust_status(self.root, record["id"])["trusted"])
+        approved = model_registry.approve_trust(self.root, record["id"])
+        self.assertTrue(approved["trusted"])
+        self.assertTrue(model_registry.trust_status(self.root, record["id"])["trusted"])
+        data = json.loads(manifest.read_text())
+        data["revision"] = "revision-2"
+        manifest.write_text(json.dumps(data))
+        self.assertFalse(model_registry.trust_status(self.root, record["id"])["trusted"])
+
+    def test_unverified_external_model_trust_not_persisted(self):
+        folder = self.make_model()
+        record = model_registry.register(self.root, str(folder))
+        state = model_registry.approve_trust(self.root, record["id"])
+        self.assertFalse(state["trusted"])
+        self.assertFalse(state["persistent_trust_available"])
+
     def test_load_refuses_without_explicit_trusted_code_approval(self):
         with self.assertRaisesRegex(ValueError, "explicitly approve"):
             moss_runtime.load(self.root, self.models, "unused", sys.executable, False)

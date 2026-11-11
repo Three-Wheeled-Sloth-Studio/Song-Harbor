@@ -79,6 +79,30 @@ class Q4InstallerTests(unittest.TestCase):
         marker=json.loads(part.with_name(part.name+".json").read_text())
         self.assertEqual(marker["sha256"],sha)
 
+    def test_complete_staging_verifies_without_network_request(self):
+        payload=b"completed-asset"*100
+        dest=self.models/"gguf"/"test.gguf"
+        dest.parent.mkdir()
+        part=dest.with_name(dest.name+".part")
+        part.write_bytes(payload)
+        digest=hashlib.sha256(payload).hexdigest()
+        marker={"sha256":digest,"size":len(payload),"source":"https://example.org/revision"}
+        part.with_name(part.name+".json").write_text(json.dumps(marker))
+        with patch.object(installer.urllib.request,"urlopen") as network:
+            result=installer._download(marker["source"],dest,marker["size"],digest)
+            self.assertEqual(result,part)
+            network.assert_not_called()
+
+    def test_runtime_archive_duplicate_flattened_paths_refused(self):
+        archive=self.models/"crispasr.zip"
+        with zipfile.ZipFile(archive,"w") as z:
+            z.writestr("a/crispasr.exe",b"runtime")
+            z.writestr("a/common.dll",b"one")
+            z.writestr("b/common.dll",b"two")
+        with self.assertRaisesRegex(RuntimeError,"Duplicate extracted path"):
+            installer._install_runtime(self.models,archive)
+        self.assertFalse(installer._destination(self.models,"runtime").is_file())
+
     def test_resume_rejects_wrong_source_and_no_network(self):
         dest=self.models/"gguf"/"test.gguf"
         dest.parent.mkdir()

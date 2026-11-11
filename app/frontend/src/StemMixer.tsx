@@ -1589,7 +1589,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
         </>}
         {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
-          mixSource={{projectId:jobId,sections:timelineSections,render:async()=>{
+          mixSource={{projectId:jobId,sections:timelineSections,
+          sourceStems:stems.map(stem=>{
+            const identity=trackIdentities.find(row=>row.working_filename===stem.filename);
+            return {track_id:identity?.track_id||stem.filename,
+              working_filename:stem.filename,display_name:stem.name,
+              gain:stem.gain,mute:stem.mute,solo:stem.solo};
+          }),
+          render:async()=>{
             const engine=audio.current;
             if(correction||sectionPreviewActive)throw Error("ERROR: Accept or discard section previews before analyzing the saved mix.");
             if(!engine?.ready)throw Error("ERROR: Wait for synchronized audio to finish loading.");

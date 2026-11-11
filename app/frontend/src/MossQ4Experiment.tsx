@@ -22,7 +22,7 @@ export function MossQ4Experiment(){
   const [audio,setAudio]=useState("");
   const [prompt,setPrompt]=useState("Describe the audible instruments, rhythm, arrangement, and changes in this excerpt.");
   const [job,setJob]=useState<Q4Job|null>(null);
-  const [approved,setApproved]=useState(false);
+  const [confirmTest,setConfirmTest]=useState(false);
   const [installApproval,setInstallApproval]=useState(false);
   const [installer,setInstaller]=useState<Q4Install|null>(null);
   const [busy,setBusy]=useState(false);
@@ -113,15 +113,21 @@ export function MossQ4Experiment(){
         <label className="setting-path">Audio question
           <textarea aria-label="Q4 audio question" value={prompt} maxLength={400} rows={2} onChange={e=>setPrompt(e.target.value)}/>
         </label>
-        <label className="setting-tool-row"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>
-          Approve experimental local executable and audio test</label>
         {job?.state==="running"?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setJob(await request<Q4Job>("/api/settings/models/q4/cancel","POST"));})}>Cancel test</Button>:
-        <Button size="compact" variant="primary" disabled={busy||!approved||!audio||!prompt.trim()||!inventory?.configured.model}
-          onClick={()=>void act(async()=>{
-            setJob(await request<Q4Job>("/api/settings/models/q4/test","POST",{audio,prompt,approved:true}));
-            setApproved(false);
-          })}>Test Q4 listening</Button>}
+        <Button size="compact" variant="primary" disabled={busy||!audio.trim()||!prompt.trim()||!inventory?.configured.model}
+          onClick={()=>setConfirmTest(true)}>Test Q4 listening</Button>}
       </div>
+      {open&&confirmTest&&job?.state!=="running"&&<div className="song-moss-confirm" role="group" aria-label="Confirm experimental Q4 test">
+        <strong>Run experimental Q4 listening test?</strong>
+        <span>This will execute the selected local CrispASR program using your WAV test file. It will not modify the audio or active Song Harbor project.</span>
+        <div className="setting-controls">
+          <Button size="compact" variant="primary" disabled={busy} onClick={()=>void act(async()=>{
+            setJob(await request<Q4Job>("/api/settings/models/q4/test","POST",{audio,prompt,approved:true}));
+            setConfirmTest(false);
+          })}>Approve and run test</Button>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setConfirmTest(false)}>Cancel</Button>
+        </div>
+      </div>}
       {job?.state==="running"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Processing test audio... {job.elapsed_seconds??0}s elapsed (10-minute cap)</div>}
       {job?.state==="complete"&&<div role="status">Process exited successfully. Output below is unverified experimental data.</div>}
       {(error||job?.error)&&<p role="alert" className="error-message">{error||job?.error}</p>}

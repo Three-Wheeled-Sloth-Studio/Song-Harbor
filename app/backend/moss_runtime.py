@@ -83,7 +83,8 @@ def status() -> dict:
         if code is not None:
             _ACTIVE["process"] = None
             details = diagnostics()
-            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {details[\'log_path\'] or \'unknown\'}."
+            log_location = details["log_path"] or "unknown"
+            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {log_location}."
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None

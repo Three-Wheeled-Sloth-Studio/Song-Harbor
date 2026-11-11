@@ -94,7 +94,7 @@ def _idle_watchdog() -> None:
         time.sleep(20)
         with LOCK:
             if _ACTIVE["process"] is None:
-                return
+                continue
             try:
                 snapshot = status()
                 if snapshot["status"] == "ready":

@@ -28,6 +28,7 @@ import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import {MossModelTool} from "./MossModelTool";
+import {TempoMapTool} from "./TempoMapTool";
 import type { SongSection } from "./SectionEditor";
 
 type SectionPreview =
@@ -1588,6 +1589,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
+        {tool==="tempoMap"&&<TempoMapTool projectId={jobId} durationSeconds={duration} sections={timelineSections}/>}
         {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
           mixSource={{projectId:jobId,sections:timelineSections,
           sourceStems:stems.map(stem=>{

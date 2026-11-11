@@ -191,3 +191,18 @@ QA gates:
 5. Simulate app exit or forced crash while loading. Relaunch and use Release previous worker. Verify exact process ownership and that unrelated WSL jobs are unaffected.
 6. Verify failed cleanup leaves clear error and recovery state rather than falsely reporting Unloaded. Repeat load must not proceed while an unresolved worker state exists.
 7. Validate that normal music production workflows and active audio project remain untouched.
+
+## 2026-11-11: Confirmed 4B KV-cache OOM from uploaded runtime log
+
+The uploaded `moss-wsl.log` shows the *actual* 4B startup path. At 10:23:35 the loader begins reading 3 safetensors shards stored under `/mnt/d/Apps/SongHarborDev/models/checkpoints/moss-audio-4b`. It finishes at 10:34:43 (668.98 seconds). Recorded memory after load: 10.79 GB model use, 0.00 GB available. At 10:34:47 SGLang scheduler raises `RuntimeError: Not enough memory. Please try to increase --mem-fraction-static` during KV cache initialization. The 15-minute Song Harbor timeout is a secondary/misleading symptom, not the reason the model fails. The warnings about optional GLM ASR import and Triton fallback are not the fatal exception.
+
+Actions committed on dev:
+- Parse startup errors from **only the current launch's** log bytes, not historical appended runs. Recognize the exact KV-cache memory exception and CUDA OOM; fail fast, request owned-worker cleanup, and report the actual blocker rather than a generic 15-minute timeout. Preserve error on uncertain cleanup.
+- Guard the *observed* failed configuration: unquantized MOSS-Audio-4B on a detected GPU of 12 GiB or less. Existing ordinary runtime has no validated quantization or CPU offload. Refuse before another expensive model start and explain the measured 10.79 GiB / 0 remaining result. Guard is conditional on verified GPU memory; it is not a claim about all implementations or future quantized variants.
+- Tests cover log session isolation and the 4B/12GB no-process-start path.
+
+Next research/engineering:
+1. **Model profile**: investigate verified supported quantization or CPU offload for the pinned OpenMOSS SGLang fork; *do not simply turn up mem-fraction-static* when 0.00 GB remains after weights. Establish minimum KV/activation budget, GPU RAM test and model quality/latency impact. No auto quantization or downloads.
+2. **Storage performance**: `/mnt/d` is Windows DrvFS and 3 shard loads required 11m 9s. Investigate moving/replicating checkpoint data into WSL ext4 storage that physically resides on D: (WSL distro VHDX on D:) with optional user-approved in-app migration and space preflight, checksum verification and zero source deletion. Benchmark before/after; do not claim speedup without measurements.
+3. Investigate smaller audio-understanding options or a CPU-compatible 4B recipe if model quality and speed are acceptable. Explicit tests need clean VRAM baseline and verified unload.
+4. Keep the audio listening/SMU workflow separate until MOSS readiness and at least one real inference test have succeeded.

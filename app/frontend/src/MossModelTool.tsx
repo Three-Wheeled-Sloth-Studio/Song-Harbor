@@ -3,7 +3,8 @@ import {Button,Status} from "@tws-ui/core/react";
 
 type Model={id:string;name:string;status:string};
 type Inventory={registered:Model[]};
-type Runtime={status:string;model_id:string|null;error:string;port?:number};
+type Runtime={status:string;model_id:string|null;error:string;port?:number;elapsed_seconds?:number;startup_timeout_seconds?:number;phase?:string;idle_unload_seconds?:number};
+type OrphanStatus={present:boolean;distro?:string;model_id?:string;status?:string;message?:string};
 type Setup={state:string;runtime_installed:boolean;runtime_python:string;error:string};
 type Trust={model_id:string;trusted:boolean;persistent_trust_available:boolean};
 type Diagnostics={log_path:string|null;log_tail:string;runtime_kind:string|null;model_id:string|null};
@@ -29,6 +30,8 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
   const [diagnostics,setDiagnostics]=useState<Diagnostics|null>(null);
   const [dependency,setDependency]=useState<DependencyStatus|null>(null);
   const [confirmRepair,setConfirmRepair]=useState(false);
+  const [orphan,setOrphan]=useState<OrphanStatus|null>(null);
+  const [confirmRelease,setConfirmRelease]=useState(false);
   const [confirmLoad,setConfirmLoad]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -46,6 +49,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
       setModels(valid);setModel(current=>valid.some(x=>x.id===current)?current:valid[0]?.id||"");
       setRuntime(rt);
       setDistro(current=>distros.distros.includes(current)?current:distros.distros[0]||"");
+      void api<OrphanStatus>("/api/settings/models/runtime/orphan").then(setOrphan).catch(e=>setError(String(e)));
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   },[]);
   useEffect(()=>{void refresh();},[refresh]);
@@ -107,7 +111,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     {active?<div className="setting-controls">
       <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
         setRuntime(await api<Runtime>("/api/settings/models/runtime/unload","POST"));
-      })}>{runtime?.status==="connected"?"Disconnect":"Unload MOSS"}</Button>
+      })}>{runtime?.status==="connected"?"Disconnect":runtime?.status==="starting"?"Cancel loading":"Unload MOSS"}</Button>
     </div>:<>
       <Button size="compact" variant="primary"
         disabled={busy||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed||dependency?.dependencies.ready===false}
@@ -149,10 +153,22 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{await api<{requested:boolean}>("/api/settings/logs/open","POST");})}>Open logs folder</Button></>}
       {dependency.repair.state==="completed"&&!dependency.dependencies.ready&&<div role="status">Verifying dependency installation...</div>}
     </div>}
+    {orphan?.present&&<div className="song-moss-confirm" role="group" aria-label="Previous WSL MOSS worker">
+      <strong>Previous MOSS worker needs verification</strong>
+      <span>{orphan.message||"A previous WSL model process may still occupy GPU memory."}</span>
+      {!confirmRelease?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>setConfirmRelease(true)}>Release previous worker</Button>:
+        <div className="setting-controls">
+          <Button size="compact" variant="primary" disabled={busy} onClick={()=>void act(async()=>{
+            await api<{released:boolean}>("/api/settings/models/runtime/orphan/release","POST",{approved:true});
+            setOrphan({present:false});setConfirmRelease(false);await refresh();
+          })}>Confirm release</Button>
+          <Button size="compact" variant="secondary" onClick={()=>setConfirmRelease(false)}>Cancel</Button>
+        </div>}
+    </div>}
     {!models.length&&<div className="setting-path" role="status">Install or register a model in Settings to enable Load.</div>}
     {!!models.length&&!setup?.runtime_installed&&<div className="setting-path" role="status">Install the MOSS WSL runtime in Settings before loading.</div>}
-    {runtime?.status==="ready"&&<div role="status">Model service ready. Audio listening is not connected yet.</div>}
-    {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Starting model service...</div>}
+    {runtime?.status==="ready"&&<div role="status">Model service ready. Automatically unloaded after 10 minutes without an inference request.</div>}
+    {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/><span>{runtime.phase||"Initializing MOSS"}... {runtime.elapsed_seconds!==undefined?Math.floor(runtime.elapsed_seconds/60)+"m "+(runtime.elapsed_seconds%60)+"s elapsed":""} <small>Startup is capped at {runtime.startup_timeout_seconds?Math.floor(runtime.startup_timeout_seconds/60):15} minutes. Cancel loading releases the owned worker.</small></span></div>}
     {error&&<p role="alert" className="error-message">{error}</p>}
     {runtime?.error&&<p role="alert" className="error-message">{runtime.error}</p>}
     {diagnostics?.log_path&&runtime?.error&&<details className="song-moss-diagnostics"><summary>Failure details</summary>

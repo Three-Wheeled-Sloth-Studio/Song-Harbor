@@ -86,7 +86,7 @@ export function MossQ4Experiment(){
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setInstaller(await request<Q4Install>("/api/settings/models/q4/install/cancel","POST"));})}>Cancel</Button>
         </div>}
         {installer?.state==="failed"&&<p role="alert" className="error-message">{installer.error}</p>}
-        {installer?.state==="completed"&&<div role="status">{installer.message}. Files available for local configuration.</div>}
+        {installer?.state==="completed"&&<div role="status">{installer.message}.</div>}
       </div>
       <div className="setting-controls">
         <label className="setting-path">CrispASR executable

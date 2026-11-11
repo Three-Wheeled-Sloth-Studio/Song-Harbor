@@ -172,6 +172,11 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
     record = next((item for item in records if item["id"] == identifier), None)
     if record is None or record.get("status") != "present-unverified":
         raise ValueError("ERROR: Register a complete checkpoint first. Model not loaded.")
+    dependencies = wsl_model_bridge.libnuma_status(distro)
+    if not dependencies["ready"]:
+        if dependencies["missing_package"] == "libnuma1":
+            raise ValueError("ERROR: Ubuntu is missing libnuma.so.1 (libnuma1). Use Repair dependency in MOSS, then retry. Model not loaded.")
+        raise ValueError("ERROR: WSL system dependencies could not be verified. Model not loaded: " + dependencies["message"])
     wsl_model_bridge.preflight(distro, python_path)
     if record.get("storage") == "wsl":
         if record.get("distro") != distro:

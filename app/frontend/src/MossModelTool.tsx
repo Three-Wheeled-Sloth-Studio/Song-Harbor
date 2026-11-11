@@ -157,6 +157,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
     {diagnostics?.log_path&&runtime?.error&&<details className="song-moss-diagnostics"><summary>Failure details</summary>
       <div className="setting-path">Log: {diagnostics.log_path}</div>
       <Button size="compact" variant="secondary" onClick={()=>void navigator.clipboard?.writeText(diagnostics.log_path||"")}>Copy path</Button>
+      <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{await api<{requested:boolean}>("/api/settings/logs/open","POST");})}>Open logs folder</Button>
       <pre>{diagnostics.log_tail||"Log empty. Process may have exited before writing diagnostics."}</pre>
     </details>}
   </div>;

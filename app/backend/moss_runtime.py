@@ -156,6 +156,19 @@ def status() -> dict:
                 return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
             return {"status": "unloaded", "model_id": None, "error": ""}
         code = process.poll()
+        failure = _startup_failure() if _ACTIVE.get("started_at") is not None else None
+        if failure and code is None:
+            try:
+                _stop_process(process)
+            except Exception as exc:
+                _ACTIVE["error"] = failure + " Cleanup unverified: " + str(exc)
+                return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
+            _ACTIVE["process"] = None
+            if _ACTIVE["log"] is not None:
+                _ACTIVE["log"].close()
+                _ACTIVE["log"] = None
+            _ACTIVE["error"] = failure
+            return {"status": "failed", "model_id": _ACTIVE["id"], "error": failure}
         if code is not None:
             if _ACTIVE.get("kind") == "wsl" and _ACTIVE.get("worker_state") is not None:
                 try:
@@ -170,7 +183,7 @@ def status() -> dict:
             causes = [text.strip() for text in details["log_tail"].splitlines()
                       if any(keyword in text.lower() for keyword in ("error:", "exception:", "out of memory", "oom", "killed"))]
             cause = (" Reason: " + causes[-1][:250]) if causes else " Open Failure details to inspect startup output."
-            _ACTIVE["error"] = f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {log_location}." + cause
+            _ACTIVE["error"] = failure or (f"ERROR: MOSS exited with code {code}. Model not loaded. Log: {log_location}." + cause)
             if _ACTIVE["log"] is not None:
                 _ACTIVE["log"].close()
                 _ACTIVE["log"] = None

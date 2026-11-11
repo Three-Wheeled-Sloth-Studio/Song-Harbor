@@ -8,6 +8,8 @@ type Health = {ready:boolean;separator_ready:boolean;model:string;model_director
 type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
 type DiscoveredModel={id?:string;name:string;path:string;family?:string;storage?:string;distro?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
+type ModelTrust={model_id:string;trusted:boolean;persistent_trust_available:boolean};
+type ModelDiagnostics={log_path:string|null;log_tail:string;runtime_kind:string|null;model_id:string|null};
 type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
 type WslStatus={available:boolean;distros:string[];message:string};
 type MossSetupCatalog={id:string;name:string;repo:string;license:string;fit:string;installed:boolean;path:string};
@@ -29,6 +31,8 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   const [savedRuntimePython,setSavedRuntimePython]=useState("");
   const [approveCode,setApproveCode]=useState(false);
   const [confirmLoad,setConfirmLoad]=useState(false);
+  const [modelTrust,setModelTrust]=useState<ModelTrust|null>(null);
+  const [modelDiagnostics,setModelDiagnostics]=useState<ModelDiagnostics|null>(null);
   const [modelPath,setModelPath]=useState("");
   const [showModels,setShowModels]=useState(true);
   const [wsl,setWsl]=useState<WslStatus|null>(null);
@@ -88,6 +92,16 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
       setSelectedModel(current=>found.registered.some(item=>item.id===current&&item.status==="present-unverified")?current:(found.registered.find(item=>item.status==="present-unverified"&&item.name.toLowerCase().includes("audio-4b"))||found.registered.find(item=>item.status==="present-unverified"))?.id||"");
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
   }
+  useEffect(()=>{
+    if(!open||!selectedModel){setModelTrust(null);return;}
+    void response<ModelTrust>("/api/settings/models/"+encodeURIComponent(selectedModel)+"/trust","GET")
+      .then(setModelTrust).catch(e=>setError(String(e)));
+  },[open,selectedModel]);
+  useEffect(()=>{
+    if(!open||runtime?.status!=="failed")return;
+    void response<ModelDiagnostics>("/api/settings/models/runtime/diagnostics","GET")
+      .then(setModelDiagnostics).catch(e=>setError(String(e)));
+  },[open,runtime?.status]);
   useEffect(()=>{
     if(!open||!wslDistro)return;
     let alive=true;
@@ -252,7 +266,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               </select>
               <Button size="compact" variant="primary" disabled={busy||!selectedModel||!wslDistro||!(wslPython.trim()||mossSetup?.runtime_python)||runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected"}
                 title={!selectedModel?"Register a checkpoint first":!(wslPython||mossSetup?.runtime_python)?"Install MOSS runtime or inspect WSL":"Review and load selected MOSS model"}
-                onClick={()=>setConfirmLoad(true)}>Load MOSS</Button>
+                onClick={()=>{if(modelTrust?.trusted){void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load-wsl","POST",{model_id:selectedModel,distro:wslDistro,python_path:mossSetup?.runtime_python||wslPython,custom_code_approved:false}));});}else setConfirmLoad(true);}}>Load MOSS</Button>
               {(runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected")&&
                 <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
                   setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));
@@ -263,7 +277,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
             {wsl?.available&&!wsl.distros.length&&<div role="status" className="setting-path">No WSL distribution detected. Use WSL setup below; existing D: installations will not be replaced.</div>}
             {!!wslDistro&&!wslProbe&&<div role="status" className="setting-path">Inspect the selected WSL distribution to locate Python and check GPU visibility.</div>}
             {!!wslProbe&&!wslPython&&<div role="status" className="setting-path">Enter the existing SGLang Python path inside WSL to enable Load.</div>}
-            {!!selectedModel&&!!wslPython&&!approveCode&&<div role="status" className="setting-path">Review and approve the registered model's custom code before loading.</div>}
+            {!!selectedModel&&!!wslPython&&!modelTrust?.trusted&&!confirmLoad&&<div role="status" className="setting-path">Review and approve the registered model's custom code before loading.</div>}
 
             <div className="setting-tool-row">
               <span>Local checkpoints <Status tone="neutral">{(inventory?.registered.length||0)} registered</Status></span>
@@ -308,19 +322,22 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
             </div>
             {confirmLoad&&<div className="song-moss-confirm" role="group" aria-label="Confirm MOSS model loading">
               <strong>Load {(inventory?.registered||[]).find(item=>item.id===selectedModel)?.name||"selected model"}?</strong>
-              <label><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I approve running this model's custom code in the isolated WSL runtime.</label>
+              <label><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I approve this checkpoint's custom code in WSL. For installed verified checkpoints, approval is remembered until the checkpoint changes.</label>
               <div className="setting-controls">
                 <Button size="compact" variant="primary" disabled={busy||!approveCode} onClick={()=>void act(async()=>{
                   setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load-wsl","POST",{
                     model_id:selectedModel,distro:wslDistro,python_path:mossSetup?.runtime_python||wslPython,custom_code_approved:true
                   }));setConfirmLoad(false);setApproveCode(false);
+                  if(modelTrust?.persistent_trust_available)setModelTrust({...modelTrust,trusted:true});
                 })}>Confirm load</Button>
                 <Button size="compact" variant="secondary" onClick={()=>{setConfirmLoad(false);setApproveCode(false);}}>Cancel</Button>
               </div>
             </div>}
             {runtime?.status==="starting"&&<p role="status">Starting model. Readiness check pending...</p>}
             {runtime?.status==="connected"&&<p role="status">Connected to external WSL model. Disconnect leaves the external server running.</p>}
-            {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
+            {runtime?.status==="failed"&&<><p role="alert" className="error-message">{runtime.error}</p>
+              {modelDiagnostics?.log_path&&<details className="song-moss-diagnostics"><summary>Failure details</summary><div className="setting-path">Log: {modelDiagnostics.log_path}</div>
+                <pre>{modelDiagnostics.log_tail||"No process output captured."}</pre></details>}</>}
             {runtime?.status==="ready"&&<p role="status">Local model endpoint responding on port {runtime.port}. Audio inference not yet validated.</p>}
           </>}
         </div>

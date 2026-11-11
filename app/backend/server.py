@@ -82,6 +82,8 @@ for folder in (DATA_ROOT, MODEL_ROOT):
     folder.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Song Harbor local separator", docs_url=None, redoc_url=None)
+# Graceful API shutdown releases only Song Harbor-owned MOSS worker groups.
+app.add_event_handler("shutdown", moss_runtime.cleanup_on_exit)
 lock = threading.Lock()
 jobs: dict[str, dict[str, Any]] = {}
 active: dict[str, subprocess.Popen[str] | None] = {"process": None}

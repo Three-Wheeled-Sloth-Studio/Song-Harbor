@@ -42,7 +42,7 @@ def discover(app_root: Path, model_root: Path) -> dict:
         if not root.is_dir():
             continue
         for folder in [root] + [entry for entry in root.iterdir() if entry.is_dir() and not entry.is_symlink()][:80]:
-            for name in ("crispasr.exe", "crispasr"):
+            for name in ("crispasr.exe", "crispasr", "crispasr-cli.exe", "crispasr-cli"):
                 candidate = folder / name
                 if candidate.is_file() and not candidate.is_symlink():
                     binaries.append(str(candidate))
@@ -154,7 +154,7 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         handle = path.open("ab")
         # Exact local files only: no '-m auto', no network download, no project edits.
         cmd = [str(executable), "--backend", "moss-audio", "-m", str(model),
-               "-f", str(source), "--ask", prompt.strip()]
+               "-f", str(source), "--prompt", prompt.strip()]
         try:
             process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                        stdout=handle, stderr=subprocess.STDOUT,

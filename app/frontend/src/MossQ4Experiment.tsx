@@ -3,7 +3,7 @@ import {Button,Status} from "@tws-ui/core/react";
 
 type MixSource={projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>};
 type Q4Review={answer:string;slices:number|null;duration_seconds:number|null;warnings:string[];validated:boolean;aligned:boolean;format:string};
-type Q4Job={review?:Q4Review|null;state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string;run_id?:string|null;output_truncated?:boolean;output_path?:string|null};
+type Q4Job={snapshot?:{project_id:string;sha256:string;section_ids:string[];start_seconds:number;end_seconds:number}|null;review?:Q4Review|null;state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string;run_id?:string|null;output_truncated?:boolean;output_path?:string|null};
 type Q4Install={state:string;kind:string|null;message:string;error:string;downloaded_bytes:number;total_bytes:number;started:number|null;artifact:string;runtime_installed:boolean;model_installed:boolean;runtime_path:string;model_path:string};
 type Q4Discovery={executables:string[];models:string[];configured:{executable:string;model:string};experiment:string;job:Q4Job;installer:Q4Install};
 
@@ -193,7 +193,7 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
       {job?.state==="complete"&&<div role="status">Q4 finished processing. Musical claims are unverified.</div>}
       {job&&["complete","failed","cancelled"].includes(job.state)&&<div className="song-moss-confirm">
         <strong>Listening review (unverified)</strong>
-        <div className="setting-path">Source: {snapshot&&source!=="external"?"Active project "+snapshot.project_id+" | snapshot "+snapshot.sha256.slice(0,12):job.audio}{job.run_id?" | Run: "+job.run_id.slice(0,8):""}</div>
+        <div className="setting-path">Source: {job.snapshot?"Active project "+job.snapshot.project_id+" | snapshot "+job.snapshot.sha256.slice(0,12)+(job.snapshot.section_ids.length?" | selected section":""):job.audio}{job.run_id?" | Run: "+job.run_id.slice(0,8):""}</div>
         {job.output_truncated&&<p role="alert" className="error-message">ERROR: Output exceeded 2 MiB. Review is incomplete; inspect the per-run log. No verified analysis produced.</p>}
         {!!job.review?.slices&&<div role="status">{job.review.slices} model slices{job.review.duration_seconds?" | "+job.review.duration_seconds.toFixed(1)+"s source":""}. Not time-aligned.</div>}
         {job.review?.warnings.map((warning,i)=><p key={i}>{warning}</p>)}

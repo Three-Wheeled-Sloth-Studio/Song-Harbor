@@ -221,6 +221,9 @@ def _trust_fingerprint(record: dict) -> str | None:
             return None
         code_identity = {}
         for relative, metadata in data["inventory"].items():
+            # Older installer manifests included a staging marker removed at publish.
+            if relative == ".songharbor-staging.json":
+                continue
             if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
                 return None
             actual = (path / relative).resolve()

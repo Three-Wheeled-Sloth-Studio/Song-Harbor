@@ -6,6 +6,7 @@ download binaries/weights, or claim useful musical understanding before QA.
 from __future__ import annotations
 
 import json
+import re
 import os
 import subprocess
 import threading
@@ -16,7 +17,8 @@ from pathlib import Path
 LOCK = threading.RLock()
 _JOB = {"process": None, "log": None, "started": None, "state": "idle",
         "error": "", "result": "", "audio": "", "log_start": 0,
-        "run_file": None, "run_id": None, "output_truncated": False}
+        "run_file": None, "run_id": None, "output_truncated": False,
+        "review": None}
 MAX_AUDIO_BYTES = 200 * 1024 * 1024
 MAX_MODEL_BYTES = 16 * 1024**3
 TIMEOUT_SECONDS = 600
@@ -106,6 +108,44 @@ def _read_run_output(path: Path | None, limit: int = 2 * 1024 * 1024) -> tuple[s
     return raw[:limit].decode("utf-8", errors="replace"), size > limit
 
 
+
+def _review_output(raw: str) -> dict:
+    """Separate a CrispASR diagnostic transcript from its user-facing answer.
+
+    CrispASR's multi-slice output is unlabelled, so its merged answer must
+    NOT be represented as a single coherent caption or mapped to sections.
+    The original log is retained untouched for troubleshooting.
+    """
+    lines = raw.splitlines()
+    slice_count = None
+    duration = None
+    for line in lines:
+        matched = re.search(r"crispasr: processing (\\d+) slice\\(s\\)", line)
+        if matched:
+            slice_count = int(matched.group(1))
+        matched = re.search(r"crispasr: audio: .*?\\(([\\d.]+) s\\)", line)
+        if matched:
+            duration = float(matched.group(1))
+    # This marker precedes the complete merged model response in tested CLI
+    # builds. An absent marker must not cause debug output to be mislabelled.
+    boundaries = [i for i, line in enumerate(lines)
+                  if re.search(r"^crispasr: transcribed .*? audio in ", line)]
+    answer = "\\n".join(lines[boundaries[-1] + 1:]).strip() if boundaries else ""
+    warnings = []
+    if slice_count and slice_count > 1:
+        warnings.append(f"CrispASR processed {slice_count} overlapping/unlabelled slices; "
+                        "their combined response is not a section-aligned analysis.")
+    if not boundaries:
+        warnings.append("No recognized final-answer delimiter; inspect raw log.")
+    if re.search(r"(?:\\b[A-G](?:#|b)?(?:m|maj|dim|sus|7)?\\s*,\\s*){20,}", answer):
+        warnings.append("Long repeated chord sequence detected; harmonic claims require verification.")
+    if re.search(r"\\b(?:BPM|beats per minute)\\b", answer, flags=re.I):
+        warnings.append("Tempo claims are model estimates, not measured BPM.")
+    return {"answer": answer, "slices": slice_count, "duration_seconds": duration,
+            "warnings": warnings, "validated": False, "aligned": False,
+            "format": "crispasr-unsegmented-v1"}
+
+
 def status(app_root: Path) -> dict:
     with LOCK:
         process = _JOB["process"]
@@ -129,12 +169,14 @@ def status(app_root: Path) -> dict:
             _JOB["process"] = None
             result, truncated = _read_run_output(_JOB.get("run_file"))
             _JOB["result"] = result
+            _JOB["review"] = _review_output(result)
             _JOB["output_truncated"] = truncated
         return {"state": _JOB["state"], "error": _JOB["error"],
                 "elapsed_seconds": round(time.monotonic() - _JOB["started"]) if _JOB["state"] == "running" else None,
                 "log_path": str(_JOB["run_file"] or _log(app_root)),
                 "log_tail": _tail(_JOB["run_file"], 0) if _JOB.get("run_file") else "",
-                "result": _JOB["result"], "audio": _JOB["audio"],
+                "result": _JOB["result"], "review": _JOB.get("review"),
+                "audio": _JOB["audio"],
                 "run_id": _JOB.get("run_id"),
                 "output_truncated": _JOB.get("output_truncated", False),
                 "output_path": str(_JOB["run_file"]) if _JOB.get("run_file") else None}
@@ -202,6 +244,7 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         _JOB.update({"process": process, "log": None, "started": time.monotonic(),
                      "state": "running", "error": "", "result": "", "audio": str(source),
                      "run_file": run_file, "run_id": run_id, "output_truncated": False,
+                     "review": None,
                      "log_start": offset})
         threading.Thread(target=_watch_process, args=(app_root, process),
                          name="moss-q4-experiment-watchdog", daemon=True).start()

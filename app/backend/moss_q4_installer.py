@@ -183,7 +183,7 @@ def _download(url: str, path: Path, expected_size: int, digest: str) -> Path:
 
 def _install_runtime(root: Path, downloaded: Path) -> None:
     destination = _destination(root, "runtime")
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.parent.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         raise RuntimeError("CrispASR installation already present. Nothing overwritten.")
     with zipfile.ZipFile(downloaded) as archive:

@@ -1,7 +1,7 @@
 import {useEffect,useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
 
-type MixSource={projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>};
+type MixSource={projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>;sourceStems:{track_id:string;working_filename:string;display_name:string;gain:number;mute:boolean;solo:boolean}[]};
 type Q4Review={answer:string;slices:number|null;duration_seconds:number|null;warnings:string[];validated:boolean;aligned:boolean;format:string};
 type Q4Job={snapshot?:{project_id:string;sha256:string;section_ids:string[];start_seconds:number;end_seconds:number}|null;review?:Q4Review|null;state:string;error:string;elapsed_seconds:number|null;log_path:string;log_tail:string;result:string;audio:string;run_id?:string|null;output_truncated?:boolean;output_path?:string|null};
 type Q4Install={state:string;kind:string|null;message:string;error:string;downloaded_bytes:number;total_bytes:number;started:number|null;artifact:string;runtime_installed:boolean;model_installed:boolean;runtime_path:string;model_path:string};
@@ -77,6 +77,7 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
     form.append("project_id",mixSource.projectId);
     form.append("recipe_revision",revision);
     form.append("section_ids",JSON.stringify(selected.map(row=>row.id)));
+    form.append("source_stems",JSON.stringify(mixSource.sourceStems));
     if(selected.length){
       form.append("start_seconds",String(selected[0].start_seconds));
       form.append("end_seconds",String(selected[selected.length-1].end_seconds));

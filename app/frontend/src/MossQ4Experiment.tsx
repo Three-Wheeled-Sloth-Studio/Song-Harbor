@@ -36,6 +36,13 @@ export function MossQ4Experiment(){
     const timer=window.setInterval(()=>{void refresh().catch(e=>setError(String(e)));},2500);
     return ()=>window.clearInterval(timer);
   },[open,job?.state]);
+  async function browse(kind:"executable"|"model"|"audio"){
+    const result=await request<{path:string|null}>("/api/settings/models/q4/browse","POST",{kind});
+    if(!result.path)return;
+    if(kind==="executable")setBinary(result.path);
+    else if(kind==="model")setModel(result.path);
+    else setAudio(result.path);
+  }
   async function act(fn:()=>Promise<void>){
     setBusy(true);setError("");
     try{await fn();}catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -52,10 +59,12 @@ export function MossQ4Experiment(){
       <div className="setting-controls">
         <label className="setting-path">CrispASR executable
           <input aria-label="CrispASR executable path" list="moss-q4-binaries" value={binary} onChange={e=>setBinary(e.target.value)} placeholder="D:\\Apps\\...\\crispasr.exe"/>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(()=>browse("executable"))}>Browse executable</Button>
           <datalist id="moss-q4-binaries">{inventory?.executables.map(item=><option key={item} value={item}/>)}</datalist>
         </label>
         <label className="setting-path">MOSS-Audio Q4 GGUF
           <input aria-label="MOSS-Audio Q4 model path" list="moss-q4-models" value={model} onChange={e=>setModel(e.target.value)} placeholder="D:\\Apps\\...\\moss-audio-q4.gguf"/>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(()=>browse("model"))}>Browse GGUF</Button>
           <datalist id="moss-q4-models">{inventory?.models.map(item=><option key={item} value={item}/>)}</datalist>
         </label>
         <Button size="compact" variant="secondary" disabled={busy||!binary||!model||job?.state==="running"} onClick={()=>void act(async()=>{
@@ -67,6 +76,7 @@ export function MossQ4Experiment(){
       <div className="setting-controls">
         <label className="setting-path">Test WAV copy (not current project)
           <input aria-label="Q4 test WAV path" value={audio} onChange={e=>setAudio(e.target.value)} placeholder="D:\\Audio\\test-clip.wav"/>
+          <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(()=>browse("audio"))}>Browse WAV</Button>
         </label>
         <label className="setting-path">Audio question
           <textarea aria-label="Q4 audio question" value={prompt} maxLength={400} rows={2} onChange={e=>setPrompt(e.target.value)}/>

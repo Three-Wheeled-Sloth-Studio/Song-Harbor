@@ -101,3 +101,15 @@ Acceptance: at least one validated section-script suggestion and one accompanime
 - GPU/resource lifecycle with truthful busy, Cancel/Unload and errors. Never claim weights freed without checking actual worker termination.
 - Keep implementation and handoff in repository; no downloadable document needed.
 - Latest raw Q4 rerun result is *not yet available* in this handoff. Continue from it rather than inventing a quality verdict.
+
+
+## 2026-11-11 dev Slice A implementation (Windows QA pending)
+
+Source commits: `dbec7b5`, `d1e0f39`, `23d13e7`, `563b4ea`, `e5ff6ed`.
+
+- Reviewed uploaded `moss-q4-experiment.log` / per-run Q4 text: both contain nine independently processed audio slices, full final concatenated prose, and startup/tracing logs. Source duration reported 237.6s. Detected internally inconsistent descriptions and invented-sounding lyrics; **Q4 musical quality has not passed**. No actual source WAV or synchronized lyrics were available in this review for independent listening.
+- Backend `_review_output` separates post-`crispasr: transcribed ...` human text from the combined diagnostics, preserves the raw per-run output unchanged, records reported duration/slice count, labels model claims unvalidated/unaligned and flags repeated chord sequences and estimated tempo. It **does not** claim to reconstruct slice timestamps or align the captions. If the final delimiter is absent, final answer is intentionally empty with a warning rather than passing diagnostics as prose.
+- UI now uses the structured review and keeps raw output behind details. Installed-state setup is hidden by default; an action-local confirmation replaces the download approval checkbox. The scope remains **external WAV only**, clearly labeled. No automatic inference, project asset edit, or network download was added.
+- Added offline regression test `app/backend/tests/test_moss_q4_review.py` (not executed by connector). **TypeScript build, Python tests, and Windows live QA have not been run since these commits.** The user's prior clean build predates this change.
+- Next QA: refresh `dev`, check `tsc --noEmit`/Vite build and Python test, then inspect installed Q4 panel. Confirm no checkbox or installer actions on default view, advanced installation confirm, source/run identity, concise review, expandable raw diagnostics, cancellation, and missing-delimiter behavior. Rerun only if user deliberately initiates another test. The first-pass result still cannot justify enabling production suggestions.
+- Following accepted QA, proceed to Slice B active-project snapshot and SMU context pipeline.

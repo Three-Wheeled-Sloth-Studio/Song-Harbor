@@ -283,7 +283,7 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
                    linux_supervisor, "run", "--python", python_path,
                    "--model", linux_model, "--served", served,
                    "--port", str(PORT), "--cache", cache,
-                   "--state", linux_state]
+                   "--state", linux_state, "--distro", distro]
         try:
             process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
                                        stdout=log, stderr=subprocess.STDOUT,
@@ -394,3 +394,50 @@ def attach(app_root: Path, model_root: Path, identifier: str) -> dict:
             raise ValueError("ERROR: No matching MOSS service at localhost:18791. Set --served-model-name " + expected + ". Model not connected.")
         _ATTACHED.update({"id": identifier, "model_name": expected})
     return status()
+
+def orphan_status(app_root: Path) -> dict:
+    """Inspect only recorded worker identity; do not treat a file as live readiness."""
+    path = app_root / "logs" / "moss-wsl-worker.json"
+    if not path.is_file():
+        return {"present": False}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        served = payload.get("served")
+        distro = payload.get("distro")
+        if (not isinstance(served, str) or not served.startswith("songharbor-moss-")
+                or not isinstance(distro, str)):
+            raise ValueError("Invalid worker identity")
+        return {"present": True, "distro": distro, "model_id": served[len("songharbor-moss-"):],
+                "status": "unverified", "message": "Previous WSL worker state found. Release before loading another model."}
+    except (OSError, ValueError):
+        return {"present": True, "status": "unverified",
+                "message": "Unrecognized worker state. Do not delete or load until inspected."}
+
+
+def release_orphan(app_root: Path, approved: bool) -> dict:
+    if not approved:
+        raise ValueError("ERROR: Approve explicit release of the previous owned worker.")
+    info = orphan_status(app_root)
+    if not info.get("present"):
+        return {"released": True, "already_absent": True}
+    if not info.get("distro") or not info.get("model_id"):
+        raise ValueError("ERROR: Worker identity is unrecognized. No process terminated.")
+    with LOCK:
+        if _ACTIVE["process"] is not None and _ACTIVE["process"].poll() is None:
+            raise ValueError("ERROR: Managed worker is active. Use Unload instead.")
+        distro = info["distro"]
+        served = "songharbor-moss-" + info["model_id"]
+        path = app_root / "logs" / "moss-wsl-worker.json"
+        script = wsl_model_bridge.linux_path(distro, str(Path(__file__).with_name("moss_wsl_supervisor.py")))
+        linux_root = wsl_model_bridge.linux_path(distro, str(app_root))
+        result = subprocess.run(["wsl.exe", "-d", distro, "--exec", "python3", script,
+                                 "stop", "--state", linux_root + "/logs/moss-wsl-worker.json",
+                                 "--served", served], capture_output=True, text=True,
+                                timeout=25, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if result.returncode or path.exists():
+            raise RuntimeError("ERROR: Previous WSL worker release not confirmed: "
+                               + (result.stderr or result.stdout or "Worker state remains.")[-500:])
+        if _probe(served):
+            raise RuntimeError("ERROR: Model endpoint still responds after orphan release.")
+        return {"released": True, "model_id": info["model_id"], "worker_group_exited": True,
+                "gpu_memory_release": "process exited; driver memory reclamation not measured"}

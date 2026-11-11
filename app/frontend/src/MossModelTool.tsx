@@ -32,7 +32,10 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         api<Runtime>("/api/settings/models/runtime"),
         api<{distros:string[]}>("/api/settings/models/wsl")
       ]);
-      const valid=inventory.registered.filter(item=>item.status==="present-unverified");
+      const valid=inventory.registered.filter(item=>item.status==="present-unverified").sort((a,b)=>{
+        const rank=(name:string)=>name.toLowerCase().includes("audio-4b")?0:1;
+        return rank(a.name)-rank(b.name);
+      });
       setModels(valid);setModel(current=>valid.some(x=>x.id===current)?current:valid[0]?.id||"");
       setRuntime(rt);
       setDistro(current=>distros.distros.includes(current)?current:distros.distros[0]||"");

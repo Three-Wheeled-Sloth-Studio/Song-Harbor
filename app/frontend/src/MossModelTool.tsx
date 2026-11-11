@@ -20,7 +20,7 @@ async function api<T>(path:string,method="GET",body?:object):Promise<T>{
 }
 
 /** In-workbench model control. Never edits song state or triggers inference. */
-export function MossModelTool({onConfigure,mixSource}:{onConfigure:()=>void;mixSource?:{projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>}}){
+export function MossModelTool({onConfigure,mixSource}:{onConfigure:()=>void;mixSource?:{projectId:string;sections:{id:string;kind:string;number:number|null;start_seconds:number;end_seconds:number}[];render:()=>Promise<Blob>;sourceStems:{track_id:string;working_filename:string;display_name:string;gain:number;mute:boolean;solo:boolean}[]}}){
   const [models,setModels]=useState<Model[]>([]);
   const [model,setModel]=useState("");
   const [distro,setDistro]=useState("");

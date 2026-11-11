@@ -89,6 +89,16 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
   }
   useEffect(()=>{
+    if(!open||!wslDistro)return;
+    let alive=true;
+    void response<MossSetup>("/api/settings/models/setup?distro="+encodeURIComponent(wslDistro),"GET").then(next=>{
+      if(!alive)return;
+      setMossSetup(next);
+      if(next.runtime_python)setWslPython(current=>current||next.runtime_python);
+    }).catch(e=>{if(alive)setError(String(e));});
+    return ()=>{alive=false;};
+  },[open,wslDistro]);
+  useEffect(()=>{
     if(!open||!showModels||runtime?.status!=="starting")return;
     const handle=window.setInterval(()=>{void refreshModels();},3000);
     return ()=>window.clearInterval(handle);

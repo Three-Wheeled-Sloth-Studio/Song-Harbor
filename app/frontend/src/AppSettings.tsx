@@ -85,7 +85,7 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
         response<ModelRuntime>("/api/settings/models/runtime","GET")
       ]);
       setInventory(found);setRuntime(state);
-      setSelectedModel(current=>found.registered.some(item=>item.id===current&&item.status==="present-unverified")?current:found.registered.find(item=>item.status==="present-unverified")?.id||"");
+      setSelectedModel(current=>found.registered.some(item=>item.id===current&&item.status==="present-unverified")?current:(found.registered.find(item=>item.status==="present-unverified"&&item.name.toLowerCase().includes("audio-4b"))||found.registered.find(item=>item.status==="present-unverified"))?.id||"");
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
   }
   useEffect(()=>{

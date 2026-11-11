@@ -8,6 +8,7 @@ import threading
 from pathlib import Path
 
 import model_registry
+import app_logs
 import wsl_model_bridge
 
 _LOCK = threading.RLock()
@@ -42,7 +43,7 @@ def status(app_root: Path, model_root: Path, distro: str | None = None) -> dict:
             if code == 0:
                 _JOB["error"] = ""
             else:
-                log_tail = _log_tail(model_root / ".song-harbor" / "logs" / "moss-setup.log")
+                log_tail = _log_tail(app_logs.log_path(app_root, "moss-setup.log"))
                 failures = [line.removeprefix("ERROR: ").strip() for line in log_tail.splitlines() if line.startswith("ERROR: ")]
                 message = failures[-1] if failures else "Installer exited unsuccessfully. Inspect installation log."
                 _JOB["error"] = "ERROR: " + message[:600] + " Model runtime not installed."
@@ -104,9 +105,7 @@ def start(app_root: Path, model_root: Path, distro: str,
     with _LOCK:
         if _JOB["process"] is not None and _JOB["process"].poll() is None:
             raise ValueError("ERROR: MOSS setup already running. No duplicate installation.")
-        logdir = model_root / ".song-harbor" / "logs"
-        logdir.mkdir(parents=True, exist_ok=True)
-        log = (logdir / "moss-setup.log").open("ab")
+        log = app_logs.open_log(app_root, "moss-setup.log")
         command = ["wsl.exe", "-d", distro, "--exec", "python3",
                    script, operation, linux_root, model or "none"]
         try:

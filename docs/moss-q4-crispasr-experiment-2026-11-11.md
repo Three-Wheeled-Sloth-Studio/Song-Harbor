@@ -18,13 +18,13 @@ automatic download, model conversion, CLI installation or inference at startup.
   section with Open/Hide; the existing OpenMOSS/SGLang model control is unchanged.
 - Bounded path discovery in configured shared model directories and tools folders.
   Supports both `crispasr.exe` and `crispasr-cli.exe` executable names.
-- Explicit local executable and model selection. Verifies file presence, GGUF
+- Explicit local executable and model selection with native Windows Browse pickers. Verifies file presence, GGUF
   header and Q4 MOSS-Audio name before saving configuration. This **does not**
   authenticate or prove the model's architecture; only model-source review and
   actual inference will do that.
 - Direct links in the tool to the runtime releases and model publisher. User
   obtains these separately for now; no hidden multi-GB downloads.
-- Explicit user-provided local WAV *test copy*, separate from the active project.
+- Explicit user-provided local WAV *test copy*, separate from the active project, selected through Browse or a pasted path.
   Verifies WAV header, file size <=200MB, nonempty question <=400 chars and
   per-run approval. Runs a fixed argument-vector `crispasr --backend moss-audio
   -m <absolute-gguf> -f <absolute-wav> --prompt <question>`, **never**

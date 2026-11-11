@@ -132,11 +132,25 @@ def run(args: argparse.Namespace) -> int:
     try:
         return child.wait()
     finally:
-        # If the server exits independently, clean up its remaining children too.
+        # Child has been reaped. Its process-group identifier is still ours, but
+        # the leader no longer exists; do not use _record() (which needs leader).
+        # We observed the group ownership at process creation in this process.
         if _group_alive(child.pid):
-            stop(path, args.served)
-        else:
-            path.unlink(missing_ok=True)
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+                deadline = time.monotonic() + 12
+                while _group_alive(child.pid) and time.monotonic() < deadline:
+                    time.sleep(0.2)
+                if _group_alive(child.pid):
+                    os.killpg(child.pid, signal.SIGKILL)
+                    deadline = time.monotonic() + 6
+                    while _group_alive(child.pid) and time.monotonic() < deadline:
+                        time.sleep(0.2)
+                if _group_alive(child.pid):
+                    print("ERROR: Orphaned model worker group remains. Cleanup not verified.", flush=True)
+            except (OSError, ProcessLookupError) as exc:
+                print("ERROR: Model worker cleanup uncertain: " + str(exc), flush=True)
+        path.unlink(missing_ok=True)
 
 
 def main() -> int:

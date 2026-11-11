@@ -1,5 +1,6 @@
 """Snapshot validation without a running Q4 model or Song Harbor server."""
 import io
+import hashlib
 import json
 import tempfile
 import unittest
@@ -27,7 +28,7 @@ class SnapshotTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             result=snapshots.create(root,io.BytesIO(source),project_id="song",
-                recipe_revision="mixhash",section_ids=["chorus-1"],
+                recipe_revision=hashlib.sha256(source).hexdigest(),section_ids=["chorus-1"],
                 start_seconds=.5,end_seconds=1.5)
             loaded=snapshots.read(root,result["snapshot_id"])
             self.assertEqual(loaded["sha256"],result["sha256"])
@@ -44,8 +45,9 @@ class SnapshotTests(unittest.TestCase):
     def test_corrupted_snapshot_detected(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            result=snapshots.create(root,io.BytesIO(wave_bytes()),project_id="song",
-                recipe_revision="mixhash",section_ids=[],
+            source=wave_bytes()
+            result=snapshots.create(root,io.BytesIO(source),project_id="song",
+                recipe_revision=hashlib.sha256(source).hexdigest(),section_ids=[],
                 start_seconds=None,end_seconds=None)
             audio=root/"cache"/"moss-q4-snapshots"/(result["snapshot_id"]+".wav")
             with audio.open("ab") as stream:

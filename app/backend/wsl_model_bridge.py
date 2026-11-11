@@ -131,3 +131,20 @@ def libnuma_status(distro: str) -> dict:
                 "message": "Missing Ubuntu library libnuma.so.1 (package libnuma1)."}
     return {"ready": False, "missing_package": None,
             "message": "WSL dependency probe failed; check WSL Python before loading."}
+
+
+def gpu_memory(distro: str) -> dict:
+    """Read-only GPU capacity snapshot; never an inference or model operation."""
+    validate_distro(distro)
+    result = _run(["wsl.exe", "-d", distro, "--exec", "nvidia-smi",
+                   "--query-gpu=memory.total,memory.free", "--format=csv,noheader,nounits"], timeout=12)
+    if result.returncode:
+        return {"verified": False, "total_mib": None, "free_mib": None}
+    try:
+        first = result.stdout.strip().splitlines()[0]
+        total, free = [int(x.strip()) for x in first.split(",")[:2]]
+        if not (total > 0 and 0 <= free <= total):
+            raise ValueError("GPU memory report invalid")
+        return {"verified": True, "total_mib": total, "free_mib": free}
+    except (ValueError, IndexError):
+        return {"verified": False, "total_mib": None, "free_mib": None}

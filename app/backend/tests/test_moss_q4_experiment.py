@@ -54,6 +54,25 @@ class Q4ExperimentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "GGUF header"):
             q4.configure(self.root, str(self.binary), str(self.model))
 
+    def test_run_result_keeps_beginning_and_flags_oversize(self):
+        output = self.root / "moss-q4-one-run.txt"
+        output.write_text("Opening sentence.\n" + "x" * 9000, encoding="utf-8")
+        whole, oversized = q4._read_run_output(output)
+        self.assertTrue(whole.startswith("Opening sentence."))
+        self.assertFalse(oversized)
+        limited, truncated = q4._read_run_output(output, 100)
+        self.assertTrue(limited.startswith("Opening sentence."))
+        self.assertTrue(truncated)
+
+    def test_separate_runs_do_not_inherit_previous_output(self):
+        first = self.root / "moss-q4-first.txt"
+        second = self.root / "moss-q4-second.txt"
+        first.write_text("Prior analysis of an unrelated song")
+        second.write_text("Fresh opening. A test clip")
+        result, truncated = q4._read_run_output(second)
+        self.assertEqual(result, "Fresh opening. A test clip")
+        self.assertFalse(truncated)
+
     def test_rejects_non_wav_without_execution(self):
         q4.configure(self.root, str(self.binary), str(self.model))
         self.audio.write_bytes(b"NOPE" + bytes(128))

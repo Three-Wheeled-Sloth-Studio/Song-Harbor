@@ -370,6 +370,24 @@ def open_song_harbor_logs(request: Request) -> dict[str, Any]:
     except (OSError, RuntimeError) as exc:
         raise HTTPException(400, "ERROR: Unable to open Song Harbor logs folder.") from exc
 
+class ReleaseMossWorkerRequest(BaseModel):
+    approved: bool = False
+
+
+@app.get("/api/settings/models/runtime/orphan")
+def moss_wsl_worker_recovery_status() -> dict[str, Any]:
+    return moss_runtime.orphan_status(APP_ROOT)
+
+
+@app.post("/api/settings/models/runtime/orphan/release")
+def release_orphaned_wsl_moss(body: ReleaseMossWorkerRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.release_orphan(APP_ROOT, body.approved)
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @app.get("/api/settings/models/runtime/diagnostics")
 def moss_runtime_diagnostics() -> dict[str, Any]:
     return moss_runtime.diagnostics()

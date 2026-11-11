@@ -21,10 +21,12 @@ import wsl_model_bridge
 import app_logs
 
 LOCK = threading.RLock()
-_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None, "worker_state": None, "supervisor": None}
+_ACTIVE = {"process": None, "id": None, "started_at": None, "error": "", "log": None, "model_name": None, "kind": None, "distro": None, "worker_state": None, "supervisor": None, "ready_at": None, "last_used": None}
 _ATTACHED = {"id": None, "model_name": None}
 PORT = 18791
 STARTUP_TIMEOUT_SECONDS = 900
+IDLE_UNLOAD_SECONDS = 600
+_WATCHDOG: threading.Thread | None = None
 _LOG_PATH: Path | None = None
 
 
@@ -68,6 +70,49 @@ def _probe(expected_name: str | None = None) -> bool:
         return False
 
 
+def _startup_phase() -> str:
+    text = _tail(_LOG_PATH, 4000).lower()
+    if "cuda graph" in text or "cudagraph" in text:
+        return "Preparing CUDA graphs"
+    if "loading weight" in text or "load_weight" in text or "load model" in text:
+        return "Loading checkpoint"
+    if "scheduler" in text:
+        return "Initializing scheduler"
+    return "Initializing runtime"
+
+
+def _start_watchdog() -> None:
+    global _WATCHDOG
+    if _WATCHDOG is not None and _WATCHDOG.is_alive():
+        return
+    _WATCHDOG = threading.Thread(target=_idle_watchdog, name="moss-model-idle-release", daemon=True)
+    _WATCHDOG.start()
+
+
+def _idle_watchdog() -> None:
+    while True:
+        time.sleep(20)
+        with LOCK:
+            if _ACTIVE["process"] is None:
+                return
+            try:
+                snapshot = status()
+                if snapshot["status"] == "ready":
+                    last = _ACTIVE.get("last_used")
+                    if last is not None and time.monotonic() - last >= IDLE_UNLOAD_SECONDS:
+                        unload()
+            except Exception as exc:
+                _ACTIVE["error"] = "ERROR: Automatic MOSS idle cleanup failed: " + str(exc)
+
+
+def mark_model_used(model_id: str) -> None:
+    """Reserved for actual audio requests, never triggered by UI status polls."""
+    with LOCK:
+        if _ACTIVE["id"] != model_id or _ACTIVE["process"] is None:
+            raise ValueError("ERROR: MOSS model not loaded.")
+        _ACTIVE["last_used"] = time.monotonic()
+
+
 def status() -> dict:
     with LOCK:
         process = _ACTIVE["process"]
@@ -101,6 +146,9 @@ def status() -> dict:
                 _ACTIVE["log"] = None
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
         ready = _probe(_ACTIVE["model_name"])
+        if ready and _ACTIVE.get("ready_at") is None:
+            _ACTIVE["ready_at"] = time.monotonic()
+            _ACTIVE["last_used"] = _ACTIVE["ready_at"]
         if not ready and time.time() - _ACTIVE["started_at"] > STARTUP_TIMEOUT_SECONDS:
             try:
                 _stop_process(process)
@@ -113,9 +161,13 @@ def status() -> dict:
                 _ACTIVE["log"] = None
             _ACTIVE["error"] = "ERROR: MOSS was not ready after 15 minutes. Owned worker shutdown requested. Model not loaded."
             return {"status": "failed", "model_id": _ACTIVE["id"], "error": _ACTIVE["error"]}
+        elapsed = max(0, round(time.time() - (_ACTIVE["started_at"] or time.time())))
         return {"status": "ready" if ready else "starting", "model_id": _ACTIVE["id"],
-                "started_at": _ACTIVE["started_at"], "error": "",
-                "port": PORT}
+                "started_at": _ACTIVE["started_at"], "elapsed_seconds": elapsed,
+                "startup_timeout_seconds": STARTUP_TIMEOUT_SECONDS,
+                "phase": "Ready" if ready else _startup_phase(),
+                "idle_unload_seconds": IDLE_UNLOAD_SECONDS if ready else None,
+                "error": "", "port": PORT}
 
 
 def load(app_root: Path, model_root: Path, identifier: str, python_executable: str,
@@ -241,8 +293,9 @@ def load_wsl(app_root: Path, model_root: Path, identifier: str, distro: str,
             raise
         _ACTIVE.update({"process": process, "id": identifier, "started_at": time.time(),
                         "error": "", "log": log, "model_name": served,
-                        "kind": "wsl", "distro": distro,
+                        "kind": "wsl", "distro": distro, "ready_at": None, "last_used": None,
                         "worker_state": state, "supervisor": linux_supervisor})
+        _start_watchdog()
     return status()
 
 
@@ -317,6 +370,8 @@ def unload() -> dict:
         _ACTIVE["process"] = None
         _ACTIVE["id"] = None
         _ACTIVE["error"] = ""
+        _ACTIVE["last_used"] = None
+        _ACTIVE["ready_at"] = None
         if _ACTIVE["log"] is not None:
             _ACTIVE["log"].close()
             _ACTIVE["log"] = None

@@ -163,3 +163,15 @@ Priorities after this QA:
 2. Reduce prompt scope for short clips to **only what is audible in this excerpt**, prohibit guesses about unseen intro, bridge and chorus, distinguish quoted/transcribed lyrics from provided authored lyrics.
 3. Compare output with persisted section text/lyrics, current track identities, optional scored MIDI, and deterministic DSP; tag heard/derived/intended/unverified separately using SMU v0.
 4. Continue Slice B parity/source checks before declaring active mix integration fully validated.
+
+
+### 2026-11-11 human verification of Verse 1 observations
+User ground-truth notes for the track:
+- Female lead vocal: **confirmed accurate**, especially Verse 1.
+- Atmosphere/arrangement: **confirmed** largely atmospheric, sparse and restrained; drums become aggressive at some points elsewhere.
+- MOSS's 111 BPM: **not verified**. User states the piece has several tempo changes. Measure local tempo and build a section/time-positioned tempo map rather than asserting one song-wide BPM. Guard against half-time/double-time interpretations; record confidence and ambiguous pulse.
+- A minor and specific chords: **plausible but unverified**; defer to MIDI/harmonic measurement, including confidence and polyphonic limitations.
+- Clean electric guitar and synth: **questionable**. Very little on the recording is clean apart from vocals. Prefer source-neutral sound-texture observations until stem identity and instrumentation are verified; a processed texture resembling guitar is not proof of clean guitar.
+- Quoted lyrics: **unverified** until compared with authored section lyrics.
+
+Use these as human-authored validation annotations in the future SMU observation/correction layer. Preserve original model observations and record confirmations/uncertainty independently; do not rewrite MOSS text or mark all inferred details as confirmed. No new inference or automatic project modifications authorized by this feedback.

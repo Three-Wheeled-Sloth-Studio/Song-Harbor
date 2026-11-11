@@ -22,6 +22,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
   const [runtime,setRuntime]=useState<Runtime|null>(null);
   const [setup,setSetup]=useState<Setup|null>(null);
   const [approved,setApproved]=useState(false);
+  const [confirmLoad,setConfirmLoad]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const refresh=useCallback(async()=>{
@@ -60,7 +61,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         {runtime?.status||"Checking"}
       </Status></div>
     <div className="setting-controls">
-      <select aria-label="MOSS model" value={model} onChange={e=>setModel(e.target.value)}>
+      <select aria-label="MOSS model" value={model} onChange={e=>{setModel(e.target.value);setConfirmLoad(false);setApproved(false);}}>
         {!models.length&&<option value="">No installed MOSS models</option>}
         {models.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
       </select>
@@ -72,21 +73,28 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         setRuntime(await api<Runtime>("/api/settings/models/runtime/unload","POST"));
       })}>{runtime?.status==="connected"?"Disconnect":"Unload MOSS"}</Button>
     </div>:<>
-      <label className="setting-tool-row"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>
-        Approve execution of this checkpoint's reviewed model code</label>
       <Button size="compact" variant="primary"
-        disabled={busy||!approved||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed}
-        onClick={()=>void act(async()=>{
-          setRuntime(await api<Runtime>("/api/settings/models/runtime/load-wsl","POST",{
-            model_id:model,distro,python_path:setup?.runtime_python,custom_code_approved:approved
-          }));
-          setApproved(false);
-        })}>Load MOSS</Button>
+        disabled={busy||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed}
+        onClick={()=>setConfirmLoad(true)}>Load MOSS</Button>
+      {confirmLoad&&<div className="song-moss-confirm" role="group" aria-label="Confirm MOSS model loading">
+        <strong>Load {models.find(item=>item.id===model)?.name||"selected MOSS model"}?</strong>
+        <label><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)}/>
+          I approve running this checkpoint's custom code in WSL.</label>
+        <div className="setting-controls">
+          <Button size="compact" variant="primary" disabled={busy||!approved} onClick={()=>void act(async()=>{
+            setRuntime(await api<Runtime>("/api/settings/models/runtime/load-wsl","POST",{
+              model_id:model,distro,python_path:setup?.runtime_python,custom_code_approved:true
+            }));
+            setApproved(false);setConfirmLoad(false);
+          })}>Confirm load</Button>
+          <Button size="compact" variant="secondary" onClick={()=>{setConfirmLoad(false);setApproved(false);}}>Cancel</Button>
+        </div>
+      </div>}
     </>}
     {!models.length&&<div className="setting-path" role="status">Install or register a model in Settings to enable Load.</div>}
     {!!models.length&&!setup?.runtime_installed&&<div className="setting-path" role="status">Install the MOSS WSL runtime in Settings before loading.</div>}
     {runtime?.status==="ready"&&<div role="status">Model service ready. Audio listening is not connected yet.</div>}
-    {runtime?.status==="starting"&&<div role="status">Starting model service...</div>}
+    {runtime?.status==="starting"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Starting model service...</div>}
     {error&&<p role="alert" className="error-message">{error}</p>}
     {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
   </div>;

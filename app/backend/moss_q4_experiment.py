@@ -9,12 +9,14 @@ import json
 import os
 import subprocess
 import threading
+import uuid
 import time
 from pathlib import Path
 
 LOCK = threading.RLock()
 _JOB = {"process": None, "log": None, "started": None, "state": "idle",
-        "error": "", "result": "", "audio": "", "log_start": 0}
+        "error": "", "result": "", "audio": "", "log_start": 0,
+        "run_file": None, "run_id": None, "output_truncated": False}
 MAX_AUDIO_BYTES = 200 * 1024 * 1024
 MAX_MODEL_BYTES = 16 * 1024**3
 TIMEOUT_SECONDS = 600
@@ -90,6 +92,20 @@ def _log(app_root: Path) -> Path:
     return app_root / "logs" / "moss-q4-experiment.log"
 
 
+def _read_run_output(path: Path | None, limit: int = 2 * 1024 * 1024) -> tuple[str, bool]:
+    """Keep a complete single-run response or mark it explicitly truncated.
+
+    Never slice from the end of model output: that drops the opening sentence
+    and makes a mid-word fragment look like a complete musical observation.
+    """
+    if path is None or not path.is_file():
+        return "", False
+    size = path.stat().st_size
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    return raw[:limit].decode("utf-8", errors="replace"), size > limit
+
+
 def status(app_root: Path) -> dict:
     with LOCK:
         process = _JOB["process"]
@@ -111,11 +127,17 @@ def status(app_root: Path) -> dict:
                 _JOB["log"].close()
                 _JOB["log"] = None
             _JOB["process"] = None
-            _JOB["result"] = _tail(_log(app_root), _JOB["log_start"])
+            result, truncated = _read_run_output(_JOB.get("run_file"))
+            _JOB["result"] = result
+            _JOB["output_truncated"] = truncated
         return {"state": _JOB["state"], "error": _JOB["error"],
                 "elapsed_seconds": round(time.monotonic() - _JOB["started"]) if _JOB["state"] == "running" else None,
-                "log_path": str(_log(app_root)), "log_tail": _tail(_log(app_root), _JOB["log_start"]),
-                "result": _JOB["result"], "audio": _JOB["audio"]}
+                "log_path": str(_JOB["run_file"] or _log(app_root)),
+                "log_tail": _tail(_JOB["run_file"], 0) if _JOB.get("run_file") else "",
+                "result": _JOB["result"], "audio": _JOB["audio"],
+                "run_id": _JOB.get("run_id"),
+                "output_truncated": _JOB.get("output_truncated", False),
+                "output_path": str(_JOB["run_file"]) if _JOB.get("run_file") else None}
 
 
 def _tail(path: Path, offset: int, limit: int = 5000) -> str:
@@ -162,19 +184,24 @@ def start(app_root: Path, audio: str, prompt: str, approved: bool) -> dict:
         path = _log(app_root)
         path.parent.mkdir(parents=True, exist_ok=True)
         offset = path.stat().st_size if path.exists() else 0
-        handle = path.open("ab")
+        run_id = uuid.uuid4().hex
+        run_file = path.parent / ("moss-q4-" + run_id + ".txt")
         # Exact local files only: no '-m auto', no network download, no project edits.
         cmd = [str(executable), "--backend", "moss-audio", "-m", str(model),
                "-f", str(source), "--prompt", prompt.strip()]
+        handle = run_file.open("xb")
         try:
             process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
                                        stdout=handle, stderr=subprocess.STDOUT,
                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except Exception:
             handle.close()
+            run_file.unlink(missing_ok=True)
             raise
-        _JOB.update({"process": process, "log": handle, "started": time.monotonic(),
+        handle.close()  # child retains its own output descriptor
+        _JOB.update({"process": process, "log": None, "started": time.monotonic(),
                      "state": "running", "error": "", "result": "", "audio": str(source),
+                     "run_file": run_file, "run_id": run_id, "output_truncated": False,
                      "log_start": offset})
         threading.Thread(target=_watch_process, args=(app_root, process),
                          name="moss-q4-experiment-watchdog", daemon=True).start()

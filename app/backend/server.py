@@ -52,6 +52,7 @@ import stem_import
 import track_lifecycle
 import declick_recipes
 import midi_arrangements
+import tempo_maps
 import midi_section_slices
 import midi_section_composite
 import polyphonic_midi
@@ -1730,6 +1731,61 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
         return out
     except (ValueError,OSError,subprocess.TimeoutExpired) as exc:
         raise HTTPException(400,str(exc)) from exc
+
+
+class TempoMapCreateRequest(BaseModel):
+    duration_samples: int = Field(ge=1, le=48000 * 3600)
+
+
+class TempoMapUpdateRequest(BaseModel):
+    asset_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    base_revision: int = Field(ge=0)
+    anchors: list[dict[str, Any]] | None = None
+    observations: list[dict[str, Any]] | None = None
+
+
+@app.get("/api/projects/{ident}/tempo-map")
+def get_project_tempo_map(ident: str) -> dict[str, Any]:
+    _ace_project(ident)
+    asset = tempo_maps.read(DATA_ROOT / "jobs" / ident)
+    return {"asset": asset, "exists": asset is not None}
+
+
+@app.post("/api/projects/{ident}/tempo-map")
+def create_project_tempo_map(ident: str, body: TempoMapCreateRequest,
+                             request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    _ace_project(ident)
+    folder = DATA_ROOT / "jobs" / ident
+    with lock:
+        if tempo_maps.read(folder) is not None:
+            raise HTTPException(409, "ERROR: Tempo map already exists. Reload before editing.")
+        try:
+            return tempo_maps.save(folder, tempo_maps.create(body.duration_samples),
+                                   expected_revision=None)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
+@app.patch("/api/projects/{ident}/tempo-map")
+def update_project_tempo_map(ident: str, body: TempoMapUpdateRequest,
+                             request: Request) -> dict[str, Any]:
+    """Explicit author edits only; observations are never auto-promoted to anchors."""
+    require_local_origin(request)
+    _ace_project(ident)
+    folder = DATA_ROOT / "jobs" / ident
+    with lock:
+        current = tempo_maps.read(folder)
+        if current is None:
+            raise HTTPException(404, "ERROR: Create the project tempo map first.")
+        if current["asset_id"] != body.asset_id or current["revision"] != body.base_revision:
+            raise HTTPException(409, "ERROR: Stale tempo map. Reload before editing.")
+        try:
+            changed = tempo_maps.revise(current, body.base_revision,
+                                         anchors=body.anchors, observations=body.observations)
+            return tempo_maps.save(folder, changed, expected_revision=body.base_revision)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
 
 class MidiArrangementFromCandidateRequest(BaseModel):

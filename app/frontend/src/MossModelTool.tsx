@@ -7,6 +7,7 @@ type Runtime={status:string;model_id:string|null;error:string;port?:number};
 type Setup={state:string;runtime_installed:boolean;runtime_python:string;error:string};
 type Trust={model_id:string;trusted:boolean;persistent_trust_available:boolean};
 type Diagnostics={log_path:string|null;log_tail:string;runtime_kind:string|null;model_id:string|null};
+type DependencyStatus={dependencies:{ready:boolean;missing_package:string|null;message:string};repair:{state:string;error:string};repair_log_path:string};
 
 async function api<T>(path:string,method="GET",body?:object):Promise<T>{
   const response=await fetch(path,{method,headers:body?{"Content-Type":"application/json"}:undefined,
@@ -26,6 +27,8 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
   const [approved,setApproved]=useState(false);
   const [trust,setTrust]=useState<Trust|null>(null);
   const [diagnostics,setDiagnostics]=useState<Diagnostics|null>(null);
+  const [dependency,setDependency]=useState<DependencyStatus|null>(null);
+  const [confirmRepair,setConfirmRepair]=useState(false);
   const [confirmLoad,setConfirmLoad]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -61,6 +64,19 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
   },[runtime?.status,runtime?.error]);
   useEffect(()=>{
     if(!distro)return;
+    void api<DependencyStatus>("/api/settings/models/wsl/dependencies?distro="+encodeURIComponent(distro)).then(setDependency)
+      .catch(e=>setError(e instanceof Error?e.message:String(e)));
+  },[distro]);
+  useEffect(()=>{
+    if(!distro||dependency?.repair.state!=="running")return;
+    const handle=window.setInterval(()=>{
+      void api<DependencyStatus>("/api/settings/models/wsl/dependencies?distro="+encodeURIComponent(distro))
+        .then(setDependency).catch(e=>setError(e instanceof Error?e.message:String(e)));
+    },2500);
+    return ()=>window.clearInterval(handle);
+  },[distro,dependency?.repair.state]);
+  useEffect(()=>{
+    if(!distro)return;
     void api<Setup>("/api/settings/models/setup?distro="+encodeURIComponent(distro)).then(setSetup)
       .catch(e=>setError(e instanceof Error?e.message:String(e)));
   },[distro]);
@@ -94,7 +110,7 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
       })}>{runtime?.status==="connected"?"Disconnect":"Unload MOSS"}</Button>
     </div>:<>
       <Button size="compact" variant="primary"
-        disabled={busy||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed}
+        disabled={busy||!model||!distro||!setup?.runtime_python||!setup?.runtime_installed||dependency?.dependencies.ready===false}
         onClick={()=>{if(trust?.trusted){void act(async()=>{setRuntime(await api<Runtime>("/api/settings/models/runtime/load-wsl","POST",{model_id:model,distro,python_path:setup?.runtime_python,custom_code_approved:false}));});}else{setConfirmLoad(true);}}}>Load MOSS</Button>
       {confirmLoad&&<div className="song-moss-confirm" role="group" aria-label="Confirm MOSS model loading">
         <strong>Trust and load {models.find(item=>item.id===model)?.name||"selected MOSS model"}?</strong>
@@ -112,6 +128,26 @@ export function MossModelTool({onConfigure}:{onConfigure:()=>void}){
         </div>
       </div>}
     </>}
+    {dependency&&!dependency.dependencies.ready&&<div className="song-moss-confirm" role="group" aria-label="WSL missing dependency">
+      <strong>{dependency.dependencies.missing_package==="libnuma1"?"Missing Ubuntu dependency: libnuma1":"WSL dependency check failed"}</strong>
+      <span>{dependency.dependencies.message}</span>
+      {dependency.dependencies.missing_package==="libnuma1"&&dependency.repair.state!=="running"&&<>
+        {!confirmRepair?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>setConfirmRepair(true)}>Repair dependency</Button>:
+        <>
+          <span>Install the Ubuntu system package libnuma1 using WSL root? No model files or songs will be modified.</span>
+          <div className="setting-controls">
+            <Button size="compact" variant="primary" disabled={busy} onClick={()=>void act(async()=>{
+              const result=await api<{state:string;error:string}>("/api/settings/models/wsl/dependencies/repair","POST",{distro,approved:true});
+              setDependency(previous=>previous?{...previous,repair:result}:previous);setConfirmRepair(false);
+            })}>Install libnuma1</Button>
+            <Button size="compact" variant="secondary" onClick={()=>setConfirmRepair(false)}>Cancel</Button>
+          </div>
+        </>}
+      </>}
+      {dependency.repair.state==="running"&&<div role="status" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/> Installing libnuma1 in WSL...</div>}
+      {dependency.repair.state==="failed"&&<div role="alert" className="error-message">{dependency.repair.error} Log: {dependency.repair_log_path}</div>}
+      {dependency.repair.state==="completed"&&!dependency.dependencies.ready&&<div role="status">Verifying dependency installation...</div>}
+    </div>}
     {!models.length&&<div className="setting-path" role="status">Install or register a model in Settings to enable Load.</div>}
     {!!models.length&&!setup?.runtime_installed&&<div className="setting-path" role="status">Install the MOSS WSL runtime in Settings before loading.</div>}
     {runtime?.status==="ready"&&<div role="status">Model service ready. Audio listening is not connected yet.</div>}

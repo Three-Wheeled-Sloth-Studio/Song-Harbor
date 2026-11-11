@@ -84,3 +84,21 @@ QA on D: Windows dev:
 4. Complete each install separately; verify no model loaded, no song touched, destination on configured D: model root and both buttons show installed status.
 5. Confirm Q4 test form is automatically pointed to installed files. Use a non-active WAV copy and approve test independently.
 6. Confirm errors from network, release mismatch, insufficient space and checksum failure are visible, and no false Installed state. Large real downloads have not been executed by GitHub CI.
+
+## 2026-11-11: First Q4 test output QA: mid-word truncation and unsupported claims
+
+User test produced a visible answer beginning `ements, progressing...`, followed by apparently unrelated or conflicting track descriptions (male vs female vocals, dark-industrial vs indie rock vs ambient, different tempos and arrangement). This text alone cannot establish whether CrispASR generated multiple incompatible descriptions, the source clip was not what we expected, or console output had additional prompts/segments. Do not treat the resulting prose as a reliable, grounded SMU asset.
+
+Confirmed app defect: `moss_q4_experiment.status` populated `result` by calling `_tail(..., limit=5000)` against an append-only shared `moss-q4-experiment.log`. This unconditionally truncated the beginning of any long response, even halfway through a word. The frontend displayed only `log_tail` under diagnostics, not a proper per-run result. It could not separate useful model text from diagnostic messages.
+
+Repair on dev:
+- Every explicitly approved Q4 test writes to its own unique `<Song Harbor runtime>/logs/moss-q4-<run-id>.txt`, with no appended prior test content. Test status includes run ID, source WAV, output file path, and full bounded output.
+- UI shows `Raw response from this test` from the *beginning*, up to a 2 MiB display ceiling. If larger, label it incomplete in an ERROR message and point to full raw per-run file. Raw log tail stays available separately for diagnostics.
+- Model text is explicitly described as experimental, potentially hallucinated, and not usable as verified music metadata. Exit code 0 only means the CLI process exited normally, not a true/accurate audio answer. No conclusions about BPM, key, lyrics, instruments or change points until corroborated by listening/analyzer and time-aligned provenance.
+- Offline tests cover preserving the beginning and preventing cross-run output mixing.
+
+Follow-up validation:
+1. Update dev and rerun a short (15-30 second), known test WAV. Confirm the output starts with full opening and displays unique run ID / WAV path.
+2. Check the raw per-run file for whether a single CLI call produced multiple descriptions or repeating captions. If so, investigate CrispASR segmentation/decoding behavior and CLI output protocol; do not concatenate multiple captions into one claim.
+3. Compare claims (tempo, gender, instruments, key, lyric quotes) with the audio, marking each corroborated, uncertain, or contradicted. Prior output had internal contradictions and is not validated.
+4. Avoid writing the freeform response to the project, automatically generating automation, or altering existing stems.

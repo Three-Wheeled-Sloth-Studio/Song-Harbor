@@ -173,7 +173,7 @@ export function MossQ4Experiment({mixSource}:{mixSource?:MixSource}){
           <label>To (inclusive)
             <select aria-label="Q4 To section" value={toId} onChange={e=>{setToId(e.target.value);setSnapshot(null);}}>
               <option value="">Choose last section</option>
-              {mixSource?.sections.filter(row=>!fromId||(mixSource.sections.findIndex(item=>item.id===row.id)>=mixSource.sections.findIndex(item=>item.id===fromId))).map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.end_seconds.toFixed(1)}s)</option>)}
+              {mixSource?.sections.filter(row=>!fromId||((mixSource?.sections??[]).findIndex(item=>item.id===row.id)>=(mixSource?.sections??[]).findIndex(item=>item.id===fromId))).map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""} ({row.end_seconds.toFixed(1)}s)</option>)}
             </select>
           </label>
         </>}

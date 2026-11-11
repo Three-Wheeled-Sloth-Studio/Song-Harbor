@@ -102,7 +102,7 @@ export function MossQ4Experiment(){
           </span>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setInstaller(await request<Q4Install>("/api/settings/models/q4/install/cancel","POST"));})}>Cancel</Button>
         </div>}
-        {installer?.state==="failed"&&<p role="alert" className="error-message">ERROR: {installer.error.replace(/^ERROR:\\s*/,"")}. Installation not completed.</p>}
+        {installer?.state==="failed"&&<p role="alert" className="error-message">ERROR: {installer.error.replace(/^ERROR:\s*/,"")}. Installation not completed.</p>}
         <details>
           <summary>Local files and advanced configuration</summary>
           <div className="setting-controls">

@@ -149,6 +149,17 @@ def _download(url: str, path: Path, expected_size: int, digest: str) -> Path:
     reserve = expected_size - have + (256 * 1024 * 1024)
     if shutil.disk_usage(path.parent).free < reserve:
         raise RuntimeError("Insufficient free disk space on shared model drive.")
+    if have == expected_size:
+        # A completed transfer may need only checksum verification.
+        checksum = hashlib.sha256()
+        with part.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(4 * _CHUNK), b""):
+                _cancelled()
+                checksum.update(chunk)
+        if checksum.hexdigest() != digest:
+            raise RuntimeError("Completed partial download has an invalid SHA-256. Nothing installed.")
+        _set(downloaded=have, total=expected_size, message="Verification complete")
+        return part
     _set(downloaded=have, total=expected_size, message="Downloading and verifying")
     headers = {"User-Agent": "Song-Harbor-Q4/1.0", "Accept-Encoding": "identity"}
     if have:

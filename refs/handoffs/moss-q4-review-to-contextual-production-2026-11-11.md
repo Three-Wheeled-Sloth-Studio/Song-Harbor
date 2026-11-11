@@ -195,3 +195,23 @@ Suggested implementation sequence after Slice B QA:
 - Validate measured tempo changes, mixed meter/halftime cases, variable-tempo song, percussion-free passage, sparse atmospheric passage and a controlled known click/tempo-transition fixture.
 
 Approval covers the design and priorities, not unattended Q4 inference or automatic mutation of the active song.
+
+
+## 2026-11-11 Slice C1: provider-neutral editable tempo-map asset (dev committed; Windows QA pending)
+
+Delivered in `app/backend/tempo_maps.py`:
+- Persisted, versioned JSON tempo-map composition asset `<project job>/generated/tempo-map.json` with canonical **48 kHz sample positions**, stable anchor/observation IDs, duration bounds, multiple anchors, step and linear BPM transitions, per-anchor meter and optional canonical section reference.
+- Distinguishes **accepted tempo anchors** from **unverified provider observations**; includes method, source hash/revision, provider, BPM candidate and half/double-time alternatives, uncertainty state and optional confidence. Empty maps answer `unknown`, never a fabricated default BPM. `bpm_at(sample)` provides read-only interpolation.
+- Validation, revision guards, atomic write, concurrency-safe API transactions, and explicit human edits. No playback-speed adjustment, time-stretch, auto-quantize, MIDI rewrite, or Q4 inference.
+- Backend endpoints: `GET/POST/PATCH /api/projects/{ident}/tempo-map`; POST initializes an empty map, PATCH saves revised anchors or observations with base revision and asset ID. All write endpoints enforce local origin, project existence and optimistic revision checks under server lock.
+- `TempoMapTool.tsx` and `WorkbenchTools.tsx`: independent Tempo map palette item, compact editing of tempo anchors by time/BPM/meter/step-versus-ramp and optional existing section ID; explicit Save/Discard/Reload; read-only candidate inspector. Current map is explicitly labelled *composition timing asset*, not connected to audio clock, MIDI, or rendering yet.
+- Offline regression coverage in `test_tempo_maps.py`: unmeasured starts unknown, real tempo changes and ramps, unverified candidates not auto-promoted, rejected duplicate anchors, stale revisions and round-trip persistence. Tests were committed but not run through the connector; **Windows build and app QA still required**.
+
+Next increments, after C1 build acceptance:
+1. Deterministic locally measured onset/pulse candidate analysis with **windowed tempo** and half/double-time ambiguity, capable of sparse and changing-tempo passages, explicit non-detection instead of forced guesses; add timed events and provenance to observation evidence.
+2. Bring in existing MIDI note onset candidates only where note/beat inference is justified (drums vs melody, subdivisions, ties, expressive timing). Preserve user anchor corrections.
+3. Align canonical authored section text and lyrics and actual stem identities with observations in SMU; cross-check MOSS separately.
+4. Make explicitly accepted tempo maps available to piano roll, ACE/YuE accompaniment constraints and section-aware timing *without* automatically stretching playback or re-quantizing existing notes.
+5. Prove parity and unchanged project assets under split stems, tempo-change fixture, meter changes, sparse/no-percussion material and rejected/stale edits.
+
+**Limitations to retain visibly:** no automatic BPM estimator, provider adapter or playback timing integration is completed by C1. Human-entered 111 BPM must not be mistaken for the track's verified meter/tempo.

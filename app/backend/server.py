@@ -32,6 +32,7 @@ import model_registry
 import moss_runtime
 import wsl_model_bridge
 import wsl_dependency_repair
+import app_logs
 import wsl_model_install
 import moss_setup_jobs
 import projects
@@ -440,7 +441,8 @@ class WslDependencyRepairRequest(BaseModel):
 def wsl_moss_dependencies(distro: str) -> dict[str, Any]:
     try:
         return {"dependencies": wsl_model_bridge.libnuma_status(distro),
-                "repair": wsl_dependency_repair.status()}
+                "repair": wsl_dependency_repair.status(),
+                "repair_log_path": str(app_logs.log_path(APP_ROOT, "moss-repair.log"))}
     except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
         raise HTTPException(400, str(exc)) from exc
 

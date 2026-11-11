@@ -144,3 +144,13 @@ Changes on dev:
 - No audio listening or Shared Musical Understanding analysis has been enabled yet; Ready must not be described as a completed musical recommendation. No changes to active project, rendering or scripting.
 
 QA: verify the busy indicator remains visible during long installs/downloads, including after reopening Settings; ensure approval remains checked after a completed operation, and that no new operation auto-starts. Verify contextual confirmation appears immediately when Load is clicked in the production tool; cancel performs no load. After confirm, Starting should show a spinner and transition only on actual runtime state. No inference tests without separate authorization.
+
+## 2026-11-11: Loading failed (exit 1), wrong log path and repeated code approval
+User QA: model production-tool load failed with exit 1; user could not find claimed .song-harbor/logs/moss-runtime.log in the repo or application root. Existing WSL loader actually writes to the shared model directory at `D:\\Apps\\SongHarborDev\\models\\.song-harbor\\logs\\moss-wsl.log` (when model root has default value). Never display a relative misleading filename.
+
+Changes on dev:
+- Native and WSL runtimes each report the actual absolute log path. Read-only diagnostics endpoint returns a bounded log tail, and production tool and Settings show Failure details inline so users need not hunt for files. The reported process failure remains blocking, and Failed status remains visible until a new load attempt or successful unload; no false Ready state.
+- One-time consent for installed models: the checkpoint's local installer manifest, repository/revision and inventory fingerprint act as a stored approval key. Explicit approval for this version may be reused on subsequent loads. A different manifest revision/inventory invalidates consent. Manual/unverified registrations and WSL-only checkpoints do not receive persistent trust and still require approval per load. This is not a license to auto-load or infer; every Load remains a deliberate user action.
+- On the production tool, trusted loads no longer prompt for the checkbox; untrusted models show a contextual first-load code consent. Settings mirrors the behavior.
+
+Validation required: Windows relaunch, verify failure log path is absolute and details show process output, identify actual reason for exit code 1 before changing inference parameters. Confirm remembered approval on subsequent loads of the same installed model and re-prompt on manifest change. No model load attempted from this environment.

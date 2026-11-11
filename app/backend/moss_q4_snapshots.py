@@ -44,11 +44,14 @@ def read(app_root: Path, snapshot_id: str) -> dict:
 
 def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
            start_seconds: float | None, end_seconds: float | None,
-           section_ids: list[str]) -> dict:
+           section_ids: list[str], source_stems: list[dict] | None = None) -> dict:
     if not project_id or not recipe_revision or len(project_id) > 200 or len(recipe_revision) > 200:
         raise ValueError("ERROR: Project and render revision required. Nothing saved.")
     if len(section_ids) > 200 or any(not isinstance(x, str) or len(x) > 200 for x in section_ids):
         raise ValueError("ERROR: Invalid section selection.")
+    source_stems = source_stems or []
+    if len(source_stems) > 200 or any(not isinstance(row, dict) for row in source_stems):
+        raise ValueError("ERROR: Invalid source-stem provenance.")
     selected = start_seconds is not None or end_seconds is not None
     if selected and (start_seconds is None or end_seconds is None or
                      not 0 <= start_seconds < end_seconds or end_seconds - start_seconds > 900):
@@ -126,7 +129,7 @@ def create(app_root: Path, stream, *, project_id: str, recipe_revision: str,
                 digest.update(chunk)
         info = {"snapshot_id": snapshot_id, "project_id": project_id,
                 "recipe_revision": recipe_revision, "rendered_mix_sha256": recipe_revision,
-                "section_ids": section_ids,
+                "section_ids": section_ids, "source_stems": source_stems,
                 "start_seconds": start_seconds if selected else 0,
                 "end_seconds": end_seconds if selected else frames / rate,
                 "sample_rate": rate, "channels": channels,

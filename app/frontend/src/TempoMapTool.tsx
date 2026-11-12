@@ -146,7 +146,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
           </div>}
           {!!measured.length&&<>
             <div className="setting-tool-row">
-              <strong>{measured.filter(row=>row.bpm!==null).length} candidates / {measured.length} windows</strong>
+              <strong>{measured.filter(row=>row.bpm!==null).length} candidates / {measured.length} windows{measured.some(row=>row.bpm!==null)?" | first "+stamp(measured.find(row=>row.bpm!==null)!.start_sample).slice(0,5):""}</strong>
               <Button size="compact" variant="secondary" disabled={busy||dirty}
                 onClick={()=>void action(saveEvidence)}>Save evidence</Button>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setMeasured([])}>Discard</Button>
@@ -158,7 +158,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
                 <span title={row.evidence||"Unverified"} style={{flex:1}}>
                   {stamp(row.start_sample).slice(0,5)}-{stamp(row.end_sample).slice(0,5)}
                 </span>
-                <span style={{flex:1}}>{row.bpm===null?"No pulse":row.bpm+" BPM"}</span>
+                <span style={{flex:1}}>{row.bpm===null?"Unclear":row.bpm+" BPM"}</span>
                 {row.bpm!==null&&<details style={{flex:1}}>
                   <summary aria-label={"Alternatives for "+stamp(row.start_sample)}>Alternatives</summary>
                   <small>{row.alternatives.length?row.alternatives.join(", ")+" BPM":"None"}</small>

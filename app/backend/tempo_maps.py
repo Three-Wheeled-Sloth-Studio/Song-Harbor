@@ -131,8 +131,6 @@ def validate(asset: dict) -> dict:
         raise ValueError("Duplicate tempo anchor IDs")
     if len({o["id"] for o in clean["observations"]}) != len(clean["observations"]):
         raise ValueError("Duplicate tempo observation IDs")
-    if clean["anchors"] and clean["anchors"][0]["sample"] != 0:
-        raise ValueError("Accepted tempo map must begin at sample zero")
     return clean
 
 
@@ -164,7 +162,7 @@ def bpm_at(asset: dict, sample: int) -> float | None:
     current = validate(asset)
     _int(sample, "sample", 0, current["duration_samples"] - 1)
     anchors = current["anchors"]
-    if not anchors:
+    if not anchors or sample < anchors[0]["sample"]:
         return None
     for i in range(len(anchors) - 1):
         left, right = anchors[i], anchors[i + 1]

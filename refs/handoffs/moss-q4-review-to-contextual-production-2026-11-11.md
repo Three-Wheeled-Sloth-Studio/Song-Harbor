@@ -229,3 +229,9 @@ Implementation:
 - No dependency added beyond existing NumPy. No model loads, background analysis, automatic Q4 processing or quantization.
 - **Windows QA required**: ensure frontend build and Python import clean; use `Tempo map > Create map > Measure tempo` on a short section; observe candidate windows, show alternate rates, Stage candidate, Save tempo map, reload. Check `Save evidence` separately, no automatic tempo changes, and sparse/quiet passage reports no reliable pulse rather than inventing BPM. Check server responsiveness and run synthetic tests. Compare a known tempo-change track, inspect loud/aggressive drum section vs restrained Verse 1.
 - Known limitations: window-level estimates may smear short tempo transitions, prefer a steady rhythmic section; no bar/downbeat, beat-by-beat grid, meter measurement, MIDI-derived pulse, harmonic validation or full mix/DAW synchronization yet. Do not equate candidate periodicity with authoritative BPM.
+
+
+### C2 refinement: sparse introduction
+Tempo maps may now start at the first **known** pulse sample, not necessarily 0:00. The interval before the first anchor explicitly returns unknown in `bpm_at`; authoring and staged measurement UI permit first anchors later than 0. This is important for restrained, unmetered atmospheric introductions. The prior test enforcing an anchor at sample zero was revised accordingly. Last C2 change: `d46858e`.
+
+Use a short clear percussive section for first QA. The first measurement does not automatically update anchors or meter. Verify that quiet sections can report no reliable pulse and that saved evidence survives reopening. Actual Windows build and Python regression execution are pending.

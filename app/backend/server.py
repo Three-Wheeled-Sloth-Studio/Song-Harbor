@@ -1811,10 +1811,22 @@ def measure_project_tempo(ident: str, body: TempoMeasureRequest,
             raise ValueError("ERROR: Tempo snapshot belongs to a different project.")
         result = tempo_measure.measure(Path(snapshot["audio_path"]),
                                        offset_seconds=float(snapshot["start_seconds"]))
+        map_asset = tempo_maps.read(DATA_ROOT / "jobs" / ident)
+        if map_asset is None:
+            raise ValueError("ERROR: Create a tempo map before measuring.")
+        duration_samples = map_asset["duration_samples"]
         original_sha = snapshot["sha256"]
+        bounded = []
         for row in result["windows"]:
+            if row["start_sample"] >= duration_samples:
+                continue
+            row["end_sample"] = min(row["end_sample"], duration_samples)
+            if row["end_sample"] <= row["start_sample"]:
+                continue
             row["source_sha256"] = original_sha
             row["source_revision"] = snapshot["rendered_mix_sha256"]
+            bounded.append(row)
+        result["windows"] = bounded
         return {**result, "snapshot_id": body.snapshot_id,
                 "source_sha256": original_sha, "project_id": ident}
     except (ValueError, OSError, wave.Error) as exc:

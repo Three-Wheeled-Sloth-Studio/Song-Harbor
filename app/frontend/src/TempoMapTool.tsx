@@ -63,7 +63,6 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
     if(draft.some(row=>row.sample===point)){setError("ERROR: That time already has a tempo anchor.");return;}
     const [top,bottom]=meter.split("/").map(Number);
     if(!Number.isInteger(top)||top<1||top>32||![1,2,4,8,16,32].includes(bottom)){setError("ERROR: Invalid meter.");return;}
-    if(point!==0&&!draft.some(row=>row.sample===0)){setError("ERROR: Establish the initial tempo at 0:00 first.");return;}
     const newAnchor:Anchor={id:identifier(),sample:point,bpm:value,transition,
       origin:"author",meter:[top,bottom],...(selectedSection?{section_id:selectedSection}:{})};
     setDraft(rows=>[...rows,newAnchor].sort((a,b)=>a.sample-b.sample));
@@ -101,9 +100,6 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
   function stageCandidate(row:Observation){
     if(row.bpm===null){setError("ERROR: This window has no reliable pulse candidate.");return;}
     if(draft.some(anchor=>anchor.sample===row.start_sample)){setError("ERROR: A map anchor already occupies this position.");return;}
-    if(row.start_sample!==0&&!draft.some(anchor=>anchor.sample===0)){
-      setError("ERROR: Establish the initial tempo at 0:00 before adding later anchors.");return;
-    }
     const newAnchor:Anchor={id:identifier(),sample:row.start_sample,bpm:row.bpm,
       transition:"step",origin:"accepted-candidate",meter:[4,4]};
     setDraft(items=>[...items,newAnchor].sort((a,b)=>a.sample-b.sample));
@@ -186,7 +182,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
           <Button size="compact" variant="secondary" disabled={busy} onClick={addAnchor}>Add anchor</Button>
         </div>
         <div style={{maxHeight:250,overflow:"auto"}}>
-          {draft.length===0?<p>No accepted tempos yet. Set the initial anchor at 0:00.</p>:draft.map(row=>
+          {draft.length===0?<p>No accepted tempos yet. Add the first anchor where the pulse becomes known.</p>:draft.map(row=>
             <div key={row.id} className="setting-tool-row">
               <span>{stamp(row.sample)} | {row.bpm} BPM | {row.meter.join("/")} | {row.transition}</span>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setDraft(items=>items.filter(item=>item.id!==row.id))}>Remove</Button>

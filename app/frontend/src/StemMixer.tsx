@@ -1589,7 +1589,15 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
-        {tool==="tempoMap"&&<TempoMapTool projectId={jobId} durationSeconds={duration} sections={timelineSections}/>}
+        {tool==="tempoMap"&&<TempoMapTool projectId={jobId} durationSeconds={duration} sections={timelineSections}
+          renderMix={async()=>{
+            const engine=audio.current;
+            if(correction||sectionPreviewActive)throw Error("ERROR: Accept or discard the section preview before measuring tempo.");
+            if(!engine?.ready)throw Error("ERROR: Wait for synchronized audio loading to finish.");
+            if(!declickLoaded)throw Error("ERROR: Saved repairs are not loaded. Measurement blocked.");
+            if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
+            return engine.renderWav24();
+          }}/>} 
         {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
           mixSource={{projectId:jobId,sections:timelineSections,
           sourceStems:stems.map(stem=>{

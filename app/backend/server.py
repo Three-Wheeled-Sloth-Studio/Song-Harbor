@@ -53,6 +53,7 @@ import track_lifecycle
 import declick_recipes
 import midi_arrangements
 import tempo_maps
+import tempo_measure
 import midi_section_slices
 import midi_section_composite
 import polyphonic_midi
@@ -1786,6 +1787,38 @@ def update_project_tempo_map(ident: str, body: TempoMapUpdateRequest,
             return tempo_maps.save(folder, changed, expected_revision=body.base_revision)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+
+
+class TempoMeasureRequest(BaseModel):
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+@app.post("/api/projects/{ident}/tempo-map/measure")
+def measure_project_tempo(ident: str, body: TempoMeasureRequest,
+                          request: Request) -> dict[str, Any]:
+    """Analyze a verified immutable offline mix, never change the accepted map."""
+    require_local_origin(request)
+    _ace_project(ident)
+    with lock:
+        active_audio = any(j.get("status") in ("uploading", "queued", "running")
+                           or j.get("rendering") or j.get("exporting_waveform")
+                           for j in jobs.values())
+    if active_audio:
+        raise HTTPException(409, "ERROR: Finish active audio processing before measuring tempo.")
+    try:
+        snapshot = moss_q4_snapshots.read(APP_ROOT, body.snapshot_id)
+        if snapshot.get("project_id") != ident or snapshot.get("source") != "song-harbor-offline-mix":
+            raise ValueError("ERROR: Tempo snapshot belongs to a different project.")
+        result = tempo_measure.measure(Path(snapshot["audio_path"]),
+                                       offset_seconds=float(snapshot["start_seconds"]))
+        original_sha = snapshot["sha256"]
+        for row in result["windows"]:
+            row["source_sha256"] = original_sha
+            row["source_revision"] = snapshot["rendered_mix_sha256"]
+        return {**result, "snapshot_id": body.snapshot_id,
+                "source_sha256": original_sha, "project_id": ident}
+    except (ValueError, OSError, wave.Error) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class MidiArrangementFromCandidateRequest(BaseModel):

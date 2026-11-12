@@ -235,3 +235,17 @@ Implementation:
 Tempo maps may now start at the first **known** pulse sample, not necessarily 0:00. The interval before the first anchor explicitly returns unknown in `bpm_at`; authoring and staged measurement UI permit first anchors later than 0. This is important for restrained, unmetered atmospheric introductions. The prior test enforcing an anchor at sample zero was revised accordingly. Last C2 change: `d46858e`.
 
 Use a short clear percussive section for first QA. The first measurement does not automatically update anchors or meter. Verify that quiet sections can report no reliable pulse and that saved evidence survives reopening. Actual Windows build and Python regression execution are pending.
+
+
+## 2026-11-12 C2 field QA: false tempo candidates in sparse opening, UI density
+
+User launched the tempo tool and supplied screenshot of 39 whole-mix measurement windows. Earlier `spectral-onset-autocorr-v1` returned tempo candidates **96.98, 165.44, 160.71, 175.78, 175.78 BPM** across the first 0-36s, with many alternatives. **Human ground truth**: there is essentially no beat before ~00:30; from ~00:30 until late in the song the beat is quite slow with only occasional drum fills. Therefore early non-null BPMs are *known unreliable as beat interpretations* and should never be promoted automatically. The user also rejected redundant explanatory prose and dense repeated rows in the tool UI.
+
+Changes on dev, pending Windows QA:
+- `tempo_measure.py` algorithm method revised to `spectral-onset-autocorr-v2`. Autocorrelation peaks now require additional **independent repeated-onset support**: at least seven resolved significant attack peaks, phase concentration of at least six peaks (and 56% of detected peaks), distinct beat occupancy over at least six beats, and >=5.5 seconds of supported spread in a window. Otherwise return **null** BPM with `insufficient-beat-evidence`; preserve source window timing and confidence null. This is a conservative *heuristic*, not a proof of true tempo or a percussive-stem classifier; tonal pulses can still produce false positives. No hard-coded 00:30 exception.
+- Synthetic regression added: four isolated irregular hits over 12s must not generate a BPM; existing click transitions (96->144) and silence tests remain. Tests not executed here.
+- `TempoMapTool.tsx`: removed duplicate Tempo map header and explanatory paragraphs; simplified primary UI to Scope+Measure, compact candidate count and first candidate position; window details and alternate interpretations collapsed, manual anchor editor collapsed; save buttons shown when needed; uses `Unclear` rather than an unjustified 'no pulse' declaration. Keeps explicit review, candidate staging, evidence persistence and revision guards.
+- Distinguish **beat evidence**, **repeating melodic/timbral modulation**, and **drum fills** in next provider work; consider drum/stem-specific onset analysis and MIDI corroboration. User's slow pulse after ~00:30 is valuable validation target; tempo choices are not yet verified.
+- QA: rerun full mix, inspect first 0-30s for **Unclear** and post-30s for plausible lower-rate candidates, compare with audible playback and drums stems; if v2 still hallucinates a pulse, keep this as a tracked error rather than declaring it solved. Also check frontend TypeScript build; no compilation/test execution was available from GitHub connector.
+
+Latest commit after UI cleanup: `2faa764`.

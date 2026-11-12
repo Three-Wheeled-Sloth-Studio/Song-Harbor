@@ -11,7 +11,7 @@ function identifier():string{
 }
 function stamp(sample:number){const seconds=sample/48000;return Math.floor(seconds/60)+":"+String(Math.floor(seconds%60)).padStart(2,"0")+"."+String(Math.round(seconds%1*1000)).padStart(3,"0");}
 
-export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:string;durationSeconds:number;sections:Section[]}){
+export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{projectId:string;durationSeconds:number;sections:Section[];renderMix:()=>Promise<Blob>}){
   const [asset,setAsset]=useState<TempoMap|null>(null);
   const [draft,setDraft]=useState<Anchor[]>([]);
   const [loading,setLoading]=useState(true);
@@ -23,6 +23,9 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
   const [transition,setTransition]=useState<"step"|"linear">("step");
   const [meter,setMeter]=useState("4/4");
   const [selectedSection,setSelectedSection]=useState("");
+  const [measured,setMeasured]=useState<Observation[]>([]);
+  const [measureState,setMeasureState]=useState("");
+  const [measureSection,setMeasureSection]=useState("");
   const url="/api/projects/"+encodeURIComponent(projectId)+"/tempo-map";
   async function api<T>(method:string,body?:object):Promise<T>{
     const response=await fetch(url,{method,headers:body?{"Content-Type":"application/json"}:undefined,
@@ -48,7 +51,7 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
   async function action(fn:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
     try{await fn();}catch(e){setError(e instanceof Error?e.message:String(e));}
-    finally{setBusy(false);}
+    finally{setBusy(false);setMeasureState("");}
   }
   function addAnchor(){
     setError("");setNotice("");
@@ -65,6 +68,60 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
       origin:"author",meter:[top,bottom],...(selectedSection?{section_id:selectedSection}:{})};
     setDraft(rows=>[...rows,newAnchor].sort((a,b)=>a.sample-b.sample));
   }
+  async function measureTempo(){
+    if(!asset)throw Error("ERROR: Create the tempo map first.");
+    setMeasureState("Rendering current mix with saved production effects");
+    const blob=await renderMix();
+    if(blob.size>600*1024*1024)throw Error("ERROR: Mix is too large for snapshot transfer.");
+    setMeasureState("Creating hashed analysis snapshot");
+    const sha=await crypto.subtle.digest("SHA-256",await blob.arrayBuffer());
+    const digest=Array.from(new Uint8Array(sha)).map(x=>x.toString(16).padStart(2,"0")).join("");
+    const section=sections.find(row=>row.id===measureSection);
+    const form=new FormData();
+    form.append("audio",blob,"tempo-measurement.wav");
+    form.append("project_id",projectId);
+    form.append("recipe_revision",digest);
+    form.append("section_ids",JSON.stringify(section?[section.id]:[]));
+    if(section){
+      form.append("start_seconds",String(section.start_seconds));
+      form.append("end_seconds",String(section.end_seconds));
+    }
+    const upload=await fetch("/api/settings/models/q4/snapshot",{method:"POST",body:form});
+    const snapshot=await upload.json() as {snapshot_id?:string;detail?:string};
+    if(!upload.ok||!snapshot.snapshot_id)throw Error(snapshot.detail||"ERROR: Snapshot unavailable.");
+    setMeasureState("Measuring local onset periodicity");
+    const response=await fetch(url+"/measure",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({snapshot_id:snapshot.snapshot_id})});
+    const result=await response.json() as {windows?:Observation[];detail?:string};
+    if(!response.ok||!result.windows)throw Error(result.detail||"ERROR: Tempo measurement failed.");
+    setMeasured(result.windows);
+    setNotice(result.windows.length+" measurement windows ready for review. No tempos accepted.");
+    setMeasureState("");
+  }
+  function stageCandidate(row:Observation){
+    if(row.bpm===null){setError("ERROR: This window has no reliable pulse candidate.");return;}
+    if(draft.some(anchor=>anchor.sample===row.start_sample)){setError("ERROR: A map anchor already occupies this position.");return;}
+    if(row.start_sample!==0&&!draft.some(anchor=>anchor.sample===0)){
+      setError("ERROR: Establish the initial tempo at 0:00 before adding later anchors.");return;
+    }
+    const newAnchor:Anchor={id:identifier(),sample:row.start_sample,bpm:row.bpm,
+      transition:"step",origin:"accepted-candidate",meter:[4,4]};
+    setDraft(items=>[...items,newAnchor].sort((a,b)=>a.sample-b.sample));
+    setNotice("Candidate staged. Save the tempo map to accept it; meter and timing remain editable.");
+    setError("");
+  }
+  async function saveEvidence(){
+    if(!asset||!measured.length)return;
+    if(dirty)throw Error("ERROR: Save or discard pending tempo anchors before saving measurements.");
+    const previous=asset.observations.filter(row=>!measured.some(item=>
+      row.source_sha256===item.source_sha256&&row.method===item.method&&
+      row.start_sample===item.start_sample&&row.end_sample===item.end_sample));
+    const saved=await api<TempoMap>("PATCH",{asset_id:asset.asset_id,base_revision:asset.revision,
+      observations:[...previous,...measured]});
+    setAsset(saved);setDraft(saved.anchors);
+    setMeasured([]);
+    setNotice("Measured candidates saved as unverified evidence. No tempo anchors changed.");
+  }
   const dirty=JSON.stringify(draft)!==JSON.stringify(asset?.anchors||[]);
   return <div className="setting-tool-section song-tempo-map">
     <div className="setting-tool-row"><strong>Tempo map</strong>
@@ -77,6 +134,43 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
         setAsset(fresh);setDraft(fresh.anchors);setNotice("Empty map created. Add and save the initial tempo anchor.");
       })}>Create tempo map</Button>:
       <>
+        <div className="song-moss-confirm">
+          <div className="setting-tool-row"><strong>Measure pulse</strong>
+            <Status tone="neutral">Candidate estimates only</Status>
+          </div>
+          <div className="setting-controls">
+            <label>Scope
+              <select aria-label="Tempo measurement scope" value={measureSection} disabled={busy}
+                onChange={e=>{setMeasureSection(e.target.value);setMeasured([]);}}>
+                <option value="">Whole current mix</option>
+                {sections.map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""}</option>)}
+              </select>
+            </label>
+            <Button size="compact" variant="primary" disabled={busy||dirty} onClick={()=>void action(measureTempo)}>
+              Measure tempo
+            </Button>
+          </div>
+          {busy&&measureState&&<div role="status" className="song-moss-progress">
+            <span className="song-sfz-spinner" aria-hidden="true"/>{measureState}
+          </div>}
+          {!!measured.length&&<>
+            <div className="setting-tool-row"><strong>Measured windows ({measured.length})</strong>
+              <Button size="compact" variant="secondary" disabled={busy||dirty}
+                onClick={()=>void action(saveEvidence)}>Save evidence</Button>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setMeasured([])}>Discard</Button>
+            </div>
+            <div style={{maxHeight:240,overflow:"auto"}}>
+              {measured.map(row=><div key={row.id} className="setting-tool-row">
+                <span>{stamp(row.start_sample)} to {stamp(row.end_sample)}: {row.bpm===null?"No reliable pulse":row.bpm+" BPM"}
+                  {row.alternatives.length?" | alternatives "+row.alternatives.join(", "):""}
+                  {row.evidence?" | "+row.evidence:""}</span>
+                {row.bpm!==null&&<Button size="compact" variant="secondary" disabled={busy||draft.some(a=>a.sample===row.start_sample)}
+                  onClick={()=>stageCandidate(row)}>Stage anchor</Button>}
+              </div>)}
+            </div>
+          </>}
+          <small>Windows overlap. Half/double-time alternatives and sparse passages require listening. No automated changes to the song or accepted tempo map.</small>
+        </div>
         <div className="setting-controls">
           <label>Time (seconds)<input aria-label="Tempo anchor time seconds" type="number" min="0" max={durationSeconds} step=".001" value={seconds} onChange={e=>setSeconds(e.target.value)}/></label>
           <label>BPM<input aria-label="Tempo BPM" type="number" min="20" max="320" step=".01" placeholder="Enter measured or authored BPM" value={bpm} onChange={e=>setBpm(e.target.value)}/></label>

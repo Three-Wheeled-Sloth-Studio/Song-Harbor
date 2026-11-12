@@ -68,6 +68,29 @@ class TempoMeasureTests(unittest.TestCase):
             self.assertTrue(any(any(abs(value - 144) < 7 for value in [r["bpm"], *r["alternatives"]]) for r in last))
             self.assertTrue(all(r["status"] == "unverified" for r in observations))
 
+    def test_isolated_fills_do_not_establish_a_beat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fills.wav"
+            rate = 48000
+            pcm = np.zeros(rate * 12, dtype=np.float32)
+            # Four separated, irregular sharp attacks, not a stable rhythm.
+            for seconds in (.7, 3.2, 7.1, 10.65):
+                i = round(seconds * rate)
+                pcm[i:i+240] = (np.exp(-np.arange(240) / 55) *
+                                np.cos(np.arange(240) * .9)).astype(np.float32)
+            integers = np.round(pcm * 8388607).astype(np.int32) & 0xffffff
+            unsigned = np.column_stack((integers, integers)).reshape(-1)
+            packed = np.stack((unsigned & 255, (unsigned >> 8) & 255,
+                               (unsigned >> 16) & 255), axis=1).astype(np.uint8)
+            with wave.open(str(path), "wb") as out:
+                out.setnchannels(2)
+                out.setsampwidth(3)
+                out.setframerate(rate)
+                out.writeframes(packed.tobytes())
+            result = tempo_measure.measure(path)
+            self.assertTrue(result["windows"])
+            self.assertTrue(all(row["bpm"] is None for row in result["windows"]))
+
     def test_offset_is_absolute_project_time(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "section.wav"

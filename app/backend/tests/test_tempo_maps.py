@@ -50,8 +50,9 @@ class TempoMapTests(unittest.TestCase):
         revised = tm.revise(asset, 0, anchors=[anchor(0)])
         with self.assertRaisesRegex(ValueError, "Stale"):
             tm.revise(revised, 0, anchors=[anchor(0)])
-        with self.assertRaisesRegex(ValueError, "sample zero"):
-            tm.revise(asset, 0, anchors=[anchor(48000)])
+        late = tm.revise(asset, 0, anchors=[anchor(48000)])
+        self.assertIsNone(tm.bpm_at(late, 0))
+        self.assertEqual(tm.bpm_at(late, 48000), 111)
 
     def test_atomic_roundtrip_and_cas(self):
         asset = tm.create(48000 * 6)

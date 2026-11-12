@@ -95,7 +95,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
     const result=await response.json() as {windows?:Observation[];detail?:string};
     if(!response.ok||!result.windows)throw Error(result.detail||"ERROR: Tempo measurement failed.");
     setMeasured(result.windows);
-    setNotice(result.windows.filter(row=>row.bpm!==null).length+" pulse candidates from "+result.windows.length+" windows.");
+    setNotice("");
     setMeasureState("");
   }
   function stageCandidate(row:Observation){
@@ -151,7 +151,9 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
                 onClick={()=>void action(saveEvidence)}>Save evidence</Button>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setMeasured([])}>Discard</Button>
             </div>
-            <div style={{maxHeight:250,overflow:"auto"}}>
+            <details>
+              <summary>Review windows</summary>
+              <div style={{maxHeight:250,overflow:"auto"}}>
               {measured.map(row=><div key={row.id} className="setting-tool-row">
                 <span title={row.evidence||"Unverified"} style={{flex:1}}>
                   {stamp(row.start_sample).slice(0,5)}-{stamp(row.end_sample).slice(0,5)}
@@ -164,7 +166,8 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
                 {row.bpm!==null&&<Button size="compact" variant="secondary" disabled={busy||draft.some(a=>a.sample===row.start_sample)}
                   onClick={()=>stageCandidate(row)}>Stage</Button>}
               </div>)}
-            </div>
+              </div>
+            </details>
           </>}
         </div>
         <div className="setting-tool-row">
@@ -196,14 +199,14 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
             </div>)}
         </div>
         </>}
-        <div className="setting-controls">
+        {(dirty||manualOpen)&&<div className="setting-controls">
           <Button size="compact" variant="primary" disabled={busy||!dirty} onClick={()=>void action(async()=>{
             const saved=await api<TempoMap>("PATCH",{asset_id:asset.asset_id,base_revision:asset.revision,anchors:draft});
             setAsset(saved);setDraft(saved.anchors);setNotice("Tempo-map revision saved. Project audio was not modified.");
           })}>Save tempo map</Button>
           <Button size="compact" variant="secondary" disabled={busy||!dirty} onClick={()=>{setDraft(asset.anchors);setError("");}}>Discard edits</Button>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void action(async()=>{await reload();setNotice("Latest revision loaded.");})}>Reload</Button>
-        </div>
+        </div>}
         <details><summary>Saved evidence ({asset.observations.length})</summary>
           {asset.observations.length===0?<p>None</p>:
             asset.observations.map(row=><p key={row.id}>{stamp(row.start_sample)} to {stamp(row.end_sample)}: {row.bpm??"Unknown"} BPM ({row.method}, {row.status})</p>)}

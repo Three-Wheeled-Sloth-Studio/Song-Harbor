@@ -26,6 +26,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
   const [measured,setMeasured]=useState<Observation[]>([]);
   const [measureState,setMeasureState]=useState("");
   const [measureSection,setMeasureSection]=useState("");
+  const [manualOpen,setManualOpen]=useState(false);
   const url="/api/projects/"+encodeURIComponent(projectId)+"/tempo-map";
   async function api<T>(method:string,body?:object):Promise<T>{
     const response=await fetch(url,{method,headers:body?{"Content-Type":"application/json"}:undefined,
@@ -94,7 +95,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
     const result=await response.json() as {windows?:Observation[];detail?:string};
     if(!response.ok||!result.windows)throw Error(result.detail||"ERROR: Tempo measurement failed.");
     setMeasured(result.windows);
-    setNotice(result.windows.length+" measurement windows ready for review. No tempos accepted.");
+    setNotice(result.windows.filter(row=>row.bpm!==null).length+" pulse candidates from "+result.windows.length+" windows.");
     setMeasureState("");
   }
   function stageCandidate(row:Observation){
@@ -103,7 +104,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
     const newAnchor:Anchor={id:identifier(),sample:row.start_sample,bpm:row.bpm,
       transition:"step",origin:"accepted-candidate",meter:[4,4]};
     setDraft(items=>[...items,newAnchor].sort((a,b)=>a.sample-b.sample));
-    setNotice("Candidate staged. Save the tempo map to accept it; meter and timing remain editable.");
+    setNotice("Anchor staged. Save to accept.");
     setError("");
   }
   async function saveEvidence(){
@@ -116,14 +117,13 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
       observations:[...previous,...measured]});
     setAsset(saved);setDraft(saved.anchors);
     setMeasured([]);
-    setNotice("Measured candidates saved as unverified evidence. No tempo anchors changed.");
+    setNotice("Evidence saved.");
   }
   const dirty=JSON.stringify(draft)!==JSON.stringify(asset?.anchors||[]);
   return <div className="setting-tool-section song-tempo-map">
-    <div className="setting-tool-row"><strong>Tempo map</strong>
-      <Status tone={dirty?"warning":asset?.anchors.length?"success":"neutral"}>{dirty?"Unsaved edits":asset?.anchors.length?"Saved revision "+asset.revision:"Not established"}</Status>
+    <div className="setting-tool-row">
+      <Status tone={dirty?"warning":asset?.anchors.length?"success":"neutral"}>{dirty?"Unsaved":asset?.anchors.length?"Revision "+asset.revision:"No accepted tempo"}</Status>
     </div>
-    <p className="setting-path">Composition timing asset. Does not change playback speed, MIDI notes or stems. No BPM is inferred until an analyzer supplies evidence.</p>
     {loading?<p role="status">Loading tempo map...</p>:!asset?
       <Button size="compact" variant="primary" disabled={busy||!durationSeconds} onClick={()=>void action(async()=>{
         const fresh=await api<TempoMap>("POST",{duration_samples:Math.round(durationSeconds*48000)});
@@ -131,42 +131,49 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
       })}>Create tempo map</Button>:
       <>
         <div className="song-moss-confirm">
-          <div className="setting-tool-row"><strong>Measure pulse</strong>
-            <Status tone="neutral">Candidate estimates only</Status>
-          </div>
           <div className="setting-controls">
             <label>Scope
               <select aria-label="Tempo measurement scope" value={measureSection} disabled={busy}
                 onChange={e=>{setMeasureSection(e.target.value);setMeasured([]);}}>
-                <option value="">Whole current mix</option>
+                <option value="">Whole mix</option>
                 {sections.map(row=><option key={row.id} value={row.id}>{row.kind}{row.number?" "+row.number:""}</option>)}
               </select>
             </label>
-            <Button size="compact" variant="primary" disabled={busy||dirty} onClick={()=>void action(measureTempo)}>
-              Measure tempo
-            </Button>
+            <Button size="compact" variant="primary" disabled={busy||dirty} onClick={()=>void action(measureTempo)}>Measure</Button>
           </div>
           {busy&&measureState&&<div role="status" className="song-moss-progress">
             <span className="song-sfz-spinner" aria-hidden="true"/>{measureState}
           </div>}
           {!!measured.length&&<>
-            <div className="setting-tool-row"><strong>Measured windows ({measured.length})</strong>
+            <div className="setting-tool-row">
+              <strong>{measured.filter(row=>row.bpm!==null).length} candidates / {measured.length} windows</strong>
               <Button size="compact" variant="secondary" disabled={busy||dirty}
                 onClick={()=>void action(saveEvidence)}>Save evidence</Button>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setMeasured([])}>Discard</Button>
             </div>
-            <div style={{maxHeight:240,overflow:"auto"}}>
+            <div style={{maxHeight:250,overflow:"auto"}}>
               {measured.map(row=><div key={row.id} className="setting-tool-row">
-                <span>{stamp(row.start_sample)} to {stamp(row.end_sample)}: {row.bpm===null?"No reliable pulse":row.bpm+" BPM"}
-                  {row.alternatives.length?" | alternatives "+row.alternatives.join(", "):""}
-                  {row.evidence?" | "+row.evidence:""}</span>
+                <span title={row.evidence||"Unverified"} style={{flex:1}}>
+                  {stamp(row.start_sample).slice(0,5)}-{stamp(row.end_sample).slice(0,5)}
+                </span>
+                <span style={{flex:1}}>{row.bpm===null?"No pulse":row.bpm+" BPM"}</span>
+                {row.bpm!==null&&<details style={{flex:1}}>
+                  <summary aria-label={"Alternatives for "+stamp(row.start_sample)}>Alternatives</summary>
+                  <small>{row.alternatives.length?row.alternatives.join(", ")+" BPM":"None"}</small>
+                </details>}
                 {row.bpm!==null&&<Button size="compact" variant="secondary" disabled={busy||draft.some(a=>a.sample===row.start_sample)}
-                  onClick={()=>stageCandidate(row)}>Stage anchor</Button>}
+                  onClick={()=>stageCandidate(row)}>Stage</Button>}
               </div>)}
             </div>
           </>}
-          <small>Windows overlap. Half/double-time alternatives and sparse passages require listening. No automated changes to the song or accepted tempo map.</small>
         </div>
+        <div className="setting-tool-row">
+          <Button size="compact" variant="secondary" onClick={()=>setManualOpen(value=>!value)}>
+            {manualOpen?"Hide manual anchors":"Manual anchors"}
+          </Button>
+          <span>{draft.length} anchors</span>
+        </div>
+        {manualOpen&&<>
         <div className="setting-controls">
           <label>Time (seconds)<input aria-label="Tempo anchor time seconds" type="number" min="0" max={durationSeconds} step=".001" value={seconds} onChange={e=>setSeconds(e.target.value)}/></label>
           <label>BPM<input aria-label="Tempo BPM" type="number" min="20" max="320" step=".01" placeholder="Enter measured or authored BPM" value={bpm} onChange={e=>setBpm(e.target.value)}/></label>
@@ -188,6 +195,7 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setDraft(items=>items.filter(item=>item.id!==row.id))}>Remove</Button>
             </div>)}
         </div>
+        </>}
         <div className="setting-controls">
           <Button size="compact" variant="primary" disabled={busy||!dirty} onClick={()=>void action(async()=>{
             const saved=await api<TempoMap>("PATCH",{asset_id:asset.asset_id,base_revision:asset.revision,anchors:draft});
@@ -196,8 +204,8 @@ export function TempoMapTool({projectId,durationSeconds,sections,renderMix}:{pro
           <Button size="compact" variant="secondary" disabled={busy||!dirty} onClick={()=>{setDraft(asset.anchors);setError("");}}>Discard edits</Button>
           <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void action(async()=>{await reload();setNotice("Latest revision loaded.");})}>Reload</Button>
         </div>
-        <details><summary>Candidate tempo evidence ({asset.observations.length})</summary>
-          {asset.observations.length===0?<p>No measured or model candidate tempos have been recorded. MIDI and DSP providers will feed this list.</p>:
+        <details><summary>Saved evidence ({asset.observations.length})</summary>
+          {asset.observations.length===0?<p>None</p>:
             asset.observations.map(row=><p key={row.id}>{stamp(row.start_sample)} to {stamp(row.end_sample)}: {row.bpm??"Unknown"} BPM ({row.method}, {row.status})</p>)}
         </details>
       </>}

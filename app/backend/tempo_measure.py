@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
-METHOD = "spectral-onset-autocorr-v1"
+METHOD = "spectral-onset-autocorr-v2"
 RATE = 48000
 HOP = 512
 FFT = 2048
@@ -73,6 +73,50 @@ def novelty(path: Path) -> tuple[np.ndarray, int, float]:
     return np.asarray(values, dtype=np.float32), rate, total / rate
 
 
+def _rhythmic_support(onsets: np.ndarray, frame_rate: float, bpm: float) -> bool:
+    """Require repeated attacks on a consistent phase, not merely an ACF peak.
+
+    Sparse pads, isolated drum fills and evolving textures can yield strong
+    autocorrelation but do not necessarily establish a sustained beat.
+    """
+    if onsets.size < 4:
+        return False
+    positive = np.maximum(onsets - float(np.median(onsets)), 0)
+    floor = float(np.median(positive))
+    spread = float(np.median(np.abs(positive - floor)))
+    threshold = max(float(np.percentile(positive, 82)), floor + 2.5 * spread, 1e-7)
+    min_gap = max(1, round(frame_rate * .13))
+    peaks = []
+    for i in range(1, len(positive) - 1):
+        if positive[i] < threshold or positive[i] <= positive[i - 1] or positive[i] < positive[i + 1]:
+            continue
+        if peaks and i - peaks[-1] < min_gap:
+            if positive[i] > positive[peaks[-1]]:
+                peaks[-1] = i
+        else:
+            peaks.append(i)
+    if len(peaks) < 7:
+        return False
+    period = 60 * frame_rate / bpm
+    # Evaluate phase locking, allowing attacks at subdivisions, but demand
+    # several *different* beats, not a single isolated fill cluster.
+    phases = np.asarray(peaks, dtype=np.float64) % period
+    distances = np.abs(phases[:, None] - phases[None, :])
+    distances = np.minimum(distances, period - distances)
+    support = np.sum(distances <= period * .13, axis=1)
+    best = int(np.argmax(support))
+    aligned = [peaks[j] for j in range(len(peaks)) if distances[best, j] <= period * .13]
+    if len(aligned) < max(6, math.ceil(len(peaks) * .56)):
+        return False
+    occupied = {round((p - aligned[0]) / period) for p in aligned}
+    if len(occupied) < 6:
+        return False
+    # A real pulse should extend across much of a window.
+    if aligned[-1] - aligned[0] < frame_rate * 5.5:
+        return False
+    return True
+
+
 def _window_candidates(curve: np.ndarray, frame_rate: float) -> tuple[float | None, list[float], str]:
     if curve.size < frame_rate * 4:
         return None, [], "too-short"
@@ -105,6 +149,10 @@ def _window_candidates(curve: np.ndarray, frame_rate: float) -> tuple[float | No
     if not peaks or peaks[0][0] < 0.12:
         return None, [], "low-periodicity"
     strongest, bpm = peaks[0]
+    # Do not accept autocorrelation of smooth timbral changes or occasional
+    # fills without repeated, phase-coherent onset evidence.
+    if not _rhythmic_support(curve, frame_rate, bpm):
+        return None, [], "insufficient-beat-evidence"
     candidates = []
     for strength, other in peaks:
         if strength < strongest * .72:

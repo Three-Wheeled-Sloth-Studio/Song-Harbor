@@ -61,8 +61,9 @@ export function TempoMapTool({projectId,durationSeconds,sections}:{projectId:str
     const [top,bottom]=meter.split("/").map(Number);
     if(!Number.isInteger(top)||top<1||top>32||![1,2,4,8,16,32].includes(bottom)){setError("ERROR: Invalid meter.");return;}
     if(point!==0&&!draft.some(row=>row.sample===0)){setError("ERROR: Establish the initial tempo at 0:00 first.");return;}
-    setDraft(rows=>[...rows,{id:identifier(),sample:point,bpm:value,transition,
-      origin:"author",meter:[top,bottom],...(selectedSection?{section_id:selectedSection}:{})}].sort((a,b)=>a.sample-b.sample));
+    const newAnchor:Anchor={id:identifier(),sample:point,bpm:value,transition,
+      origin:"author",meter:[top,bottom],...(selectedSection?{section_id:selectedSection}:{})};
+    setDraft(rows=>[...rows,newAnchor].sort((a,b)=>a.sample-b.sample));
   }
   const dirty=JSON.stringify(draft)!==JSON.stringify(asset?.anchors||[]);
   return <div className="setting-tool-section song-tempo-map">

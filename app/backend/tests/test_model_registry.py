@@ -55,12 +55,87 @@ class ModelRegistryTests(unittest.TestCase):
         (folder / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"a": "../outside.safetensors"}}))
         self.assertIsNone(model_registry.inspect(folder))
 
+    def test_upstream_architecture_names_detected(self):
+        folder = self.models / "upstream-music"
+        folder.mkdir()
+        (folder / "config.json").write_text(json.dumps({"architectures": ["MossMusicModel"], "model_type": "custom"}))
+        (folder / "model.safetensors").write_bytes(b"weights")
+        self.assertEqual(model_registry.inspect(folder)["family"], "moss_music")
+        other = self.models / "upstream-audio"
+        other.mkdir()
+        (other / "config.json").write_text(json.dumps({"architectures": ["MossAudioModel"], "model_type": "moss_audio"}))
+        (other / "model.safetensors").write_bytes(b"weights")
+        self.assertEqual(model_registry.inspect(other)["family"], "moss_audio")
+
     def test_unrecognized_model_does_not_register(self):
         folder = self.models / "random"
         folder.mkdir()
         (folder / "config.json").write_text('{"model_type":"other"}')
         (folder / "model.safetensors").write_bytes(b"data")
         self.assertEqual(model_registry.scan(self.models), [])
+
+    def test_external_wsl_attach_checks_served_model_identity(self):
+        folder = self.make_model()
+        registered = model_registry.register(self.root, str(folder))
+        expected = "songharbor-moss-" + registered["id"]
+        with patch.object(moss_runtime, "_probe", return_value=False) as probe:
+            with self.assertRaisesRegex(ValueError, "No matching MOSS service"):
+                moss_runtime.attach(self.root, self.models, registered["id"])
+            probe.assert_called_once_with(expected)
+        self.assertIsNone(moss_runtime._ATTACHED["id"])
+
+    def test_external_wsl_disconnect_does_not_kill_process(self):
+        moss_runtime._ATTACHED.update({"id": "test", "model_name": "songharbor-moss-test"})
+        try:
+            with patch.object(moss_runtime, "_probe", return_value=True):
+                self.assertEqual(moss_runtime.status()["status"], "connected")
+            with patch.object(moss_runtime, "_stop_process") as stop:
+                result = moss_runtime.unload()
+                self.assertFalse(result["service_stopped"])
+                stop.assert_not_called()
+        finally:
+            moss_runtime._ATTACHED.update({"id": None, "model_name": None})
+
+    def test_wsl_registration_does_not_copy_or_download_model(self):
+        metadata = {"path": "/home/sloth/models/MOSS-Music", "name": "MOSS-Music",
+                    "family": "moss_music", "status": "present-unverified",
+                    "files": 2, "bytes_present": 4096}
+        with patch.object(model_registry.wsl_model_bridge, "inspect_checkpoint", return_value=metadata) as probe:
+            record = model_registry.register_wsl(self.root, "Ubuntu", metadata["path"])
+            inventory = model_registry.list_models(self.root, self.models)
+            probe.assert_called_with("Ubuntu", metadata["path"])
+        self.assertEqual(inventory["registered"][0]["storage"], "wsl")
+        self.assertEqual(inventory["registered"][0]["distro"], "Ubuntu")
+        self.assertEqual(inventory["registered"][0]["id"], record["id"])
+        self.assertFalse(self.models.joinpath(".song-harbor").exists())
+
+    def test_wsl_registration_rejects_incomplete(self):
+        with patch.object(model_registry.wsl_model_bridge, "inspect_checkpoint",
+                          return_value={"status": "incomplete"}):
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                model_registry.register_wsl(self.root, "Ubuntu", "/home/sloth/incomplete")
+
+    def test_trust_is_checkpoint_specific_and_revoked_on_manifest_change(self):
+        folder = self.make_model()
+        manifest = folder / "song-harbor-install.json"
+        manifest.write_text(json.dumps({"complete": True, "repo": "vendor/MOSS-Music",
+            "revision": "revision-1", "inventory": {"model-00001-of-00002.safetensors": {"sha256": "a" * 64, "size": len(b"fake-weight")}}}))
+        record = model_registry.register(self.root, str(folder))
+        self.assertFalse(model_registry.trust_status(self.root, record["id"])["trusted"])
+        approved = model_registry.approve_trust(self.root, record["id"])
+        self.assertTrue(approved["trusted"])
+        self.assertTrue(model_registry.trust_status(self.root, record["id"])["trusted"])
+        data = json.loads(manifest.read_text())
+        data["revision"] = "revision-2"
+        manifest.write_text(json.dumps(data))
+        self.assertFalse(model_registry.trust_status(self.root, record["id"])["trusted"])
+
+    def test_unverified_external_model_trust_not_persisted(self):
+        folder = self.make_model()
+        record = model_registry.register(self.root, str(folder))
+        state = model_registry.approve_trust(self.root, record["id"])
+        self.assertFalse(state["trusted"])
+        self.assertFalse(state["persistent_trust_available"])
 
     def test_load_refuses_without_explicit_trusted_code_approval(self):
         with self.assertRaisesRegex(ValueError, "explicitly approve"):

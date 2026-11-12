@@ -11,6 +11,7 @@ import threading
 from pathlib import Path
 
 import workspace_settings
+import wsl_model_bridge
 
 _LOCK = threading.RLock()
 FAMILIES = {
@@ -52,9 +53,9 @@ def _atomic_write(app_root: Path, registry: dict) -> None:
 
 def _identify(config: dict) -> str | None:
     types = " ".join(str(config.get(k, "")) for k in ("model_type", "architectures", "auto_map")).lower()
-    if "moss_music" in types or "moss-music" in types:
+    if "moss_music" in types or "moss-music" in types or "mossmusic" in types:
         return "moss_music"
-    if "moss_audio" in types or "moss-audio" in types:
+    if "moss_audio" in types or "moss-audio" in types or "mossaudio" in types:
         return "moss_audio"
     return None
 
@@ -131,13 +132,22 @@ def list_models(app_root: Path, root: Path) -> dict:
     for key, record in registry["models"].items():
         if not isinstance(record, dict) or not isinstance(record.get("path"), str):
             continue
-        check = inspect(Path(record["path"]))
+        try:
+            check = (wsl_model_bridge.inspect_checkpoint(record["distro"], record["path"])
+                     if record.get("storage") == "wsl" and isinstance(record.get("distro"), str)
+                     else inspect(Path(record["path"])))
+        except (ValueError, OSError, RuntimeError):
+            check = None
         if check is None:
             registered.append({"id": key, "name": record.get("name", key), "path": record["path"],
-                               "status": "missing-or-unrecognized", "loaded": False})
+                               "status": "missing-or-unrecognized", "loaded": False,
+                               "storage": record.get("storage", "windows"), "distro": record.get("distro")})
         else:
             check["id"] = key
             check["registered"] = True
+            if record.get("storage") == "wsl":
+                check["storage"] = "wsl"
+                check["distro"] = record["distro"]
             registered.append(check)
             by_path.pop(check["path"], None)
     return {"registered": registered, "discovered": list(by_path.values()), "scan_limit": MAX_DIRECTORIES}
@@ -170,3 +180,89 @@ def unregister(app_root: Path, identifier: str) -> None:
         del registry["models"][identifier]
         _atomic_write(app_root, registry)
     # Never delete any model files.
+
+
+def register_wsl(app_root: Path, distro: str, linux_folder: str) -> dict:
+    """Register a checkpoint residing entirely inside an existing WSL distribution."""
+    import hashlib
+    info = wsl_model_bridge.inspect_checkpoint(distro, linux_folder)
+    if info is None or info.get("status") != "present-unverified":
+        raise ValueError("ERROR: WSL checkpoint missing, incomplete, or unrecognized. Model not registered.")
+    identifier = hashlib.sha256((distro + ":" + info["path"]).encode("utf-8")).hexdigest()[:20]
+    with _LOCK:
+        registry = _load(app_root)
+        registry["models"][identifier] = {
+            "path": info["path"], "name": info["name"], "family": info["family"],
+            "storage": "wsl", "distro": distro}
+        _atomic_write(app_root, registry)
+    return {**info, "id": identifier, "registered": True, "storage": "wsl", "distro": distro}
+
+
+def _trust_fingerprint(record: dict) -> str | None:
+    """Trust only installed checkpoint provenance with a verified local manifest.
+
+    The manifest is installer-produced and contains a pinned upstream revision
+    plus a local file inventory. An unverified manually registered directory
+    never gets persistent trust.
+    """
+    import hashlib
+    if record.get("storage") == "wsl":
+        return None
+    path = Path(record.get("path", ""))
+    manifest = path / "song-harbor-install.json"
+    if not manifest.is_file() or manifest.stat().st_size > 4 * 1024 * 1024:
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if not data.get("complete") or not isinstance(data.get("revision"), str) or not isinstance(data.get("inventory"), dict):
+            return None
+        if not all(isinstance(v, dict) and isinstance(v.get("sha256"), str) and len(v["sha256"]) == 64
+                   for v in data["inventory"].values()):
+            return None
+        code_identity = {}
+        for relative, metadata in data["inventory"].items():
+            # Older installer manifests included a staging marker removed at publish.
+            if relative == ".songharbor-staging.json":
+                continue
+            if not isinstance(relative, str) or Path(relative).is_absolute() or ".." in Path(relative).parts:
+                return None
+            actual = (path / relative).resolve()
+            if not actual.is_relative_to(path.resolve()) or not actual.is_file():
+                return None
+            if actual.stat().st_size != metadata.get("size"):
+                return None
+            if actual.suffix.lower() in (".py", ".json", ".yaml", ".yml") and actual.stat().st_size <= 8 * 1024 * 1024:
+                code_identity[relative] = hashlib.sha256(actual.read_bytes()).hexdigest()
+        return hashlib.sha256(json.dumps({
+            "revision": data["revision"], "repo": data.get("repo"),
+            "inventory": data["inventory"], "code_identity": code_identity
+        }, sort_keys=True).encode()).hexdigest()
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def trust_status(app_root: Path, identifier: str) -> dict:
+    with _LOCK:
+        registry = _load(app_root)
+        record = registry["models"].get(identifier)
+        if not isinstance(record, dict):
+            raise ValueError("ERROR: Model is not registered.")
+        fingerprint = _trust_fingerprint(record)
+        return {"model_id": identifier, "trusted": fingerprint is not None and
+                record.get("approved_fingerprint") == fingerprint,
+                "persistent_trust_available": fingerprint is not None}
+
+
+def approve_trust(app_root: Path, identifier: str) -> dict:
+    with _LOCK:
+        registry = _load(app_root)
+        record = registry["models"].get(identifier)
+        if not isinstance(record, dict):
+            raise ValueError("ERROR: Model is not registered.")
+        fingerprint = _trust_fingerprint(record)
+        if fingerprint is None:
+            # Unverified/WSL-only models still require each-load authorization.
+            return {"model_id": identifier, "trusted": False, "persistent_trust_available": False}
+        record["approved_fingerprint"] = fingerprint
+        _atomic_write(app_root, registry)
+        return {"model_id": identifier, "trusted": True, "persistent_trust_available": True}

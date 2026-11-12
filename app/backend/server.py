@@ -30,6 +30,14 @@ import workspace_settings
 import shared_model_settings
 import model_registry
 import moss_runtime
+import moss_q4_experiment
+import moss_q4_snapshots
+import moss_q4_installer
+import wsl_model_bridge
+import wsl_dependency_repair
+import app_logs
+import wsl_model_install
+import moss_setup_jobs
 import projects
 import sections
 import section_import
@@ -44,6 +52,8 @@ import stem_import
 import track_lifecycle
 import declick_recipes
 import midi_arrangements
+import tempo_maps
+import tempo_measure
 import midi_section_slices
 import midi_section_composite
 import polyphonic_midi
@@ -77,6 +87,9 @@ for folder in (DATA_ROOT, MODEL_ROOT):
     folder.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Song Harbor local separator", docs_url=None, redoc_url=None)
+# Graceful API shutdown releases only Song Harbor-owned MOSS worker groups.
+app.router.add_event_handler("shutdown", moss_runtime.cleanup_on_exit)
+app.router.add_event_handler("shutdown", moss_q4_experiment.cleanup)
 lock = threading.Lock()
 jobs: dict[str, dict[str, Any]] = {}
 active: dict[str, subprocess.Popen[str] | None] = {"process": None}
@@ -270,7 +283,7 @@ def configure_shared_models(body: WorkingDirectoryRequest, request: Request) -> 
     require_local_origin(request)
     try:
         shared_model_settings.save(APP_ROOT, body.path)
-        return shared_model_settings.status(APP_ROOT, MODEL_ROOT)
+        return shared_model_settings.status(APP_ROOT, SHARED_MODEL_ROOT)
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -294,9 +307,41 @@ class LoadMossRequest(BaseModel):
     custom_code_approved: bool = False
 
 
+class RuntimePythonRequest(BaseModel):
+    path: str = Field(min_length=1, max_length=4096)
+
+
+@app.get("/api/settings/models/runtime/config")
+def model_runtime_config() -> dict[str, Any]:
+    return {"python_executable": shared_model_settings.configured_runtime_python(APP_ROOT)}
+
+
+@app.put("/api/settings/models/runtime/config")
+def save_model_runtime_config(body: RuntimePythonRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return {"python_executable": shared_model_settings.save_runtime_python(APP_ROOT, body.path)}
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/api/settings/models/discover")
 def discover_local_models() -> dict[str, Any]:
     return model_registry.list_models(APP_ROOT, SHARED_MODEL_ROOT)
+
+
+class RegisterWslModelRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    path: str = Field(min_length=1, max_length=2048)
+
+
+@app.post("/api/settings/models/register-wsl")
+def register_wsl_model(body: RegisterWslModelRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return model_registry.register_wsl(APP_ROOT, body.distro, body.path)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/settings/models/register")
@@ -320,17 +365,332 @@ def unregister_local_model(model_id: str, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class MossQ4ConfigureRequest(BaseModel):
+    executable: str = Field(min_length=1, max_length=2048)
+    model: str = Field(min_length=1, max_length=2048)
+
+
+class MossQ4TestRequest(BaseModel):
+    audio: str = Field(min_length=1, max_length=2048)
+    prompt: str = Field(min_length=1, max_length=400)
+    approved: bool = False
+
+
+class MossQ4InstallRequest(BaseModel):
+    kind: Literal["runtime", "model"]
+    approved: bool = False
+
+
+@app.get("/api/settings/models/q4/install")
+def moss_q4_install_status() -> dict[str, Any]:
+    return moss_q4_installer.status(SHARED_MODEL_ROOT)
+
+
+@app.post("/api/settings/models/q4/install")
+def moss_q4_install(body: MossQ4InstallRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_installer.start(APP_ROOT, SHARED_MODEL_ROOT, body.kind, body.approved)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/install/cancel")
+def moss_q4_install_cancel(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    return moss_q4_installer.cancel(SHARED_MODEL_ROOT)
+
+
+class MossQ4BrowseRequest(BaseModel):
+    kind: Literal["executable", "model", "audio"]
+
+
+@app.post("/api/settings/models/q4/browse")
+def moss_q4_browse(body: MossQ4BrowseRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.browse(body.kind)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/settings/models/q4")
+def moss_q4_discovery() -> dict[str, Any]:
+    return {**moss_q4_experiment.discover(APP_ROOT, SHARED_MODEL_ROOT),
+            "job": moss_q4_experiment.status(APP_ROOT),
+            "installer": moss_q4_installer.status(SHARED_MODEL_ROOT)}
+
+
+@app.post("/api/settings/models/q4/configure")
+def moss_q4_configure(body: MossQ4ConfigureRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.configure(APP_ROOT, body.executable, body.model)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MossQ4SnapshotRunRequest(BaseModel):
+    snapshot_id: str = Field(min_length=32, max_length=32)
+    prompt: str = Field(min_length=1, max_length=400)
+    approved: bool = False
+
+
+def _q4_busy_guard() -> None:
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if (busy or moss_runtime.status().get("status") in ("ready", "starting", "connected")
+            or moss_runtime.orphan_status(APP_ROOT).get("present")):
+        raise HTTPException(409, "ERROR: Audio processing or unresolved MOSS worker is active. Q4 not started.")
+
+
+@app.post("/api/settings/models/q4/snapshot")
+def moss_q4_snapshot(request: Request, audio: UploadFile = File(...),
+                     project_id: str = Form(...), recipe_revision: str = Form(...),
+                     section_ids: str = Form("[]"), source_stems: str = Form("[]"),
+                     start_seconds: float | None = Form(None),
+                     end_seconds: float | None = Form(None)) -> dict[str, Any]:
+    require_local_origin(request)
+    _q4_busy_guard()
+    if moss_q4_experiment.status(APP_ROOT)["state"] == "running":
+        raise HTTPException(409, "ERROR: Q4 analysis already running; snapshot not prepared.")
+    try:
+        ids = json.loads(section_ids)
+        stems = json.loads(source_stems)
+        if not isinstance(stems, list) or len(source_stems) > 200000:
+            raise ValueError("ERROR: Invalid source-stem metadata.")
+        if not isinstance(ids, list):
+            raise ValueError("ERROR: Section IDs must be an array.")
+        return moss_q4_snapshots.create(
+            APP_ROOT, audio.file, project_id=project_id,
+            recipe_revision=recipe_revision, start_seconds=start_seconds,
+            end_seconds=end_seconds, section_ids=ids, source_stems=stems)
+    except (OSError, ValueError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    finally:
+        audio.file.close()
+
+
+@app.post("/api/settings/models/q4/snapshot/analyze")
+def moss_q4_snapshot_analyze(body: MossQ4SnapshotRunRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    _q4_busy_guard()
+    if not body.approved:
+        raise HTTPException(400, "ERROR: Explicit Q4 analysis approval required.")
+    try:
+        source = moss_q4_snapshots.read(APP_ROOT, body.snapshot_id)
+        result = moss_q4_experiment.start(APP_ROOT, source["audio_path"], body.prompt, True,
+                                          snapshot={k: v for k, v in source.items() if k != "audio_path"})
+        return {**result, "snapshot": {k: v for k, v in source.items() if k != "audio_path"}}
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/test")
+def moss_q4_test(body: MossQ4TestRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if (busy or moss_runtime.status().get("status") in ("ready", "starting", "connected")
+            or moss_runtime.orphan_status(APP_ROOT).get("present")):
+        raise HTTPException(409, "ERROR: Audio processing or unresolved MOSS worker is active. Q4 test not started.")
+    try:
+        return moss_q4_experiment.start(APP_ROOT, body.audio, body.prompt, body.approved)
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/q4/cancel")
+def moss_q4_cancel(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_q4_experiment.cancel(APP_ROOT)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise HTTPException(500, "ERROR: Q4 termination could not be verified.") from exc
+
+
 @app.get("/api/settings/models/runtime")
 def moss_runtime_status() -> dict[str, Any]:
     return moss_runtime.status()
 
 
+@app.post("/api/settings/logs/open")
+def open_song_harbor_logs(request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return app_logs.open_logs_folder(APP_ROOT)
+    except (OSError, RuntimeError) as exc:
+        raise HTTPException(400, "ERROR: Unable to open Song Harbor logs folder.") from exc
+
+class ReleaseMossWorkerRequest(BaseModel):
+    approved: bool = False
+
+
+@app.get("/api/settings/models/runtime/orphan")
+def moss_wsl_worker_recovery_status() -> dict[str, Any]:
+    return moss_runtime.orphan_status(APP_ROOT)
+
+
+@app.post("/api/settings/models/runtime/orphan/release")
+def release_orphaned_wsl_moss(body: ReleaseMossWorkerRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.release_orphan(APP_ROOT, body.approved)
+    except (ValueError, RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/settings/models/runtime/diagnostics")
+def moss_runtime_diagnostics() -> dict[str, Any]:
+    return moss_runtime.diagnostics()
+
+
+@app.get("/api/settings/models/{model_id}/trust")
+def moss_model_trust_status(model_id: str) -> dict[str, Any]:
+    try:
+        return model_registry.trust_status(APP_ROOT, model_id)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+class WslModelLoadRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=128)
+    distro: str = Field(min_length=1, max_length=100)
+    python_path: str = Field(min_length=1, max_length=2048)
+    custom_code_approved: bool = False
+
+
+class InstallWslRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    destination: str = Field(min_length=1, max_length=2048)
+    approved: bool = False
+
+
+@app.get("/api/settings/models/wsl/install")
+def wsl_install_status() -> dict[str, Any]:
+    return wsl_model_install.status()
+
+
+@app.post("/api/settings/models/wsl/install")
+def install_wsl_distro(body: InstallWslRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return wsl_model_install.install(APP_ROOT, body.distro, body.destination, body.approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class MossSetupRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    operation: Literal["runtime", "checkpoint"]
+    model: str | None = None
+    approved: bool = False
+
+
+@app.get("/api/settings/models/setup")
+def moss_setup_status(distro: str = "") -> dict[str, Any]:
+    return moss_setup_jobs.status(APP_ROOT, SHARED_MODEL_ROOT, distro or None)
+
+
+@app.post("/api/settings/models/setup")
+def start_moss_setup(body: MossSetupRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_setup_jobs.start(APP_ROOT, SHARED_MODEL_ROOT,
+                                     body.distro, body.operation, body.model, body.approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/settings/models/wsl")
+def discover_wsl_for_models() -> dict[str, Any]:
+    return wsl_model_bridge.distros()
+
+
+class WslDistroRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+
+
+class WslDependencyRepairRequest(BaseModel):
+    distro: str = Field(min_length=1, max_length=100)
+    approved: bool = False
+
+
+@app.get("/api/settings/models/wsl/dependencies")
+def wsl_moss_dependencies(distro: str) -> dict[str, Any]:
+    try:
+        return {"dependencies": wsl_model_bridge.libnuma_status(distro),
+                "repair": wsl_dependency_repair.status(),
+                "repair_log_path": str(app_logs.log_path(APP_ROOT, "moss-repair.log"))}
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/wsl/dependencies/repair")
+def repair_wsl_dependencies(body: WslDependencyRepairRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return wsl_dependency_repair.start(APP_ROOT, body.distro, body.approved)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/wsl/probe")
+def probe_wsl_for_models(body: WslDistroRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return wsl_model_bridge.discover_runtime(body.distro)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/settings/models/runtime/load-wsl")
+def load_wsl_moss(body: WslModelLoadRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running")
+                   or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy:
+        raise HTTPException(409, "ERROR: Audio processing is active. Model not loaded.")
+    try:
+        trust = model_registry.trust_status(APP_ROOT, body.model_id)
+        if not (body.custom_code_approved or trust["trusted"]):
+            raise ValueError("ERROR: Approve checkpoint custom code before first load. Model not loaded.")
+        result = moss_runtime.load_wsl(APP_ROOT, SHARED_MODEL_ROOT, body.model_id,
+                                       body.distro, body.python_path, True)
+        if body.custom_code_approved:
+            model_registry.approve_trust(APP_ROOT, body.model_id)
+        return result
+    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class AttachMossRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=128)
+
+
+@app.post("/api/settings/models/runtime/attach")
+def attach_moss_model(body: AttachMossRequest, request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    try:
+        return moss_runtime.attach(APP_ROOT, SHARED_MODEL_ROOT, body.model_id)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.post("/api/settings/models/runtime/load")
 def load_moss_model(body: LoadMossRequest, request: Request) -> dict[str, Any]:
     require_local_origin(request)
+    with lock:
+        busy = any(j.get("status") in ("uploading", "queued", "running") or j.get("rendering") or j.get("exporting_waveform") for j in jobs.values())
+    if busy:
+        raise HTTPException(409, "ERROR: Song Harbor is processing audio. Finish current jobs before loading a model. Model not loaded.")
     try:
         return moss_runtime.load(APP_ROOT, SHARED_MODEL_ROOT, body.model_id, body.python_executable,
                                  body.custom_code_approved)
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(408, "ERROR: SGLang runtime preflight timed out. Model not loaded.") from exc
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -1372,6 +1732,105 @@ def analyze_bass_midi(ident:str,request:Request,body:BassMidiAnalyzeRequest)->di
         return out
     except (ValueError,OSError,subprocess.TimeoutExpired) as exc:
         raise HTTPException(400,str(exc)) from exc
+
+
+class TempoMapCreateRequest(BaseModel):
+    duration_samples: int = Field(ge=1, le=48000 * 3600)
+
+
+class TempoMapUpdateRequest(BaseModel):
+    asset_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    base_revision: int = Field(ge=0)
+    anchors: list[dict[str, Any]] | None = None
+    observations: list[dict[str, Any]] | None = None
+
+
+@app.get("/api/projects/{ident}/tempo-map")
+def get_project_tempo_map(ident: str) -> dict[str, Any]:
+    _ace_project(ident)
+    asset = tempo_maps.read(DATA_ROOT / "jobs" / ident)
+    return {"asset": asset, "exists": asset is not None}
+
+
+@app.post("/api/projects/{ident}/tempo-map")
+def create_project_tempo_map(ident: str, body: TempoMapCreateRequest,
+                             request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    _ace_project(ident)
+    folder = DATA_ROOT / "jobs" / ident
+    with lock:
+        if tempo_maps.read(folder) is not None:
+            raise HTTPException(409, "ERROR: Tempo map already exists. Reload before editing.")
+        try:
+            return tempo_maps.save(folder, tempo_maps.create(body.duration_samples),
+                                   expected_revision=None)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
+@app.patch("/api/projects/{ident}/tempo-map")
+def update_project_tempo_map(ident: str, body: TempoMapUpdateRequest,
+                             request: Request) -> dict[str, Any]:
+    """Explicit author edits only; observations are never auto-promoted to anchors."""
+    require_local_origin(request)
+    _ace_project(ident)
+    folder = DATA_ROOT / "jobs" / ident
+    with lock:
+        current = tempo_maps.read(folder)
+        if current is None:
+            raise HTTPException(404, "ERROR: Create the project tempo map first.")
+        if current["asset_id"] != body.asset_id or current["revision"] != body.base_revision:
+            raise HTTPException(409, "ERROR: Stale tempo map. Reload before editing.")
+        try:
+            changed = tempo_maps.revise(current, body.base_revision,
+                                         anchors=body.anchors, observations=body.observations)
+            return tempo_maps.save(folder, changed, expected_revision=body.base_revision)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+
+class TempoMeasureRequest(BaseModel):
+    snapshot_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+
+
+@app.post("/api/projects/{ident}/tempo-map/measure")
+def measure_project_tempo(ident: str, body: TempoMeasureRequest,
+                          request: Request) -> dict[str, Any]:
+    """Analyze a verified immutable offline mix, never change the accepted map."""
+    require_local_origin(request)
+    _ace_project(ident)
+    with lock:
+        active_audio = any(j.get("status") in ("uploading", "queued", "running")
+                           or j.get("rendering") or j.get("exporting_waveform")
+                           for j in jobs.values())
+    if active_audio:
+        raise HTTPException(409, "ERROR: Finish active audio processing before measuring tempo.")
+    try:
+        snapshot = moss_q4_snapshots.read(APP_ROOT, body.snapshot_id)
+        if snapshot.get("project_id") != ident or snapshot.get("source") != "song-harbor-offline-mix":
+            raise ValueError("ERROR: Tempo snapshot belongs to a different project.")
+        result = tempo_measure.measure(Path(snapshot["audio_path"]),
+                                       offset_seconds=float(snapshot["start_seconds"]))
+        map_asset = tempo_maps.read(DATA_ROOT / "jobs" / ident)
+        if map_asset is None:
+            raise ValueError("ERROR: Create a tempo map before measuring.")
+        duration_samples = map_asset["duration_samples"]
+        original_sha = snapshot["sha256"]
+        bounded = []
+        for row in result["windows"]:
+            if row["start_sample"] >= duration_samples:
+                continue
+            row["end_sample"] = min(row["end_sample"], duration_samples)
+            if row["end_sample"] <= row["start_sample"]:
+                continue
+            row["source_sha256"] = original_sha
+            row["source_revision"] = snapshot["rendered_mix_sha256"]
+            bounded.append(row)
+        result["windows"] = bounded
+        return {**result, "snapshot_id": body.snapshot_id,
+                "source_sha256": original_sha, "project_id": ident}
+    except (ValueError, OSError, wave.Error) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class MidiArrangementFromCandidateRequest(BaseModel):

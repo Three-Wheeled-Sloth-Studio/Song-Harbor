@@ -44,6 +44,22 @@ class SharedModelSettingsTests(unittest.TestCase):
         self.assertFalse(status["models_loaded"])
         self.assertFalse(status["restart_required"])
 
+    def test_runtime_python_setting_preserves_other_preferences(self):
+        candidate = Path(sys.executable)
+        if candidate.name.lower() not in ("python", "python.exe", "python3.exe"):
+            self.skipTest("Test runner does not use a standard Python executable")
+        config = workspace_settings.settings_path(self.root)
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(json.dumps({"working_files_directory": str(self.target)}))
+        saved = shared_model_settings.save_runtime_python(self.root, str(candidate))
+        self.assertEqual(saved, shared_model_settings.configured_runtime_python(self.root))
+        self.assertEqual(str(self.target), workspace_settings.read(self.root)["working_files_directory"])
+
+    def test_missing_runtime_python_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Runtime not saved"):
+            shared_model_settings.save_runtime_python(self.root, str(self.target / "python.exe"))
+        self.assertEqual("", shared_model_settings.configured_runtime_python(self.root))
+
 
 if __name__ == "__main__":
     unittest.main()

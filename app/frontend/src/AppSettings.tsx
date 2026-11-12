@@ -6,23 +6,47 @@ import {AceServiceControls} from "./AceServiceControls";
 type Working = {active_directory:string;configured_directory:string;default_directory:string;restart_required:boolean;warning:string};
 type Health = {ready:boolean;separator_ready:boolean;model:string;model_directory:string;ffmpeg?:{directory:string}|null;needs_setup?:string[]};
 type ModelSettings={configured_directory:string;active_directory:string;restart_required:boolean;exists:boolean;downloads_enabled:boolean;models_loaded:boolean};
-type DiscoveredModel={id?:string;name:string;path:string;family?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
+type DiscoveredModel={id?:string;name:string;path:string;family?:string;storage?:string;distro?:string;status:string;registered?:boolean;files?:number;bytes_present?:number};
 type ModelInventory={registered:DiscoveredModel[];discovered:DiscoveredModel[];scan_limit:number};
-type ModelRuntime={status:"unloaded"|"starting"|"ready"|"failed";model_id:string|null;error:string;port?:number};
+type ModelTrust={model_id:string;trusted:boolean;persistent_trust_available:boolean};
+type ModelDiagnostics={log_path:string|null;log_tail:string;runtime_kind:string|null;model_id:string|null};
+type ModelRuntime={status:"unloaded"|"starting"|"ready"|"connected"|"failed";model_id:string|null;error:string;port?:number};
+type WslStatus={available:boolean;distros:string[];message:string};
+type MossSetupCatalog={id:string;name:string;repo:string;license:string;fit:string;installed:boolean;path:string};
+type MossSetup={state:"idle"|"running"|"finished"|"failed";operation:string|null;model:string|null;distro:string|null;runtime_installed:boolean;runtime_python:string;catalog:MossSetupCatalog[];error:string;log_tail:string};
+type WslInstall={state:"idle"|"installing"|"completed"|"failed";destination:string;message:string};
+type WslProbe={distro:string;python_candidates:string[];probe_ok:boolean;gpu_visible:boolean;message:string};
 type FluidSynthSettings={configured_path:string;resolved_path:string|null};
 
 export function AppSettings({open,onOpenChange,health,onReady,focus}:{
   open:boolean;onOpenChange:(value:boolean)=>void;health:Health|null;onReady:(value:Health)=>void;
-  focus?:"fluidsynth"|"sfizz"|null;
+  focus?:"fluidsynth"|"sfizz"|"models"|null;
 }) {
   const [models,setModels]=useState<ModelSettings|null>(null);
   const [inventory,setInventory]=useState<ModelInventory|null>(null);
   const [runtime,setRuntime]=useState<ModelRuntime|null>(null);
   const [locatePath,setLocatePath]=useState("");
+  const [wslModelPath,setWslModelPath]=useState("");
   const [runtimePython,setRuntimePython]=useState("");
+  const [savedRuntimePython,setSavedRuntimePython]=useState("");
   const [approveCode,setApproveCode]=useState(false);
+  const [confirmLoad,setConfirmLoad]=useState(false);
+  const [modelTrust,setModelTrust]=useState<ModelTrust|null>(null);
+  const [modelDiagnostics,setModelDiagnostics]=useState<ModelDiagnostics|null>(null);
   const [modelPath,setModelPath]=useState("");
-  const [showModels,setShowModels]=useState(false);
+  const [showModels,setShowModels]=useState(true);
+  const [wsl,setWsl]=useState<WslStatus|null>(null);
+  const [mossSetup,setMossSetup]=useState<MossSetup|null>(null);
+  const [setupModel,setSetupModel]=useState("moss-audio-4b");
+  const [approveSetup,setApproveSetup]=useState(false);
+  const [wslInstall,setWslInstall]=useState<WslInstall|null>(null);
+  const [wslInstallFolder,setWslInstallFolder]=useState("");
+  const [wslInstallApproved,setWslInstallApproved]=useState(false);
+  const [showWslInstall,setShowWslInstall]=useState(false);
+  const [wslDistro,setWslDistro]=useState("");
+  const [wslProbe,setWslProbe]=useState<WslProbe|null>(null);
+  const [wslPython,setWslPython]=useState("");
+  const [selectedModel,setSelectedModel]=useState("");
   const [data,setData]=useState<Working|null>(null);
   const [path,setPath]=useState("");
   const [busy,setBusy]=useState(false);
@@ -37,13 +61,19 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
 
   useEffect(()=>{
     if(!open)return;
-    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");
+    setError("");setNotice("");setShowTools(focus==="fluidsynth"||focus==="sfizz");if(focus==="models")setShowModels(true);
     void fetch("/api/settings/working-files").then(async r=>{
       if(!r.ok)throw Error("Could not read storage settings");
       return await r.json() as Working;
     }).then(x=>{setData(x);setPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/models").then(async r=>{if(!r.ok)throw Error("Could not read model settings");return await r.json() as ModelSettings;}).then(x=>{setModels(x);setModelPath(x.configured_directory);}).catch(e=>setError(String(e)));
     void refreshModels();
+    void response<MossSetup>("/api/settings/models/setup","GET").then(setMossSetup).catch(e=>setError(String(e)));
+    void response<WslInstall>("/api/settings/models/wsl/install","GET").then(setWslInstall).catch(e=>setError(String(e)));
+    void response<WslStatus>("/api/settings/models/wsl","GET").then(x=>{
+      setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
+    }).catch(e=>setError(String(e)));
+    void response<{python_executable:string}>("/api/settings/models/runtime/config","GET").then(x=>{setRuntimePython(x.python_executable);setSavedRuntimePython(x.python_executable);}).catch(e=>setError(String(e)));
     void fetch("/api/settings/fluidsynth").then(async r=>{if(!r.ok)throw Error("Could not read FluidSynth settings");return await r.json() as FluidSynthSettings;})
       .then(x=>{setFluid(x);setFluidPath(x.configured_path||x.resolved_path||"");}).catch(e=>setError(String(e)));
     void fetch("/api/settings/sfizz").then(async r=>{
@@ -59,13 +89,54 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
         response<ModelRuntime>("/api/settings/models/runtime","GET")
       ]);
       setInventory(found);setRuntime(state);
+      setSelectedModel(current=>found.registered.some(item=>item.id===current&&item.status==="present-unverified")?current:(found.registered.find(item=>item.status==="present-unverified"&&item.name.toLowerCase().includes("audio-4b"))||found.registered.find(item=>item.status==="present-unverified"))?.id||"");
     } catch(e) {setError(e instanceof Error?e.message:String(e));}
   }
+  useEffect(()=>{
+    if(!open||!selectedModel){setModelTrust(null);return;}
+    void response<ModelTrust>("/api/settings/models/"+encodeURIComponent(selectedModel)+"/trust","GET")
+      .then(setModelTrust).catch(e=>setError(String(e)));
+  },[open,selectedModel]);
+  useEffect(()=>{
+    if(!open||runtime?.status!=="failed")return;
+    void response<ModelDiagnostics>("/api/settings/models/runtime/diagnostics","GET")
+      .then(setModelDiagnostics).catch(e=>setError(String(e)));
+  },[open,runtime?.status]);
+  useEffect(()=>{
+    if(!open||!wslDistro)return;
+    let alive=true;
+    void response<MossSetup>("/api/settings/models/setup?distro="+encodeURIComponent(wslDistro),"GET").then(next=>{
+      if(!alive)return;
+      setMossSetup(next);
+      if(next.runtime_python)setWslPython(current=>current||next.runtime_python);
+    }).catch(e=>{if(alive)setError(String(e));});
+    return ()=>{alive=false;};
+  },[open,wslDistro]);
   useEffect(()=>{
     if(!open||!showModels||runtime?.status!=="starting")return;
     const handle=window.setInterval(()=>{void refreshModels();},3000);
     return ()=>window.clearInterval(handle);
   },[open,showModels,runtime?.status]);
+  useEffect(()=>{
+    if(!open||!showModels||mossSetup?.state!=="running")return;
+    const handle=window.setInterval(()=>{
+      void response<MossSetup>("/api/settings/models/setup?distro="+encodeURIComponent(wslDistro),"GET").then(next=>{
+        setMossSetup(next);
+        if(next.state==="finished"){
+          if(next.runtime_python)setWslPython(next.runtime_python);
+          void refreshModels();
+        }
+      }).catch(e=>setError(String(e)));
+    },2500);
+    return ()=>window.clearInterval(handle);
+  },[open,showModels,mossSetup?.state,wslDistro]);
+  async function startMossSetup(operation:"runtime"|"checkpoint"){
+    if(!wslDistro)throw Error("ERROR: Select an installed WSL distribution.");
+    const x=await response<MossSetup>("/api/settings/models/setup","POST",{
+      distro:wslDistro,operation,model:operation==="checkpoint"?setupModel:null,approved:approveSetup
+    });
+    setMossSetup(x);
+  }
   async function act(operation:()=>Promise<void>){
     setBusy(true);setError("");setNotice("");
     try{await operation();}catch(e){setError(e instanceof Error?e.message:String(e));}
@@ -119,17 +190,102 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               })}>Save location</Button>
             </div>
             <div className="setting-tool-row">
+              <strong>MOSS loader</strong>
+              <Status tone={runtime?.status==="ready"||runtime?.status==="connected"?"success":runtime?.status==="failed"?"warning":"neutral"}>{runtime?.status||"Checking"}</Status>
+            </div>
+            <div className="setting-controls">
+              <span>WSL</span>
+              <select aria-label="WSL distribution" value={wslDistro} onChange={e=>{setWslDistro(e.target.value);setWslProbe(null);setWslPython("");}}>
+                <option value="">Select distribution</option>
+                {(wsl?.distros||[]).map(name=><option key={name} value={name}>{name}</option>)}
+              </select>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                const x=await response<WslStatus>("/api/settings/models/wsl","GET");setWsl(x);setWslDistro(v=>x.distros.includes(v)?v:x.distros[0]||"");
+              })}>Detect WSL</Button>
+              <Button size="compact" variant="secondary" disabled={busy||!wslDistro} onClick={()=>void act(async()=>{
+                const x=await response<WslProbe>("/api/settings/models/wsl/probe","POST",{distro:wslDistro});
+                setWslProbe(x);setWslPython(x.python_candidates[0]||"");
+              })}>Inspect</Button>
+            </div>
+            {wsl?.message&&<p role="status">{wsl.message}</p>}
+            <div className="setting-tool-row">
+              <span>WSL setup <Status tone={wsl?.distros.length?"success":"warning"}>{wsl?.distros.length?"Installed":"Check setup"}</Status></span>
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>setShowWslInstall(v=>!v)}>{showWslInstall?"Hide setup":"Install WSL"}</Button>
+            </div>
+            {showWslInstall&&<div className="setting-tools">
+              <div className="setting-controls setting-component-path">
+                <input aria-label="New Ubuntu WSL installation directory" value={wslInstallFolder}
+                  onChange={e=>setWslInstallFolder(e.target.value)} placeholder="D:\\WSL\\SongHarborUbuntu (new folder)"/>
+                <Button size="compact" variant="primary" disabled={busy||wslInstall?.state==="installing"||!wsl?.available||!wslInstallFolder.trim()||!wslInstallApproved||(wsl?.distros||[]).includes("Ubuntu")}
+                  onClick={()=>void act(async()=>{
+                    const x=await response<WslInstall>("/api/settings/models/wsl/install","POST",{distro:"Ubuntu",destination:wslInstallFolder,approved:wslInstallApproved});
+                    setWslInstall(x);
+                  })}>Install Ubuntu</Button>
+              </div>
+              <label className="setting-tool-row"><input type="checkbox" checked={wslInstallApproved}
+                onChange={e=>setWslInstallApproved(e.target.checked)}/> Approve Ubuntu download and installation in selected folder</label>
+              {wslInstall?.message&&<p role="status">{wslInstall.message}</p>}
+              <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                setWslInstall(await response<WslInstall>("/api/settings/models/wsl/install","GET"));
+                const x=await response<WslStatus>("/api/settings/models/wsl","GET");setWsl(x);
+              })}>Check installation</Button>
+            </div>}
+
+            {wslProbe&&<div className="setting-controls setting-component-path">
+              <input aria-label="WSL SGLang Python path" value={wslPython} onChange={e=>setWslPython(e.target.value)} placeholder="/home/user/.venv/bin/python"/>
+              <Status tone={wslProbe.gpu_visible?"success":"warning"}>{wslProbe.gpu_visible?"GPU visible":"GPU unverified"}</Status>
+            </div>}
+            <div className="setting-tool-row">
+              <strong>Install MOSS</strong>
+              <Status tone={mossSetup?.state==="failed"?"warning":mossSetup?.runtime_installed?"success":"neutral"}>
+                {mossSetup?.state==="running"?"Installing":mossSetup?.runtime_installed?"Runtime installed":"Setup needed"}
+              </Status>
+            </div>
+            <div className="setting-controls">
+              <Button size="compact" variant="secondary"
+                disabled={busy||!wslDistro||!approveSetup||mossSetup?.state==="running"||!!mossSetup?.runtime_installed}
+                onClick={()=>void act(async()=>{await startMossSetup("runtime");})}>{mossSetup?.state==="running"&&mossSetup.operation==="runtime"?"Installing...":"Install MOSS runtime"}</Button>
+              <select aria-label="MOSS checkpoint to download" value={setupModel} onChange={e=>setSetupModel(e.target.value)}>
+                {(mossSetup?.catalog||[]).map(item=><option key={item.id} value={item.id}>{item.name}{item.installed?" (installed)":""}</option>)}
+              </select>
+              <Button size="compact" variant="secondary"
+                disabled={busy||!wslDistro||!approveSetup||!mossSetup?.runtime_installed||mossSetup?.state==="running"||!!mossSetup?.catalog.find(x=>x.id===setupModel)?.installed}
+                onClick={()=>void act(async()=>{await startMossSetup("checkpoint");})}>{mossSetup?.state==="running"&&mossSetup.operation==="checkpoint"?"Downloading...":"Download model"}</Button>
+            </div>
+            <label className="setting-tool-row"><input type="checkbox" checked={approveSetup} onChange={e=>setApproveSetup(e.target.checked)}/>
+              Approve selected download/install to the shared model drive</label>
+            {mossSetup?.state==="running"&&<div role="status" aria-live="polite" className="song-moss-progress"><span className="song-sfz-spinner" aria-hidden="true"/><span>{mossSetup.operation==="runtime"?"Installing MOSS runtime":"Downloading "+(mossSetup.catalog.find(item=>item.id===mossSetup.model)?.name||"MOSS model")}... <small>Active task; status refreshes automatically.</small></span></div>}
+            {mossSetup?.state==="failed"&&<div role="alert" className="error-message">{mossSetup.error}</div>}
+            {(mossSetup?.state==="running"||mossSetup?.state==="failed")&&<details><summary>Installation log</summary>
+              <pre style={{whiteSpace:"pre-wrap",maxHeight:"150px",overflow:"auto"}}>{mossSetup.log_tail||"Initializing..."}</pre>
+            </details>}
+            <div className="setting-controls setting-component-path">
+              <select aria-label="MOSS model to load" value={selectedModel} onChange={e=>{setSelectedModel(e.target.value);setConfirmLoad(false);setApproveCode(false);}}>
+                <option value="">Select registered MOSS model</option>
+                {(inventory?.registered||[]).filter(item=>item.status==="present-unverified").map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              <Button size="compact" variant="primary" disabled={busy||!selectedModel||!wslDistro||!(wslPython.trim()||mossSetup?.runtime_python)||runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected"}
+                title={!selectedModel?"Register a checkpoint first":!(wslPython||mossSetup?.runtime_python)?"Install MOSS runtime or inspect WSL":"Review and load selected MOSS model"}
+                onClick={()=>{if(modelTrust?.trusted){void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load-wsl","POST",{model_id:selectedModel,distro:wslDistro,python_path:mossSetup?.runtime_python||wslPython,custom_code_approved:false}));});}else setConfirmLoad(true);}}>Load MOSS</Button>
+              {(runtime?.status==="ready"||runtime?.status==="starting"||runtime?.status==="connected")&&
+                <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{
+                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));
+                })}>Unload</Button>}
+            </div>
+            {!inventory?.registered.length&&<div role="status" className="setting-path">No registered MOSS model. Scan or register a checkpoint below to enable Load.</div>}
+            {wsl&&!wsl.available&&<div role="alert" className="error-message">ERROR: WSL is not installed or wsl.exe is unavailable. No model loaded.</div>}
+            {wsl?.available&&!wsl.distros.length&&<div role="status" className="setting-path">No WSL distribution detected. Use WSL setup below; existing D: installations will not be replaced.</div>}
+            {!!wslDistro&&!wslProbe&&<div role="status" className="setting-path">Inspect the selected WSL distribution to locate Python and check GPU visibility.</div>}
+            {!!wslProbe&&!wslPython&&<div role="status" className="setting-path">Enter the existing SGLang Python path inside WSL to enable Load.</div>}
+            {!!selectedModel&&!!wslPython&&!modelTrust?.trusted&&!confirmLoad&&<div role="status" className="setting-path">Review and approve the registered model's custom code before loading.</div>}
+
+            <div className="setting-tool-row">
               <span>Local checkpoints <Status tone="neutral">{(inventory?.registered.length||0)} registered</Status></span>
               <Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(refreshModels)}>Scan folder</Button>
             </div>
             {(inventory?.registered||[]).map(item=><div className="setting-tool-row" key={item.id} title={item.path}>
-              <span>{item.name} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
+              <span>{item.name}{item.storage==="wsl"?" (WSL "+item.distro+")":""} <Status tone={item.status==="present-unverified"?"neutral":"warning"}>{runtime?.model_id===item.id?runtime?.status:item.status}</Status></span>
               <div className="setting-controls">
-                {runtime?.model_id===item.id&&runtime?.status!=="failed"
-                  ?<Button size="compact" variant="secondary" disabled={busy} onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/unload","POST"));})}>Unload</Button>
-                  :<Button size="compact" variant="secondary" disabled={busy||item.status!=="present-unverified"||runtime?.status==="starting"||runtime?.status==="ready"||!runtimePython.trim()||!approveCode}
-                    title="Explicitly start isolated offline SGLang. Requires reviewed custom model code and a configured runtime."
-                    onClick={()=>void act(async()=>{setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load","POST",{model_id:item.id,python_executable:runtimePython,custom_code_approved:approveCode}));})}>Load</Button>}
                 <Button size="compact" variant="secondary" disabled={busy||runtime?.model_id===item.id} onClick={()=>void act(async()=>{
                   await response<{unregistered:boolean}>("/api/settings/models/register/"+encodeURIComponent(item.id||""),"DELETE");
                   await refreshModels();
@@ -149,11 +305,39 @@ export function AppSettings({open,onOpenChange,health,onReady,focus}:{
               })}>Register path</Button>
             </div>
             <div className="setting-controls setting-component-path">
-              <input aria-label="SGLang Python executable" value={runtimePython} onChange={e=>setRuntimePython(e.target.value)} placeholder="Isolated SGLang python.exe (existing)"/>
+              <input aria-label="Existing checkpoint path inside WSL" value={wslModelPath} onChange={e=>setWslModelPath(e.target.value)}
+                placeholder="/home/user/models/MOSS-Music-8B-Instruct"/>
+              <Button size="compact" variant="secondary" disabled={busy||!wslDistro||!wslModelPath.trim()} onClick={()=>void act(async()=>{
+                await response<DiscoveredModel>("/api/settings/models/register-wsl","POST",{distro:wslDistro,path:wslModelPath});
+                setWslModelPath("");await refreshModels();
+              })}>Register WSL path</Button>
             </div>
-            <label className="setting-tool-row"><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I reviewed and approve this checkpoint's custom Python code</label>
+            <div className="setting-controls setting-component-path">
+              <input aria-label="SGLang Python executable" value={runtimePython} onChange={e=>setRuntimePython(e.target.value)} placeholder="Isolated SGLang python.exe (existing)"/>
+              <Button size="compact" variant="secondary" disabled={busy||!runtimePython.trim()||runtimePython===savedRuntimePython} onClick={()=>void act(async()=>{
+                const x=await response<{python_executable:string}>("/api/settings/models/runtime/config","PUT",{path:runtimePython});
+                setSavedRuntimePython(x.python_executable);setRuntimePython(x.python_executable);
+                setNotice("Runtime executable saved. No model started.");
+              })}>Save runtime</Button>
+            </div>
+            {confirmLoad&&<div className="song-moss-confirm" role="group" aria-label="Confirm MOSS model loading">
+              <strong>Load {(inventory?.registered||[]).find(item=>item.id===selectedModel)?.name||"selected model"}?</strong>
+              <label><input type="checkbox" checked={approveCode} onChange={e=>setApproveCode(e.target.checked)}/> I approve this checkpoint's custom code in WSL. For installed verified checkpoints, approval is remembered until the checkpoint changes.</label>
+              <div className="setting-controls">
+                <Button size="compact" variant="primary" disabled={busy||!approveCode} onClick={()=>void act(async()=>{
+                  setRuntime(await response<ModelRuntime>("/api/settings/models/runtime/load-wsl","POST",{
+                    model_id:selectedModel,distro:wslDistro,python_path:mossSetup?.runtime_python||wslPython,custom_code_approved:true
+                  }));setConfirmLoad(false);setApproveCode(false);
+                  if(modelTrust?.persistent_trust_available)setModelTrust({...modelTrust,trusted:true});
+                })}>Confirm load</Button>
+                <Button size="compact" variant="secondary" onClick={()=>{setConfirmLoad(false);setApproveCode(false);}}>Cancel</Button>
+              </div>
+            </div>}
             {runtime?.status==="starting"&&<p role="status">Starting model. Readiness check pending...</p>}
-            {runtime?.status==="failed"&&<p role="alert" className="error-message">{runtime.error}</p>}
+            {runtime?.status==="connected"&&<p role="status">Connected to external WSL model. Disconnect leaves the external server running.</p>}
+            {runtime?.status==="failed"&&<><p role="alert" className="error-message">{runtime.error}</p>
+              {modelDiagnostics?.log_path&&<details className="song-moss-diagnostics"><summary>Failure details</summary><div className="setting-path">Log: {modelDiagnostics.log_path}</div>
+                <pre>{modelDiagnostics.log_tail||"No process output captured."}</pre></details>}</>}
             {runtime?.status==="ready"&&<p role="status">Local model endpoint responding on port {runtime.port}. Audio inference not yet validated.</p>}
           </>}
         </div>

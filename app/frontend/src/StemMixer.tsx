@@ -27,6 +27,8 @@ import {AccompanimentGenerator} from "./AccompanimentGenerator";
 import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
+import {MossModelTool} from "./MossModelTool";
+import {TempoMapTool} from "./TempoMapTool";
 import type { SongSection } from "./SectionEditor";
 
 type SectionPreview =
@@ -69,11 +71,12 @@ function effectiveGain(stem: Stem, anySolo: boolean) {
   return stem.mute || (anySolo && !stem.solo) ? 0 : stem.gain / 100;
 }
 
-export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, midiSession, onMidiSessionChange, settingsOpen }: {
+export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, savedStems, trackLabels, trackAliases, trackDetails, initialReplacements, initialSections, initialTitle, onSaved, onTrackRenamed, onTrackAdded, onConfigureFluidSynth, onConfigureSfizz, onConfigureModels, midiSession, onMidiSessionChange, settingsOpen }: {
   jobId: string; files: string[]; expectedDuration?: number;
   onMissingFfmpeg?: (retry: () => void) => void;
   onConfigureFluidSynth?:()=>void;
   onConfigureSfizz?:()=>void;
+  onConfigureModels?:()=>void;
   midiSession?:MidiRenderSession|null;
   onMidiSessionChange?:(value:MidiRenderSession|null)=>void;
   settingsOpen?:boolean;
@@ -1586,6 +1589,31 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </details>
 
         </>}
+        {tool==="tempoMap"&&<TempoMapTool projectId={jobId} durationSeconds={duration} sections={timelineSections}
+          renderMix={async()=>{
+            const engine=audio.current;
+            if(correction||sectionPreviewActive)throw Error("ERROR: Accept or discard the section preview before measuring tempo.");
+            if(!engine?.ready)throw Error("ERROR: Wait for synchronized audio loading to finish.");
+            if(!declickLoaded)throw Error("ERROR: Saved repairs are not loaded. Measurement blocked.");
+            if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
+            return engine.renderWav24();
+          }}/>} 
+        {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
+          mixSource={{projectId:jobId,sections:timelineSections,
+          sourceStems:stems.map(stem=>{
+            const identity=trackIdentities.find(row=>row.working_filename===stem.filename);
+            return {track_id:identity?.track_id||stem.filename,
+              working_filename:stem.filename,display_name:stem.name,
+              gain:stem.gain,mute:stem.mute,solo:stem.solo};
+          }),
+          render:async()=>{
+            const engine=audio.current;
+            if(correction||sectionPreviewActive)throw Error("ERROR: Accept or discard section previews before analyzing the saved mix.");
+            if(!engine?.ready)throw Error("ERROR: Wait for synchronized audio to finish loading.");
+            if(!declickLoaded)throw Error("ERROR: Saved repairs are still loading; mix snapshot blocked.");
+            if(exporting)throw Error("ERROR: Mix export is running. Analysis snapshot not started.");
+            return engine.renderWav24();
+          }}}/>}
         {tool==="accompaniment"&&<AccompanimentGenerator jobId={jobId} sections={timelineSections}
           sourceTracks={trackIdentities.map(t=>({track_id:t.track_id,display_name:t.display_name,working_filename:t.working_filename}))}
           engine={audio.current} playing={playing} position={position} onSeek={seek}

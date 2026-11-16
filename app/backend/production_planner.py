@@ -340,7 +340,8 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             if filename is None:
                 return None
             state = stem_states.get(filename, {})
-            if state.get("mute", False) or (any_solo and not state.get("solo", False)):
+            if (state.get("mute", False) or float(state.get("gain", 1)) <= .001
+                    or (any_solo and not state.get("solo", False))):
                 return None
             evidence = scoped.get((section["id"], filename))
             if section_stems:
@@ -372,11 +373,13 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             alias, evidence = drum_role
             # Focus on transient character. No panning of the combined drum
             # bus: its kick and low hits must remain an anchored foundation.
-            if (is_peak or expansive or tone == "driving") and metric["peakDbfs"] < -1.5:
-                threshold = -15 if dynamics >= 70 else -18
-                comp = f"{threshold},2"
-                if set_effect(alias, "comp", comp):
-                    notes_local.append("Measured active drums: moderate compression for impact, not forced loudness")
+            if (is_peak or expansive or tone == "driving") and metric["peakDbfs"] <= -3.5:
+                # Bounded dry lift creates a noticeable entrance while
+                # leaving impact transients uncompressed. Mix headroom is a
+                # screening guard, not proof of safe final rendered peaks.
+                lift = min(2.0, round(.7 + dynamics * .014, 1))
+                if set_effect(alias, "gain", f"+{lift:g}"):
+                    notes_local.append(f"Drums +{lift:g} dB on an active high-energy passage; verify rendered peaks")
             elif is_break or tone == "ominous":
                 send = min(28, 9 + round(spatial * .16))
                 if spatial >= 35 and set_effect(alias, "space", str(send)):

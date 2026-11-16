@@ -54,6 +54,28 @@ def _owned(directives: list[dict], alias: str, kind: str) -> bool:
     )
 
 
+def _authored_direction(value: object) -> dict:
+    """Read explicit parenthetical performance cues only; lyrics are not
+    sentiment-classified, paraphrased, or edited."""
+    if not isinstance(value, str):
+        return {"tone": "unspecified", "cues": []}
+    annotations = []
+    for line in value.splitlines():
+        line = line.strip()
+        if line.startswith("(") and line.endswith(")") and len(line) < 220:
+            annotations.append(line[1:-1].strip())
+    evidence = " ".join(annotations).casefold()
+    intimate = ("intimate", "whisper", "restrained", "hushed", "smoky", "quiet", "distant")
+    expansive = ("full power", "choir swell", "anthemic", "soaring", "defiant", "explosive")
+    if any(word in evidence for word in intimate):
+        tone = "intimate"
+    elif any(word in evidence for word in expansive):
+        tone = "expansive"
+    else:
+        tone = "unspecified"
+    return {"tone": tone, "cues": annotations[:5]}
+
+
 def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
              dynamics: int = 60, direction: str = "enhance",
              stereo_sources: list[dict] | None = None,
@@ -188,6 +210,11 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         length = float(section["end_seconds"]) - float(section["start_seconds"])
         ramp = round(max(.05, min(length * (.42 if is_peak else .48), 15)), 2)
         quiet = metric["rmsDbfs"] < -30
+        authored_direction = _authored_direction(
+            project.get("section_lyrics", {}).get(section["id"], "")
+        )
+        intimate = authored_direction["tone"] == "intimate"
+        expansive = authored_direction["tone"] == "expansive"
         step: list[str] = []
         notes_local = []
 
@@ -225,9 +252,9 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 alias = row["alias"]
                 # Deliberate spatial story: alternating/expanding verse positions,
                 # bring separated tracks closer to center for chorus impact.
-                if is_peak:
+                if is_peak or intimate:
                     bias = min(24, round(spatial * .24))
-                elif is_intro or is_break:
+                elif is_intro or is_break or expansive:
                     bias = min(48, round(spatial * .48))
                 else:
                     bias = min(42, round(spatial * .40))
@@ -243,7 +270,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             # a dry source is effectively mono; width alone does not.
             for i, row in enumerate(local_eligible[:3]):
                 alias = row["alias"]
-                reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro else .18)))
+                reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro or expansive else .18)))
                 if direction in ("ominous", "movement"):
                     reflections = min(38, reflections + 4)
                 if row["mono"] or metric["widthDb"] < -14:
@@ -252,7 +279,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 elif not row["split"] and not row["wide"] and not row["asymmetric"]:
                     width = min(145, round(105 + spatial * (.25 if is_peak or is_break else .15)))
                     set_effect(alias, "width", str(width))
-                if (is_intro or is_break or is_peak) and i == 0:
+                if (is_intro or is_break or is_peak or expansive) and i == 0:
                     wet = min(55, round(16 + spatial * (.30 if is_break else .22)))
                     if direction == "ominous":
                         wet = min(60, wet + 7)
@@ -272,12 +299,18 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         )
         if dynamics >= 40 and known.get("vocals") and lead_active and local_eligible:
             backing = local_eligible[0]["alias"]
-            if is_verse or is_break:
-                duck = round(min(4.0, 1.1 + dynamics * .027), 1)
+            if is_verse or is_break or intimate:
+                duck = round(min(4.0, 1.1 + dynamics * .027 + (.4 if intimate else 0)), 1)
                 if set_effect(backing, "duck", f"{duck:g}"):
                     notes_local.append(f"Voice-keyed backing duck {duck:g} dB, protecting lead clarity")
             elif is_peak:
                 set_effect(backing, "duck", "1")
+        if authored_direction["cues"]:
+            notes_local.append(
+                "Authored performance direction: " +
+                authored_direction["tone"] +
+                " (" + "; ".join(authored_direction["cues"])[:150] + ")"
+            )
         if metric["peakDbfs"] > -1:
             notes_local.append("High mix peak; audition and check headroom, not automatically mastered")
         if quiet:

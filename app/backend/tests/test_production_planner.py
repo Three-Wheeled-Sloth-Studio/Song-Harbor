@@ -234,6 +234,55 @@ class ProductionPlannerTests(unittest.TestCase):
             planner.generate(project,self.metrics(project),reviewed_context={
                 project["sections"][0]["id"]:{"tone":"guitar in A minor", "origin":"model"}})
 
+    def test_role_aware_vocals_drums_bass_with_headroom_and_presence(self):
+        project=self.project()
+        project["files"].append("Drums.wav")
+        project["source_tracks"].append({"working_filename":"Drums.wav","stem_alias":"Drums"})
+        project["section_production"]={}
+        rows=self.metrics(project)
+        rows[1]["peakDbfs"]=-4.5
+        sources=[
+            {"filename":name,"balanceDb":0,"widthDb":-55,"correlation":1,
+             "hardPan":0,"channels":2,"rmsDbfs":-18}
+            for name in ("Other.wav","Vocals.wav","Bass.wav","Drums.wav")
+        ]
+        result=planner.generate(project,rows,stereo_sources=sources,
+                                spatial=85,dynamics=85,direction="ominous")
+        content=result["content"]
+        self.assertIn("Vocals.reverb:",content)
+        self.assertIn("Drums.comp:",content)
+        self.assertIn("Bass.space:",content)
+        self.assertNotIn("Vocals.pan:",content)
+        self.assertNotIn("Bass.pan:",content)
+        self.assertNotIn("Drums.pan:",content)
+        self.assertEqual(section_import.apply(project,content,"replace",28)["section_lyrics"],
+                         project["section_lyrics"])
+
+    def test_silent_roles_and_authored_vocal_reverb_are_protected(self):
+        project=self.project()
+        project["files"].append("Drums.wav")
+        project["source_tracks"].append({"working_filename":"Drums.wav","stem_alias":"Drums"})
+        project["section_production"]={
+            project["sections"][0]["id"]:
+                section_production.parse_block("{Vocals.reverb:25@4s:smooth}")
+        }
+        sections=[x["id"] for x in project["sections"]]
+        sources=[
+            {"filename":name,"balanceDb":0,"widthDb":-55,"correlation":1,
+             "hardPan":0,"channels":2,"rmsDbfs":-20}
+            for name in ("Other.wav","Vocals.wav","Bass.wav","Drums.wav")
+        ]
+        evidence=[]
+        for sid in sections:
+            for name in ("Other.wav","Vocals.wav","Bass.wav","Drums.wav"):
+                evidence.append({"sectionId":sid,"filename":name,"rmsDbfs":-85 if name=="Drums.wav" else -20,
+                                 "balanceDb":0,"widthDb":-55,"correlation":1,"coverage":1})
+        result=planner.generate(project,self.metrics(project),stereo_sources=sources,
+                                section_stems=evidence,spatial=80,dynamics=80)
+        self.assertEqual(result["content"].count("Vocals.reverb:"),1)
+        self.assertNotIn("Drums.comp:",result["content"])
+        self.assertNotIn("Drums.space:",result["content"])
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

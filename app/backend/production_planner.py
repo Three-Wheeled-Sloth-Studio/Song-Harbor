@@ -146,8 +146,6 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         if not isinstance(filename, str) or filename not in files:
             raise ValueError("Invalid section stem filename")
         key = (row["sectionId"], filename)
-        if key in scoped:
-            raise ValueError("Duplicate section stem observation")
         measurement = {"sectionId": row["sectionId"], "filename": filename}
         for field, lo, hi in (
             ("rmsDbfs", -240, 24), ("balanceDb", -200, 200),
@@ -158,7 +156,12 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not lo <= value <= hi:
                 raise ValueError("Invalid section stem " + field)
             measurement[field] = float(value)
-        scoped[key] = measurement
+        previous = scoped.get(key)
+        # Split channels can report multiple physical source lanes under one
+        # working filename. Keep the strongest covered lane as conservative
+        # presence evidence; split-child positioning stays protected.
+        if previous is None or measurement["rmsDbfs"] > previous["rmsDbfs"]:
+            scoped[key] = measurement
     lookup = section_production.source_map(files, project.get("source_tracks", []))
     by_filename = {row["filename"]: row for row in source_profiles}
     stem_states = {row.get("filename"): row for row in project.get("stems", [])}

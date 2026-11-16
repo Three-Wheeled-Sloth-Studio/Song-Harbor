@@ -28,12 +28,16 @@ def normalize(raw: dict, section_ids: set[str]) -> dict:
     if type(revision) is not int or not 0 <= revision < 1000000:
         raise ValueError("Invalid production context revision")
     entries = raw.get("sections")
-    if not isinstance(entries, dict) or len(entries) > 256:
+    archived = raw.get("archived", {})
+    if (not isinstance(entries, dict) or not isinstance(archived, dict)
+            or len(entries) + len(archived) > 512):
         raise ValueError("Invalid production context sections")
-    result = {"schema_version": VERSION, "revision": revision, "sections": {}}
-    for section_id, item in entries.items():
-        if section_id not in section_ids or not isinstance(item, dict):
-            raise ValueError("Production context references an unknown section")
+    result = {"schema_version": VERSION, "revision": revision, "sections": {},
+              "archived": {}}
+    for section_id, item in [*entries.items(), *archived.items()]:
+        if (not isinstance(section_id, str) or not 1 <= len(section_id) <= 200
+                or not isinstance(item, dict)):
+            raise ValueError("Invalid production context section identity")
         tone, origin = item.get("tone"), item.get("origin", "author")
         if tone not in TONES or origin not in SOURCE_TYPES:
             raise ValueError("Invalid reviewed musical direction")
@@ -53,7 +57,8 @@ def normalize(raw: dict, section_ids: set[str]) -> dict:
         if origin == "q4-reviewed":
             cleaned["source_run_id"] = source_id
             cleaned["source_sha256"] = source_hash
-        result["sections"][section_id] = cleaned
+        target = "sections" if section_id in section_ids else "archived"
+        result[target][section_id] = cleaned
     return result
 
 
@@ -73,6 +78,11 @@ def save(folder: Path, raw: dict, section_ids: set[str], expected_revision: int)
     if existing["revision"] != expected_revision:
         raise ValueError("Stale production context; reload before saving")
     cleaned = normalize(copy.deepcopy(raw), section_ids)
+    # Keep reviews of retired section IDs historical and unassociated with
+    # new boundaries. UI edits only active IDs; it cannot discard archives.
+    for section_id, item in existing.get("archived", {}).items():
+        if section_id not in cleaned["sections"] and section_id not in cleaned["archived"]:
+            cleaned["archived"][section_id] = item
     if cleaned["revision"] != expected_revision:
         raise ValueError("Incorrect base production-context revision")
     cleaned["revision"] += 1

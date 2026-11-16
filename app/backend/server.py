@@ -3208,8 +3208,14 @@ def update_production_context(ident: str, body: ProductionContextUpdateRequest,
             raise HTTPException(404, "Song unavailable")
         try:
             section_ids = {item["id"] for item in record.get("sections", [])}
+            previous = production_context.read(DATA_ROOT / "jobs" / ident, section_ids)
             for section_id, item in body.sections.items():
                 if item.get("origin") != "q4-reviewed":
+                    continue
+                # Previously approved observations remain historical review
+                # records. Re-verification is needed only for a newly changed
+                # source, not when saving another section's author notes.
+                if previous["sections"].get(section_id) == item:
                     continue
                 job = moss_q4_experiment.status(APP_ROOT)
                 snap = job.get("snapshot")

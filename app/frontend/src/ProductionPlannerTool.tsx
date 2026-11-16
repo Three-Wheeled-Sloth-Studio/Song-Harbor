@@ -1,6 +1,7 @@
 import {useState} from "react";
 import {Button,Status} from "@tws-ui/core/react";
 import type {SectionInsight} from "./SectionInsights";
+import {ProductionContextReview} from "./ProductionContextReview";
 
 type Direction="enhance"|"ominous"|"movement"|"contrast";
 type StereoSource={filename:string;balanceDb:number;widthDb:number;correlation:number;hardPan:number;rmsDbfs?:number;channels?:number};
@@ -9,8 +10,9 @@ type Suggestion={section_id:string;label:string;directives:string[];measurements
 type Plan={content:string;profile:{name:string;id:string};suggestions:Suggestion[];
   notes:{section_id:string;note:string}[];stereo_sources?:StereoSource[];section_stem_count?:number;analysis_kind:string;disclaimer:string;source:string};
 
-export function ProductionPlannerTool({projectId,analyze,sourceStereo,sectionStems,onReview}:{
-  projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;
+export function ProductionPlannerTool({projectId,sections,analyze,sourceStereo,sectionStems,onReview}:{
+  projectId:string;sections:readonly {id:string;kind:string;number:number|null}[];
+  analyze:()=>Promise<readonly SectionInsight[]>;
   sourceStereo:()=>readonly StereoSource[];sectionStems:()=>readonly SectionStem[];onReview:(content:string)=>void;
 }){
   const [direction,setDirection]=useState<Direction>("enhance");
@@ -21,6 +23,7 @@ export function ProductionPlannerTool({projectId,analyze,sourceStereo,sectionSte
   const [error,setError]=useState("");
   const [plan,setPlan]=useState<Plan|null>(null);
   const [copied,setCopied]=useState(false);
+
   async function generate(){
     setBusy(true);setError("");setPlan(null);setCopied(false);
     try{
@@ -62,6 +65,7 @@ export function ProductionPlannerTool({projectId,analyze,sourceStereo,sectionSte
         {busy?"Analyzing...":"Generate plan"}
       </Button>
     </div>
+    <ProductionContextReview projectId={projectId} sections={sections} onSaved={()=>{setPlan(null);setCopied(false);}}/>
     {busy&&<p role="status">{phase}</p>}
     {error&&<p className="error-message" role="alert">{error}</p>}
     {plan&&<>

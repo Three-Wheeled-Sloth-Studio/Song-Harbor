@@ -1601,7 +1601,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
             return engine.renderWav24();
           }}/>} 
-        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} sections={timelineSections} sourceStereo={()=>audio.current?.sourceStereoProfiles||[]} sectionStems={()=>audio.current?.sourceSectionProfiles(timelineSections)||[]} onReview={content=>{
+        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} sections={timelineSections} sourceStereo={()=>audio.current?.sourceStereoProfiles||[]} sectionStems={()=>audio.current?.sourceSectionProfiles(timelineSections)||[]} splitSections={()=>audio.current?.splitSectionProfiles(timelineSections)||[]} onReview={content=>{
           if((productionDraft||openTools.includes("songText")) &&
              !window.confirm("Replace any unsaved whole-song editor draft with this proposal?"))return;
           setProductionDraft(prev=>({id:(prev?.id||0)+1,content}));

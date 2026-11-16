@@ -140,14 +140,13 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                          "profile": profile})
     clone = copy.deepcopy(project)
     original = project.get("section_production", {})
-    all_authored_through_section: list[dict] = []
+    all_authored = [directive for directives in original.values() for directive in directives]
     generated: dict[tuple[str, str], object] = {}
     added = []
     notes = []
     for index, section in enumerate(sections):
         metric = by_id[section["id"]]
         existing = list(original.get(section["id"], []))
-        all_authored_through_section.extend(existing)
         lower = section["kind"].lower()
         is_peak = lower in ("chorus", "pre-chorus")
         is_break = lower in ("bridge", "instrumental", "outro")
@@ -160,10 +159,9 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         notes_local = []
 
         def set_effect(alias: str, kind: str, value: str):
-            # Author's earlier directives inherit. Any explicit author value
-            # takes precedence over generated automation in this and subsequent
-            # sections. Never emit a duplicate effect in one section.
-            if _owned(all_authored_through_section, alias, kind):
+            # Protect all authored effect dimensions, including values appearing
+            # later in the song, from accidental proposed overrides.
+            if _owned(all_authored, alias, kind):
                 return False
             key = (alias.casefold(), kind)
             if generated.get(key) == value:

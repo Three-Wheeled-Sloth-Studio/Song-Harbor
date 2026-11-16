@@ -124,15 +124,24 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         polarized = abs(metric["balanceDb"]) >= 2
         quiet = metric["rmsDbfs"] < -30
         step = []
+        authored_pan = spatial_alias is not None and _owned(existing, spatial_alias, "pan")
         if spatial_alias and not _owned(existing, spatial_alias, "width"):
             if not wide and not polarized and not source_already_spatial and spatial >= 35:
                 target = min(145, 100 + round(spatial * (.38 if is_peak or is_break else .17)))
-                if direction == "movement":
+                if direction == "movement" or (direction == "contrast" and is_peak):
                     target = min(145, target + 10)
                 if target > 108:
                     step.append(f"{spatial_alias}.width:{target}@{ramp:g}s:smooth")
             elif wide or polarized or source_already_spatial:
                 notes.append({"section_id": section["id"], "note": "Existing stereo/channel separation protected; no additional widening"})
+        if (spatial_alias and not authored_pan and not source_already_spatial
+                and not polarized and not wide and direction == "movement"
+                and spatial >= 65 and not _owned(existing, spatial_alias, "pan")
+                and lower in ("verse", "bridge", "pre-chorus")):
+            side = "left" if index % 2 == 0 else "right"
+            bias = min(35, round(spatial * .32))
+            if bias >= 20:
+                step.append(f"{spatial_alias}.pan:{side}.{bias}@{ramp:g}s:smooth")
         if spatial_alias and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
             wet = min(45, round(12 + spatial * (.24 if is_break else .14)))
             if direction == "ominous":

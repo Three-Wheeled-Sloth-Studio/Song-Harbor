@@ -1283,3 +1283,21 @@ input[type=range]:focus-visible,.track-toggle:focus-visible{outline:2px solid #8
 .song-moss-confirm label input{flex:0 0 auto;margin-top:2px}
 .song-moss-confirm .setting-controls{display:flex;flex-wrap:wrap;gap:7px}
 @media(prefers-reduced-motion:reduce){.song-moss-progress .song-sfz-spinner{animation:none;border-top-style:dotted}}
+
+
+/* Production planner is a resizable floating tool, not a fixed single-row form. */
+.song-floating-tool:has(.song-production-planner){width:min(760px,calc(100vw - 24px));max-height:min(86vh,860px);min-height:280px}
+.song-floating-tool:has(.song-production-planner)>.song-floating-tool-content{min-height:0;overflow-y:auto;overflow-x:hidden;flex:1}
+.song-production-planner{min-width:0;max-width:100%;display:flex;flex-direction:column;gap:10px}
+.song-production-planner .setting-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end;gap:10px}
+.song-production-planner .setting-controls>label{min-width:0;display:flex;flex-direction:column;gap:4px}
+.song-production-planner .setting-controls input,
+.song-production-planner .setting-controls select{min-width:0;max-width:100%;width:100%}
+.song-production-planner .setting-controls>button{grid-column:1/-1;justify-self:start}
+.song-production-planner .setting-tool-row{flex-wrap:wrap;justify-content:flex-start}
+.song-production-planner textarea{min-width:0;max-width:100%;width:100%;resize:vertical}
+.song-production-planner details{min-width:0;overflow-wrap:anywhere}
+@media(max-width:600px){
+  .song-production-planner .setting-controls{grid-template-columns:minmax(0,1fr)}
+  .song-floating-tool:has(.song-production-planner){min-height:0;max-height:calc(100dvh - 75px)}
+}

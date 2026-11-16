@@ -8,7 +8,7 @@ type StereoSource={filename:string;balanceDb:number;widthDb:number;correlation:n
 type SectionStem={sectionId:string;filename:string;key:string;channels:number;rmsDbfs:number;balanceDb:number;widthDb:number;correlation:number;coverage:number;startSeconds:number};
 type Suggestion={section_id:string;label:string;directives:string[];measurements:SectionInsight};
 type Plan={content:string;profile:{name:string;id:string};suggestions:Suggestion[];
-  notes:{section_id:string;note:string}[];stereo_sources?:StereoSource[];section_stem_count?:number;analysis_kind:string;disclaimer:string;source:string};
+  notes:{section_id:string;note:string}[];stereo_sources?:StereoSource[];section_stem_count?:number;reviewed_sections?:number;analysis_kind:string;disclaimer:string;source:string};
 
 export function ProductionPlannerTool({projectId,sections,analyze,sourceStereo,sectionStems,onReview}:{
   projectId:string;sections:readonly {id:string;kind:string;number:number|null}[];
@@ -83,7 +83,7 @@ export function ProductionPlannerTool({projectId,sections,analyze,sourceStereo,s
       <textarea aria-label="Proposed whole-song section text"
         value={plan.content} rows={12} readOnly style={{width:"100%"}}/>
       <details><summary>Changes and evidence</summary>
-        <p>{plan.section_stem_count||0} section-local stem readings; {plan.stereo_sources?.length||0} source profiles ({(plan.stereo_sources||[]).filter(row=>row.channels===1||(row.widthDb< -35&&row.correlation>.995)).length} near-mono).</p>
+        <p>{plan.reviewed_sections||0} human-reviewed sections; {plan.section_stem_count||0} section-local stem readings; {plan.stereo_sources?.length||0} source profiles ({(plan.stereo_sources||[]).filter(row=>row.channels===1||(row.widthDb< -35&&row.correlation>.995)).length} near-mono).</p>
         {plan.suggestions.map(item=><p key={item.section_id}>
           <strong>{item.label}</strong>: {item.directives.join(" ")}
           <small> | RMS {item.measurements.rmsDbfs.toFixed(1)} dBFS,

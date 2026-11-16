@@ -140,6 +140,72 @@ class ProductionPlannerTests(unittest.TestCase):
         self.assertNotIn("Other.pan:",result["content"])
         self.assertNotIn("Other.space:",result["content"])
 
+    def test_section_stem_presence_controls_effects(self):
+        project=self.project()
+        project["section_production"]={}
+        rows=self.metrics(project)
+        ids=[row["id"] for row in project["sections"]]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-55,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-20}
+        observations=[
+            {"sectionId":ids[0],"filename":"Other.wav","rmsDbfs":-92,
+             "balanceDb":0,"widthDb":-55,"correlation":1,"coverage":1},
+            {"sectionId":ids[1],"filename":"Other.wav","rmsDbfs":-16,
+             "balanceDb":0,"widthDb":-55,"correlation":1,"coverage":1},
+            {"sectionId":ids[1],"filename":"Vocals.wav","rmsDbfs":-19,
+             "balanceDb":0,"widthDb":-35,"correlation":1,"coverage":1}
+        ]
+        result=planner.generate(project,rows,stereo_sources=[source],
+                                section_stems=observations,direction="movement",
+                                spatial=85,dynamics=80)
+        intro=result["content"].split("[Chorus")[0]
+        chorus=result["content"].split("[Chorus")[1]
+        self.assertNotIn("Other.pan:",intro)
+        self.assertIn("Other.pan:",chorus)
+        self.assertIn("Other.space:",chorus)
+
+    def test_missing_vocal_section_does_not_invent_ducking(self):
+        project=self.project()
+        project["section_production"]={}
+        ids=[row["id"] for row in project["sections"]]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-60,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-20}
+        observations=[]
+        for ident in ids:
+            for filename,level in (("Other.wav",-20),("Vocals.wav",-100)):
+                observations.append({"sectionId":ident,"filename":filename,
+                   "rmsDbfs":level,"balanceDb":0,"widthDb":-60,
+                   "correlation":1,"coverage":1})
+        result=planner.generate(project,self.metrics(project),
+                                stereo_sources=[source],section_stems=observations,
+                                spatial=80,dynamics=85)
+        self.assertNotIn("Other.duck:",result["content"])
+
+    def test_split_child_duplicate_lanes_do_not_break_preview(self):
+        project=self.project()
+        project["section_production"]={}
+        first=project["sections"][0]["id"]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-60,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
+        row={"sectionId":first,"filename":"Other.wav","rmsDbfs":-18,
+             "balanceDb":0,"widthDb":-55,"correlation":1,"coverage":1}
+        result=planner.generate(project,self.metrics(project),
+                                stereo_sources=[source],section_stems=[row,dict(row)])
+        self.assertEqual(result["section_stem_count"],1)
+
+    def test_authored_direction_from_explicit_notes_only(self):
+        project=self.project()
+        project["section_lyrics"][project["sections"][0]["id"]] = (
+            "(female lead, intimate and restrained)\\n" +
+            "Lyrics say explosive, but that is not a stage direction"
+        )
+        result=planner.generate(project,self.metrics(project),spatial=70,
+                                stereo_sources=self.sources())
+        self.assertIn("Authored performance direction: intimate",
+                      " ".join(item["note"] for item in result["notes"]))
+        self.assertNotIn("Authored performance direction: expansive",
+                         " ".join(item["note"] for item in result["notes"]))
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

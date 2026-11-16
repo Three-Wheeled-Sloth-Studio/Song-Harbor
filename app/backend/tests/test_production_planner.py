@@ -250,7 +250,7 @@ class ProductionPlannerTests(unittest.TestCase):
                                 spatial=85,dynamics=85,direction="ominous")
         content=result["content"]
         self.assertIn("Vocals.reverb:",content)
-        self.assertIn("Drums.comp:",content)
+        self.assertIn("Drums.gain:+",content)
         self.assertIn("Bass.space:",content)
         self.assertNotIn("Vocals.pan:",content)
         self.assertNotIn("Bass.pan:",content)
@@ -280,7 +280,7 @@ class ProductionPlannerTests(unittest.TestCase):
         result=planner.generate(project,self.metrics(project),stereo_sources=sources,
                                 section_stems=evidence,spatial=80,dynamics=80)
         self.assertEqual(result["content"].count("Vocals.reverb:"),1)
-        self.assertNotIn("Drums.comp:",result["content"])
+        self.assertNotIn("Drums.gain:",result["content"])
         self.assertNotIn("Drums.space:",result["content"])
 
     def test_bad_metric_set_rejected(self):

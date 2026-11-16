@@ -333,6 +333,27 @@ class ProductionPlannerTests(unittest.TestCase):
                                 split_sections=[row],spatial=90)
         self.assertNotIn("Other-left.",result["content"])
 
+    def test_split_pair_returns_to_neutral_after_leaving_section(self):
+        project=self.project()
+        project["section_production"]={}
+        project["channel_children"]={"Other.wav":{"export":"verified-split"}}
+        intro,chorus=project["sections"]
+        rows=[
+            {"sectionId":intro["id"],"filename":"Other.wav",
+             "leftRmsDbfs":-17,"rightRmsDbfs":-18,"correlation":.8,"coverage":1},
+            {"sectionId":chorus["id"],"filename":"Other.wav",
+             "leftRmsDbfs":-80,"rightRmsDbfs":-80,"correlation":0,"coverage":1},
+        ]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-100,
+                "correlation":.8,"hardPan":0,"channels":2,"rmsDbfs":-18}
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                split_sections=rows,spatial=85,dynamics=80)
+        body=result["content"]
+        self.assertIn("Other-left.space:0",body)
+        self.assertIn("Other-right.space:0",body)
+        self.assertIn("Other-left.gain:0",body)
+        section_import.apply(project,body,"replace",28)
+
     def test_quiet_split_lane_not_automated(self):
         project=self.project()
         project["section_production"]={}

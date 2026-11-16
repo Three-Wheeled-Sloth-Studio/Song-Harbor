@@ -80,6 +80,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
              dynamics: int = 60, direction: str = "enhance",
              stereo_sources: list[dict] | None = None,
              section_stems: list[dict] | None = None,
+             split_sections: list[dict] | None = None,
              reviewed_context: dict | None = None) -> dict:
     """Return a validated import-ready text proposal; never mutate project."""
     if type(spatial) is not int or not 0 <= spatial <= 100:
@@ -171,6 +172,29 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         # presence evidence; split-child positioning stays protected.
         if previous is None or measurement["rmsDbfs"] > previous["rmsDbfs"]:
             scoped[key] = measurement
+    split_sections = split_sections or []
+    if not isinstance(split_sections, list) or len(split_sections) > 4096:
+        raise ValueError("Invalid split-channel evidence collection")
+    split_evidence: dict[tuple[str, str], dict] = {}
+    for row in split_sections:
+        if not isinstance(row, dict) or row.get("sectionId") not in section_filenames:
+            raise ValueError("Unknown split-channel section")
+        filename = row.get("filename")
+        if not isinstance(filename, str) or filename not in files:
+            raise ValueError("Unknown split-channel source")
+        key = (row["sectionId"], filename)
+        if key in split_evidence:
+            raise ValueError("Duplicate split-channel observation")
+        result = {"sectionId": row["sectionId"], "filename": filename}
+        for field, minimum, maximum in (
+            ("leftRmsDbfs", -240, 24), ("rightRmsDbfs", -240, 24),
+            ("correlation", -1.001, 1.001), ("coverage", 0, 1.001),
+        ):
+            value = row.get(field)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError("Invalid split channel measurement: " + field)
+            result[field] = float(value)
+        split_evidence[key] = result
     lookup = section_production.source_map(files, project.get("source_tracks", []))
     by_filename = {row["filename"]: row for row in source_profiles}
     stem_states = {row.get("filename"): row for row in project.get("stems", [])}
@@ -266,6 +290,59 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 local_eligible.append({**row, "section_evidence": evidence})
         else:
             local_eligible = eligible
+        # Split channels are already hard-routed left/right by the mixer.
+        # Avoid panning those endpoints away from their native places.
+        # Independent send levels can add space to a near-mono recording
+        # without asserting that the two dry lanes are separate instruments.
+        if spatial >= 45:
+            aliases_with_children = section_production.source_map(
+                files, project.get("source_tracks", []), children
+            )
+            for entry in local_eligible[:5]:
+                if not entry["split"]:
+                    continue
+                alias = entry["alias"]
+                filename = lookup.get(alias)
+                evidence = split_evidence.get((section["id"], filename))
+                left_alias, right_alias = alias+"-left", alias+"-right"
+                if (left_alias not in aliases_with_children
+                        or right_alias not in aliases_with_children
+                        or not evidence or evidence["coverage"] < .4
+                        or min(evidence["leftRmsDbfs"], evidence["rightRmsDbfs"]) < -48):
+                    continue
+                # A parent effect can also process both children; don't
+                # compete with it, even if the author changes it later.
+                def child_effect(child: str, kind: str, value: str) -> bool:
+                    if _owned(all_authored, alias, kind):
+                        return False
+                    return set_effect(child, kind, value)
+
+                correlated = evidence["correlation"] >= .985
+                # For near-identical source channels choose differentiated
+                # reflections rather than inventing pan/width separation.
+                low = min(30, round(7 + spatial*.13))
+                high = min(40, round(15 + spatial*.22))
+                if direction == "ominous" or tone == "ominous":
+                    high = min(40, high+3)
+                if is_peak and not expansive:
+                    high = max(low+2, high-5)
+                reverse = index % 2 == 1
+                left_send, right_send = (high, low) if reverse else (low, high)
+                applied = child_effect(left_alias, "space", str(left_send))
+                applied = child_effect(right_alias, "space", str(right_send)) or applied
+                # Only vary direct channel gain when the lanes are already
+                # measurably different and the processed mix has headroom.
+                if (not correlated and dynamics >= 65
+                        and metric["peakDbfs"] <= -4
+                        and abs(evidence["leftRmsDbfs"]-evidence["rightRmsDbfs"]) < 10):
+                    stronger = left_alias if evidence["leftRmsDbfs"] > evidence["rightRmsDbfs"] else right_alias
+                    if child_effect(stronger, "gain", "-0.8"):
+                        applied = True
+                if applied:
+                    notes_local.append(
+                        f"{alias} split L/R: distinct reflection sends; "
+                        + ("near-correlated dry lanes" if correlated else "measured independent lane variation")
+                    )
         if spatial >= 20 and local_eligible:
             # Prefer separately recorded stem files, with complementary restrained
             # lateral placement; preserve existing panning or split routing.
@@ -291,7 +368,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             # Nonidentical backing stems can have individual reflection spaces.
             # Reflections generate decorrelated spatial information even where
             # a dry source is effectively mono; width alone does not.
-            for i, row in enumerate(local_eligible[:3]):
+            for i, row in enumerate([x for x in local_eligible if not x["split"]][:3]):
                 alias = row["alias"]
                 reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro or expansive else .18)))
                 if direction in ("ominous", "movement") or tone == "ominous":
@@ -442,5 +519,6 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         "analysis_kind": "reviewed-context-v3", "stereo_sources": source_profiles,
         "reviewed_sections": sum(key in {x["id"] for x in sections} for key in reviewed_context),
         "section_stem_count": len(scoped),
+        "split_section_count": len(split_evidence),
         "disclaimer": "Stereo mix metrics do not establish independent stem/channel identity. Compare and audition before import.",
     }

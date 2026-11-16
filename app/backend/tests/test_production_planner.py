@@ -33,12 +33,18 @@ class ProductionPlannerTests(unittest.TestCase):
                  "balanceDb":0.2,"widthDb":-4 if wide else -18,
                  "intensity":.5} for s in project["sections"]]
 
+    def sources(self):
+        return [{"filename":"Other.wav","balanceDb":0.2,"widthDb":-28,
+                 "correlation":.88,"hardPan":0,"channels":2},
+                {"filename":"Guitar.wav","balanceDb":0.0,"widthDb":-60,
+                 "correlation":1,"hardPan":0,"channels":2}]
+
     def test_draft_preserves_lyrics_id_timing_and_original_directives(self):
         project=self.project()
         original=copy.deepcopy(project)
-        result=planner.generate(project,self.metrics(project))
+        result=planner.generate(project,self.metrics(project),stereo_sources=self.sources())
         self.assertEqual(project,original)
-        self.assertEqual(len(result["suggestions"]),1)
+        self.assertGreaterEqual(len(result["suggestions"]),1)
         self.assertIn("The signal begins",result["content"])
         self.assertIn("Now the chorus comes",result["content"])
         self.assertIn("Vocals.pan:left.30",result["content"])
@@ -71,8 +77,8 @@ class ProductionPlannerTests(unittest.TestCase):
         result=planner.generate(project,self.metrics(project),stereo_sources=sources)
         intro=result["content"].split("[Chorus")[0]
         self.assertNotIn("Other.width:1",intro)
-        self.assertIn("Existing stereo/channel separation protected",
-                      " ".join(row["note"] for row in result["notes"]))
+        self.assertNotIn("Other.pan:left.",intro)
+        self.assertNotIn("Other.pan:right.",intro.split("Other.pan:right.35")[0])
 
     def test_invalid_stereo_metrics_rejected(self):
         project=self.project()
@@ -87,7 +93,8 @@ class ProductionPlannerTests(unittest.TestCase):
                   "widthDb":-200,"correlation":1,"hardPan":0,"channels":2}]
         result=planner.generate(project,self.metrics(project),stereo_sources=sources)
         self.assertNotIn("Other.width:1",result["content"])
-        self.assertIn("Near-mono source", " ".join(row["note"] for row in result["notes"]))
+        self.assertIn("Other.space:",result["content"])
+        self.assertIn("spatial reflections", " ".join(row["note"] for row in result["notes"]))
 
     def test_silent_section_metrics_are_valid(self):
         project=self.project()
@@ -95,6 +102,33 @@ class ProductionPlannerTests(unittest.TestCase):
         rows[0].update({"rmsDbfs":-200,"peakDbfs":-200,"widthDb":-200})
         result=planner.generate(project,rows)
         self.assertIn("Quiet passage preserved", " ".join(row["note"] for row in result["notes"]))
+
+    def test_distinct_mono_backing_sources_create_complementary_pan(self):
+        project=self.project()
+        project["files"].append("Guitar.wav")
+        project["source_tracks"].append({"working_filename":"Guitar.wav","stem_alias":"Guitar"})
+        # Remove explicit author controls only in this fixture.
+        project["section_production"]={}
+        sources=[{"filename":name,"balanceDb":0,"widthDb":-180,
+                  "correlation":1,"hardPan":0,"channels":1}
+                 for name in ("Other.wav","Guitar.wav")]
+        result=planner.generate(project,self.metrics(project),stereo_sources=sources,
+                                direction="movement",spatial=85,dynamics=75)
+        self.assertIn("Other.pan:",result["content"])
+        self.assertIn("Guitar.pan:",result["content"])
+        self.assertIn("Other.space:",result["content"])
+        self.assertIn("Guitar.space:",result["content"])
+        self.assertIn("Other.duck:",result["content"])
+        self.assertNotIn("Other.width:",result["content"])
+        parsed=section_import.apply(project,result["content"],"replace",28)
+        self.assertEqual(parsed["section_lyrics"],project["section_lyrics"])
+
+    def test_existing_authored_pan_and_split_are_never_replaced(self):
+        project=self.project()
+        project["channel_children"]={"Other.wav":{"export":"some-file"}}
+        result=planner.generate(project,self.metrics(project),stereo_sources=self.sources(),
+                                direction="movement",spatial=100)
+        self.assertEqual(result["content"].count("Other.pan:"),1)
 
     def test_bad_metric_set_rejected(self):
         project=self.project()
@@ -107,7 +141,7 @@ class ProductionPlannerTests(unittest.TestCase):
 
     def test_lyrics_preserved_with_empty_profile(self):
         project=self.project()
-        result=planner.generate(project,self.metrics(project),spatial=0,dynamics=0)
+        result=planner.generate(project,self.metrics(project),spatial=0,dynamics=0,stereo_sources=self.sources())
         self.assertEqual(result["suggestions"],[])
         self.assertEqual(section_import.render_tags(project),result["content"])
 

@@ -104,97 +104,150 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             raise ValueError("Invalid source channel count")
         profile["channels"] = channels
         source_profiles.append(profile)
-    spatial_filename = section_production.source_map(files, project.get("source_tracks", [])).get(spatial_alias or "")
-    target_profiles = [row for row in source_profiles if row["filename"] == spatial_filename]
-    stem_state = next((item for item in project.get("stems", [])
-                       if item.get("filename") == spatial_filename), None)
-    any_solo = any(item.get("solo") for item in project.get("stems", []))
-    spatial_audible = not stem_state or (
-        not stem_state.get("mute", False)
-        and float(stem_state.get("gain", 1)) > .001
-        and (not any_solo or stem_state.get("solo", False))
+    lookup = section_production.source_map(files, project.get("source_tracks", []))
+    by_filename = {row["filename"]: row for row in source_profiles}
+    stem_states = {row.get("filename"): row for row in project.get("stems", [])}
+    any_solo = any(row.get("solo", False) for row in stem_states.values())
+    children = project.get("channel_children", {})
+    protected_aliases = {"vocals", "bass", "drums"}
+    # Multiple independently recorded stems are the preferred source of
+    # new stereo differentiation. Width alone cannot widen a mono source.
+    priority = ["other", "guitar", "piano", "synth", "strings", "ambience", "pads"]
+    candidates = sorted(
+        (alias for alias in parents if alias.casefold() not in protected_aliases),
+        key=lambda name: (priority.index(name.casefold()) if name.casefold() in priority else len(priority),
+                          name.casefold()),
     )
-    has_split = bool(project.get("channel_children", {}).get(spatial_filename or "", {}).get("export"))
-    source_unmeasured = not target_profiles
-    source_near_mono = bool(target_profiles) and all(
-        row["channels"] == 1 or (row["widthDb"] < -35 and row["correlation"] > .995)
-        for row in target_profiles
-    )
-    source_already_spatial = has_split or any(
-        abs(row["balanceDb"]) >= 1.5 or row["widthDb"] > -12 or abs(row["hardPan"]) > .1
-        for row in target_profiles
-    )
+    eligible = []
+    for alias in candidates:
+        filename = lookup.get(alias)
+        profile = by_filename.get(filename)
+        if not profile:
+            continue
+        state = stem_states.get(filename, {})
+        if (state.get("mute", False) or (any_solo and not state.get("solo", False))
+                or float(state.get("gain", 1)) <= .001):
+            continue
+        # Explicitly protect existing channel split and dedicated hard pans.
+        split = bool(children.get(filename, {}).get("export"))
+        mono = profile["channels"] == 1 or (
+            profile["widthDb"] < -35 and profile["correlation"] > .995
+        )
+        already_wide = profile["widthDb"] > -12
+        existing_asymmetry = abs(profile["balanceDb"]) >= 1.7 or abs(profile["hardPan"]) > .1
+        eligible.append({"alias": alias, "mono": mono, "split": split,
+                         "wide": already_wide, "asymmetric": existing_asymmetry,
+                         "profile": profile})
     clone = copy.deepcopy(project)
-    authored = [directive
-                for directives in project.get("section_production", {}).values()
-                for directive in directives]
-    # Effects inherit across sections. A missing directive in a later section
-    # does not make an earlier authored effect available for replacement.
-    def available(kind: str) -> bool:
-        return spatial_alias is not None and not _owned(authored, spatial_alias, kind)
+    original = project.get("section_production", {})
+    all_authored_through_section: list[dict] = []
+    generated: dict[tuple[str, str], object] = {}
     added = []
     notes = []
-    generated_pan = False
     for index, section in enumerate(sections):
         metric = by_id[section["id"]]
-        existing = list(clone.get("section_production", {}).get(section["id"], []))
+        existing = list(original.get(section["id"], []))
+        all_authored_through_section.extend(existing)
         lower = section["kind"].lower()
         is_peak = lower in ("chorus", "pre-chorus")
         is_break = lower in ("bridge", "instrumental", "outro")
-        length = section["end_seconds"] - section["start_seconds"]
-        ramp = round(max(.05, min(length * (.38 if is_peak else .44), 14)), 2)
-        # Use only clear mix-level evidence and modest bounded targets.
-        # widthDb closer to zero denotes more natural side content already.
-        wide = metric["widthDb"] > -10
-        polarized = abs(metric["balanceDb"]) >= 2
+        is_intro = lower == "intro"
+        is_verse = lower in ("verse", "verse 1", "verse 2", "verse 3")
+        length = float(section["end_seconds"]) - float(section["start_seconds"])
+        ramp = round(max(.05, min(length * (.42 if is_peak else .48), 15)), 2)
         quiet = metric["rmsDbfs"] < -30
-        step = []
-        authored_pan = spatial_alias is not None and _owned(existing, spatial_alias, "pan")
-        if spatial_alias and spatial_audible and available("width") and not _owned(existing, spatial_alias, "width"):
-            if not wide and not polarized and not source_already_spatial and not source_near_mono and not source_unmeasured and spatial >= 35:
-                target = min(145, 100 + round(spatial * (.38 if is_peak or is_break else .17)))
-                if direction == "movement" or (direction == "contrast" and is_peak):
-                    target = min(145, target + 10)
-                if target > 108:
-                    step.append(f"{spatial_alias}.width:{target}@{ramp:g}s:smooth")
-            elif wide or polarized or source_already_spatial:
-                notes.append({"section_id": section["id"], "note": "Existing stereo/channel separation protected; no additional widening"})
-            elif source_near_mono:
-                notes.append({"section_id": section["id"], "note": "Near-mono source; width control cannot create independent stereo detail"})
-            elif source_unmeasured:
-                notes.append({"section_id": section["id"], "note": "No source stereo measurement; skipping unsupported width change"})
-        if (spatial_alias and spatial_audible and not authored_pan and not source_already_spatial
-                and not polarized and not wide and not source_unmeasured and direction == "movement"
-                and spatial >= 65 and available("pan") and not _owned(existing, spatial_alias, "pan")
-                and lower in ("verse", "bridge", "pre-chorus")):
-            side = "left" if index % 2 == 0 else "right"
-            bias = min(35, round(spatial * .32))
-            if bias >= 20:
-                step.append(f"{spatial_alias}.pan:{side}.{bias}@{ramp:g}s:smooth")
-                generated_pan = True
-        if spatial_alias and spatial_audible and available("reverb") and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
-            wet = min(45, round(12 + spatial * (.24 if is_break else .14)))
-            if direction == "ominous":
-                wet = min(50, wet + 8)
-            if is_break or lower == "intro":
-                step.append(f"{spatial_alias}.reverb:{wet}@{ramp:g}s:smooth")
-        # Only modest level reductions for objectively hot sections.
-        # No attempt to force low-energy intros to match a chorus.
-        if spatial_alias and spatial_audible and available("gain") and not _owned(existing, spatial_alias, "gain"):
-            if metric["peakDbfs"] > -1 and dynamics >= 45:
-                step.append(f"{spatial_alias}.gain:-1@{ramp:g}s:smooth")
-                notes.append({"section_id": section["id"], "note": "Peak near ceiling; modest backing attenuation suggested, not a headroom guarantee"})
-            elif quiet:
-                notes.append({"section_id": section["id"], "note": "Quiet passage preserved; no automatic loudness lift"})
-        # Do not alter vocal gain or pan: input stems can contain shared male/female vocals.
-        if vocal and metric["peakDbfs"] > 0:
-            notes.append({"section_id": section["id"], "note": "Mix peak exceeds digital full scale; review master headroom separately"})
+        step: list[str] = []
+        notes_local = []
+
+        def set_effect(alias: str, kind: str, value: str):
+            # Author's earlier directives inherit. Any explicit author value
+            # takes precedence over generated automation in this and subsequent
+            # sections. Never emit a duplicate effect in one section.
+            if _owned(all_authored_through_section, alias, kind):
+                return False
+            key = (alias.casefold(), kind)
+            if generated.get(key) == value:
+                return False
+            parsed = f"{alias}.{kind}:{value}@{ramp:g}s:smooth"
+            step.append(parsed)
+            generated[key] = value
+            return True
+
+        if spatial >= 20 and eligible:
+            # Prefer actual separated stems, with complementary restrained
+            # lateral placement; preserve existing panning or split routing.
+            lateral = [row for row in eligible if not row["split"] and not row["asymmetric"]]
+            pair = lateral[:2]
+            for i, row in enumerate(pair):
+                alias = row["alias"]
+                # Deliberate spatial story: alternating/expanding verse positions,
+                # bring separated tracks closer to center for chorus impact.
+                if is_peak:
+                    bias = min(24, round(spatial * .24))
+                elif is_intro or is_break:
+                    bias = min(48, round(spatial * .48))
+                else:
+                    bias = min(42, round(spatial * .40))
+                if direction == "movement":
+                    bias = min(55, bias + 8)
+                if direction == "ominous" and is_break:
+                    bias = min(55, bias + 5)
+                side = ("left" if (index + i) % 2 == 0 else "right")
+                if bias >= 12 and set_effect(alias, "pan", f"{side}.{bias}"):
+                    notes_local.append(f"Position {alias} {side}; separate sources create real stereo contrast")
+            # Nonidentical backing stems can have individual reflection spaces.
+            # Reflections generate decorrelated spatial information even where
+            # a dry source is effectively mono; width alone does not.
+            for i, row in enumerate(eligible[:3]):
+                alias = row["alias"]
+                reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro else .18)))
+                if direction in ("ominous", "movement"):
+                    reflections = min(38, reflections + 4)
+                if row["mono"] or metric["widthDb"] < -14:
+                    if set_effect(alias, "space", str(reflections)):
+                        notes_local.append(f"{alias}: spatial reflections, not fake mono widening")
+                elif not row["split"] and not row["wide"] and not row["asymmetric"]:
+                    width = min(145, round(105 + spatial * (.25 if is_peak or is_break else .15)))
+                    set_effect(alias, "width", str(width))
+                if (is_intro or is_break or is_peak) and i == 0:
+                    wet = min(55, round(16 + spatial * (.30 if is_break else .22)))
+                    if direction == "ominous":
+                        wet = min(60, wet + 7)
+                    set_effect(alias, "reverb", str(wet))
+            if len(eligible) < 2:
+                notes_local.append("Only one eligible backing stem: reflections and positioning cannot create a second instrument")
+        elif not eligible:
+            notes_local.append("No eligible measured backing stems; no invented spatial effect")
+
+        # Create contrast by dynamically making room around the lead, not
+        # forcing every section to one target loudness. Never touch lead/bass.
+        if dynamics >= 40 and known.get("vocals") and eligible:
+            backing = eligible[0]["alias"]
+            if is_verse or is_break:
+                duck = round(min(4.0, 1.1 + dynamics * .027), 1)
+                if set_effect(backing, "duck", f"{duck:g}"):
+                    notes_local.append(f"Voice-keyed backing duck {duck:g} dB, protecting lead clarity")
+            elif is_peak:
+                set_effect(backing, "duck", "1")
+        if metric["peakDbfs"] > -1:
+            notes_local.append("High mix peak; audition and check headroom, not automatically mastered")
+        if quiet:
+            notes_local.append("Quiet section deliberately preserved")
+        # An existing wet return can remain broad through a dramatic section
+        # without increasing the dry master level.
         if step:
-            mapping = section_production.source_aliases(files, project.get("source_tracks", []), project.get("channel_children", {}))
-            parsed = section_production.parse_block("{"+ " ".join(step) +"}", mapping)
+            aliases = section_production.source_aliases(
+                files, project.get("source_tracks", []), children
+            )
+            parsed = section_production.parse_block("{" + " ".join(step) + "}", aliases)
             clone.setdefault("section_production", {})[section["id"]] = existing + parsed
-            added.append({"section_id": section["id"], "label": section["kind"] + (" " + str(section["number"]) if section.get("number") else ""),
-                          "directives": step, "measurements": metric})
+            added.append({
+                "section_id": section["id"],
+                "label": section["kind"] + (" " + str(section["number"]) if section.get("number") else ""),
+                "directives": step, "measurements": metric,
+            })
+        for note in notes_local:
+            notes.append({"section_id": section["id"], "note": note})
     content = section_import.render_tags(clone)
     # Run complete import validation without changing source project or manifest.
     # A proposal that loses a directive/lyric or cannot round-trip is not returned.

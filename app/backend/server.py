@@ -3263,6 +3263,7 @@ class ProductionPlanRequest(BaseModel):
     section_metrics: list[dict[str, Any]] = Field(min_length=1, max_length=256)
     stereo_sources: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
     section_stems: list[dict[str, Any]] = Field(default_factory=list, max_length=8192)
+    split_sections: list[dict[str, Any]] = Field(default_factory=list, max_length=4096)
     spatial: int = Field(default=65, ge=0, le=100)
     dynamics: int = Field(default=60, ge=0, le=100)
     direction: Literal["enhance", "ominous", "movement", "contrast"] = "enhance"
@@ -3285,6 +3286,7 @@ def preview_production_plan(ident: str, body: ProductionPlanRequest,
                                            direction=body.direction,
                                            stereo_sources=body.stereo_sources,
                                            section_stems=body.section_stems,
+                                           split_sections=body.split_sections,
                                            reviewed_context=context["sections"])
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, "Production preview rejected: " + str(exc)) from exc

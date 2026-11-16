@@ -107,6 +107,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     spatial_filename = section_production.source_map(files, project.get("source_tracks", [])).get(spatial_alias or "")
     target_profiles = [row for row in source_profiles if row["filename"] == spatial_filename]
     has_split = bool(project.get("channel_children", {}).get(spatial_filename or "", {}).get("export"))
+    source_unmeasured = not target_profiles
     source_near_mono = bool(target_profiles) and all(
         row["channels"] == 1 or (row["widthDb"] < -35 and row["correlation"] > .995)
         for row in target_profiles
@@ -135,7 +136,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         step = []
         authored_pan = spatial_alias is not None and _owned(existing, spatial_alias, "pan")
         if spatial_alias and not _owned(existing, spatial_alias, "width"):
-            if not wide and not polarized and not source_already_spatial and not source_near_mono and spatial >= 35:
+            if not wide and not polarized and not source_already_spatial and not source_near_mono and not source_unmeasured and spatial >= 35:
                 target = min(145, 100 + round(spatial * (.38 if is_peak or is_break else .17)))
                 if direction == "movement" or (direction == "contrast" and is_peak):
                     target = min(145, target + 10)
@@ -145,8 +146,10 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 notes.append({"section_id": section["id"], "note": "Existing stereo/channel separation protected; no additional widening"})
             elif source_near_mono:
                 notes.append({"section_id": section["id"], "note": "Near-mono source; width control cannot create independent stereo detail"})
+            elif source_unmeasured:
+                notes.append({"section_id": section["id"], "note": "No source stereo measurement; skipping unsupported width change"})
         if (spatial_alias and not authored_pan and not source_already_spatial
-                and not polarized and not wide and direction == "movement"
+                and not polarized and not wide and not source_unmeasured and direction == "movement"
                 and spatial >= 65 and not _owned(existing, spatial_alias, "pan")
                 and lower in ("verse", "bridge", "pre-chorus")):
             side = "left" if index % 2 == 0 else "right"

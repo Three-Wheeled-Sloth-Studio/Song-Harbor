@@ -292,7 +292,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             local_eligible = eligible
         # Split channels are already hard-routed left/right by the mixer.
         # Avoid panning those endpoints away from their native places.
-        # Independent send levels can add space to a near-mono recording
+        # Independent reverb sends can add depth to a near-mono recording
         # without asserting that the two dry lanes are separate instruments.
         if spatial >= 45:
             aliases_with_children = section_production.source_map(
@@ -328,8 +328,8 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     high = max(low+2, high-5)
                 reverse = index % 2 == 1
                 left_send, right_send = (high, low) if reverse else (low, high)
-                applied = child_effect(left_alias, "space", str(left_send))
-                applied = child_effect(right_alias, "space", str(right_send)) or applied
+                applied = child_effect(left_alias, "reverb", str(left_send))
+                applied = child_effect(right_alias, "reverb", str(right_send)) or applied
                 # Only vary direct channel gain when the lanes are already
                 # measurably different and the processed mix has headroom.
                 if (not correlated and dynamics >= 65
@@ -340,7 +340,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                         applied = True
                 if applied:
                     notes_local.append(
-                        f"{alias} split L/R: distinct reflection sends; "
+                        f"{alias} split L/R: distinct reverb sends; "
                         + ("near-correlated dry lanes" if correlated else "measured independent lane variation")
                     )
         # When a split pair leaves an arrangement, undo only our own
@@ -359,7 +359,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 continue
             for suffix in ("-left", "-right"):
                 alias = entry["alias"]+suffix
-                for kind, neutral in (("space", "0"), ("gain", "0")):
+                for kind, neutral in (("reverb", "0"), ("gain", "0")):
                     key = (alias.casefold(), kind)
                     if key in generated and generated[key] != neutral:
                         if not _owned(all_authored, entry["alias"], kind):

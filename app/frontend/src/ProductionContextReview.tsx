@@ -59,14 +59,17 @@ export function ProductionContextReview({projectId,sections,onSaved}:{
     if(!current||!selected)return;
     setBusy(true);setError("");setMessage("");
     try{
-      if(!remove&&source==="q4-reviewed"&&!q4)
+      const previous=current.sections[selected];
+      const retained=source==="q4-reviewed"&&previous?.origin==="q4-reviewed";
+      if(!remove&&source==="q4-reviewed"&&!q4&&!retained)
         throw Error("ERROR: No complete, section-matched Q4 review is available.");
       const sectionsNext={...current.sections};
       if(remove)delete sectionsNext[selected];
       else sectionsNext[selected]={
         tone,origin:source,note:note.trim(),
         ...(source==="q4-reviewed"?{
-          source_run_id:listening.run_id,source_sha256:listening.source_sha256}: {})
+          source_run_id:q4?listening.run_id:previous?.source_run_id,
+          source_sha256:q4?listening.source_sha256:previous?.source_sha256}: {})
       } as Entry;
       const response=await fetch(route+"/production-context",{
         method:"PATCH",headers:{"Content-Type":"application/json"},
@@ -99,7 +102,7 @@ export function ProductionContextReview({projectId,sections,onSaved}:{
       <label>Basis
         <select value={source} aria-label="Listening direction evidence" onChange={e=>setSource(e.target.value as "author"|"q4-reviewed")}>
           <option value="author">My listening / intent</option>
-          {q4&&<option value="q4-reviewed">Q4 reviewed by me</option>}
+          {(q4||current?.sections[selected]?.origin==="q4-reviewed")&&<option value="q4-reviewed">Q4 reviewed by me</option>}
         </select>
       </label>
       <label>Note (optional)

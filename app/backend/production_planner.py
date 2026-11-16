@@ -328,6 +328,67 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     notes_local.append(f"Voice-keyed backing duck {duck:g} dB, protecting lead clarity")
             elif is_peak:
                 set_effect(backing, "duck", "1")
+        # Role-aware production: lead, drums and bass contribute to the arc
+        # without treating every source as a generic backing instrument.
+        # All choices require the stem to be present in this section; keep
+        # the lead and bass centered and respect existing authored controls.
+        def active_role(name: str) -> tuple[str, dict] | None:
+            alias = known.get(name)
+            if alias is None:
+                return None
+            filename = lookup.get(alias)
+            if filename is None:
+                return None
+            state = stem_states.get(filename, {})
+            if state.get("mute", False) or (any_solo and not state.get("solo", False)):
+                return None
+            evidence = scoped.get((section["id"], filename))
+            if section_stems:
+                if (evidence is None or evidence["coverage"] < .2
+                        or evidence["rmsDbfs"] < -45):
+                    return None
+            else:
+                profile = by_filename.get(filename)
+                if profile is None or profile.get("rmsDbfs", 0) < -55:
+                    return None
+            return alias, evidence or {}
+
+        lead_role = active_role("vocals")
+        drum_role = active_role("drums")
+        bass_role = active_role("bass")
+        if lead_role and spatial >= 35:
+            alias, _ = lead_role
+            # Reverb is a depth change, not a gain hike. Keep words forward
+            # in verses and let the chorus/bridge open up without panning lead.
+            wet = (17 + round(spatial * .25) if expansive or is_peak else
+                   14 + round(spatial * .18) if intimate else
+                   19 + round(spatial * .20))
+            if tone == "ominous":
+                wet += 7
+            wet = min(55, wet)
+            if set_effect(alias, "reverb", str(wet)):
+                notes_local.append("Lead reverb depth follows section direction; preserve centered vocal")
+        if drum_role and dynamics >= 35:
+            alias, evidence = drum_role
+            # Focus on transient character. No panning of the combined drum
+            # bus: its kick and low hits must remain an anchored foundation.
+            if (is_peak or expansive or tone == "driving") and metric["peakDbfs"] < -1.5:
+                threshold = -15 if dynamics >= 70 else -18
+                comp = f"{threshold},2"
+                if set_effect(alias, "comp", comp):
+                    notes_local.append("Measured active drums: moderate compression for impact, not forced loudness")
+            elif is_break or tone == "ominous":
+                send = min(28, 9 + round(spatial * .16))
+                if spatial >= 35 and set_effect(alias, "space", str(send)):
+                    notes_local.append("Drum reflections add threatening depth without hard-panning low hits")
+        if bass_role and direction in ("ominous", "contrast") and dynamics >= 45:
+            alias, _ = bass_role
+            # Bass stays centered. Only a low-level ambient reflection during
+            # sustained suspense, never a width/pan or high gain operation.
+            if is_intro or is_break or tone in ("ominous", "suspended"):
+                send = min(15, 5 + round(spatial * .10))
+                if set_effect(alias, "space", str(send)):
+                    notes_local.append("Subtle bass reflections; preserve low-frequency center")
         if confirmed:
             notes_local.append(
                 "Human-reviewed direction: " + tone +

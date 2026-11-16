@@ -181,3 +181,12 @@ User approved proceeding after noting that the planner is improving but still mo
 5. If no split directives appear, inspect actual `channel_children` export registration, active mixer split track keys, dry lane RMS/correlation and authored effects: the generator intentionally fails closed on missing or weak evidence.
 
 Latest code changes are on `dev` only. No production merge. QA gate remains open.
+
+
+## 2026-11-16 QA blocker: split child `.space` rejected
+
+User reported `Production preview rejected: Child split channels currently support gain, pan, EQ and reverb only` immediately after first split-channel planner deployment. Confirmed against actual `app/backend/section_import.py` child compatibility validator: child directives support `gain`, `pan`, `eq`, `reverb`, `reset`, not `space`. My planner's initial L/R generator wrongly issued `Stem-left.space` / `Stem-right.space`, then attempted to reset `space:0`. This was a **planner bug**, not an issue with the user's stems or project.
+
+**Fixed on dev:** L/R asymmetrical sends and corresponding reset transitions now use **`<alias>-left.reverb:<percent>` / `<alias>-right.reverb:<percent>`**, a supported child effect. Parent `.space` remains available and unchanged for unsplit sources. Child gain correction continues to use existing supported `.gain` syntax. Existing user-owned parent reverb automation blocks competing new child reverb proposals. Tests updated for author protections and neutral resets, with a new regression fixture checking actual full-script `section_import.apply(..., "replace", ...)` round-trip of near-correlated split channels to catch this type of API-contract mismatch.
+
+**QA gate:** Update/relaunch `dev`, regenerate Blackbox Gospel plan, check successful preview and child `.reverb` rather than child `.space`. Inspect emitted lines for valid existing parent/child scripts. No build or Windows runtime verification performed via GitHub connector. No production merge.

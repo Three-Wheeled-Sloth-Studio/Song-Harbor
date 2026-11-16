@@ -106,6 +106,14 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         source_profiles.append(profile)
     spatial_filename = section_production.source_map(files, project.get("source_tracks", [])).get(spatial_alias or "")
     target_profiles = [row for row in source_profiles if row["filename"] == spatial_filename]
+    stem_state = next((item for item in project.get("stems", [])
+                       if item.get("filename") == spatial_filename), None)
+    any_solo = any(item.get("solo") for item in project.get("stems", []))
+    spatial_audible = not stem_state or (
+        not stem_state.get("mute", False)
+        and float(stem_state.get("gain", 1)) > .001
+        and (not any_solo or stem_state.get("solo", False))
+    )
     has_split = bool(project.get("channel_children", {}).get(spatial_filename or "", {}).get("export"))
     source_unmeasured = not target_profiles
     source_near_mono = bool(target_profiles) and all(
@@ -135,7 +143,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         quiet = metric["rmsDbfs"] < -30
         step = []
         authored_pan = spatial_alias is not None and _owned(existing, spatial_alias, "pan")
-        if spatial_alias and not _owned(existing, spatial_alias, "width"):
+        if spatial_alias and spatial_audible and not _owned(existing, spatial_alias, "width"):
             if not wide and not polarized and not source_already_spatial and not source_near_mono and not source_unmeasured and spatial >= 35:
                 target = min(145, 100 + round(spatial * (.38 if is_peak or is_break else .17)))
                 if direction == "movement" or (direction == "contrast" and is_peak):
@@ -148,7 +156,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 notes.append({"section_id": section["id"], "note": "Near-mono source; width control cannot create independent stereo detail"})
             elif source_unmeasured:
                 notes.append({"section_id": section["id"], "note": "No source stereo measurement; skipping unsupported width change"})
-        if (spatial_alias and not authored_pan and not source_already_spatial
+        if (spatial_alias and spatial_audible and not authored_pan and not source_already_spatial
                 and not polarized and not wide and not source_unmeasured and direction == "movement"
                 and spatial >= 65 and not _owned(existing, spatial_alias, "pan")
                 and lower in ("verse", "bridge", "pre-chorus")):
@@ -157,7 +165,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             if bias >= 20:
                 step.append(f"{spatial_alias}.pan:{side}.{bias}@{ramp:g}s:smooth")
                 generated_pan = True
-        if spatial_alias and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
+        if spatial_alias and spatial_audible and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
             wet = min(45, round(12 + spatial * (.24 if is_break else .14)))
             if direction == "ominous":
                 wet = min(50, wet + 8)
@@ -165,7 +173,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 step.append(f"{spatial_alias}.reverb:{wet}@{ramp:g}s:smooth")
         # Only modest level reductions for objectively hot sections.
         # No attempt to force low-energy intros to match a chorus.
-        if spatial_alias and not _owned(existing, spatial_alias, "gain"):
+        if spatial_alias and spatial_audible and not _owned(existing, spatial_alias, "gain"):
             if metric["peakDbfs"] > -1 and dynamics >= 45:
                 step.append(f"{spatial_alias}.gain:-1@{ramp:g}s:smooth")
                 notes.append({"section_id": section["id"], "note": "Peak near ceiling; modest backing attenuation suggested, not a headroom guarantee"})

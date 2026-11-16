@@ -196,7 +196,7 @@ class ProductionPlannerTests(unittest.TestCase):
     def test_authored_direction_from_explicit_notes_only(self):
         project=self.project()
         project["section_lyrics"][project["sections"][0]["id"]] = (
-            "(female lead, intimate and restrained)\\n" +
+            "(female lead, intimate and restrained)\n" +
             "Lyrics say explosive, but that is not a stage direction"
         )
         result=planner.generate(project,self.metrics(project),spatial=70,

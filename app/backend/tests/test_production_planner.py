@@ -70,6 +70,21 @@ class ProductionPlannerTests(unittest.TestCase):
                 {"filename":"Other.wav","balanceDb":float("nan"),
                  "widthDb":0,"correlation":0,"hardPan":0}])
 
+    def test_near_mono_source_does_not_get_fake_width(self):
+        project=self.project()
+        sources=[{"filename":"Other.wav","balanceDb":0,
+                  "widthDb":-200,"correlation":1,"hardPan":0,"channels":2}]
+        result=planner.generate(project,self.metrics(project),stereo_sources=sources)
+        self.assertNotIn("Other.width:1",result["content"])
+        self.assertIn("Near-mono source", " ".join(row["note"] for row in result["notes"]))
+
+    def test_silent_section_metrics_are_valid(self):
+        project=self.project()
+        rows=self.metrics(project)
+        rows[0].update({"rmsDbfs":-200,"peakDbfs":-200,"widthDb":-200})
+        result=planner.generate(project,rows)
+        self.assertIn("Quiet passage preserved", " ".join(row["note"] for row in result["notes"]))
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

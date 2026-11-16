@@ -116,6 +116,58 @@ export class SharedClockAudition {
     });
   }
 
+  /** Section-scoped dry source observations, aligned by the existing stem
+   * timeline offsets. These are source facts, NOT post-effect stem meters.
+   * Sampling is bounded; silence or missing coverage is never invented.
+   */
+  sourceSectionProfiles(sections:readonly SectionRange[]):readonly {
+    sectionId:string;filename:string;key:string;channels:number;
+    rmsDbfs:number;balanceDb:number;widthDb:number;correlation:number;
+    coverage:number;startSeconds:number;
+  }[]{
+    if(sections.length>256)throw Error("Too many sections for source inspection");
+    const measurements:{
+      sectionId:string;filename:string;key:string;channels:number;
+      rmsDbfs:number;balanceDb:number;widthDb:number;correlation:number;
+      coverage:number;startSeconds:number;
+    }[]=[];
+    for(const track of this.tracks){
+      const buffer=this.effectiveBuffer(track);
+      const left=buffer.getChannelData(0);
+      const right=buffer.numberOfChannels>1?buffer.getChannelData(1):left;
+      const rate=buffer.sampleRate;
+      const start=this.timelineStart(track);
+      for(const section of sections){
+        const duration=section.end_seconds-section.start_seconds;
+        if(duration<=0)continue;
+        const from=Math.max(0,Math.floor((section.start_seconds-start)*rate));
+        const to=Math.min(buffer.length,Math.ceil((section.end_seconds-start)*rate));
+        const coverage=Math.max(0,to-from)/(duration*rate);
+        if(to<=from)continue;
+        const step=Math.max(1,Math.floor((to-from)/40000));
+        let l=0,r=0,cross=0,mid=0,side=0,n=0;
+        for(let i=from;i<to;i+=step){
+          const a=left[i],b=right[i];
+          l+=a*a;r+=b*b;cross+=a*b;
+          mid+=(a+b)*(a+b)*.25;side+=(a-b)*(a-b)*.25;
+          n++;
+        }
+        if(n===0)continue;
+        const rmsDbfs=20*Math.log10(Math.max(1e-10,Math.sqrt((l+r)/(2*n))));
+        measurements.push({
+          sectionId:section.id,filename:track.source.filename,key:track.source.key,
+          channels:buffer.numberOfChannels,rmsDbfs,
+          balanceDb:10*Math.log10(Math.max(1e-14,l)/Math.max(1e-14,r)),
+          widthDb:20*Math.log10(Math.max(1e-10,Math.sqrt(side/Math.max(1e-14,mid)))),
+          correlation:cross/Math.sqrt(Math.max(1e-14,l*r)),
+          coverage:Math.max(0,Math.min(1,coverage)),
+          startSeconds:start
+        });
+      }
+    }
+    return measurements;
+  }
+
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;

@@ -134,3 +134,22 @@ Dev correction:
 Current implementation is still a **heuristic** compiler, not musical phrase identification, multi-provider model reasoning, verified loudness-matched A/B or a mastering limiter. The aim of this incremental change is broader, meaningful section direction grounded in actual audio and authored performance tags. There is no fake promise of automatic perceptual level matching.
 
 QA after updating dev: rebuild and compare Blackbox Gospel with Spatial movement 85 / Dynamics 75. Expect role directives for active Vocals, Drums and Bass when appropriate and when no prior author control blocks them. If missing, inspect existing authored automation and section-level stem activity, not force commands. Audition drums with peaks monitored (no clipping). Existing stage/apply workflow remains explicit and non-destructive. Production main unchanged.
+
+
+## 2026-11-16 QA: broadened production is more interesting; channel-level work next
+
+User listening QA after role-aware pass: **"Looking better/more interesting."** Still observes primarily `space`, `reverb`, and `duck`, and **effects target whole parent stems rather than their existing left/right channels**. This is a useful positive checkpoint but NOT approval of a finished planner.
+
+Source contract review:
+- `section_production.source_map(..., channel_children)` already exposes valid `<alias>-left` and `<alias>-right` virtual channels for actually split parent stems. No new splitter or routing engine needed.
+- `production_planner.generate` still builds candidates from parent aliases, excludes left/right children from its eligible pool, and refuses lateral pan for split parents. Role-specific treatment of vocals/bass/drums acts on parents.
+- Existing `SharedClockAudition.sourceSectionProfiles` returns dry source statistics, but does not currently report reliable separately attributed **post-effect L/R split-child** activity per section. Treat this measurement gap honestly.
+
+Next recommended slice:
+1. Extend planner evidence input with verified split-child identities, section-scoped channel activity and independently measured L/R RMS/width/balance; preserve original parent-child alias binding and channel-specific author directives.
+2. Use `<alias>-left` / `<alias>-right` for **complementary, bounded, reversible** spatial work: gradual pan shifts, asymmetrical reverb/space sends, careful width or gain modulation, and selected end-of-section ramps; do not decorrelate low bass/kick or accidentally collapse the original stereo scene. For near-mono input, work with distinct rendered split lanes only when measured differences support it; avoid fake widening.
+3. Broaden to additional compatible directives where measured evidence and existing author intent justify them (pan, width, gain, selected EQ), rather than inflating the directive count with unnecessary movement. Keep lead intelligible, aggressive drum transients, headroom and mono integrity.
+4. Run parser and round-trip tests with split virtual aliases, authored left/right overrides, muted/silent channels, absent split assets, and section transitions; all plans remain unsaved previews.
+5. Follow with rendered proposal-vs-original level-matched A/B and measurable effect QA. No claim of automatic perceived-loudness consistency yet.
+
+Do **not** treat the user's feedback as proof of runtime pass for any new implementation. As of this entry, this is a captured next-slice design decision and QA note, not a claim that split-child optimization is implemented.

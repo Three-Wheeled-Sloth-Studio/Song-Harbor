@@ -110,6 +110,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     clone = copy.deepcopy(project)
     added = []
     notes = []
+    generated_pan = False
     for index, section in enumerate(sections):
         metric = by_id[section["id"]]
         existing = list(clone.get("section_production", {}).get(section["id"], []))
@@ -142,6 +143,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             bias = min(35, round(spatial * .32))
             if bias >= 20:
                 step.append(f"{spatial_alias}.pan:{side}.{bias}@{ramp:g}s:smooth")
+                generated_pan = True
         if spatial_alias and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
             wet = min(45, round(12 + spatial * (.24 if is_break else .14)))
             if direction == "ominous":

@@ -7,8 +7,8 @@ type Suggestion={section_id:string;label:string;directives:string[];measurements
 type Plan={content:string;profile:{name:string;id:string};suggestions:Suggestion[];
   notes:{section_id:string;note:string}[];analysis_kind:string;disclaimer:string;source:string};
 
-export function ProductionPlannerTool({projectId,analyze}:{
-  projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;
+export function ProductionPlannerTool({projectId,analyze,onReview}:{
+  projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;onReview:(content:string)=>void;
 }){
   const [direction,setDirection]=useState<Direction>("enhance");
   const [spatial,setSpatial]=useState(65);
@@ -67,6 +67,7 @@ export function ProductionPlannerTool({projectId,analyze}:{
       <div className="setting-tool-row">
         <strong>{plan.suggestions.length} sections adjusted</strong>
         <Status tone="warning">Draft only</Status>
+        <Button size="compact" variant="primary" onClick={()=>onReview(plan.content)}>Review in editor</Button>
         <Button size="compact" variant="secondary" onClick={()=>void (async()=>{
           try{
             await navigator.clipboard.writeText(plan.content);

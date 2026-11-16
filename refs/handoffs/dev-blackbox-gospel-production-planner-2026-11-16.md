@@ -153,3 +153,31 @@ Next recommended slice:
 5. Follow with rendered proposal-vs-original level-matched A/B and measurable effect QA. No claim of automatic perceived-loudness consistency yet.
 
 Do **not** treat the user's feedback as proof of runtime pass for any new implementation. As of this entry, this is a captured next-slice design decision and QA note, not a claim that split-child optimization is implemented.
+
+
+## 2026-11-16 next implementation: channel-aware production planner (Windows QA pending)
+
+User approved proceeding after noting that the planner is improving but still mostly generates `space`, `reverb` and `duck` on parent stems instead of treating already split left/right channels independently.
+
+**Committed on dev**:
+- `SharedClockAudition.splitSectionProfiles(sections)` reads the **actual active, split source lane buffers** already installed in the synchronized mixer (`<filename>:left` and `:right`), compares sample-aligned raw lanes over canonical sections, and outputs bounded section-local left/right RMS, dry inter-lane correlation, and temporal coverage. This is a dry measurement, not a post-effect mix meter.
+- Production Planner frontend passes `split_sections` alongside existing per-section mix and parent-stem evidence. Server bounds this input to 4096 rows and planner rejects nonfinite, out-of-range, duplicate and unknown source/section measurements.
+- Planner cross-checks `channel_children` and `section_production.source_map` for **verified, script-addressable** `Stem-left`/`Stem-right` aliases. It only generates split directives where *both real lanes* have sufficient active signal (>= -48 dBFS, >=40% temporal coverage). It **does not** invent split assets, assume near-mono channels are independent musical instruments, or repan the already hard-L/R channels.
+- Complementary, bounded `<alias>-left.space` and `<alias>-right.space` across sections introduce differentiated reflections (different values, with direction/section-sensitive amounts). For **measurably differentiated** L/R dry channels only (correlation <.985, similar channel levels, enough headroom and dynamics ambition), a modest -0.8 dB gain adjustment of the stronger channel is proposed. Correlated/near-mono channels get reflections but no fake gain/pan/width claim. Aggressive low-end/drum parent roles remain protected by excluding them from split optimization in this increment.
+- Parent-generated `space`/`reverb` proposals now exclude split rows; the original existing author controls on parent and children are protected. On later section loss of both channel signals, generated child space/gain values are returned to neutral through valid scripted ramps. No project state or audio mutates until the user explicitly accepts the proposal in Section Text.
+- Added regression coverage in `test_production_planner.py`: actual split L/R directive output, parent/child authored controls, absent routing, silent/weak lane, and return-to-neutral after dropout. Existing section text/lyrics/import round-trip guards remain.
+
+**Important constraints / next improvements**:
+- Raw L/R source evidence is not the same as *post-effects* per-child mix; results must be auditioned and headroom/mono checked.
+- Near-identical channels can be treated differently with bounded reflection sends, but this should not be represented as verified independence or guaranteed mono compatibility.
+- The existing mix analysis and project section scripts still set the creative and safety constraints. No automatic `auto.gain`, time-warp, melody transcription or large EQ shift was introduced.
+- A later step should render original/proposed audio for level-matched A/B and measured mono/headroom QA before automatic accept. Channel-specific EQ and more adventurous movement can be considered after those safeguards are demonstrated.
+
+**Windows QA** (not executed by GitHub connector):
+1. Update and relaunch dev; confirm TypeScript/Vite build and backend startup. Run backend `python -m unittest discover -s app/backend/tests -p 'test_production_planner.py' -v`.
+2. Blackbox Gospel > Production planner > Spatial movement 85, Dynamics 75. Generate. Verify active split backing stems now yield `<name>-left.space` and `<name>-right.space` with different values in appropriate sections, plus occasional bounded channel gain only where measured variation/headroom supports it.
+3. Verify absent split files, absent/quiet L/R lane, or absent section coverage **do not** trigger new child controls. Existing authored parent and child effects remain untouched; no accidental change to hard-panned routing.
+4. Audition the result, checking lead clarity, drum transients, and mono compatibility. Verify current saved project untouched until explicit Review in editor / Apply.
+5. If no split directives appear, inspect actual `channel_children` export registration, active mixer split track keys, dry lane RMS/correlation and authored effects: the generator intentionally fails closed on missing or weak evidence.
+
+Latest code changes are on `dev` only. No production merge. QA gate remains open.

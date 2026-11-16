@@ -56,7 +56,8 @@ def _owned(directives: list[dict], alias: str, kind: str) -> bool:
 
 def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
              dynamics: int = 60, direction: str = "enhance",
-             stereo_sources: list[dict] | None = None) -> dict:
+             stereo_sources: list[dict] | None = None,
+             section_stems: list[dict] | None = None) -> dict:
     """Return a validated import-ready text proposal; never mutate project."""
     if type(spatial) is not int or not 0 <= spatial <= 100:
         raise ValueError("Spatial ambition must be 0-100")
@@ -109,6 +110,33 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             profile["rmsDbfs"] = float(energy)
         profile["channels"] = channels
         source_profiles.append(profile)
+    # Aligned dry-source observations are section-scoped evidence, unlike the
+    # whole-source fingerprint. Silence and incomplete coverage are explicit.
+    section_stems = section_stems or []
+    if not isinstance(section_stems, list) or len(section_stems) > 8192:
+        raise ValueError("Too many section stem observations")
+    section_filenames = {x["id"] for x in sections}
+    scoped: dict[tuple[str, str], dict] = {}
+    for row in section_stems:
+        if not isinstance(row, dict) or row.get("sectionId") not in section_filenames:
+            raise ValueError("Unknown section stem observation")
+        filename = row.get("filename")
+        if not isinstance(filename, str) or filename not in files:
+            raise ValueError("Invalid section stem filename")
+        key = (row["sectionId"], filename)
+        if key in scoped:
+            raise ValueError("Duplicate section stem observation")
+        measurement = {"sectionId": row["sectionId"], "filename": filename}
+        for field, lo, hi in (
+            ("rmsDbfs", -240, 24), ("balanceDb", -200, 200),
+            ("widthDb", -240, 240), ("correlation", -1.001, 1.001),
+            ("coverage", 0, 1.001),
+        ):
+            value = row.get(field)
+            if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not lo <= value <= hi:
+                raise ValueError("Invalid section stem " + field)
+            measurement[field] = float(value)
+        scoped[key] = measurement
     lookup = section_production.source_map(files, project.get("source_tracks", []))
     by_filename = {row["filename"]: row for row in source_profiles}
     stem_states = {row.get("filename"): row for row in project.get("stems", [])}
@@ -176,10 +204,22 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             generated[key] = value
             return True
 
-        if spatial >= 20 and eligible:
+        # Choose only stems that contribute within this section. The earlier
+        # full-song estimate remains the fallback for old planner clients.
+        if section_stems:
+            local_eligible = []
+            for row in eligible:
+                filename = lookup.get(row["alias"])
+                evidence = scoped.get((section["id"], filename))
+                if not evidence or evidence["coverage"] < .2 or evidence["rmsDbfs"] < -45:
+                    continue
+                local_eligible.append({**row, "section_evidence": evidence})
+        else:
+            local_eligible = eligible
+        if spatial >= 20 and local_eligible:
             # Prefer separately recorded stem files, with complementary restrained
             # lateral placement; preserve existing panning or split routing.
-            lateral = [row for row in eligible if not row["split"] and not row["asymmetric"]]
+            lateral = [row for row in local_eligible if not row["split"] and not row["asymmetric"]]
             pair = lateral[:2]
             for i, row in enumerate(pair):
                 alias = row["alias"]
@@ -201,7 +241,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             # Nonidentical backing stems can have individual reflection spaces.
             # Reflections generate decorrelated spatial information even where
             # a dry source is effectively mono; width alone does not.
-            for i, row in enumerate(eligible[:3]):
+            for i, row in enumerate(local_eligible[:3]):
                 alias = row["alias"]
                 reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro else .18)))
                 if direction in ("ominous", "movement"):
@@ -217,15 +257,21 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     if direction == "ominous":
                         wet = min(60, wet + 7)
                     set_effect(alias, "reverb", str(wet))
-            if len(eligible) < 2:
+            if len(local_eligible) < 2:
                 notes_local.append("Only one eligible backing stem: reflections and positioning cannot create a second instrument")
-        elif not eligible:
-            notes_local.append("No eligible measured backing stems; no invented spatial effect")
+        elif not local_eligible:
+            notes_local.append("No active measured backing stems in this section; no invented spatial effect")
 
         # Create contrast by dynamically making room around the lead, not
         # forcing every section to one target loudness. Never touch lead/bass.
-        if dynamics >= 40 and known.get("vocals") and eligible:
-            backing = eligible[0]["alias"]
+        vocal_filename = lookup.get(known.get("vocals", ""))
+        vocal_section = scoped.get((section["id"], vocal_filename))
+        lead_active = not section_stems or (
+            vocal_section is not None and vocal_section["coverage"] >= .2
+            and vocal_section["rmsDbfs"] >= -43
+        )
+        if dynamics >= 40 and known.get("vocals") and lead_active and local_eligible:
+            backing = local_eligible[0]["alias"]
             if is_verse or is_break:
                 duck = round(min(4.0, 1.1 + dynamics * .027), 1)
                 if set_effect(backing, "duck", f"{duck:g}"):
@@ -268,6 +314,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     return {
         "profile": PROFILE, "content": content, "suggestions": added,
         "notes": notes, "source": "current-saved-section-text-plus-client-measured-mix",
-        "analysis_kind": "bounded-deterministic-v1", "stereo_sources": source_profiles,
+        "analysis_kind": "section-stem-aware-v2", "stereo_sources": source_profiles,
+        "section_stem_count": len(scoped),
         "disclaimer": "Stereo mix metrics do not establish independent stem/channel identity. Compare and audition before import.",
     }

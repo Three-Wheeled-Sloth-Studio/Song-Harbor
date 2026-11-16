@@ -79,7 +79,8 @@ def _authored_direction(value: object) -> dict:
 def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
              dynamics: int = 60, direction: str = "enhance",
              stereo_sources: list[dict] | None = None,
-             section_stems: list[dict] | None = None) -> dict:
+             section_stems: list[dict] | None = None,
+             reviewed_context: dict | None = None) -> dict:
     """Return a validated import-ready text proposal; never mutate project."""
     if type(spatial) is not int or not 0 <= spatial <= 100:
         raise ValueError("Spatial ambition must be 0-100")
@@ -87,6 +88,9 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         raise ValueError("Dynamic ambition must be 0-100")
     if direction not in ("enhance", "ominous", "movement", "contrast"):
         raise ValueError("Unknown production direction")
+    reviewed_context = reviewed_context or {}
+    if not isinstance(reviewed_context, dict):
+        raise ValueError("Invalid reviewed production context")
     sections = project.get("sections", [])
     if not sections:
         raise ValueError("Create and save song sections before planning production")
@@ -221,8 +225,19 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         authored_direction = _authored_direction(
             project.get("section_lyrics", {}).get(section["id"], "")
         )
-        intimate = authored_direction["tone"] == "intimate"
-        expansive = authored_direction["tone"] == "expansive"
+        confirmed = reviewed_context.get(section["id"])
+        if confirmed is not None:
+            if not isinstance(confirmed, dict) or confirmed.get("tone") not in (
+                "intimate", "restrained", "ominous", "rising", "expansive",
+                "driving", "suspended", "neutral"):
+                raise ValueError("Invalid reviewed direction")
+            # A human-confirmed interpretation can refine the broad stage cue,
+            # but it never changes authored text or source measurements.
+            tone = confirmed["tone"]
+        else:
+            tone = authored_direction["tone"]
+        intimate = tone in ("intimate", "restrained", "suspended")
+        expansive = tone in ("expansive", "rising", "driving")
         step: list[str] = []
         notes_local = []
 
@@ -268,7 +283,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     bias = min(42, round(spatial * .40))
                 if direction == "movement":
                     bias = min(55, bias + 8)
-                if direction == "ominous" and is_break:
+                if (direction == "ominous" or tone == "ominous") and is_break:
                     bias = min(55, bias + 5)
                 side = ("left" if (index + i) % 2 == 0 else "right")
                 if bias >= 12 and set_effect(alias, "pan", f"{side}.{bias}"):
@@ -279,7 +294,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             for i, row in enumerate(local_eligible[:3]):
                 alias = row["alias"]
                 reflections = min(35, round(6 + spatial * (.27 if is_break or is_intro or expansive else .18)))
-                if direction in ("ominous", "movement"):
+                if direction in ("ominous", "movement") or tone == "ominous":
                     reflections = min(38, reflections + 4)
                 if row["mono"] or metric["widthDb"] < -14:
                     if set_effect(alias, "space", str(reflections)):
@@ -287,9 +302,9 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                 elif not row["split"] and not row["wide"] and not row["asymmetric"]:
                     width = min(145, round(105 + spatial * (.25 if is_peak or is_break else .15)))
                     set_effect(alias, "width", str(width))
-                if (is_intro or is_break or is_peak or expansive) and i == 0:
+                if (is_intro or is_break or is_peak or expansive or tone == "ominous") and i == 0:
                     wet = min(55, round(16 + spatial * (.30 if is_break else .22)))
-                    if direction == "ominous":
+                    if direction == "ominous" or tone == "ominous":
                         wet = min(60, wet + 7)
                     set_effect(alias, "reverb", str(wet))
             if len(local_eligible) < 2:
@@ -313,6 +328,11 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     notes_local.append(f"Voice-keyed backing duck {duck:g} dB, protecting lead clarity")
             elif is_peak:
                 set_effect(backing, "duck", "1")
+        if confirmed:
+            notes_local.append(
+                "Human-reviewed direction: " + tone +
+                " (" + confirmed.get("origin", "author") + ")"
+            )
         if authored_direction["cues"]:
             notes_local.append(
                 "Authored performance direction: " +
@@ -355,7 +375,8 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     return {
         "profile": PROFILE, "content": content, "suggestions": added,
         "notes": notes, "source": "current-saved-section-text-plus-client-measured-mix",
-        "analysis_kind": "section-stem-aware-v2", "stereo_sources": source_profiles,
+        "analysis_kind": "reviewed-context-v3", "stereo_sources": source_profiles,
+        "reviewed_sections": sum(key in {x["id"] for x in sections} for key in reviewed_context),
         "section_stem_count": len(scoped),
         "disclaimer": "Stereo mix metrics do not establish independent stem/channel identity. Compare and audition before import.",
     }

@@ -206,6 +206,34 @@ class ProductionPlannerTests(unittest.TestCase):
         self.assertNotIn("Authored performance direction: expansive",
                          " ".join(item["note"] for item in result["notes"]))
 
+    def test_reviewed_direction_is_explicit_and_preserves_lyrics(self):
+        project=self.project()
+        project["section_production"]={}
+        ident=project["sections"][0]["id"]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-60,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-22}
+        original=copy.deepcopy(project)
+        neutral=planner.generate(project,self.metrics(project),
+                                 stereo_sources=[source],spatial=80)
+        reviewed=planner.generate(project,self.metrics(project),
+                                  stereo_sources=[source],spatial=80,
+                                  reviewed_context={ident:{"tone":"ominous",
+                                    "origin":"author","note":"Low and threatening"}})
+        self.assertEqual(project,original)
+        self.assertIn("Human-reviewed direction: ominous",
+                      " ".join(row["note"] for row in reviewed["notes"]))
+        self.assertNotIn("Human-reviewed direction:", 
+                         " ".join(row["note"] for row in neutral["notes"]))
+        self.assertEqual(reviewed["reviewed_sections"],1)
+        self.assertEqual(section_import.apply(project,reviewed["content"],"replace",28)["section_lyrics"],
+                         project["section_lyrics"])
+
+    def test_unreviewed_model_claims_not_accepted(self):
+        project=self.project()
+        with self.assertRaisesRegex(ValueError,"Invalid reviewed direction"):
+            planner.generate(project,self.metrics(project),reviewed_context={
+                project["sections"][0]["id"]:{"tone":"guitar in A minor", "origin":"model"}})
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

@@ -143,8 +143,13 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         if not isinstance(row, dict) or row.get("sectionId") not in section_filenames:
             raise ValueError("Unknown section stem observation")
         filename = row.get("filename")
-        if not isinstance(filename, str) or filename not in files:
+        if not isinstance(filename, str) or len(filename) > 260:
             raise ValueError("Invalid section stem filename")
+        if filename not in files:
+            # A split-channel child or ephemeral audition track is not a
+            # separate canonical source. Skip it rather than aborting the
+            # whole proposal or inventing a parent-to-child relationship.
+            continue
         key = (row["sectionId"], filename)
         measurement = {"sectionId": row["sectionId"], "filename": filename}
         for field, lo, hi in (

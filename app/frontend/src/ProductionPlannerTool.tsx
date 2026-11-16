@@ -3,10 +3,10 @@ import {Button,Status} from "@tws-ui/core/react";
 import type {SectionInsight} from "./SectionInsights";
 
 type Direction="enhance"|"ominous"|"movement"|"contrast";
-type StereoSource={filename:string;balanceDb:number;widthDb:number;correlation:number;hardPan:number};
+type StereoSource={filename:string;balanceDb:number;widthDb:number;correlation:number;hardPan:number;rmsDbfs?:number;channels?:number};
 type Suggestion={section_id:string;label:string;directives:string[];measurements:SectionInsight};
 type Plan={content:string;profile:{name:string;id:string};suggestions:Suggestion[];
-  notes:{section_id:string;note:string}[];analysis_kind:string;disclaimer:string;source:string};
+  notes:{section_id:string;note:string}[];stereo_sources?:StereoSource[];analysis_kind:string;disclaimer:string;source:string};
 
 export function ProductionPlannerTool({projectId,analyze,sourceStereo,onReview}:{
   projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;
@@ -39,9 +39,7 @@ export function ProductionPlannerTool({projectId,analyze,sourceStereo,onReview}:
   }
   return <div className="setting-tool-section song-production-planner">
     <div className="setting-controls">
-      <label>Profile
-        <input aria-label="Production profile" readOnly value="Infra Choir"/>
-      </label>
+      <div className="planner-profile" aria-label="Production profile">Infra Choir</div>
       <label>Direction
         <select aria-label="Production direction" value={direction}
           onChange={e=>setDirection(e.target.value as Direction)}>
@@ -80,6 +78,7 @@ export function ProductionPlannerTool({projectId,analyze,sourceStereo,onReview}:
       <textarea aria-label="Proposed whole-song section text"
         value={plan.content} rows={12} readOnly style={{width:"100%"}}/>
       <details><summary>Changes and evidence</summary>
+        <p>{plan.stereo_sources?.length||0} source profiles inspected; {(plan.stereo_sources||[]).filter(row=>row.channels===1||(row.widthDb< -35&&row.correlation>.995)).length} near-mono.</p>
         {plan.suggestions.map(item=><p key={item.section_id}>
           <strong>{item.label}</strong>: {item.directives.join(" ")}
           <small> | RMS {item.measurements.rmsDbfs.toFixed(1)} dBFS,

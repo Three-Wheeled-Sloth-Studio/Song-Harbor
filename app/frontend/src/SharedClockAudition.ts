@@ -95,7 +95,7 @@ export class SharedClockAudition {
    * Hard-panned split children are explicitly marked, not mistaken for mono.
    */
   get sourceStereoProfiles():readonly {key:string;filename:string;hardPan:number;
-    channels:number;balanceDb:number;widthDb:number;correlation:number}[]{
+    channels:number;balanceDb:number;widthDb:number;correlation:number;rmsDbfs:number}[]{
     return this.tracks.map(track=>{
       const buffer=this.effectiveBuffer(track);
       const left=buffer.getChannelData(0);
@@ -109,6 +109,7 @@ export class SharedClockAudition {
       }
       return {key:track.source.key,filename:track.source.filename,
         hardPan:track.source.pan,channels:buffer.numberOfChannels,
+        rmsDbfs:20*Math.log10(Math.max(1e-10,Math.sqrt((l+r)/Math.max(1,2*n)))),
         balanceDb:10*Math.log10(Math.max(1e-14,l)/Math.max(1e-14,r)),
         widthDb:20*Math.log10(Math.max(1e-10,Math.sqrt(side/Math.max(1e-14,mid)))),
         correlation:cross/Math.sqrt(Math.max(1e-14,l*r))};

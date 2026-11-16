@@ -41,6 +41,7 @@ import moss_setup_jobs
 import projects
 import sections
 import section_import
+import production_planner
 import daw
 import audacity_handoff
 import channel_split
@@ -3177,6 +3178,30 @@ def export_lyric_captions(ident: str) -> dict[str, Any]:
         return lyric_captions.render_srt(record)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+class ProductionPlanRequest(BaseModel):
+    section_metrics: list[dict[str, Any]] = Field(min_length=1, max_length=256)
+    spatial: int = Field(default=65, ge=0, le=100)
+    dynamics: int = Field(default=60, ge=0, le=100)
+    direction: Literal["enhance", "ominous", "movement", "contrast"] = "enhance"
+
+
+@app.post("/api/projects/{ident}/production-plan/preview")
+def preview_production_plan(ident: str, body: ProductionPlanRequest,
+                            request: Request) -> dict[str, Any]:
+    """Pure proposal. Never alters song manifest, source media, or section text."""
+    require_local_origin(request)
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    try:
+        return production_planner.generate(record, body.section_metrics,
+                                           spatial=body.spatial,
+                                           dynamics=body.dynamics,
+                                           direction=body.direction)
+    except (ValueError, TypeError, KeyError) as exc:
+        raise HTTPException(400, "Production preview rejected: " + str(exc)) from exc
 
 
 @app.get("/api/projects/{ident}/sections/export")

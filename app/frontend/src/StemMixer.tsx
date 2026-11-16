@@ -240,6 +240,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   };
 
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
+  const [productionDraft,setProductionDraft]=useState<{id:number;content:string}|null>(null);
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [sourceAudioRevision,setSourceAudioRevision]=useState(0);
   const [cleanupLocked,setCleanupLocked]=useState(false);
@@ -1433,9 +1434,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <small>Final color scan measures actual effects-processed stereo mix, which can differ from this approximation.</small>
         </details>}
         {tool==="songText"&&<>
-        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
+        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"} externalDraft={productionDraft}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,volume,auto,finish,replacements,offsets,echo,groups,groupTargets,echoAutomation)=>{
+            setProductionDraft(null);
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
@@ -1599,7 +1601,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
             return engine.renderWav24();
           }}/>} 
-        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} analyze={async()=>{
+        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} onReview={content=>{
+          if(productionDraft&&productionDraft.content!==content &&
+             !window.confirm("Replace the existing unsaved planner draft?"))return;
+          setProductionDraft(prev=>({id:(prev?.id||0)+1,content}));
+          setOpenTools(items=>items.includes("songText")?items:[...items,"songText"]);
+        }} analyze={async()=>{
           const engine=audio.current;
           if(correction||sectionPreviewActive)throw Error("ERROR: Return to saved mix before planning production.");
           if(!engine?.ready||!declickLoaded)throw Error("ERROR: Finish loading synchronized mix and saved repairs first.");

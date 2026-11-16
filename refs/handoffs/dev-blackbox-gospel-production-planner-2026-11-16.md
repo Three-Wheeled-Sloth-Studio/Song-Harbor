@@ -88,3 +88,26 @@ Implemented:
 QA: update dev, launch, generate default and spatial-movement plans for Blackbox Gospel. Compare sections where a backing stem enters/exits, check that staged effects follow the active source, review in existing whole-song editor and ensure no overwritten lyrics, existing automation, or automatic application. Inspect plan's Changes/Evidence for section-local readings. Listen for inappropriate early ducking and changes on silent stems.
 
 Remaining limitations: Per-stem **post-effects** section analysis, semantic understanding from MOSS/SMU and cross-stem overlap, proposed-mix loudness matched A/B, editable profile history, and adaptive overall loudness solver are still future work. Split-channel optimization remains explicitly pinned for a later slice.
+
+
+## 2026-11-16 Slice C4: reviewed musical understanding (dev, untested on Windows)
+
+User reported the previous section-local stem activity slice builds clean and instructed proceeding. Dev remains the only updated branch. The next slice integrates user-confirmed expressive direction as provider-neutral context, **without allowing experimental Q4 text to authorize script changes**.
+
+Delivered:
+- `production_context.py` new durable JSON sidecar under `<runtime>/data/jobs/<id>/generated/production-context.json`. Revisioned, atomic and non-destructive; user-saved per-canonical-section directions: intimate, restrained, ominous, rising, expansive, driving, suspended, neutral. Optional short intent note. Origin `author` or `q4-reviewed`, with mandatory source run ID and SHA for Q4-reviewed entries.
+- `server.py` GET/PATCH `/api/projects/{ident}/production-context`, read-only `/api/projects/{ident}/production-listening`, using existing song identity/local-origin protections and write lock. Q4 review is offered **only** for the last complete, nontruncated Q4 run on exactly one canonical section of the same project with an analysis snapshot. Source is still unverified; model claims about tempo, chords, lyrics and instruments are **not parsed or auto-accepted**. Backend checks explicit user-confirmed Q4 origin against run ID, snapshot ID's project/section and source SHA. Prior reviewed entries remain valid historical records and don't require the currently active Q4 job when saving a separate section.
+- `ProductionContextReview.tsx` collapsed editor in Production Planner: choose section, tone, optional note and basis; optionally inspect an appropriately scoped Q4 review and explicitly confirm it. Save/Clear/Refresh with revision checks, no auto-run of model and no changes to section text. The next plan-generation action reads only saved human-reviewed context.
+- `production_planner.generate()` now accepts reviewed context as a separate, validated input, respecting existing artist/authored effects, lyrics, section metrics and stem activity. Confirmed tone can shape lateral separation, spatial reflections/reverb and voice-keyed ducking. Explicit parenthetical lyric-stage directions remain available as fallback. No generated plan is automatically accepted. UI displays count of reviewed sections in evidence.
+- Offline tests `test_production_context.py` and additional `test_production_planner.py` fixtures verify save/revision/provenance, rejection of invented model claims, and unchanged original lyrics/automation.
+
+**Known safety caveats / not claimed:** This is a human-in-the-loop MOSS bridge, **not automatic semantic extraction from Q4**, since Q4 was known to invent structure, BPM and instruments. A previously reviewed Q4 context is historical source-specific evidence and does not currently perform automatic full-mix freshness checking; when arrangement/mix changes it should be re-reviewed. Orphaned context after section-ID changes currently fails loudly with a conflict instead of silently remapping. Split L/R fine-grained planning, post-effects per-stem section metering, tempo/harmonic SMU fusion, editable production profile and loudness-matched A/B remain pending.
+
+**Windows QA checklist:**
+1. Update/relaunch `dev` and verify TS/Vite build and backend startup. Run `python -m unittest discover -s app/backend/tests -p 'test_production_context.py' -v` plus existing `test_production_planner.py`.
+2. Blackbox Gospel > Production planner > **Reviewed listening context**; save an authored direction for one actual section (e.g. ominous or rising), generate plan; check the count and altered eligible spatial/duck suggestions. Reload tool, confirm persisted context.
+3. If a current Q4 run exists and is a complete **single-section** Blackbox Gospel review, inspect it and explicitly confirm tone. A Q4 run on another song, external WAV, whole mix or multiple sections must **not** be offered as section-level evidence.
+4. Change saved direction and re-generate; ensure prior proposal is cleared, no auto-import or overwrite, and existing section text unchanged until reviewed and explicitly accepted.
+5. Test Clear, stale revision conflict, quiet sections and rejected invalid/unaligned review provenance. The open tool and default plan should work even without Q4 installed or having analyzed Blackbox Gospel.
+
+Source implementation is committed to `dev`, but **this slice is not yet Windows build/unit/lifecycle validated**. No automatic model inference, downloads or changes to project audio occurred.

@@ -49,6 +49,24 @@ class ProductionContextTests(unittest.TestCase):
                               "sections": {section: {"tone": tone, "origin": "author", "note": ""}}},
                              self.sections)
 
+    def test_retired_section_context_archived_not_reassigned(self):
+        another=uuid.uuid4().hex
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            initial={"schema_version":1,"revision":0,"sections":{
+                self.section:{"tone":"intimate","origin":"author","note":"Old verse"},
+                another:{"tone":"driving","origin":"author","note":"Chorus"}
+            }}
+            pc.save(root,initial,{self.section,another},0)
+            changed=pc.read(root,{another})
+            self.assertNotIn(self.section,changed["sections"])
+            self.assertEqual(changed["archived"][self.section]["note"],"Old verse")
+            pc.save(root,{"schema_version":1,"revision":1,
+                         "sections":changed["sections"]},{another},1)
+            restored=pc.read(root,{another})
+            self.assertIn(self.section,restored["archived"])
+            self.assertNotIn(self.section,restored["sections"])
+
     def test_empty_context_fails_closed_on_model_provenance(self):
         with self.assertRaisesRegex(ValueError, "Only reviewed Q4"):
             pc.normalize({"schema_version": 1, "revision": 0,

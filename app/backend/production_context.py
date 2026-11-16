@@ -21,7 +21,7 @@ def empty() -> dict:
     return {"schema_version": VERSION, "revision": 0, "sections": {}}
 
 
-def normalize(raw: dict, section_ids: set[str]) -> dict:
+def normalize(raw: dict, section_ids: set[str], *, allow_retired: bool = False) -> dict:
     if not isinstance(raw, dict) or raw.get("schema_version") != VERSION:
         raise ValueError("Invalid production context format")
     revision = raw.get("revision")
@@ -35,6 +35,8 @@ def normalize(raw: dict, section_ids: set[str]) -> dict:
     result = {"schema_version": VERSION, "revision": revision, "sections": {},
               "archived": {}}
     for section_id, item in [*entries.items(), *archived.items()]:
+        if section_id in entries and section_id not in section_ids and not allow_retired:
+            raise ValueError("Production context references an unknown section")
         if (not isinstance(section_id, str) or not 1 <= len(section_id) <= 200
                 or not isinstance(item, dict)):
             raise ValueError("Invalid production context section identity")
@@ -70,7 +72,8 @@ def read(folder: Path, section_ids: set[str]) -> dict:
     location = path(folder)
     if not location.is_file():
         return empty()
-    return normalize(json.loads(location.read_text(encoding="utf-8")), section_ids)
+    return normalize(json.loads(location.read_text(encoding="utf-8")), section_ids,
+                     allow_retired=True)
 
 
 def save(folder: Path, raw: dict, section_ids: set[str], expected_revision: int) -> dict:

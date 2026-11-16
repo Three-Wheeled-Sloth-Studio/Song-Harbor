@@ -3215,7 +3215,10 @@ def update_production_context(ident: str, body: ProductionContextUpdateRequest,
                 # Previously approved observations remain historical review
                 # records. Re-verification is needed only for a newly changed
                 # source, not when saving another section's author notes.
-                if previous["sections"].get(section_id) == item:
+                prior = previous["sections"].get(section_id)
+                if (prior and prior.get("origin") == "q4-reviewed"
+                        and prior.get("source_run_id") == item.get("source_run_id")
+                        and prior.get("source_sha256") == item.get("source_sha256")):
                     continue
                 job = moss_q4_experiment.status(APP_ROOT)
                 snap = job.get("snapshot")

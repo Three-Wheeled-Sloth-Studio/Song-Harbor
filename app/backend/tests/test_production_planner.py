@@ -53,6 +53,23 @@ class ProductionPlannerTests(unittest.TestCase):
         result=planner.generate(project,self.metrics(project,wide=True))
         self.assertNotIn("Other.width:1",result["content"].split("[Chorus")[0])
 
+    def test_protect_existing_stereo_source_differentiation(self):
+        project=self.project()
+        sources=[{"filename":"Other.wav","balanceDb":4.2,
+                  "widthDb":-4.3,"correlation":.68,"hardPan":0}]
+        result=planner.generate(project,self.metrics(project),stereo_sources=sources)
+        intro=result["content"].split("[Chorus")[0]
+        self.assertNotIn("Other.width:1",intro)
+        self.assertIn("Existing stereo/channel separation protected",
+                      " ".join(row["note"] for row in result["notes"]))
+
+    def test_invalid_stereo_metrics_rejected(self):
+        project=self.project()
+        with self.assertRaisesRegex(ValueError,"Invalid source stereo"):
+            planner.generate(project,self.metrics(project),stereo_sources=[
+                {"filename":"Other.wav","balanceDb":float("nan"),
+                 "widthDb":0,"correlation":0,"hardPan":0}])
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

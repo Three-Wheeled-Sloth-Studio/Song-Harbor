@@ -1,0 +1,50 @@
+# Song Harbor DEV: Blackbox Gospel production planner, first functional slice
+
+Date: 2026-11-16
+Branch: dev only. Main/production remains untouched.
+
+## Intent
+
+One compact **Production planner** in the existing tools rail analyzes the current effects-processed mix and existing dry source stereo fingerprints, combines those with saved song sections/lyrics and a built-in Infra Choir aesthetic profile, and generates reviewable import-ready production section text. Do not reinterpret a tonal texture as an instrument or assume a single model can establish all facts. Preserve author-created arrangement, section boundaries, lyrics and prior section automation. Human review and Save are required.
+
+## Implemented in source
+
+- `app/frontend/src/ProductionPlannerTool.tsx`: profile shown as Infra Choir (v1), direction selection, bounded spatial/dynamic ambition controls, Generate plan, compact count and evidence, read-only generated text, Copy, Review in editor. No model download, MOSS execution or automatic project save.
+- `app/frontend/src/StemMixer.tsx`: planner uses `SharedClockAudition.analyzeMix(timelineSections)` on the actual currently effects-processed render. Blocks unsaved section previews, unloaded repairs and conflicting export; guards mid-analysis revision changes. Existing analysis findings and section insights are refreshed for other tools. Stages reviewed proposal as a distinct **unsaved** whole-song section draft; warns before overwriting an already-open editor or previous planner draft.
+- `app/frontend/src/SharedClockAudition.ts`: inspect decoded source track L/R energy, side/mid width and correlation and hard-panned source identities, without changing source data or audio routing. These source fingerprints supplement, but are not substitutes for, the section-level *processed mix* measurements. Currently whole-source statistics, not per-section post-effect stem/channel meters.
+- `app/backend/production_planner.py`: isolated deterministic v1 proposal provider. Existing canonical section IDs/lyrics/timings and existing directives are authoritative. Validates complete section-metric coverage, finite metrics, stereo evidence and bounds. Protects existing target-specific author controls, split stems, measured source L/R differentiation, already wide or polarized mixes, near-mono sources where width effects would be ineffective, muted/non-soloed sources, and lead vocals/bass. Adds only supported bounded width/reverb/pan/gain directives for eligible atmospheric/backing parent aliases; long smooth transitions relative to section duration; only modest attenuation for near-clipping backing; preserves deliberately quiet passages. Spatial movement mode can stage modest pan on unprotected candidate sources, returning toward center at chorus or ending. No invented instrument identities, authored score edits, master auto-gain, or false loudness guarantee.
+- `app/backend/server.py`: `POST /api/projects/{ident}/production-plan/preview` local-origin-only, bounded read-only preview. Returns validated whole-song section text plus per-section directives, mix measurements, notes, stereo provenance, style profile and explicit limitation.
+- `app/frontend/src/SectionsTool.tsx`: can accept the produced text as an unsaved draft in existing Whole-song Section Text editor, retaining normal explicit Apply/Save/Discard and ability to Reload the saved text. It does **not** automatically import/apply.
+- `app/frontend/src/WorkbenchTools.tsx`: new planner tool item.
+- `app/backend/tests/test_production_planner.py`: regression fixtures for preservation of section IDs, lyric words and original directives, source stereo protection, anti-hallucination for near-mono and silent sections, invalid metrics, draft/no-op and import round-trip.
+
+## Evidence hierarchy and limitations
+
+1. Authored section and lyric text + existing project scripts: source of truth.
+2. Processed mix RMS, peaks, width, balance from the same offline audio graph as export: measured. May not exactly match a separate DAW/master.
+3. Per-source raw stereo fingerprints / split status: measured baseline, *not* section-specific post-effect stem energy.
+4. Infra Choir v1 production profile: built-in style preference, not a learned listener.
+5. Suggested directives: bounded deterministic heuristic, not claims about instrumentation or musical taste quality.
+
+**Not yet implemented**: validated MOSS/SMU observation ingestion and resolution, actual harmonic/tempo awareness, editable persistent profile library, per-stem per-section effects-processed evidence, audio-rendered proposed A/B, true LUFS-based adaptive overall loudness controller, automatic iterative optimization. Do not claim these in UI/release notes. The current dynamics slider influences only bounded backing peak-guard opportunities; it is not a full leveler.
+
+## Windows QA requested
+
+1. Update/relaunch dev. Run `npm run build --prefix app/frontend` or normal launcher. Check Python import/startup and execute `python -m unittest discover -s app/backend/tests -p 'test_production_planner.py' -v` in the backend runtime.
+2. Open Blackbox Gospel with its saved canonical sections, lyrics and stems. Open **Production planner**; choose default Infra Choir profile and `Enhance arrangement`. Click Generate plan. Verify visible busy state and a returned full-song draft with exact timestamps/lyrics and previously saved directives intact.
+3. Test `Review in editor`; confirm it opens Whole-song section text as **unsaved**, not auto-accepted. Discard/reload, then separately import a reviewed draft. Reopen project and check expected persistence and normal export. Verify source files and original scripts unchanged before acceptance.
+4. Inspect spatial evidence for an already stereo-differentiated parent, a hard split child, and a nearly mono source. Wide/imbalanced sources should not be needlessly widened, nor should near-mono sources be mislabeled as independently stereo. Check existing authored pan/reverb/width are not overridden or duplicated.
+5. Try different direction/ambition settings. Without a qualifying mix/section/stem evidence signal, generated result may deliberately contain few or zero additions; explain why in Changes and evidence.
+6. Test no saved sections, stale analysis after changing a fader/section, mid-preview edit, conflicting export, and invalid/quiet sections. Expect explicit errors or conservative suggestions, never project mutation.
+7. Audition a preview manually and compare level-matched original vs proposed mix; verify chorus impact, lead intelligibility, mono compatibility, headroom and drum transients. No automatic A/B or LUFS matching is yet implemented.
+8. Specific track test: compare Blackbox Gospel from quiet opening through contrasting sections and keep high-value production changes only.
+
+## Follow-on slices
+
+1. Profile persistence/editable album or artist profiles with explicit author intent, spatial aesthetics and user correction history.
+2. Integrate section-aware MIDI / authored lyrics and verified MOSS observations via SMU, contradictions explicitly unverified. Suggest changes with explanation and source evidence.
+3. Analyze effects-processed per-stem per-section L/R and semantic masking to create richer movement while respecting already differentiated channels.
+4. Render proposed script to an immutable audition candidate and perform loudness-matched A/B with peaks, mid/side, correlation and masking guardrails.
+5. Separate bounded, opt-in perceived loudness normalization `auto.gain` from creative dynamics and preserve intentional dramatic contrast.
+
+Status: implementation committed to dev, **frontend build/backend unit tests and actual Windows listening QA not executed via connector**. Do not promote to main until these pass.

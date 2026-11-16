@@ -48,6 +48,17 @@ class ProductionPlannerTests(unittest.TestCase):
         self.assertEqual(processed["sections"],project["sections"])
         self.assertEqual(processed["section_lyrics"],project["section_lyrics"])
 
+    def test_authored_effects_are_protected_across_sections(self):
+        project=self.project()
+        # The Chorus explicitly establishes a width. Planner must not
+        # insert a competing width in the Intro or later section.
+        result=planner.generate(project,self.metrics(project),stereo_sources=[
+            {"filename":"Other.wav","balanceDb":0.1,"widthDb":-17,
+             "correlation":.8,"hardPan":0,"channels":2}])
+        self.assertEqual(result["content"].count("Other.width:"),1)
+        self.assertIn("Other.width:130",result["content"])
+        self.assertEqual(result["content"].count("Other.pan:"),1)
+
     def test_wide_mix_is_not_widened_more(self):
         project=self.project()
         result=planner.generate(project,self.metrics(project,wide=True))

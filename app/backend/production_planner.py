@@ -343,6 +343,27 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                         f"{alias} split L/R: distinct reflection sends; "
                         + ("near-correlated dry lanes" if correlated else "measured independent lane variation")
                     )
+        # When a split pair leaves an arrangement, undo only our own
+        # previous automation. Existing author-owned settings are untouched.
+        eligible_split_aliases = {
+            entry["alias"].casefold() for entry in local_eligible
+            if entry["split"] and split_evidence.get(
+                (section["id"], lookup.get(entry["alias"])), {}).get("coverage", 0) >= .4
+            and min(
+                split_evidence.get((section["id"], lookup.get(entry["alias"])), {}).get("leftRmsDbfs", -240),
+                split_evidence.get((section["id"], lookup.get(entry["alias"])), {}).get("rightRmsDbfs", -240),
+            ) >= -48
+        }
+        for entry in eligible:
+            if not entry["split"] or entry["alias"].casefold() in eligible_split_aliases:
+                continue
+            for suffix in ("-left", "-right"):
+                alias = entry["alias"]+suffix
+                for kind, neutral in (("space", "0"), ("gain", "0")):
+                    key = (alias.casefold(), kind)
+                    if key in generated and generated[key] != neutral:
+                        if not _owned(all_authored, entry["alias"], kind):
+                            set_effect(alias, kind, neutral)
         if spatial >= 20 and local_eligible:
             # Prefer separately recorded stem files, with complementary restrained
             # lateral placement; preserve existing panning or split routing.

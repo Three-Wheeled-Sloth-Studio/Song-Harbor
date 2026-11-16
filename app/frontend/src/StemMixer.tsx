@@ -28,6 +28,7 @@ import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import {MossModelTool} from "./MossModelTool";
+import {ProductionPlannerTool} from "./ProductionPlannerTool";
 import {TempoMapTool} from "./TempoMapTool";
 import type { SongSection } from "./SectionEditor";
 
@@ -1598,6 +1599,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
             return engine.renderWav24();
           }}/>} 
+        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} analyze={async()=>{
+          const engine=audio.current;
+          if(correction||sectionPreviewActive)throw Error("ERROR: Return to saved mix before planning production.");
+          if(!engine?.ready||!declickLoaded)throw Error("ERROR: Finish loading synchronized mix and saved repairs first.");
+          if(exporting)throw Error("ERROR: Mix export is already running.");
+          if(!timelineSections.length)throw Error("ERROR: Save song sections before planning.");
+          const revision=analysisRevision.current;
+          const result=await engine.analyzeMix(timelineSections);
+          if(revision!==analysisRevision.current)throw Error("ERROR: Mix changed during analysis. Try again.");
+          setCleanupFindings(result);
+          setSectionInsights(engine.sectionInsights);
+          setCleanupScanned(true);
+          setCleanupStale(false);
+          return engine.sectionInsights;
+        }}/>}
         {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
           mixSource={{projectId:jobId,sections:timelineSections,
           sourceStems:stems.map(stem=>{

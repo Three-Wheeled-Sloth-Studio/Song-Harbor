@@ -161,7 +161,11 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     # A proposal that loses a directive/lyric or cannot round-trip is not returned.
     duration = max(float(x["end_seconds"]) for x in sections)
     validated = section_import.apply(copy.deepcopy(project), content, "replace", duration)
-    if validated.get("section_lyrics", {}) != project.get("section_lyrics", {}):
+    def lyrics_clean(value: object) -> str:
+        return "\n".join(line.rstrip() for line in str(value or "").splitlines()).strip()
+    original_lyrics = {key: lyrics_clean(value) for key, value in project.get("section_lyrics", {}).items()}
+    result_lyrics = {key: lyrics_clean(value) for key, value in validated.get("section_lyrics", {}).items()}
+    if result_lyrics != original_lyrics:
         raise ValueError("Proposal did not preserve authored lyrics")
     if [(x["id"], x["start_seconds"], x["end_seconds"]) for x in validated["sections"]] != [
             (x["id"], x["start_seconds"], x["end_seconds"]) for x in sections]:

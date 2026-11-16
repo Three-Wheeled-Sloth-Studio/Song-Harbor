@@ -130,6 +130,16 @@ class ProductionPlannerTests(unittest.TestCase):
                                 direction="movement",spatial=100)
         self.assertEqual(result["content"].count("Other.pan:"),1)
 
+    def test_silent_stem_not_spatialized(self):
+        project=self.project()
+        project["section_production"]={}
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-180,
+                "correlation":1,"hardPan":0,"channels":1,"rmsDbfs":-85}
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                direction="movement",spatial=100)
+        self.assertNotIn("Other.pan:",result["content"])
+        self.assertNotIn("Other.space:",result["content"])
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

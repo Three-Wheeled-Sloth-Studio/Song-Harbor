@@ -91,6 +91,30 @@ export class SharedClockAudition {
   private lastSectionInsights:SectionInsight[]=[];
   get sectionInsights():readonly SectionInsight[]{return this.lastSectionInsights;}
   get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
+  /** Dry source stereo identity; separate from processed mix measurements.
+   * Hard-panned split children are explicitly marked, not mistaken for mono.
+   */
+  get sourceStereoProfiles():readonly {key:string;filename:string;hardPan:number;
+    channels:number;balanceDb:number;widthDb:number;correlation:number}[]{
+    return this.tracks.map(track=>{
+      const buffer=this.effectiveBuffer(track);
+      const left=buffer.getChannelData(0);
+      const right=buffer.numberOfChannels>1?buffer.getChannelData(1):left;
+      const step=Math.max(1,Math.floor(buffer.length/120000));
+      let l=0,r=0,cross=0,mid=0,side=0,n=0;
+      for(let i=0;i<buffer.length;i+=step){
+        const a=left[i],b=right[i];
+        l+=a*a;r+=b*b;cross+=a*b;
+        mid+=(a+b)*(a+b)*.25;side+=(a-b)*(a-b)*.25;n++;
+      }
+      return {key:track.source.key,filename:track.source.filename,
+        hardPan:track.source.pan,channels:buffer.numberOfChannels,
+        balanceDb:10*Math.log10(Math.max(1e-14,l)/Math.max(1e-14,r)),
+        widthDb:20*Math.log10(Math.max(1e-10,Math.sqrt(side/Math.max(1e-14,mid)))),
+        correlation:cross/Math.sqrt(Math.max(1e-14,l*r))};
+    });
+  }
+
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;

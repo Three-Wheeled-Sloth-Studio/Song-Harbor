@@ -35,7 +35,7 @@ def _measurement(raw: dict) -> dict:
     values = {}
     for field, minimum, maximum in (
         ("rmsDbfs", -240, 24), ("peakDbfs", -240, 24),
-        ("widthDb", -240, 70), ("balanceDb", -100, 100),
+        ("widthDb", -240, 240), ("balanceDb", -200, 200),
         ("intensity", 0, 1),
     ):
         value = raw.get(field)
@@ -92,7 +92,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             raise ValueError("Invalid stereo source identity")
         profile = {"filename": row["filename"]}
         for name, minimum, maximum in (
-            ("balanceDb", -100, 100), ("widthDb", -240, 70),
+            ("balanceDb", -200, 200), ("widthDb", -240, 240),
             ("correlation", -1.001, 1.001), ("hardPan", -1, 1),
         ):
             value = row.get(name)

@@ -55,7 +55,8 @@ def _owned(directives: list[dict], alias: str, kind: str) -> bool:
 
 
 def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
-             dynamics: int = 60, direction: str = "enhance") -> dict:
+             dynamics: int = 60, direction: str = "enhance",
+             stereo_sources: list[dict] | None = None) -> dict:
     """Return a validated import-ready text proposal; never mutate project."""
     if type(spatial) is not int or not 0 <= spatial <= 100:
         raise ValueError("Spatial ambition must be 0-100")
@@ -82,6 +83,30 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     # Only plan on known parent stems. Child L/R spatial settings are retained.
     spatial_alias = next((known[a] for a in ("other", "guitar", "piano") if a in known), None)
     vocal = known.get("vocals")
+    stereo_sources = stereo_sources or []
+    if len(stereo_sources) > 200:
+        raise ValueError("Too many stereo sources")
+    source_profiles = []
+    for row in stereo_sources:
+        if not isinstance(row, dict) or not isinstance(row.get("filename"), str) or len(row["filename"]) > 260:
+            raise ValueError("Invalid stereo source identity")
+        profile = {"filename": row["filename"]}
+        for name, minimum, maximum in (
+            ("balanceDb", -100, 100), ("widthDb", -200, 70),
+            ("correlation", -1.001, 1.001), ("hardPan", -1, 1),
+        ):
+            value = row.get(name)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not minimum <= value <= maximum:
+                raise ValueError("Invalid source stereo " + name)
+            profile[name] = float(value)
+        source_profiles.append(profile)
+    spatial_filename = section_production.source_map(files, project.get("source_tracks", [])).get(spatial_alias or "")
+    target_profiles = [row for row in source_profiles if row["filename"] == spatial_filename]
+    has_split = bool(project.get("channel_children", {}).get(spatial_filename or "", {}).get("export"))
+    source_already_spatial = has_split or any(
+        abs(row["balanceDb"]) >= 1.5 or row["widthDb"] > -12 or abs(row["hardPan"]) > .1
+        for row in target_profiles
+    )
     clone = copy.deepcopy(project)
     added = []
     notes = []
@@ -100,14 +125,14 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         quiet = metric["rmsDbfs"] < -30
         step = []
         if spatial_alias and not _owned(existing, spatial_alias, "width"):
-            if not wide and not polarized and spatial >= 35:
+            if not wide and not polarized and not source_already_spatial and spatial >= 35:
                 target = min(145, 100 + round(spatial * (.38 if is_peak or is_break else .17)))
                 if direction == "movement":
                     target = min(145, target + 10)
                 if target > 108:
                     step.append(f"{spatial_alias}.width:{target}@{ramp:g}s:smooth")
-            elif wide or polarized:
-                notes.append({"section_id": section["id"], "note": "Existing stereo separation detected; no added width or pan"})
+            elif wide or polarized or source_already_spatial:
+                notes.append({"section_id": section["id"], "note": "Existing stereo/channel separation protected; no additional widening"})
         if spatial_alias and not _owned(existing, spatial_alias, "reverb") and spatial >= 45:
             wet = min(45, round(12 + spatial * (.24 if is_break else .14)))
             if direction == "ominous":
@@ -144,6 +169,6 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     return {
         "profile": PROFILE, "content": content, "suggestions": added,
         "notes": notes, "source": "current-saved-section-text-plus-client-measured-mix",
-        "analysis_kind": "bounded-deterministic-v1",
+        "analysis_kind": "bounded-deterministic-v1", "stereo_sources": source_profiles,
         "disclaimer": "Stereo mix metrics do not establish independent stem/channel identity. Compare and audition before import.",
     }

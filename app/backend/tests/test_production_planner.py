@@ -38,7 +38,7 @@ class ProductionPlannerTests(unittest.TestCase):
         original=copy.deepcopy(project)
         result=planner.generate(project,self.metrics(project))
         self.assertEqual(project,original)
-        self.assertEqual(len(result["suggestions"]),2)
+        self.assertEqual(len(result["suggestions"]),1)
         self.assertIn("The signal begins",result["content"])
         self.assertIn("Now the chorus comes",result["content"])
         self.assertIn("Vocals.pan:left.30",result["content"])

@@ -102,6 +102,11 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
         channels = row.get("channels", 2)
         if type(channels) is not int or channels not in (1, 2):
             raise ValueError("Invalid source channel count")
+        if row.get("rmsDbfs") is not None:
+            energy = row["rmsDbfs"]
+            if not isinstance(energy, (int, float)) or isinstance(energy, bool) or not math.isfinite(energy) or not -240 <= energy <= 24:
+                raise ValueError("Invalid source RMS")
+            profile["rmsDbfs"] = float(energy)
         profile["channels"] = channels
         source_profiles.append(profile)
     lookup = section_production.source_map(files, project.get("source_tracks", []))
@@ -122,7 +127,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
     for alias in candidates:
         filename = lookup.get(alias)
         profile = by_filename.get(filename)
-        if not profile:
+        if not profile or profile.get("rmsDbfs", 0) < -55:
             continue
         state = stem_states.get(filename, {})
         if (state.get("mute", False) or (any_solo and not state.get("solo", False))
@@ -172,7 +177,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
             return True
 
         if spatial >= 20 and eligible:
-            # Prefer actual separated stems, with complementary restrained
+            # Prefer separately recorded stem files, with complementary restrained
             # lateral placement; preserve existing panning or split routing.
             lateral = [row for row in eligible if not row["split"] and not row["asymmetric"]]
             pair = lateral[:2]
@@ -192,7 +197,7 @@ def generate(project: dict, metrics: list[dict], *, spatial: int = 65,
                     bias = min(55, bias + 5)
                 side = ("left" if (index + i) % 2 == 0 else "right")
                 if bias >= 12 and set_effect(alias, "pan", f"{side}.{bias}"):
-                    notes_local.append(f"Position {alias} {side}; separate sources create real stereo contrast")
+                    notes_local.append(f"Position {alias} {side}; use available stem separation for stereo contrast")
             # Nonidentical backing stems can have individual reflection spaces.
             # Reflections generate decorrelated spatial information even where
             # a dry source is effectively mono; width alone does not.

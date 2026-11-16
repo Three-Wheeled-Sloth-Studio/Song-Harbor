@@ -3,12 +3,14 @@ import {Button,Status} from "@tws-ui/core/react";
 import type {SectionInsight} from "./SectionInsights";
 
 type Direction="enhance"|"ominous"|"movement"|"contrast";
+type StereoSource={filename:string;balanceDb:number;widthDb:number;correlation:number;hardPan:number};
 type Suggestion={section_id:string;label:string;directives:string[];measurements:SectionInsight};
 type Plan={content:string;profile:{name:string;id:string};suggestions:Suggestion[];
   notes:{section_id:string;note:string}[];analysis_kind:string;disclaimer:string;source:string};
 
-export function ProductionPlannerTool({projectId,analyze,onReview}:{
-  projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;onReview:(content:string)=>void;
+export function ProductionPlannerTool({projectId,analyze,sourceStereo,onReview}:{
+  projectId:string;analyze:()=>Promise<readonly SectionInsight[]>;
+  sourceStereo:()=>readonly StereoSource[];onReview:(content:string)=>void;
 }){
   const [direction,setDirection]=useState<Direction>("enhance");
   const [spatial,setSpatial]=useState(65);
@@ -27,7 +29,7 @@ export function ProductionPlannerTool({projectId,analyze,onReview}:{
       setPhase("Validating section script");
       const response=await fetch("/api/projects/"+encodeURIComponent(projectId)+"/production-plan/preview",{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({section_metrics:insights,spatial,dynamics,direction})
+        body:JSON.stringify({section_metrics:insights,stereo_sources:sourceStereo(),spatial,dynamics,direction})
       });
       const result=await response.json() as Plan&{detail?:string};
       if(!response.ok)throw Error(result.detail||"ERROR: Production proposal failed.");

@@ -42,6 +42,7 @@ import projects
 import sections
 import section_import
 import production_planner
+import production_context
 import daw
 import audacity_handoff
 import channel_split
@@ -3180,6 +3181,75 @@ def export_lyric_captions(ident: str) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class ProductionContextUpdateRequest(BaseModel):
+    revision: int = Field(ge=0)
+    sections: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+@app.get("/api/projects/{ident}/production-context")
+def get_production_context(ident: str) -> dict[str, Any]:
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    try:
+        return production_context.read(DATA_ROOT / "jobs" / ident,
+                                       {item["id"] for item in record.get("sections", [])})
+    except (ValueError, OSError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.patch("/api/projects/{ident}/production-context")
+def update_production_context(ident: str, body: ProductionContextUpdateRequest,
+                              request: Request) -> dict[str, Any]:
+    require_local_origin(request)
+    with lock:
+        record = projects.read_project(DATA_ROOT, ident)
+        if not record or not get_job(ident):
+            raise HTTPException(404, "Song unavailable")
+        try:
+            section_ids = {item["id"] for item in record.get("sections", [])}
+            for section_id, item in body.sections.items():
+                if item.get("origin") != "q4-reviewed":
+                    continue
+                job = moss_q4_experiment.status(APP_ROOT)
+                snap = job.get("snapshot")
+                if (job.get("state") != "complete" or job.get("output_truncated")
+                        or not isinstance(snap, dict)
+                        or snap.get("project_id") != ident
+                        or snap.get("section_ids") != [section_id]
+                        or job.get("run_id") != item.get("source_run_id")
+                        or snap.get("sha256") != item.get("source_sha256")
+                        or not (job.get("review") or {}).get("answer")):
+                    raise ValueError("ERROR: Reviewed MOSS source is missing, stale or not aligned to the selected section.")
+            return production_context.save(
+                DATA_ROOT / "jobs" / ident,
+                {"schema_version": 1, "revision": body.revision, "sections": body.sections},
+                section_ids, body.revision)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/production-listening")
+def get_production_listening(ident: str) -> dict[str, Any]:
+    """Optional display only. Never silently attach an unlabeled Q4 output."""
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record or not get_job(ident):
+        raise HTTPException(404, "Song unavailable")
+    status = moss_q4_experiment.status(APP_ROOT)
+    snap = status.get("snapshot")
+    if (status.get("state") != "complete" or status.get("output_truncated")
+            or not isinstance(snap, dict) or snap.get("project_id") != ident
+            or len(snap.get("section_ids", [])) != 1
+            or snap["section_ids"][0] not in {x["id"] for x in record.get("sections", [])}
+            or not (status.get("review") or {}).get("answer")):
+        return {"available": False}
+    return {"available": True, "section_id": snap["section_ids"][0],
+            "run_id": status["run_id"], "source_sha256": snap["sha256"],
+            "review": status["review"]["answer"][:6000],
+            "verified": False, "aligned": False,
+            "warning": "Q4 model claims are unverified. Review the section by ear before confirming context."}
+
+
 class ProductionPlanRequest(BaseModel):
     section_metrics: list[dict[str, Any]] = Field(min_length=1, max_length=256)
     stereo_sources: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
@@ -3198,12 +3268,15 @@ def preview_production_plan(ident: str, body: ProductionPlanRequest,
     if not record or not get_job(ident):
         raise HTTPException(404, "Song unavailable")
     try:
+        context = production_context.read(DATA_ROOT / "jobs" / ident,
+                                          {item["id"] for item in record.get("sections", [])})
         return production_planner.generate(record, body.section_metrics,
                                            spatial=body.spatial,
                                            dynamics=body.dynamics,
                                            direction=body.direction,
                                            stereo_sources=body.stereo_sources,
-                                           section_stems=body.section_stems)
+                                           section_stems=body.section_stems,
+                                           reviewed_context=context["sections"])
     except (ValueError, TypeError, KeyError) as exc:
         raise HTTPException(400, "Production preview rejected: " + str(exc)) from exc
 

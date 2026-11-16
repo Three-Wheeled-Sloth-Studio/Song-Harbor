@@ -283,6 +283,69 @@ class ProductionPlannerTests(unittest.TestCase):
         self.assertNotIn("Drums.gain:",result["content"])
         self.assertNotIn("Drums.space:",result["content"])
 
+    def test_split_channels_receive_distinct_reflections_from_actual_lanes(self):
+        project=self.project()
+        project["section_production"]={}
+        project["channel_children"]={"Other.wav":{"export":"verified-split"}}
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-190,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-17}
+        observations=[{"sectionId":row["id"],"filename":"Other.wav",
+                       "leftRmsDbfs":-18,"rightRmsDbfs":-18.5,
+                       "correlation":.65,"coverage":1}
+                      for row in project["sections"]]
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                split_sections=observations,spatial=85,
+                                dynamics=75,direction="movement")
+        self.assertEqual(result["split_section_count"],2)
+        self.assertIn("Other-left.space:",result["content"])
+        self.assertIn("Other-right.space:",result["content"])
+        self.assertIn("Other-left.gain:-0.8",result["content"])
+        self.assertNotIn("Other.pan:",result["content"])
+        self.assertNotIn("Other.width:",result["content"])
+        result_project=section_import.apply(project,result["content"],"replace",28)
+        self.assertEqual(result_project["section_lyrics"],project["section_lyrics"])
+
+    def test_split_channels_respect_parent_and_child_authored_controls(self):
+        project=self.project()
+        project["channel_children"]={"Other.wav":{"export":"verified-split"}}
+        section=project["sections"][0]["id"]
+        project["section_production"]={section:section_production.parse_block(
+            "{Other.space:15@4s:smooth Other-left.gain:-1@4s:smooth}",
+            section_production.source_aliases(project["files"],project["source_tracks"],project["channel_children"]))}
+        row={"sectionId":section,"filename":"Other.wav","leftRmsDbfs":-18,
+             "rightRmsDbfs":-18,"correlation":1,"coverage":1}
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-200,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                split_sections=[row],spatial=95,direction="movement")
+        self.assertNotIn("Other-left.space:",result["content"])
+        self.assertNotIn("Other-right.space:",result["content"])
+        self.assertEqual(result["content"].count("Other-left.gain:"),1)
+
+    def test_split_measurement_does_not_create_child_when_split_missing(self):
+        project=self.project()
+        project["section_production"]={}
+        row={"sectionId":project["sections"][0]["id"],"filename":"Other.wav",
+             "leftRmsDbfs":-18,"rightRmsDbfs":-18,"correlation":0,"coverage":1}
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-180,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                split_sections=[row],spatial=90)
+        self.assertNotIn("Other-left.",result["content"])
+
+    def test_quiet_split_lane_not_automated(self):
+        project=self.project()
+        project["section_production"]={}
+        project["channel_children"]={"Other.wav":{"export":"verified-split"}}
+        row={"sectionId":project["sections"][0]["id"],"filename":"Other.wav",
+             "leftRmsDbfs":-18,"rightRmsDbfs":-80,"correlation":.2,"coverage":1}
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-180,
+                "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
+        result=planner.generate(project,self.metrics(project),stereo_sources=[source],
+                                split_sections=[row],spatial=90)
+        self.assertNotIn("Other-left.space:",result["content"])
+        self.assertNotIn("Other-right.space:",result["content"])
+
     def test_bad_metric_set_rejected(self):
         project=self.project()
         with self.assertRaisesRegex(ValueError,"every saved section"):

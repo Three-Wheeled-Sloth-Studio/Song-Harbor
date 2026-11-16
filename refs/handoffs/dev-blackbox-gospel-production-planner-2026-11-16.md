@@ -119,3 +119,18 @@ Source implementation is committed to `dev`, but **this slice is not yet Windows
 - Existing Q4-reviewed notes can be edited or saved in subsequent sessions without the old Q4 worker still being active. The original model run identity and snapshot hash remain attached. A newer Q4 run never silently replaces that approval's provenance; to attach a new run, clear and explicitly review again.
 - Source model output remains unverified, optional, explicit-review only. No Q4 inference is launched by opening or generating a Production Planner draft.
 - Additional regression fixture checks archived retirement and restoration behavior. Latest source revision: `c011b63` on dev, pending Windows build and regression execution.
+
+
+## 2026-11-16 QA: narrow role coverage despite clean build
+
+User confirmed dev build clean but the plan still gives only modest adjustments to Other, Piano and occasional Guitar. Root cause verified in `production_planner.generate`: the generic eligible-source pool **explicitly excluded Vocals/Bass/Drums** (`protected_aliases`), and only the remaining eligible pool received spatial planning/ducking. Human-reviewed direction alone did not make those rhythm/lead roles participate.
+
+Dev correction:
+- Keep the independent backing-stem spatialization logic and existing authored automation guards.
+- Add **separate role-aware rules** (only when source is active in the section per measured sample coverage/RMS, with legacy source evidence fallback): Vocals receive direction-aware reverb depth without panning the lead; active drums receive an opt-in bounded +0.7 to +2.0 dB transient-preserving gain lift in chorus/expansive/driving passages *only with at least 3.5 dB measured mix peak headroom*, or restrained industrial reflections in darker bridge passages; bass receives subtle reflections in ominous/suspended passages while maintaining its central low-end anchor. All routes respect solo/mute/zero-gain state, current authored directives across the song, and existing exact section boundaries.
+- Explicitly **did not** automatically compress aggressive drum crashes. A prior idea for default drum compression was replaced with bounded lift to keep messy impact. Peak prediction remains approximate; a proposed dry drum lift needs post-render headroom and mono QA.
+- Added regression tests covering vocal/drum/bass involvement, absence of unintended pan for these roles, preserved lyrics, and silence/author protection.
+
+Current implementation is still a **heuristic** compiler, not musical phrase identification, multi-provider model reasoning, verified loudness-matched A/B or a mastering limiter. The aim of this incremental change is broader, meaningful section direction grounded in actual audio and authored performance tags. There is no fake promise of automatic perceptual level matching.
+
+QA after updating dev: rebuild and compare Blackbox Gospel with Spatial movement 85 / Dynamics 75. Expect role directives for active Vocals, Drums and Bass when appropriate and when no prior author control blocks them. If missing, inspect existing authored automation and section-level stem activity, not force commands. Audition drums with peaks monitored (no clipping). Existing stage/apply workflow remains explicit and non-destructive. Production main unchanged.

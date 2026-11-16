@@ -68,8 +68,8 @@ export function ProductionContextReview({projectId,sections,onSaved}:{
       else sectionsNext[selected]={
         tone,origin:source,note:note.trim(),
         ...(source==="q4-reviewed"?{
-          source_run_id:q4?listening.run_id:previous?.source_run_id,
-          source_sha256:q4?listening.source_sha256:previous?.source_sha256}: {})
+          source_run_id:retained?previous.source_run_id:listening.run_id,
+          source_sha256:retained?previous.source_sha256:listening.source_sha256}: {})
       } as Entry;
       const response=await fetch(route+"/production-context",{
         method:"PATCH",headers:{"Content-Type":"application/json"},

@@ -111,3 +111,11 @@ Delivered:
 5. Test Clear, stale revision conflict, quiet sections and rejected invalid/unaligned review provenance. The open tool and default plan should work even without Q4 installed or having analyzed Blackbox Gospel.
 
 Source implementation is committed to `dev`, but **this slice is not yet Windows build/unit/lifecycle validated**. No automatic model inference, downloads or changes to project audio occurred.
+
+
+### Reviewed-context follow-up safeguards
+
+- Orphaned per-section reviews are now archived when saved section IDs are retired; archived records are retained in the sidecar for audit and excluded from new section proposals. Fresh edits containing unknown IDs are rejected rather than silently archived or remapped.
+- Existing Q4-reviewed notes can be edited or saved in subsequent sessions without the old Q4 worker still being active. The original model run identity and snapshot hash remain attached. A newer Q4 run never silently replaces that approval's provenance; to attach a new run, clear and explicitly review again.
+- Source model output remains unverified, optional, explicit-review only. No Q4 inference is launched by opening or generating a Production Planner draft.
+- Additional regression fixture checks archived retirement and restoration behavior. Latest source revision: `c011b63` on dev, pending Windows build and regression execution.

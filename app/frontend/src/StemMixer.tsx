@@ -1434,7 +1434,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <small>Final color scan measures actual effects-processed stereo mix, which can differ from this approximation.</small>
         </details>}
         {tool==="songText"&&<>
-        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"} externalDraft={productionDraft}
+        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"} externalDraft={productionDraft} onDraftDismiss={()=>setProductionDraft(null)}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,volume,auto,finish,replacements,offsets,echo,groups,groupTargets,echoAutomation)=>{
             setProductionDraft(null);
@@ -1602,8 +1602,8 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             return engine.renderWav24();
           }}/>} 
         {tool==="planner"&&<ProductionPlannerTool projectId={jobId} onReview={content=>{
-          if(productionDraft&&productionDraft.content!==content &&
-             !window.confirm("Replace the existing unsaved planner draft?"))return;
+          if((productionDraft||openTools.includes("songText")) &&
+             !window.confirm("Replace any unsaved whole-song editor draft with this proposal?"))return;
           setProductionDraft(prev=>({id:(prev?.id||0)+1,content}));
           setOpenTools(items=>items.includes("songText")?items:[...items,"songText"]);
         }} analyze={async()=>{

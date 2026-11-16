@@ -48,3 +48,11 @@ One compact **Production planner** in the existing tools rail analyzes the curre
 5. Separate bounded, opt-in perceived loudness normalization `auto.gain` from creative dynamics and preserve intentional dramatic contrast.
 
 Status: implementation committed to dev, **frontend build/backend unit tests and actual Windows listening QA not executed via connector**. Do not promote to main until these pass.
+
+
+## Post-implementation safeguards (later dev commits)
+- Raw per-source stereo measurements now gate any new width/pan suggestion; without matching source evidence the planner does not invent stereo advantages.
+- Nearly mono source signals, already spatialized signals, hard split children, and muted/non-soloed sources are protected.
+- **Inherited authored directives are globally protected by effect dimension**; an earlier author pan/width/reverb/gain in any section cannot be unexpectedly overridden by this initial rule-based provider in a later section. This is intentionally conservative and can yield few suggestions.
+- Existing project chorus width and earlier spatial placement now have regression coverage; near-mono and silent-metric fixtures are included.
+- No compiler or unittest run was available through GitHub connector. Latest dev source commit after these refinements: `33d870c`.

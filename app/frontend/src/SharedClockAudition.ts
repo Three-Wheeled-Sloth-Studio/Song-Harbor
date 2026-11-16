@@ -168,6 +168,60 @@ export class SharedClockAudition {
     return measurements;
   }
 
+  /** Compare actual split L/R source tracks section by section.
+   * This is dry source evidence, not processed output or a mastering test.
+   */
+  splitSectionProfiles(sections:readonly SectionRange[]):readonly {
+    sectionId:string;filename:string;leftRmsDbfs:number;rightRmsDbfs:number;
+    correlation:number;coverage:number;
+  }[]{
+    if(sections.length>256)throw Error("Too many sections for split inspection");
+    const pairs=new Map<string,{left?:Track;right?:Track}>();
+    for(const track of this.tracks){
+      const key=track.source.key;
+      const suffix=key.endsWith(":left")?"left":key.endsWith(":right")?"right":null;
+      if(!suffix||key!==track.source.filename+":"+suffix)continue;
+      const pair=pairs.get(track.source.filename)||{};
+      pair[suffix]=track;
+      pairs.set(track.source.filename,pair);
+    }
+    const observations:{
+      sectionId:string;filename:string;leftRmsDbfs:number;rightRmsDbfs:number;
+      correlation:number;coverage:number;
+    }[]=[];
+    for(const [filename,pair] of pairs){
+      if(!pair.left||!pair.right)continue;
+      const leftBuffer=this.effectiveBuffer(pair.left);
+      const rightBuffer=this.effectiveBuffer(pair.right);
+      const l=leftBuffer.getChannelData(0),r=rightBuffer.getChannelData(0);
+      const lRate=leftBuffer.sampleRate,rRate=rightBuffer.sampleRate;
+      const leftStart=this.timelineStart(pair.left),rightStart=this.timelineStart(pair.right);
+      for(const section of sections){
+        const duration=section.end_seconds-section.start_seconds;
+        if(duration<=0)continue;
+        const first=Math.max(section.start_seconds,leftStart,rightStart);
+        const last=Math.min(section.end_seconds,leftStart+l.length/lRate,rightStart+r.length/rRate);
+        if(last<=first)continue;
+        const coverage=Math.min(1,(last-first)/duration);
+        const count=Math.min(40000,Math.max(1,Math.floor((last-first)*Math.min(lRate,rRate))));
+        let ll=0,rr=0,cross=0;
+        for(let i=0;i<count;i++){
+          const time=first+(i+.5)*(last-first)/count;
+          const li=Math.min(l.length-1,Math.max(0,Math.floor((time-leftStart)*lRate)));
+          const ri=Math.min(r.length-1,Math.max(0,Math.floor((time-rightStart)*rRate)));
+          const a=l[li],b=r[ri];
+          ll+=a*a;rr+=b*b;cross+=a*b;
+        }
+        observations.push({sectionId:section.id,filename,
+          leftRmsDbfs:20*Math.log10(Math.max(1e-10,Math.sqrt(ll/count))),
+          rightRmsDbfs:20*Math.log10(Math.max(1e-10,Math.sqrt(rr/count))),
+          correlation:cross/Math.sqrt(Math.max(1e-14,ll*rr)),
+          coverage});
+      }
+    }
+    return observations;
+  }
+
   private loadController:AbortController|null=null;
   private offset=0;
   private startAt=0;

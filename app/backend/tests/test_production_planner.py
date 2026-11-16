@@ -297,8 +297,8 @@ class ProductionPlannerTests(unittest.TestCase):
                                 split_sections=observations,spatial=85,
                                 dynamics=75,direction="movement")
         self.assertEqual(result["split_section_count"],2)
-        self.assertIn("Other-left.space:",result["content"])
-        self.assertIn("Other-right.space:",result["content"])
+        self.assertIn("Other-left.reverb:",result["content"])
+        self.assertIn("Other-right.reverb:",result["content"])
         self.assertIn("Other-left.gain:-0.8",result["content"])
         self.assertNotIn("Other.pan:",result["content"])
         self.assertNotIn("Other.width:",result["content"])
@@ -310,7 +310,7 @@ class ProductionPlannerTests(unittest.TestCase):
         project["channel_children"]={"Other.wav":{"export":"verified-split"}}
         section=project["sections"][0]["id"]
         project["section_production"]={section:section_production.parse_block(
-            "{Other.space:15@4s:smooth Other-left.gain:-1@4s:smooth}",
+            "{Other.reverb:15@4s:smooth Other-left.gain:-1@4s:smooth}",
             section_production.source_aliases(project["files"],project["source_tracks"],project["channel_children"]))}
         row={"sectionId":section,"filename":"Other.wav","leftRmsDbfs":-18,
              "rightRmsDbfs":-18,"correlation":1,"coverage":1}
@@ -318,8 +318,8 @@ class ProductionPlannerTests(unittest.TestCase):
                 "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
         result=planner.generate(project,self.metrics(project),stereo_sources=[source],
                                 split_sections=[row],spatial=95,direction="movement")
-        self.assertNotIn("Other-left.space:",result["content"])
-        self.assertNotIn("Other-right.space:",result["content"])
+        self.assertNotIn("Other-left.reverb:",result["content"])
+        self.assertNotIn("Other-right.reverb:",result["content"])
         self.assertEqual(result["content"].count("Other-left.gain:"),1)
 
     def test_split_measurement_does_not_create_child_when_split_missing(self):
@@ -349,10 +349,30 @@ class ProductionPlannerTests(unittest.TestCase):
         result=planner.generate(project,self.metrics(project),stereo_sources=[source],
                                 split_sections=rows,spatial=85,dynamics=80)
         body=result["content"]
-        self.assertIn("Other-left.space:0",body)
-        self.assertIn("Other-right.space:0",body)
+        self.assertIn("Other-left.reverb:0",body)
+        self.assertIn("Other-right.reverb:0",body)
         self.assertIn("Other-left.gain:0",body)
         section_import.apply(project,body,"replace",28)
+
+    def test_all_generated_split_child_directives_are_accepted_by_importer(self):
+        project=self.project()
+        project["section_production"]={}
+        project["channel_children"]={"Other.wav":{"export":"verified-split"}}
+        rows=[{"sectionId":section["id"],"filename":"Other.wav",
+               "leftRmsDbfs":-22,"rightRmsDbfs":-23,
+               "correlation":.999,"coverage":1}
+              for section in project["sections"]]
+        source={"filename":"Other.wav","balanceDb":0,"widthDb":-170,
+                "correlation":.999,"hardPan":0,"channels":2,"rmsDbfs":-22}
+        proposal=planner.generate(project,self.metrics(project),
+                                  stereo_sources=[source],split_sections=rows,
+                                  spatial=90,dynamics=85)
+        self.assertIn("Other-left.reverb:",proposal["content"])
+        self.assertIn("Other-right.reverb:",proposal["content"])
+        self.assertNotIn("Other-left.space:",proposal["content"])
+        self.assertNotIn("Other-right.space:",proposal["content"])
+        output=section_import.apply(project,proposal["content"],"replace",28)
+        self.assertEqual(output["section_lyrics"],project["section_lyrics"])
 
     def test_quiet_split_lane_not_automated(self):
         project=self.project()
@@ -364,8 +384,8 @@ class ProductionPlannerTests(unittest.TestCase):
                 "correlation":1,"hardPan":0,"channels":2,"rmsDbfs":-18}
         result=planner.generate(project,self.metrics(project),stereo_sources=[source],
                                 split_sections=[row],spatial=90)
-        self.assertNotIn("Other-left.space:",result["content"])
-        self.assertNotIn("Other-right.space:",result["content"])
+        self.assertNotIn("Other-left.reverb:",result["content"])
+        self.assertNotIn("Other-right.reverb:",result["content"])
 
     def test_bad_metric_set_rejected(self):
         project=self.project()

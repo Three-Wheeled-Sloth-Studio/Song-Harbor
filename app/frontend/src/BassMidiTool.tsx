@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from "react";
 import {MidiPianoRoll,type Arrangement} from "./MidiPianoRoll";
+import {SeparationPreviewTool} from "./SeparationPreviewTool";
 import type {SongSection} from "./SectionEditor";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
@@ -33,7 +34,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
  const stemToolsRef=useRef<HTMLDivElement>(null);
  const [trackId,setTrackId]=useState("");
  const [trackRows,setTrackRows]=useState<Track[]>([]);
- const [functionMode,setFunctionMode]=useState<"mix"|"midi">(midiSession?.jobId===jobId&&midiSession.candidates.length?"midi":"mix");
+ const [functionMode,setFunctionMode]=useState<"mix"|"midi"|"separate">(midiSession?.jobId===jobId&&midiSession.candidates.length?"midi":"mix");
  const [regionMode,setRegionMode]=useState<"song"|"span"|"custom">("song");
  const [fromId,setFromId]=useState("");
  const [toId,setToId]=useState("");
@@ -511,6 +512,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      <div className="song-stem-hub-tabs" role="group" aria-label="Stem function">
        <button type="button" aria-pressed={functionMode==="mix"} title="Stem mix controls" onClick={()=>setFunctionMode("mix")}>◉ <span>Mix</span></button>
        <button type="button" aria-pressed={functionMode==="midi"} title="Stem to MIDI" onClick={()=>setFunctionMode("midi")}>♮ <span>MIDI</span></button>
+       <button type="button" aria-pressed={functionMode==="separate"} title="Specialist source re-separation A/B" onClick={()=>setFunctionMode("separate")}>✦ <span>Separate</span></button>
      </div>
    </div>
    {functionMode==="mix"&&<div className="song-stem-hub-mix">
@@ -522,6 +524,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </div>:<small role="status">Choose a stem to edit its base mix.</small>}
      <button type="button" className="song-stem-hub-next" onClick={()=>setFunctionMode("midi")}>♮ Stem → MIDI</button>
    </div>}
+   {functionMode==="separate"&&<SeparationPreviewTool jobId={jobId} trackId={trackId} start={Math.max(clipStart,Math.min(position,clipEnd-0.5))} duration={Math.max(0,clipEnd-Math.max(clipStart,Math.min(position,clipEnd-0.5)))} />}
    {functionMode==="midi"&&<>
      <div className="song-midi-region">
        <label title="Selection scope">Region <select aria-label="MIDI extraction region" value={regionMode} onChange={e=>{clearCandidate();setRegionMode(e.target.value as "song"|"span"|"custom");}}>

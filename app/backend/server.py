@@ -46,6 +46,7 @@ import production_context
 import daw
 import audacity_handoff
 import channel_split
+import separation_preview
 import waveform_peaks
 import track_routing
 import app_update
@@ -3461,6 +3462,56 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
         raise HTTPException(400, f"Could not prepare DAW files: {exc}") from exc
     finally:
         job["exporting_waveform"] = False
+
+
+class SeparationPreviewRequest(BaseModel):
+    track_id: str
+    start_seconds: float = Field(ge=0)
+    duration_seconds: float = Field(ge=0.5, le=60)
+    model_id: str
+
+
+@app.get("/api/projects/{ident}/separation/models")
+def separation_preview_models(ident: str) -> dict[str, Any]:
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(409, "Open a completed song before refining stems")
+    return {"models": separation_preview.available_models(MODEL_ROOT),
+            "hint": "Installed local models only. No model download or stem replacement occurs."}
+
+
+@app.post("/api/projects/{ident}/separation/previews")
+def start_separation_preview(ident: str, request: Request,
+                             body: SeparationPreviewRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    record = projects.read_project(DATA_ROOT, ident) if job else None
+    if not record or job.get("status") != "complete":
+        raise HTTPException(409, "Complete a song before refining a stem")
+    try:
+        return separation_preview.submit(
+            DATA_ROOT, record, body.track_id, body.start_seconds,
+            body.duration_seconds, body.model_id, MODEL_ROOT,
+            dependency_tool("ffmpeg"), str(SEPARATOR))
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/separation/previews/{candidate_id}")
+def separation_preview_status(ident: str, candidate_id: str) -> dict[str, Any]:
+    try:
+        return separation_preview.status(ident, candidate_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/separation/previews/{candidate_id}/audio/{filename}")
+def separation_preview_audio(ident: str, candidate_id: str, filename: str) -> FileResponse:
+    try:
+        path = separation_preview.audio_path(ident, candidate_id, filename)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(path, media_type="audio/wav", filename=path.name)
 
 
 class ChannelSplitRequest(BaseModel):

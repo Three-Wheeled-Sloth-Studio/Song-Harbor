@@ -10,11 +10,11 @@ FILES = [f"song ({name}).wav" for name in section_production.ALIASES]
 class ProductionNotationTests(unittest.TestCase):
     def test_named_groups_and_section_automation_roundtrip(self):
         project={"sections":[],"files":FILES}
-        script=("[Verse 0:00-0:10]\\n"
+        script=("[Verse 0:00-0:10]\n"
                 "{group.DrumPair:Drums,Bass DrumPair.auto.gain:0@5s:smooth "
-                "Drums.gain:+.75@5s:smooth}\\n"
-                "[Chorus 0:10-0:20]\\n"
-                "{DrumPair.auto.pan:center@5s:smooth}\\n")
+                "Drums.gain:+.75@5s:smooth}\n"
+                "[Chorus 0:10-0:20]\n"
+                "{DrumPair.auto.pan:center@5s:smooth}\n")
         changed=section_import.apply(project,script,"replace",20)
         self.assertEqual(changed["stem_groups"],[{"name":"DrumPair","sources":[FILES[1],FILES[2]]}])
         self.assertEqual([r["dimension"] for r in changed["section_group_targets"]],["gain","pan"])

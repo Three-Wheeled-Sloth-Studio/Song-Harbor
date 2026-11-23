@@ -28,6 +28,7 @@ import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
 import {CorrectionWorkbench,type CorrectionDraft} from "./CorrectionWorkbench";
 import {ToolWindow,TOOL_ITEMS,type WorkbenchTool} from "./WorkbenchTools";
 import {MossModelTool} from "./MossModelTool";
+import {ProductionPlannerTool} from "./ProductionPlannerTool";
 import {TempoMapTool} from "./TempoMapTool";
 import type { SongSection } from "./SectionEditor";
 
@@ -239,6 +240,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   };
 
   const [sectionInsights,setSectionInsights]=useState<readonly SectionInsight[]>([]);
+  const [productionDraft,setProductionDraft]=useState<{id:number;content:string}|null>(null);
   const [cleanupScanned,setCleanupScanned]=useState(false);
   const [sourceAudioRevision,setSourceAudioRevision]=useState(0);
   const [cleanupLocked,setCleanupLocked]=useState(false);
@@ -1432,9 +1434,10 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
           <small>Final color scan measures actual effects-processed stereo mix, which can differ from this approximation.</small>
         </details>}
         {tool==="songText"&&<>
-        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"}
+        <SectionsTool jobId={jobId} songTitle={title} open={tool==="songText"} externalDraft={productionDraft} onDraftDismiss={()=>setProductionDraft(null)}
           onClose={()=>{setOpenTools(items=>items.filter(x=>x!=="songText"));}} focused={scriptFocus} revision={scriptRevision}
           onApplied={(items,targets,reverb,width,space,eq,dynamics,gain,volume,auto,finish,replacements,offsets,echo,groups,groupTargets,echoAutomation)=>{
+            setProductionDraft(null);
             setPanTargets(targets);
             setReverbTargets(reverb);
             setWidthTargets(width);
@@ -1598,6 +1601,26 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
             if(exporting)throw Error("ERROR: Mix export is running. Measurement blocked.");
             return engine.renderWav24();
           }}/>} 
+        {tool==="planner"&&<ProductionPlannerTool projectId={jobId} sections={timelineSections} sourceStereo={()=>audio.current?.sourceStereoProfiles||[]} sectionStems={()=>audio.current?.sourceSectionProfiles(timelineSections)||[]} splitSections={()=>audio.current?.splitSectionProfiles(timelineSections)||[]} onReview={content=>{
+          if((productionDraft||openTools.includes("songText")) &&
+             !window.confirm("Replace any unsaved whole-song editor draft with this proposal?"))return;
+          setProductionDraft(prev=>({id:(prev?.id||0)+1,content}));
+          setOpenTools(items=>items.includes("songText")?items:[...items,"songText"]);
+        }} analyze={async()=>{
+          const engine=audio.current;
+          if(correction||sectionPreviewActive)throw Error("ERROR: Return to saved mix before planning production.");
+          if(!engine?.ready||!declickLoaded)throw Error("ERROR: Finish loading synchronized mix and saved repairs first.");
+          if(exporting)throw Error("ERROR: Mix export is already running.");
+          if(!timelineSections.length)throw Error("ERROR: Save song sections before planning.");
+          const revision=analysisRevision.current;
+          const result=await engine.analyzeMix(timelineSections);
+          if(revision!==analysisRevision.current)throw Error("ERROR: Mix changed during analysis. Try again.");
+          setCleanupFindings(result);
+          setSectionInsights(engine.sectionInsights);
+          setCleanupScanned(true);
+          setCleanupStale(false);
+          return engine.sectionInsights;
+        }}/>}
         {tool==="moss"&&<MossModelTool onConfigure={()=>onConfigureModels?.()}
           mixSource={{projectId:jobId,sections:timelineSections,
           sourceStems:stems.map(stem=>{

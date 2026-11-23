@@ -39,12 +39,12 @@ type SavedEnding={fade_seconds:number;tail_seconds:number;curve:"smooth"|"linear
 type EchoTarget={section_id:string;source_key:string;delayMs:number;wet:number;feedback:number;lowpassHz:number;transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
 type GroupDefinition={name:string;sources:string[]};
 type GroupTarget={section_id:string;name:string;dimension:"gain"|"pan";sources:string[];transition_seconds:number;transition_anchor?:"start"|"end";curve:"smooth"|"linear"};
-export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onApplied}:{
+export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,externalDraft,onDraftDismiss,onApplied}:{
   jobId:string;songTitle:string;open:boolean;onClose:()=>void;focused:SongSection|null;
-  revision:number;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],volume:SavedVolumeTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding,replacements:ReplacementMask[],offsets:Record<string,number>,echo:Record<string,{delayMs:number;wet:number;feedback:number;lowpassHz:number}>,groups:GroupDefinition[],groupTargets:GroupTarget[],echoAutomation:EchoTarget[])=>void;
+  revision:number;externalDraft?:{id:number;content:string}|null;onDraftDismiss?:()=>void;onApplied:(sections:SongSection[],targets:SavedPanTarget[],reverb:SavedReverbTarget[],width:SavedWidthTarget[],space:SavedSpaceTarget[],eq:SavedEqTarget[],dynamics:SavedDynamicsTarget[],gain:SavedGainTarget[],volume:SavedVolumeTarget[],auto:SavedAutoPanTarget[],ending:SavedEnding,replacements:ReplacementMask[],offsets:Record<string,number>,echo:Record<string,{delayMs:number;wet:number;feedback:number;lowpassHz:number}>,groups:GroupDefinition[],groupTargets:GroupTarget[],echoAutomation:EchoTarget[])=>void;
 }){
-  const [content,setContent]=useState(()=>temporarySectionDrafts.get(jobId)||"");
-  const [dirty,setDirty]=useState(()=>temporarySectionDrafts.has(jobId));
+  const [content,setContent]=useState(()=>externalDraft?.content||temporarySectionDrafts.get(jobId)||"");
+  const [dirty,setDirty]=useState(()=>Boolean(externalDraft)||temporarySectionDrafts.has(jobId));
   useEffect(()=>{
     if(dirty)temporarySectionDrafts.set(jobId,content);
     else temporarySectionDrafts.delete(jobId);
@@ -76,12 +76,23 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
     }
   }
 
+  const loadedDraftId=useRef<number|null>(externalDraft?.id??null);
+  useEffect(()=>{
+    if(!externalDraft||loadedDraftId.current===externalDraft.id)return;
+    loadedDraftId.current=externalDraft.id;
+    setContent(externalDraft.content);
+    setDirty(true);
+    setMode("replace");
+    setError("");setMessage("");setStale(false);
+  },[externalDraft]);
   const loadedRevision=useRef(-1);
   const focusSection=useRef<SongSection|null>(null);
   focusSection.current=focused;
   const load=useCallback(async(force=false)=>{
     if(!open)return;
+    if(externalDraft&&!force)return;
     if(dirty&&!force){setStale(true);return;}
+    if(force&&externalDraft)onDraftDismiss?.();
     try{
       const r=await fetch(`/api/projects/${jobId}/sections/export`,{cache:"no-store"});
       const data=await r.json() as ExportData;
@@ -104,7 +115,7 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
       }
       loadedRevision.current=revision;
     }catch(e){setError(e instanceof Error?e.message:String(e));}
-  },[jobId,open,dirty,revision]);
+  },[jobId,open,dirty,revision,externalDraft,onDraftDismiss]);
   useEffect(()=>{
     if(!open){
       // A closed editor must never rely on the previous cached revision.
@@ -115,8 +126,8 @@ export function SectionsTool({jobId,songTitle,open,onClose,focused,revision,onAp
     void load();
   },[open,revision,load]);
   useEffect(()=>{loadedRevision.current=-1;
-    setContent(temporarySectionDrafts.get(jobId)||"");
-    setDirty(temporarySectionDrafts.has(jobId));
+    setContent(externalDraft?.content||temporarySectionDrafts.get(jobId)||"");
+    setDirty(Boolean(externalDraft)||temporarySectionDrafts.has(jobId));
   },[jobId]);
   // Focus a section only when the navigation target changes, never on typing.
   // React re-renders with each keystroke; watching content here forced the

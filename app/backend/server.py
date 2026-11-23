@@ -3467,8 +3467,9 @@ def export_to_daw(ident: str, request: Request, body: DawTargetRequest) -> dict[
 class SeparationPreviewRequest(BaseModel):
     track_id: str
     start_seconds: float = Field(ge=0)
-    duration_seconds: float = Field(ge=0.5, le=60)
+    duration_seconds: float = Field(ge=0.5, le=1800)
     model_id: str
+    full_stem: bool = False
 
 
 @app.get("/api/projects/{ident}/separation/models")
@@ -3525,7 +3526,7 @@ def start_separation_preview(ident: str, request: Request,
         return separation_preview.submit(
             DATA_ROOT, record, body.track_id, body.start_seconds,
             body.duration_seconds, body.model_id, MODEL_ROOT,
-            dependency_tool("ffmpeg"), str(SEPARATOR))
+            dependency_tool("ffmpeg"), str(SEPARATOR), full_stem=body.full_stem)
     except (OSError, ValueError, RuntimeError) as exc:
         raise HTTPException(409, str(exc)) from exc
 

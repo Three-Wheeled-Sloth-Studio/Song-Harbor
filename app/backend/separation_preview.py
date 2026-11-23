@@ -178,26 +178,30 @@ def _validated_source(data_root: Path, project: dict, track_id: str) -> tuple[Pa
 
 
 def submit(data_root: Path, project: dict, track_id: str, start: float, duration: float,
-           model_id: str, model_root: Path, ffmpeg: str, separator: str) -> dict:
+           model_id: str, model_root: Path, ffmpeg: str, separator: str, full_stem: bool = False) -> dict:
     if (not all(math.isfinite(v) for v in (start, duration)) or start < 0
-            or not 0.5 <= duration <= MAX_REGION_SECONDS):
-        raise ValueError("Choose a finite 0.5 to 60 second test region")
+            or not 0.5 <= duration <= (1800.0 if full_stem else MAX_REGION_SECONDS)):
+        raise ValueError("Choose a valid test region (0.5-60 seconds) or full stem (up to 30 minutes)")
     source, track = _validated_source(data_root, project, track_id)
     clip_start = float(track.get("start_seconds") or 0)
     clip_duration = float(track.get("duration_seconds") or project.get("source_duration_seconds") or 0)
+    if full_stem:
+        start, duration = clip_start, clip_duration
+        if not 0.5 <= duration <= 1800.0:
+            raise ValueError("Full stem must be between 0.5 seconds and 30 minutes")
     if start < clip_start - 0.001 or start + duration > clip_start + clip_duration + 0.001:
         raise ValueError("Test region must be inside the selected source clip")
     if not Path(separator).is_file():
         raise ValueError("Audio separator runtime is not installed")
     model = _verified_model(model_root, model_id)
     job_id = uuid.uuid4().hex[:16]
-    output = data_root / "jobs" / project["id"] / "exports" / ("Refinement-" + job_id)
+    output = data_root / "jobs" / project["id"] / "exports" / (("Full-Separation-" if full_stem else "Refinement-") + job_id)
     source_hash = hashlib.sha256()
     with source.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             source_hash.update(block)
     record = {"id": job_id, "project_id": project["id"], "track_id": track_id,
-              "source": source.name, "source_sha256": source_hash.hexdigest(),
+              "source": source.name, "source_sha256": source_hash.hexdigest(), "full_stem": full_stem,
               "model": model.name, "start_seconds": start, "source_offset_seconds": start - clip_start, "duration_seconds": duration,
               "status": "queued", "message": "Queued", "files": [], "folder": str(output),
               "process": None}
@@ -239,11 +243,11 @@ def _worker(record: dict, source: Path, model: Path, model_root: Path,
         with _LOCK:
             record["process"] = proc
         try:
-            _, err = proc.communicate(timeout=900)
+            _, err = proc.communicate(timeout=3600 if record["full_stem"] else 900)
         except subprocess.TimeoutExpired as exc:
             proc.kill()
             proc.communicate()
-            raise RuntimeError("Separation preview exceeded the 15 minute limit") from exc
+            raise RuntimeError("Separation exceeded the time limit") from exc
         if proc.returncode != 0:
             raise RuntimeError("Separator returned error " + str(proc.returncode) + ": " +
                                err.decode("utf-8", errors="replace")[-400:])
@@ -251,13 +255,13 @@ def _worker(record: dict, source: Path, model: Path, model_root: Path,
         if not files:
             raise RuntimeError("Separator produced no candidate WAVs")
         manifest = {key: record[key] for key in ("id", "project_id", "track_id", "source",
-                    "source_sha256", "model", "start_seconds", "source_offset_seconds", "duration_seconds")}
+                    "source_sha256", "model", "full_stem", "start_seconds", "source_offset_seconds", "duration_seconds")}
         manifest["candidate_files"] = files
         (output / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         with _LOCK:
             record["files"] = files
             record["status"] = "complete"
-            record["message"] = "Candidate ready for A/B"
+            record["message"] = "Full stem exported" if record["full_stem"] else "Candidate ready for A/B"
     except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
         with _LOCK:
             record["status"] = "failed"

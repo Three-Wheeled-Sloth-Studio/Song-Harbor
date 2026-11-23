@@ -267,8 +267,8 @@ class ImportTracksTests(unittest.TestCase):
             self.assertEqual(projects.read_project(root,ident),project)
             self.assertEqual(job["status"],"complete")
             self.assertEqual(job["files"],names)
-            self.assertEqual(list((folder/"stems").glob("*.wav")),[
-                folder/"stems"/names[0],folder/"stems"/names[1]])
+            self.assertEqual(set((folder/"stems").glob("*.wav")),
+                             {folder/"stems"/names[0],folder/"stems"/names[1]})
     
     def test_imported_project_is_discoverable_and_daw_exportable(self):
         with tempfile.TemporaryDirectory() as temp:

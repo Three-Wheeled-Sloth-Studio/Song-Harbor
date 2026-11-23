@@ -3476,8 +3476,37 @@ def separation_preview_models(ident: str) -> dict[str, Any]:
     job = get_job(ident)
     if not job or job.get("status") != "complete":
         raise HTTPException(409, "Open a completed song before refining stems")
-    return {"models": separation_preview.available_models(MODEL_ROOT),
-            "hint": "Installed local models only. No model download or stem replacement occurs."}
+    return {"models": separation_preview.model_catalog(MODEL_ROOT),
+            "hint": "Recommended models can be installed explicitly. No automatic downloads or stem replacement."}
+
+
+class SeparationModelInstallRequest(BaseModel):
+    model_id: str
+    acknowledged: bool = False
+
+
+@app.post("/api/projects/{ident}/separation/models/install")
+def install_separation_model(ident: str, request: Request,
+                             body: SeparationModelInstallRequest) -> dict[str, Any]:
+    require_local_origin(request)
+    job = get_job(ident)
+    if not job or job.get("status") != "complete":
+        raise HTTPException(409, "Open a completed song first")
+    try:
+        return separation_preview.install_model(MODEL_ROOT, body.model_id,
+                                                body.acknowledged, str(SEPARATOR))
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/projects/{ident}/separation/models/install/{install_id}")
+def separation_model_install_status(ident: str, install_id: str) -> dict[str, Any]:
+    if not get_job(ident):
+        raise HTTPException(404, "Song not found")
+    try:
+        return separation_preview.install_status(install_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.post("/api/projects/{ident}/separation/previews")

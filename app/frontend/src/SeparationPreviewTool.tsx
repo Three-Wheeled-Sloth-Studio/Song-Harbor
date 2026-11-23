@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 
-type Model={id:string;name:string;installed:boolean;family:string};
+type Model={id:string;name:string;installed:boolean;family:string;recommended?:boolean;purpose?:string;source?:string;license_note?:string};
+type Install={id:string;status:string;message:string;model_id:string;elapsed_seconds?:number;sha256?:string};
 type Candidate={id:string;status:string;message:string;model:string;files:string[];start_seconds:number;duration_seconds:number};
 type Props={jobId:string;trackId:string;start:number;duration:number};
 
@@ -11,16 +12,38 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
   const [selectedFile,setSelectedFile]=useState("");
   const [reference,setReference]=useState(true);
   const [busy,setBusy]=useState(false);
+  const [install,setInstall]=useState<Install|null>(null);
+  const [installApproved,setInstallApproved]=useState(false);
   const [error,setError]=useState("");
   const player=useRef<HTMLAudioElement>(null);
   const base="/api/projects/"+encodeURIComponent(jobId)+"/separation";
   useEffect(()=>{
-    let live=true;setCandidate(null);setSelectedFile("");setError("");setBusy(false);
+    let live=true;setCandidate(null);setSelectedFile("");setError("");setBusy(false);setInstall(null);setInstallApproved(false);
     void fetch(base+"/models").then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.detail||"Model lookup failed");return data as {models:Model[]};})
       .then(data=>{if(live){setModels(data.models);setModel(old=>data.models.some(m=>m.id===old)?old:(data.models[0]?.id||""));}})
       .catch(e=>{if(live)setError(String(e));});
     return ()=>{live=false;};
   },[base,trackId]);
+  useEffect(()=>{
+    if(!install||!["queued","running"].includes(install.status))return;
+    let live=true;
+    const refresh=async()=>{
+      try{
+        const r=await fetch(base+"/models/install/"+install.id);
+        const data=await r.json() as Install&{detail?:string};
+        if(!r.ok)throw Error(data.detail||"Install status unavailable");
+        if(!live)return;
+        setInstall(data);
+        if(data.status==="complete"){
+          const catalog=await fetch(base+"/models");
+          const listing=await catalog.json() as {models:Model[]};
+          if(live&&catalog.ok){setModels(listing.models);setModel(data.model_id);setInstallApproved(false);}
+        }
+      }catch(e){if(live)setError(String(e));}
+    };
+    const timer=window.setInterval(()=>{void refresh();},1500);
+    return ()=>{live=false;window.clearInterval(timer);};
+  },[base,install?.id,install?.status]);
   useEffect(()=>{
     if(!candidate||!["queued","running"].includes(candidate.status))return;
     let live=true;
@@ -35,6 +58,17 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
     const timer=window.setInterval(()=>{void poll();},1500);
     return ()=>{live=false;window.clearInterval(timer);};
   },[base,candidate?.id,candidate?.status]);
+  async function installSelected(){
+    if(!model||install?.status==="running"||install?.status==="queued")return;
+    setError("");setInstall(null);
+    try{
+      const r=await fetch(base+"/models/install",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model_id:model,acknowledged:true})});
+      const data=await r.json() as Install&{detail?:string};
+      if(!r.ok)throw Error(data.detail||"Model installation failed");
+      setInstall(data);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}
+  }
   async function generate(){
     if(busy||!trackId||!model)return;
     setBusy(true);setError("");setCandidate(null);setSelectedFile("");setReference(true);
@@ -48,6 +82,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
       setCandidate(data);
     }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
   }
+  const chosen=models.find(m=>m.id===model);
   const ready=candidate?.status==="complete"&&Boolean(selectedFile);
   const audioUrl=candidate?base+"/previews/"+candidate.id+"/audio/"+encodeURIComponent(reference?"source-region.wav":selectedFile):"";
   function toggle(source:boolean){
@@ -57,14 +92,28 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
   }
   return <div className="song-separation-preview">
     <div className="song-midi-region">
-      <label title="Installed local separation model">Model <select value={model} onChange={e=>{setModel(e.target.value);setCandidate(null);}} aria-label="Separation model">
+      <label title="Specialist separation model">Model <select value={model} onChange={e=>{setModel(e.target.value);setCandidate(null);setInstall(null);setInstallApproved(false);}} aria-label="Separation model">
         {models.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
       </select></label>
-      <button type="button" title="Generate a non-destructive 30-second separation comparison" disabled={busy||!model||!trackId||candidate?.status==="running"||candidate?.status==="queued"} onClick={()=>void generate()}>
+      <button type="button" title="Generate a non-destructive 30-second separation comparison" disabled={busy||!chosen?.installed||!trackId||candidate?.status==="running"||candidate?.status==="queued"} onClick={()=>void generate()}>
         {busy||candidate?.status==="queued"||candidate?.status==="running"?"◌ Processing":"✦ Compare"}
       </button>
     </div>
-    {!models.length&&<p role="status" className="song-save-notice">No installed separator models found. No downloads were started.</p>}
+    {chosen&&!chosen.installed&&<div className="song-separation-install" role="status">
+      <p style={{color:"#d79536"}}>⚠ Model not installed</p>
+      <p>{chosen.purpose||"Specialist model comparison"}</p>
+      {chosen.source&&<a href={chosen.source} target="_blank" rel="noreferrer" title="Review source and licensing">Model source ↗</a>}
+      <small>{chosen.license_note||"Verify checkpoint licensing before commercial distribution."}</small>
+      {!installApproved?<button type="button" title="Review installation approval" disabled={install?.status==="running"} onClick={()=>setInstallApproved(true)}>↓ Install model</button>:
+       <div><span>Downloads this model locally; existing stems stay untouched.</span>
+       <button type="button" disabled={install?.status==="queued"||install?.status==="running"} title="Approve local model download" onClick={()=>void installSelected()}>✓ Approve install</button>
+       <button type="button" title="Cancel model installation approval" onClick={()=>setInstallApproved(false)}>×</button></div>}
+    </div>}
+    {install&&<p role={install.status==="failed"?"alert":"status"} className={install.status==="failed"?"error-message":"song-save-notice"}
+      style={{color:install.status==="complete"?"#46b879":install.status==="failed"?"#eb6262":"#d79536"}}>
+      {install.status==="complete"?"✓ Model installed":install.status==="running"?"◌ Installing model...":install.message}
+    </p>}
+
     {candidate&&<p role={candidate.status==="failed"?"alert":"status"} className={candidate.status==="failed"?"error-message":"song-save-notice"}>
       {candidate.status==="complete"?"✓ Candidate ready":candidate.message}
     </p>}

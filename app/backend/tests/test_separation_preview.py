@@ -11,11 +11,25 @@ class SpecialistSeparationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             (root / "htdemucs_6s.yaml").write_text("a")
-            (root / "voice.onnx").write_bytes(b"weights")
+            (root / "voice.onnx").write_bytes(b"weights" * 200000)
             (root / "bad.exe").write_bytes(b"no")
             found = separation_preview.available_models(root)
             self.assertEqual([m["id"] for m in found], ["htdemucs_6s.yaml", "voice.onnx"])
             self.assertTrue(all(m["installed"] for m in found))
+
+    def test_recommended_model_install_requires_explicit_approval(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "separator.exe").write_bytes(b"exe")
+            catalog = separation_preview.model_catalog(root / "models")
+            self.assertTrue(any(m["recommended"] and not m["installed"] for m in catalog))
+            with self.assertRaisesRegex(ValueError, "Confirm"):
+                separation_preview.install_model(root / "models", "UVR_MDXNET_KARA_2.onnx",
+                                                 False, str(root / "separator.exe"))
+            self.assertFalse((root / "models").exists())
+            with self.assertRaisesRegex(ValueError, "curated"):
+                separation_preview.install_model(root / "models", "../untrusted.onnx",
+                                                 True, str(root / "separator.exe"))
 
     def test_unknown_model_refused_before_starting_job(self):
         with tempfile.TemporaryDirectory() as folder:

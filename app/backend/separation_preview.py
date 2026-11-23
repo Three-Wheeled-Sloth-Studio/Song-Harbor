@@ -17,6 +17,18 @@ import track_lifecycle
 
 MODEL_EXTENSIONS = {".onnx", ".ckpt", ".pth", ".yaml"}
 MAX_REGION_SECONDS = 60.0
+RECOMMENDED_MODELS = (
+    {"id": "UVR-MDX-NET-Inst_HQ_3.onnx", "name": "MDX instrumental cleanup",
+     "purpose": "Compare an alternate instrumental/vocal extraction",
+     "source": "https://github.com/nomadkaraoke/python-audio-separator",
+     "license_note": "Checkpoint rights must be reviewed for commercial redistribution."},
+    {"id": "UVR_MDXNET_KARA_2.onnx", "name": "MDX Karaoke 2",
+     "purpose": "Experiment with lead and backing vocal content",
+     "source": "https://github.com/nomadkaraoke/python-audio-separator",
+     "license_note": "Checkpoint rights must be reviewed for commercial redistribution."},
+)
+_INSTALLS: dict[str, dict] = {}
+
 _LOCK = threading.RLock()
 _JOBS: dict[str, dict] = {}
 
@@ -26,10 +38,10 @@ def available_models(model_root: Path) -> list[dict]:
     if not model_root.is_dir():
         return []
     found: list[dict] = []
-    for root in [model_root, *(p for p in model_root.iterdir() if p.is_dir() and not p.is_symlink())]:
+    for root in [model_root, *(p for p in model_root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))]:
         for path in root.iterdir():
             if (not path.is_file() or path.is_symlink() or path.suffix.lower() not in MODEL_EXTENSIONS
-                    or len(found) >= 120):
+                    or len(found) >= 120 or (path.suffix.lower() != ".yaml" and path.stat().st_size < 1024 * 1024)):
                 continue
             found.append({"id": path.name, "name": path.name, "installed": True,
                           "family": "Demucs" if path.suffix == ".yaml" else
@@ -37,6 +49,99 @@ def available_models(model_root: Path) -> list[dict]:
         if len(found) >= 120:
             break
     return sorted(found, key=lambda item: item["name"].lower())
+
+
+def model_catalog(root: Path) -> list[dict]:
+    installed = {m["id"]: m for m in available_models(root)}
+    return [{**entry, "installed": entry["id"] in installed,
+             "family": "MDX", "recommended": True} for entry in RECOMMENDED_MODELS] + [
+                {**entry, "recommended": False} for name, entry in installed.items()
+                if name not in {item["id"] for item in RECOMMENDED_MODELS}
+             ]
+
+
+def install_model(model_root: Path, identifier: str, acknowledged: bool, separator: str) -> dict:
+    """Explicit one-model install. No arbitrary model URL, path or silent download."""
+    if not acknowledged:
+        raise ValueError("Confirm the checkpoint source and license notice before installation")
+    if identifier not in {entry["id"] for entry in RECOMMENDED_MODELS}:
+        raise ValueError("Only curated separation models can be installed in-app")
+    if not Path(separator).is_file():
+        raise ValueError("Separation runtime is missing")
+    model_root.mkdir(parents=True, exist_ok=True)
+    if (model_root / identifier).is_file():
+        raise ValueError("Model is already installed. Refresh model list.")
+    with _LOCK:
+        if any(job["status"] in ("queued", "running") for job in _INSTALLS.values()):
+            raise ValueError("Another model installation is running")
+        job_id = uuid.uuid4().hex[:16]
+        record = {"id": job_id, "model_id": identifier, "status": "queued",
+                  "message": "Queued", "elapsed_seconds": 0, "sha256": ""}
+        _INSTALLS[job_id] = record
+    thread = threading.Thread(target=_install_worker,
+                              args=(record, model_root, separator), daemon=True)
+    thread.start()
+    return dict(record)
+
+
+def _install_worker(record: dict, model_root: Path, separator: str) -> None:
+    import os
+    import tempfile
+    started = time.monotonic()
+    try:
+        with _LOCK:
+            record["status"] = "running"
+            record["message"] = "Downloading approved selection"
+        with tempfile.TemporaryDirectory(prefix=".separation-install-", dir=model_root) as stage:
+            command = [separator, "--download_model_only", "--model_filename",
+                       record["model_id"], "--model_file_dir", stage]
+            proc = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            try:
+                _, err = proc.communicate(timeout=1800)
+            except subprocess.TimeoutExpired as exc:
+                proc.kill()
+                proc.communicate()
+                raise RuntimeError("Model download timed out") from exc
+            if proc.returncode != 0:
+                raise RuntimeError("Model installer returned error " + str(proc.returncode) +
+                                   ": " + err.decode("utf-8", errors="replace")[-400:])
+            candidate = Path(stage) / record["model_id"]
+            if not candidate.is_file() or candidate.is_symlink() or candidate.stat().st_size < 1024 * 1024:
+                raise RuntimeError("Downloaded checkpoint was missing or incomplete")
+            digest = hashlib.sha256()
+            with candidate.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            target = model_root / record["model_id"]
+            if target.exists():
+                raise RuntimeError("Model appeared during installation; existing file preserved")
+            os.replace(candidate, target)
+            evidence = {"model": record["model_id"], "sha256": digest.hexdigest(),
+                        "source": "python-audio-separator curated upstream registry",
+                        "license": "unverified - review before commercial distribution",
+                        "installed_at": time.time()}
+            (model_root / (record["model_id"] + ".song-harbor.json")).write_text(
+                json.dumps(evidence, indent=2), encoding="utf-8")
+            with _LOCK:
+                record["status"] = "complete"
+                record["message"] = "Installed and SHA-256 recorded"
+                record["sha256"] = digest.hexdigest()
+    except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+        with _LOCK:
+            record["status"] = "failed"
+            record["message"] = "ERROR: " + str(exc)[:600]
+    finally:
+        with _LOCK:
+            record["elapsed_seconds"] = round(time.monotonic() - started, 1)
+
+
+def install_status(job_id: str) -> dict:
+    with _LOCK:
+        record = _INSTALLS.get(job_id)
+        if not record:
+            raise ValueError("Unknown model installation")
+        return dict(record)
 
 
 def _verified_model(root: Path, identifier: str) -> Path:

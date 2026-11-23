@@ -3476,7 +3476,11 @@ def separation_preview_models(ident: str) -> dict[str, Any]:
     job = get_job(ident)
     if not job or job.get("status") != "complete":
         raise HTTPException(409, "Open a completed song before refining stems")
-    return {"models": separation_preview.model_catalog(MODEL_ROOT),
+    try:
+        catalog = separation_preview.model_catalog(MODEL_ROOT)
+    except (OSError, ValueError) as exc:
+        raise HTTPException(503, f"Separation models unavailable: {exc}") from exc
+    return {"models": catalog,
             "hint": "Recommended models can be installed explicitly. No automatic downloads or stem replacement."}
 
 

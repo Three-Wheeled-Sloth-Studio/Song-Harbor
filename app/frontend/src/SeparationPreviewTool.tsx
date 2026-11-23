@@ -5,6 +5,22 @@ type Install={id:string;status:string;message:string;model_id:string;elapsed_sec
 type Candidate={id:string;status:string;message:string;model:string;files:string[];start_seconds:number;duration_seconds:number};
 type Props={jobId:string;trackId:string;start:number;duration:number};
 
+async function responseJson<T extends {detail?:string}>(response:Response, operation:string):Promise<T>{
+  const body=await response.text();
+  let parsed:T;
+  try { parsed=JSON.parse(body) as T; }
+  catch {
+    const snippet=body.trim().slice(0,160);
+    throw Error(response.ok
+      ? operation+": server returned an invalid response. Update and Reload Song Harbor."
+      : operation+": server returned HTTP "+response.status+
+        (snippet&&snippet!=="Internal Server Error"?": "+snippet:"")+
+        ". Check the Song Harbor server log or restart the app.");
+  }
+  if(!response.ok)throw Error(parsed.detail||operation+" failed (HTTP "+response.status+")");
+  return parsed;
+}
+
 export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
   const [models,setModels]=useState<Model[]>([]);
   const [model,setModel]=useState("");
@@ -19,7 +35,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
   const base="/api/projects/"+encodeURIComponent(jobId)+"/separation";
   useEffect(()=>{
     let live=true;setCandidate(null);setSelectedFile("");setError("");setBusy(false);setInstall(null);setInstallApproved(false);
-    void fetch(base+"/models").then(async r=>{const data=await r.json();if(!r.ok)throw Error(data.detail||"Model lookup failed");return data as {models:Model[]};})
+    void fetch(base+"/models").then(async r=>{return await responseJson<{models:Model[];detail?:string}>(r,"Model discovery");})
       .then(data=>{if(live){setModels(data.models);setModel(old=>data.models.some(m=>m.id===old)?old:(data.models[0]?.id||""));}})
       .catch(e=>{if(live)setError(String(e));});
     return ()=>{live=false;};
@@ -30,14 +46,13 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
     const refresh=async()=>{
       try{
         const r=await fetch(base+"/models/install/"+install.id);
-        const data=await r.json() as Install&{detail?:string};
-        if(!r.ok)throw Error(data.detail||"Install status unavailable");
+        const data=await responseJson<Install&{detail?:string}>(r,"Install status");
         if(!live)return;
         setInstall(data);
         if(data.status==="complete"){
           const catalog=await fetch(base+"/models");
-          const listing=await catalog.json() as {models:Model[]};
-          if(live&&catalog.ok){setModels(listing.models);setModel(data.model_id);setInstallApproved(false);}
+          const listing=await responseJson<{models:Model[];detail?:string}>(catalog,"Model discovery");
+          if(live){setModels(listing.models);setModel(data.model_id);setInstallApproved(false);}
         }
       }catch(e){if(live)setError(String(e));}
     };
@@ -50,8 +65,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
     const poll=async()=>{
       try{
         const r=await fetch(base+"/previews/"+candidate.id);
-        const data=await r.json() as Candidate&{detail?:string};
-        if(!r.ok)throw Error(data.detail||"Preview status unavailable");
+        const data=await responseJson<Candidate&{detail?:string}>(r,"Preview status");
         if(live){setCandidate(data);if(data.status==="complete")setSelectedFile(old=>old||data.files[0]||"");}
       }catch(e){if(live)setError(String(e));}
     };
@@ -64,8 +78,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
     try{
       const r=await fetch(base+"/models/install",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model_id:model,acknowledged:true})});
-      const data=await r.json() as Install&{detail?:string};
-      if(!r.ok)throw Error(data.detail||"Model installation failed");
+      const data=await responseJson<Install&{detail?:string}>(r,"Model installation");
       setInstall(data);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
   }
@@ -77,8 +90,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration}:Props) {
       if(!Number.isFinite(start)||region<.5)throw Error("Select at least half a second inside this stem");
       const r=await fetch(base+"/previews",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({track_id:trackId,start_seconds:start,duration_seconds:region,model_id:model})});
-      const data=await r.json() as Candidate&{detail?:string};
-      if(!r.ok)throw Error(data.detail||"Separation preview failed");
+      const data=await responseJson<Candidate&{detail?:string}>(r,"Separation preview");
       setCandidate(data);
     }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
   }

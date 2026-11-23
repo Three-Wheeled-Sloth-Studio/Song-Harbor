@@ -38,14 +38,27 @@ def available_models(model_root: Path) -> list[dict]:
     if not model_root.is_dir():
         return []
     found: list[dict] = []
-    for root in [model_root, *(p for p in model_root.iterdir() if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))]:
-        for path in root.iterdir():
-            if (not path.is_file() or path.is_symlink() or path.suffix.lower() not in MODEL_EXTENSIONS
-                    or len(found) >= 120 or (path.suffix.lower() != ".yaml" and path.stat().st_size < 1024 * 1024)):
-                continue
-            found.append({"id": path.name, "name": path.name, "installed": True,
-                          "family": "Demucs" if path.suffix == ".yaml" else
-                                    "MDX/VR or other (verify model)", "path": str(path)})
+    try:
+        roots = [model_root]
+        roots.extend(p for p in model_root.iterdir()
+                     if p.is_dir() and not p.is_symlink() and not p.name.startswith("."))
+    except OSError as exc:
+        raise ValueError(f"Cannot inspect separation model directory: {exc}") from exc
+    for root in roots[:121]:
+        try:
+            paths = root.iterdir()
+            for path in paths:
+                try:
+                    if (not path.is_file() or path.is_symlink() or path.suffix.lower() not in MODEL_EXTENSIONS
+                            or len(found) >= 120 or (path.suffix.lower() != ".yaml" and path.stat().st_size < 1024 * 1024)):
+                        continue
+                    found.append({"id": path.name, "name": path.name, "installed": True,
+                                  "family": "Demucs" if path.suffix == ".yaml" else
+                                            "MDX/VR or other (verify model)", "path": str(path)})
+                except OSError:
+                    continue  # Ignore unreadable or changing individual model files.
+        except OSError:
+            continue  # Other tools may own inaccessible subdirectories.
         if len(found) >= 120:
             break
     return sorted(found, key=lambda item: item["name"].lower())

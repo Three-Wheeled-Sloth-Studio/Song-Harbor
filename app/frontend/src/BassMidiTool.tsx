@@ -524,7 +524,7 @@ export function BassMidiTool({jobId,sections,songDuration,position,selectedTrack
      </div>:<small role="status">Choose a stem to edit its base mix.</small>}
      <button type="button" className="song-stem-hub-next" onClick={()=>setFunctionMode("midi")}>♮ Stem → MIDI</button>
    </div>}
-   {functionMode==="separate"&&<SeparationPreviewTool jobId={jobId} trackId={trackId} clipStart={clipStart} clipDuration={clipEnd-clipStart} start={Math.max(clipStart,Math.min(position,clipEnd-0.5))} duration={Math.max(0,clipEnd-Math.max(clipStart,Math.min(position,clipEnd-0.5)))} />}
+   {functionMode==="separate"&&<SeparationPreviewTool jobId={jobId} trackId={trackId} clipStart={clipStart} clipDuration={clipEnd-clipStart} existingAliases={trackRows.map(row=>row.stem_alias)} saveProject={saveProject} onInserted={onInserted} onPause={onPause} start={Math.max(clipStart,Math.min(position,clipEnd-0.5))} duration={Math.max(0,clipEnd-Math.max(clipStart,Math.min(position,clipEnd-0.5)))} />}
    {functionMode==="midi"&&<>
      <div className="song-midi-region">
        <label title="Selection scope">Region <select aria-label="MIDI extraction region" value={regionMode} onChange={e=>{clearCandidate();setRegionMode(e.target.value as "song"|"span"|"custom");}}>

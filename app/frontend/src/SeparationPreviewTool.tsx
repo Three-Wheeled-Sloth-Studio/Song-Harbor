@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from "react";
 type Model={id:string;name:string;installed:boolean;family:string;recommended?:boolean;purpose?:string;source?:string;license_note?:string};
 type Install={id:string;status:string;message:string;model_id:string;elapsed_seconds?:number;sha256?:string};
 type Candidate={id:string;status:string;message:string;model:string;files:string[];start_seconds:number;duration_seconds:number;full_stem?:boolean};
-type Props={jobId:string;trackId:string;start:number;duration:number;clipStart:number;clipDuration:number};
+type Props={jobId:string;trackId:string;start:number;duration:number;clipStart:number;clipDuration:number;existingAliases:string[];saveProject:()=>Promise<boolean>;onInserted:(data:{project:unknown;job:unknown;channel_split_warning?:string})=>void;onPause:()=>void};
 
 async function responseJson<T extends {detail?:string}>(response:Response, operation:string):Promise<T>{
   const body=await response.text();
@@ -21,7 +21,7 @@ async function responseJson<T extends {detail?:string}>(response:Response, opera
   return parsed;
 }
 
-export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,clipDuration}:Props) {
+export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,clipDuration,existingAliases,saveProject,onInserted,onPause}:Props) {
   const [models,setModels]=useState<Model[]>([]);
   const [model,setModel]=useState("");
   const [candidate,setCandidate]=useState<Candidate|null>(null);
@@ -31,10 +31,14 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
   const [install,setInstall]=useState<Install|null>(null);
   const [installApproved,setInstallApproved]=useState(false);
   const [error,setError]=useState("");
+  const [names,setNames]=useState<Record<string,string>>({});
+  const [accepted,setAccepted]=useState<Record<string,string>>({});
+  const [inserting,setInserting]=useState(false);
+  const [success,setSuccess]=useState("");
   const player=useRef<HTMLAudioElement>(null);
   const base="/api/projects/"+encodeURIComponent(jobId)+"/separation";
   useEffect(()=>{
-    let live=true;setCandidate(null);setSelectedFile("");setError("");setBusy(false);setInstall(null);setInstallApproved(false);
+    let live=true;setCandidate(null);setSelectedFile("");setError("");setBusy(false);setInstall(null);setInstallApproved(false);setAccepted({});setNames({});setSuccess("");
     void fetch(base+"/models").then(async r=>{return await responseJson<{models:Model[];detail?:string}>(r,"Model discovery");})
       .then(data=>{if(live){setModels(data.models);setModel(old=>data.models.some(m=>m.id===old)?old:(data.models[0]?.id||""));}})
       .catch(e=>{if(live)setError(String(e));});
@@ -66,7 +70,12 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
       try{
         const r=await fetch(base+"/previews/"+candidate.id);
         const data=await responseJson<Candidate&{detail?:string}>(r,"Preview status");
-        if(live){setCandidate(data);if(data.status==="complete")setSelectedFile(old=>old||data.files.find((f:string)=>f.includes("(Vocals)"))||data.files[0]||"");}
+        if(live){setCandidate(data);if(data.status==="complete"){
+          setSelectedFile(old=>old||data.files.find((f:string)=>f.includes("(Vocals)"))||data.files[0]||"");
+          const suggested:Record<string,string>={};
+          data.files.forEach((file,index)=>{suggested[file]=(file.includes("(Vocals)")?"RefinedVocals":file.includes("(Instrumental)")?"VocalResidual":"SeparatedStem")+(index>1?String(index+1):"");});
+          setNames(old=>({...suggested,...old}));
+        }}
       }catch(e){if(live)setError(String(e));}
     };
     const timer=window.setInterval(()=>{void poll();},1500);
@@ -84,7 +93,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
   }
   async function generate(fullStem=false){
     if(busy||!trackId||!model)return;
-    setBusy(true);setError("");setCandidate(null);setSelectedFile("");setReference(true);
+    setBusy(true);setError("");setCandidate(null);setSelectedFile("");setReference(true);setAccepted({});setNames({});setSuccess("");
     try{
       const region=fullStem?clipDuration:Math.min(30,duration);
       if(!Number.isFinite(start)||region<.5)throw Error("Select at least half a second inside this stem");
@@ -93,6 +102,33 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
       const data=await responseJson<Candidate&{detail?:string}>(r,"Separation preview");
       setCandidate(data);
     }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+  }
+  async function acceptSelected(){
+    if(!candidate?.full_stem||candidate.status!=="complete"||!selectedFile||inserting)return;
+    const name=(names[selectedFile]||"").trim();
+    if(!/^[A-Za-z][A-Za-z0-9_-]{0,31}$/.test(name)){setError("Stem name must start with a letter and use only letters, numbers, underscore, or hyphen (max 32).");return;}
+    if([...existingAliases,...Object.values(accepted)].some(a=>a.toLowerCase()===name.toLowerCase())){setError("That stem name is already used. Choose a unique name.");return;}
+    setInserting(true);setError("");setSuccess("");
+    try{
+      if(!await saveProject())throw Error("Save the song before accepting a separated stem");
+      onPause();
+      const r=await fetch(base+"/previews/"+candidate.id+"/audio/"+encodeURIComponent(selectedFile));
+      if(!r.ok)throw Error("Separated output is no longer available (HTTP "+r.status+")");
+      const wav=await r.blob();
+      const form=new FormData();
+      form.append("file",wav,selectedFile);
+      form.append("stem_alias",name);
+      form.append("display_name",name);
+      form.append("start_seconds",String(candidate.start_seconds));
+      form.append("accept_mode","layer");
+      form.append("original_gain_percent","100");
+      const response=await fetch("/api/projects/"+encodeURIComponent(jobId)+"/tracks/add",{method:"POST",body:form});
+      const added=await responseJson<{project:unknown;job:unknown;channel_split_warning?:string;detail?:string}>(response,"Add separated stem");
+      setAccepted(old=>({...old,[selectedFile]:name}));
+      setSuccess(name+" added to mixer. Original stem kept; adjust Mix levels before export.");
+      onInserted(added);
+      if(added.channel_split_warning)setError(added.channel_split_warning);
+    }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setInserting(false);}
   }
   const chosen=models.find(m=>m.id===model);
   const ready=candidate?.status==="complete"&&Boolean(selectedFile);
@@ -138,6 +174,10 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
         {candidate!.files.map(file=><option key={file} value={file}>{outputLabel(file)}</option>)}
       </select></label>
       <small>{outputHint(selectedFile)}</small>
+      {candidate?.full_stem&&<div className="song-midi-region">
+        <label title="Name of the new editable stem">Stem name <input aria-label="New separated stem name" value={names[selectedFile]||""} maxLength={32} disabled={Boolean(accepted[selectedFile])||inserting} onChange={e=>setNames(old=>({...old,[selectedFile]:e.target.value}))}/></label>
+        <button type="button" style={{color:"#f3f6f8",background:accepted[selectedFile]?"#235f47":"#244458",border:"1px solid #54839d"}} title="Add this full separated output as a new editable stem; original remains available" disabled={Boolean(accepted[selectedFile])||inserting} onClick={()=>void acceptSelected()}>{accepted[selectedFile]?"✓ Added to mixer":inserting?"◌ Adding...":"✓ Add as stem"}</button>
+      </div>}
       {candidate?.full_stem&&<a href={base+"/previews/"+candidate.id+"/audio/"+encodeURIComponent(selectedFile)} download={selectedFile} title="Download the full separated WAV">↓ Download selected WAV</a>}
       <div className="song-stem-hub-tabs" role="group" aria-label="Compare original and separated candidate">
         <button type="button" style={{color:"#f3f6f8",background:reference?"#24546a":"#223342",border:"1px solid #54839d"}} aria-pressed={reference} title="Original unprocessed source region" onClick={()=>toggle(true)}>A Original</button>
@@ -146,6 +186,7 @@ export function SeparationPreviewTool({jobId,trackId,start,duration,clipStart,cl
       <audio key={audioUrl} ref={player} controls preload="none" src={audioUrl} aria-label="Separation A/B player"/>
       <small>{candidate.full_stem?"Full outputs saved under this song's exports. They have not been added to the mixer.":"Preview only. Original stems and script remain unchanged."}</small>
     </div>}
+    {success&&<p role="status" style={{color:"#46b879"}}>{success}</p>}
     {error&&<p role="alert" className="error-message">ERROR: {error}</p>}
   </div>;
 }

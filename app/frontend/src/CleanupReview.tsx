@@ -62,6 +62,7 @@ export function CleanupReview({
           <small>Peak {item.metrics.peakDbfs.toFixed(1)} dBFS · RMS {item.metrics.rmsDbfs.toFixed(1)} dBFS · DC {item.metrics.dcPercent.toFixed(3)}% FS
             {item.metrics.stereoCorrelation!==null&&` · L/R correlation ${item.metrics.stereoCorrelation.toFixed(2)}`}
             {item.metrics.sideToMidDb!==null&&` · Side/Mid ${item.metrics.sideToMidDb.toFixed(1)} dB`}
+            {item.metrics.spectralConsistency!==null&&` · Spectral consistency ${(100*item.metrics.spectralConsistency).toFixed(0)}%`}
           </small>
           {item.findings.length===0?<small>No observations above current thresholds.</small>:
             <ul>{item.findings.map((finding,i)=><li key={i}>

@@ -38,6 +38,16 @@ QA on the actual Windows workstation is required: run 2-3 stems including a spli
 - Controlled tests cover aligned versus inverted stereo, expected RMS/DC values, silence, invalid samples, and non-mutation. Full Windows UI listening and performance checks are still required.
 - Next targeted investigation: temporal persistence of narrowband features and spectral stationarity with meaningful industrial/electronic negative controls. Metadata/container inspection remains an independent track.
 
+**User validation:** Build clean and QA green for the source-integrity measurement pass (2026-11-24).
+
+## Spectral-shape consistency pass (2026-11-24)
+
+- Existing `SignalAudit.ts` already measures persistent narrowband high-frequency lines. Do not duplicate it or mislabel a stable carrier as a verified watermark.
+- New `SpectralStationarity.ts` samples up to 160 bounded windows with eight frequency probes and computes the average similarity of normalized neighboring spectral shapes. The result appears as **Spectral consistency** in each scanned stem's source measurements, when enough active windows exist.
+- A high percentage simply means the measured frequency shape changed little between active samples; intentional drones, looped textures, industrial rhythms, synthetic instruments and generated audio can all exhibit it. It is not a defect score and triggers no repair.
+- Tests cover fixed synth tone, changing notes, silent/short clips, distorted gated industrial texture, and source immutability. The UI and Windows performance are not yet separately verified for this pass.
+- Next: correlate these measurements with time-localized spectral evidence, add metadata/container inventory, then use controlled listening cases to decide whether any measurement deserves an actionable finding. Do not pursue detector-score reduction as a quality metric.
+
 ## External references
 
 - https://github.com/geeknik/ai-audio-fingerprint-remover (archived MIT, deprecated)

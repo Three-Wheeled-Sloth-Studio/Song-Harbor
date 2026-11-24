@@ -47,6 +47,7 @@ jobs:
             app/frontend/tests/region-spectrogram.test.mjs \
             app/frontend/tests/section-insights.test.mjs \
             app/frontend/tests/stem-artifact-attribution.test.mjs
+            app/frontend/tests/stem-integrity-scan.test.mjs
       - name: Generate synthetic artifact benchmark report
         run: |
           node --experimental-strip-types app/frontend/tests/run-artifact-benchmark.mjs > artifact-benchmark.json

@@ -2,6 +2,7 @@ import {useMemo,useState} from "react";
 import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCleanupAnalyzer";
 import {findingReviewKey,toggleReviewed,markReviewed} from "./FindingReview";
 import type {StageComparison} from "./AudioStageComparison";
+import type {StemIntegrityResult} from "./SharedClockAudition";
 
 const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics","Signal audit"] as const;
 const stamp=(seconds:number)=>{
@@ -9,7 +10,8 @@ const stamp=(seconds:number)=>{
   return String(Math.floor(whole/60)).padStart(2,"0")+":"+String(whole%60).padStart(2,"0");
 };
 export function CleanupReview({
-  findings,reviewed,onReviewedChange,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick
+  findings,reviewed,onReviewedChange,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick,
+  stemScanning,stemScanProgress,stemScanResults,stemScanError,onScanStems,onCancelStemScan
 }:{
   findings:readonly AudioFinding[];
   reviewed:ReadonlySet<string>;
@@ -21,6 +23,9 @@ export function CleanupReview({
   onLoop:(start:number,end:number)=>void;
   onTryCorrection:(finding:AudioFinding)=>void;
   onTryDeclick:(finding:AudioFinding)=>void;
+  stemScanning:boolean;stemScanProgress:{done:number;total:number;name:string};
+  stemScanResults:readonly StemIntegrityResult[];stemScanError:string;
+  onScanStems:()=>void;onCancelStemScan:()=>void;
 }){
   const [filter,setFilter]=useState<string>("All");
   const [showReviewed,setShowReviewed]=useState(false);
@@ -35,10 +40,32 @@ export function CleanupReview({
     <summary>◇ Sound cleanup <span className="song-cleanup-summary-counter">{scanned?findings.length:"Scan"}</span></summary>
     <div className="song-cleanup-review">
       <div className="song-cleanup-toolbar">
-        <button type="button" className="song-cleanup-run" disabled={!ready||busy||analyzing}
+        <button type="button" className="song-cleanup-run" disabled={!ready||busy||analyzing||stemScanning}
           onClick={onAnalyze}>{analyzing?"Analyzing…":scanned?"Re-analyze mix":"Analyze mix"}</button>
+        <button type="button" className="song-cleanup-run" disabled={!ready||busy||analyzing||stemScanning}
+          onClick={onScanStems}>Scan all stems</button>
         {scanned&&<small>{warningCount} warnings · {findings.length} findings</small>}
       </div>
+      {stemScanning&&<div role="status" aria-live="polite">
+        <strong>Scanning stems: {stemScanProgress.done} / {stemScanProgress.total}</strong>
+        {stemScanProgress.name&&<small> · {stemScanProgress.name}</small>}
+        <progress aria-label="Stem analysis progress" max={stemScanProgress.total||1}
+          value={stemScanProgress.done} style={{display:"block",width:"100%"}}/>
+        <button type="button" onClick={onCancelStemScan}>Stop scan</button>
+      </div>}
+      {stemScanError&&<p role="alert" className="song-cleanup-error">ERROR: {stemScanError} No audio was changed.</p>}
+      {!stemScanning&&stemScanResults.length>0&&<details className="song-finding-detail" open>
+        <summary>Source integrity: {stemScanResults.length} stems, {stemScanResults.reduce((sum,item)=>sum+item.findings.length,0)} listening candidates</summary>
+        <small>Read-only source-lane screening. Intentional distortion, wide effects and percussion may be flagged; these are not proven watermarks.</small>
+        {stemScanResults.map(item=><details key={item.key} className="song-finding-detail">
+          <summary>{item.key} · {item.findings.length} candidates</summary>
+          {item.findings.length===0?<small>No observations above current thresholds.</small>:
+            <ul>{item.findings.map((finding,i)=><li key={i}>
+              <button type="button" onClick={()=>onSeek(finding.timeSeconds)}>{stamp(finding.timeSeconds)}</button>
+              {" "}{finding.label}: {finding.detail}
+            </li>)}</ul>}
+        </details>)}
+      </details>}
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}
       {scanned&&<>
         {stale&&<small role="status" className="song-cleanup-stale">Previous scan · mix changed. Re-analyze to refresh.</small>}

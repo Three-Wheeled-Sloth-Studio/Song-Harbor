@@ -21,6 +21,14 @@ QA on the actual Windows workstation is required: run 2-3 stems including a spli
 4. **Musical humanization**: reversible, source-aware microtiming, velocity/expression, dynamics and stereo motion, preferentially operating on editable MIDI or section automation. Respect author intent, tempo map, protected passages and channel-split constraints. Do not randomly perturb a final master as a default.
 5. **Controlled comparison**: original generated source, Song Harbor production output and conventional reference; level-matched blind audition, spectral/transient/stereo measurements, objective metadata checks. Detector scores are exploratory, not proof of provenance removal.
 
+## Incremental source scanning (2026-11-24)
+
+- **Scan all stems** is now available in the existing Sound cleanup panel alongside Analyze mix.
+- Reuses each already-decoded raw source lane (including split lanes) and existing read-only acoustic heuristics. Analysis runs sequentially, reports completed/total, supports stop between stems, and groups timestamped observations under each source.
+- Source timeline offsets are retained. No new rendering, candidate processing, sample modification, metadata stripping, or watermark-removal action is performed.
+- Validation: frontend build and focused audio/signal/stem tests passed locally. Added `stem-integrity-scan.test.mjs` to CI. Windows UI performance, cancellation latency on long sources, and listening relevance remain unverified.
+- Next: progress within long-stem scans, batch retry/report persistence, metadata/container inspection and stronger source-integrity measurements. Maintain strict distinction between source QC, model-origin research and audible repair.
+
 ## External references
 
 - https://github.com/geeknik/ai-audio-fingerprint-remover (archived MIT, deprecated)

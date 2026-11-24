@@ -15,7 +15,7 @@ import {SectionDeEssTool} from "./SectionDeEssTool";
 import { EndingTool } from "./EndingTool";
 import { compileSectionAutomation, valueAt } from "./SectionAutomation";
 import type {ReplacementMask} from "./ReplacementMasks";
-import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe } from "./SharedClockAudition";
+import { SharedClockAudition, MixHeadroomError, type AuditionSource,type DeclickRecipe,type StemIntegrityResult } from "./SharedClockAudition";
 import {DeclickWorkbench,type DeclickDraft} from "./DeclickWorkbench";
 import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import {findingReviewKey,markReviewed} from "./FindingReview";
@@ -248,8 +248,14 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const setCleanupLock=useCallback((locked:boolean)=>setCleanupLocked(locked),[]);
   const [cleanupStale,setCleanupStale]=useState(false);
   const [analyzing,setAnalyzing]=useState(false);
+  const [stemScanning,setStemScanning]=useState(false);
+  const [stemScanProgress,setStemScanProgress]=useState({done:0,total:0,name:""});
+  const [stemScanResults,setStemScanResults]=useState<readonly StemIntegrityResult[]>([]);
+  const [stemScanError,setStemScanError]=useState("");
+  const stemScanCancel=useRef(false);
   const [cleanupError,setCleanupError]=useState("");
   const analysisRevision=useRef(0);
+  useEffect(()=>{setStemScanResults([]);},[sourceAudioRevision]);
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
   const headroomFixRef=useRef<HTMLElement|null>(null);
@@ -1126,6 +1132,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
 
   async function analyzeMix(){
     const engine=audio.current;
+    if(stemScanning)return;
     if(!engine?.ready){setCleanupError("Wait for synchronized audio to load before analyzing.");return;}
     const revision=analysisRevision.current;
     setAnalyzing(true);setCleanupError("");
@@ -1142,6 +1149,21 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     }catch(e){
       setCleanupError(e instanceof Error?e.message:"Sound analysis failed");
     }finally{setAnalyzing(false);}
+  }
+  async function analyzeAllStems(){
+    const engine=audio.current;
+    if(!engine?.ready||stemScanning||analyzing||cleanupLocked||exporting)return;
+    stemScanCancel.current=false;
+    setStemScanning(true);setStemScanError("");setStemScanResults([]);
+    setStemScanProgress({done:0,total:engine.declickSourceKeys.length,name:""});
+    const revision=analysisRevision.current;
+    try{
+      const results=await engine.analyzeAllStems((done,total,name)=>setStemScanProgress({done,total,name}),
+        ()=>stemScanCancel.current||analysisRevision.current!==revision);
+      if(analysisRevision.current!==revision)throw Error("Sources changed during analysis. Results discarded; scan again.");
+      setStemScanResults(results);
+    }catch(e){setStemScanError(e instanceof Error?e.message:String(e));}
+    finally{setStemScanning(false);}
   }
 
   async function exportMix(overrideTrimDb?:number) {
@@ -1539,7 +1561,9 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         </>}
         {tool==="cleanup"&&<>
         <CleanupReview findings={cleanupFindings} reviewed={reviewedFindings} onReviewedChange={setReviewedFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
-          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||Boolean(correction)}
+          analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||cleanupLocked||Boolean(correction)}
+          stemScanning={stemScanning} stemScanProgress={stemScanProgress} stemScanResults={stemScanResults} stemScanError={stemScanError}
+          onScanStems={()=>{void analyzeAllStems();}} onCancelStemScan={()=>{stemScanCancel.current=true;}}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection} onTryDeclick={tryDeclick}
           onLoop={(start,end)=>{
             setLoopIn(Math.min(start,duration));

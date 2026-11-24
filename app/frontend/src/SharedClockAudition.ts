@@ -9,6 +9,7 @@ import {createSpatialReflection,scheduleSpatialReflection,type SpatialReflection
 import {createEqStage,scheduleEq,type EqCurves} from "./SectionEq";
 import {createDynamicsStage,scheduleCompressor,scheduleDucking,makeDuckingEnvelope,makeDeEssEnvelope,scheduleDeEss,type DynamicsCurves,type DynamicsStage} from "./SectionDynamics";
 import {inspectRenderedAudio,type AudioFinding} from "./AudioCleanupAnalyzer";
+import {scanStemSource,type StemIntegrityResult} from "./StemIntegrityScan.ts";
 import {compareAudioStages,type StageComparison} from "./AudioStageComparison";
 import {regionSpectrogram} from "./RegionSpectrogram.ts";
 import {bandEvidence} from "./StemArtifactAttribution.ts";
@@ -25,6 +26,7 @@ import {analyzeSections,type SectionRange,type SectionInsight} from "./SectionIn
 export type AuditionSource = {key:string;filename:string;url:string;pan:-1|0|1;startSeconds:number;timelinePositioned:boolean};
 export type AuditionLevel = {gain:number};
 export type DeclickRecipe={id:string;filename:string;source_key:string;time_seconds:number;half_window_ms:number};
+export type {StemIntegrityResult} from "./StemIntegrityScan.ts";
 type CandidatePreview={buffer:AudioBuffer;startSeconds:number;gain:GainNode;source:AudioBufferSourceNode|null;enabled:boolean;blend:number;trimDb:number;solo:boolean};
 type Track = {source:AuditionSource;buffer:AudioBuffer;rawBuffer:AudioBuffer;gain:GainNode;sectionGain:GainNode;scriptVolume:GainNode;replacementGain:GainNode;childGain:GainNode;childEq?:[BiquadFilterNode,BiquadFilterNode,BiquadFilterNode];panner:StereoPannerNode};
 type ActiveNode = AudioBufferSourceNode;
@@ -91,6 +93,26 @@ export class SharedClockAudition {
   private lastSectionInsights:SectionInsight[]=[];
   get sectionInsights():readonly SectionInsight[]{return this.lastSectionInsights;}
   get cleanupFindings():readonly AudioFinding[]{return this.lastAnalysis;}
+  /** Read-only source-lane audit, without rendering a new mix or retaining PCM copies.
+   * Yield between stems so UI progress and cancellation remain responsive.
+   */
+  async analyzeAllStems(onProgress:(done:number,total:number,name:string)=>void,
+    cancelled:()=>boolean=()=>false):Promise<readonly StemIntegrityResult[]>{
+    if(!this.ready)throw Error("Wait for synchronized audio before scanning stems");
+    const tracks=[...this.tracks];
+    const results:StemIntegrityResult[]=[];
+    for(let i=0;i<tracks.length;i++){
+      if(cancelled())break;
+      const track=tracks[i];
+      onProgress(i,tracks.length,track.source.key);
+      await new Promise<void>(resolve=>setTimeout(resolve,0));
+      if(cancelled())break;
+      results.push(scanStemSource(track.source.key,track.source.filename,
+        track.source.startSeconds,track.rawBuffer));
+      onProgress(i+1,tracks.length,track.source.key);
+    }
+    return results;
+  }
   /** Dry source stereo identity; separate from processed mix measurements.
    * Hard-panned split children are explicitly marked, not mistaken for mono.
    */

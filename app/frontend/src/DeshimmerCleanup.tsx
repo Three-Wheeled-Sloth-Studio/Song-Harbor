@@ -1,8 +1,9 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import type {SharedClockAudition} from "./SharedClockAudition";
 
 type Job={id:string;status:string;message:string;filename:string;source_hash:string};
 type Track={track_id:string;working_filename:string;stem_alias:string;display_name:string};
+type BatchItem={filename:string;name:string;job:Job|null;status:"pending"|"running"|"ready"|"failed"|"cancelled";error?:string};
 const isRunning=(status:string)=>["queued","analyzing","optimizing","rendering"].includes(status);
 export function DeshimmerCleanup({
   jobId,tracks,engine,playing,onPlay,onLocked,onJobId,onInserted,onPause,onError
@@ -19,11 +20,15 @@ export function DeshimmerCleanup({
   const [error,setError]=useState("");
   const [loadedId,setLoadedId]=useState<string|null>(null);
   const [listen,setListen]=useState<"original"|"cleaned">("original");
+  const [batch,setBatch]=useState<BatchItem[]>([]);
+  const [batchRunning,setBatchRunning]=useState(false);
+  const [batchIndex,setBatchIndex]=useState(-1);
+  const stopBatch=useRef(false);
   const base="/api/projects/"+encodeURIComponent(jobId)+"/cleanup/deshimmer";
-  const locked=busy||previewBusy||Boolean(job&&isRunning(job.status));
+  const locked=busy||previewBusy||batchRunning||Boolean(job&&isRunning(job.status));
   useEffect(()=>{onLocked(locked);},[locked,onLocked]);
   useEffect(()=>{onJobId(locked?job?.id||null:null);},[locked,job?.id,onJobId]);
-  useEffect(()=>()=>{onLocked(false);onJobId(null);engine?.clearCandidatePreview();},[engine,onLocked,onJobId]);
+  useEffect(()=>()=>{stopBatch.current=true;onLocked(false);onJobId(null);engine?.clearCandidatePreview();},[engine,onLocked,onJobId]);
   useEffect(()=>{
     if(!job||!isRunning(job.status))return;
     let alive=true;
@@ -52,6 +57,51 @@ export function DeshimmerCleanup({
       setJob(result);
     }catch(e){setError(e instanceof Error?e.message:String(e));}
     finally{setBusy(false);}
+  }
+  async function startAll(){
+    if(locked||!tracks.length||!engine?.ready)return;
+    stopBatch.current=false;
+    engine.clearCandidatePreview();setLoadedId(null);setJob(null);setError("");
+    const items:BatchItem[]=tracks.map(track=>({filename:track.working_filename,name:track.display_name,job:null,status:"pending"}));
+    setBatch(items);setBatchRunning(true);setBatchIndex(0);
+    const update=(index:number,patch:Partial<BatchItem>)=>setBatch(old=>old.map((item,i)=>i===index?{...item,...patch}:item));
+    try{
+      for(let i=0;i<items.length;i++){
+        if(stopBatch.current)break;
+        setBatchIndex(i);update(i,{status:"running"});
+        try{
+          const response=await fetch(base,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:items[i].filename})});
+          const started=await response.json() as Job&{detail?:string};
+          if(!response.ok)throw Error(started.detail||"Unable to start optimization");
+          update(i,{job:started});
+          let latest=started;
+          while(isRunning(latest.status)&&!stopBatch.current){
+            await new Promise(resolve=>window.setTimeout(resolve,1000));
+            const polled=await fetch(base+"/"+started.id,{cache:"no-store"});
+            const data=await polled.json() as Job&{detail?:string};
+            if(!polled.ok)throw Error(data.detail||"Optimization status unavailable");
+            latest=data;update(i,{job:latest});
+          }
+          if(stopBatch.current){
+            if(isRunning(latest.status))await fetch(base+"/"+started.id+"/cancel",{method:"POST"});
+            update(i,{job:latest,status:"cancelled"});
+          }else if(latest.status==="ready")update(i,{job:latest,status:"ready"});
+          else update(i,{job:latest,status:"failed",error:latest.message});
+        }catch(e){update(i,{status:"failed",error:e instanceof Error?e.message:String(e)});}
+      }
+    }finally{
+      if(stopBatch.current)setBatch(old=>old.map(item=>item.status==="pending"?{...item,status:"cancelled"}:item));
+      setBatchRunning(false);setBatchIndex(-1);
+    }
+  }
+  function cancelAll(){
+    stopBatch.current=true;
+    // The batch loop cancels the active candidate and preserves completed results.
+  }
+  function reviewCandidate(item:BatchItem){
+    if(locked||!item.job||item.status!=="ready")return;
+    onPause();engine?.clearCandidatePreview();setLoadedId(null);setListen("original");
+    setSelected(item.filename);setJob(item.job);setError("");
   }
   /** Load only once. Keep this on the existing Song Harbor shared clock. */
   async function ensurePreview():Promise<boolean>{
@@ -101,6 +151,7 @@ export function DeshimmerCleanup({
       // Preserve the tool/window; only candidate context is cleared.
       setJob(null);setLoadedId(null);setListen("original");setSelected("");
       onInserted({project:value.project,job:value.job});
+      setBatch(old=>old.filter(item=>item.job?.id!==job.id));
     }catch(e){const message=e instanceof Error?e.message:String(e);setError(message);onError(message);}
     finally{setBusy(false);}
   }
@@ -116,7 +167,26 @@ export function DeshimmerCleanup({
       </select>
       <button type="button" disabled={locked||!selected||!engine?.ready}
         onClick={()=>void start()}>Optimize</button>
+      <button type="button" disabled={locked||!tracks.length||!engine?.ready}
+        onClick={()=>void startAll()}>Optimize all stems</button>
     </div>
+    {(batchRunning||batch.length>0)&&<div className="song-deshimmer-batch" aria-label="All stems optimization progress">
+      <div role="status" aria-live="polite">
+        <strong>{batchRunning?"Optimizing all stems":"Batch optimization complete"}</strong>
+        {" - "}{batch.filter(item=>["ready","failed","cancelled"].includes(item.status)).length} of {batch.length} processed
+        {batchRunning&&batchIndex>=0&&"; current: "+batch[batchIndex]?.name}
+      </div>
+      <progress max={batch.length||1} value={batch.filter(item=>["ready","failed","cancelled"].includes(item.status)).length}
+        aria-label="Stems processed" style={{width:"100%"}}/>
+      {batchRunning&&<button type="button" onClick={cancelAll}>Stop batch</button>}
+      <ul style={{margin:"0.25rem 0",paddingLeft:"1.4rem",maxHeight:"12rem",overflowY:"auto"}}>
+        {batch.map(item=><li key={item.filename}>
+          {item.name}: {item.status==="running"?(item.job?.message||"Starting"):item.status}
+          {item.error&&<span role="alert"> - ERROR: {item.error}. Stem not updated.</span>}
+          {item.status==="ready"&&<button type="button" disabled={locked} onClick={()=>reviewCandidate(item)}>Review candidate</button>}
+        </li>)}
+      </ul>
+    </div>}
     {candidateReady&&<div className="song-deshimmer-audition" aria-label="Cleanup audition">
       <button type="button" className="song-deshimmer-play"
         aria-label={playing?"Pause cleanup audition":"Play cleanup audition"}

@@ -59,6 +59,10 @@ export function CleanupReview({
         <small>Read-only source-lane screening. Intentional distortion, wide effects and percussion may be flagged; these are not proven watermarks.</small>
         {stemScanResults.map(item=><details key={item.key} className="song-finding-detail">
           <summary>{item.key} · {item.findings.length} candidates</summary>
+          <small>Peak {item.metrics.peakDbfs.toFixed(1)} dBFS · RMS {item.metrics.rmsDbfs.toFixed(1)} dBFS · DC {item.metrics.dcPercent.toFixed(3)}% FS
+            {item.metrics.stereoCorrelation!==null&&` · L/R correlation ${item.metrics.stereoCorrelation.toFixed(2)}`}
+            {item.metrics.sideToMidDb!==null&&` · Side/Mid ${item.metrics.sideToMidDb.toFixed(1)} dB`}
+          </small>
           {item.findings.length===0?<small>No observations above current thresholds.</small>:
             <ul>{item.findings.map((finding,i)=><li key={i}>
               <button type="button" onClick={()=>onSeek(finding.timeSeconds)}>{stamp(finding.timeSeconds)}</button>

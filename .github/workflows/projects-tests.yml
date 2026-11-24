@@ -65,6 +65,7 @@ jobs:
             test_ace_transport.py
             test_channel_split.py
             test_declick_recipes.py
+            test_wav_metadata_inventory.py
             test_dependencies.py
             test_duration_recovery.py
             test_duration_validation.py

@@ -21,7 +21,7 @@ import type {AudioFinding} from "./AudioCleanupAnalyzer";
 import {findingReviewKey,markReviewed} from "./FindingReview";
 import type {SectionInsight} from "./SectionInsights.ts";
 import {NarrativeDynamicsPanel,SectionComparisonPanel} from "./NarrativeDynamicsPanel";
-import {CleanupReview} from "./CleanupReview";
+import {CleanupReview,type SourceContainerRecord} from "./CleanupReview";
 import {DeshimmerCleanup} from "./DeshimmerCleanup";
 import {AccompanimentGenerator} from "./AccompanimentGenerator";
 import {BassMidiTool,type MidiRenderSession} from "./BassMidiTool";
@@ -251,11 +251,12 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
   const [stemScanning,setStemScanning]=useState(false);
   const [stemScanProgress,setStemScanProgress]=useState({done:0,total:0,name:""});
   const [stemScanResults,setStemScanResults]=useState<readonly StemIntegrityResult[]>([]);
+  const [containerRecords,setContainerRecords]=useState<readonly SourceContainerRecord[]>([]);
   const [stemScanError,setStemScanError]=useState("");
   const stemScanCancel=useRef(false);
   const [cleanupError,setCleanupError]=useState("");
   const analysisRevision=useRef(0);
-  useEffect(()=>{setStemScanResults([]);},[sourceAudioRevision]);
+  useEffect(()=>{setStemScanResults([]);setContainerRecords([]);},[sourceAudioRevision]);
   const [masterTrimDb,setMasterTrimDb]=useState(0);
   const [headroomIssue,setHeadroomIssue]=useState<{peakDbfs:number;additionalTrimDb:number}|null>(null);
   const headroomFixRef=useRef<HTMLElement|null>(null);
@@ -1155,9 +1156,16 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
     if(!engine?.ready||stemScanning||analyzing||cleanupLocked||exporting)return;
     stemScanCancel.current=false;
     setStemScanning(true);setStemScanError("");setStemScanResults([]);
+    setContainerRecords([]);
     setStemScanProgress({done:0,total:engine.declickSourceKeys.length,name:""});
     const revision=analysisRevision.current;
     try{
+      try{
+        const response=await fetch("/api/projects/"+encodeURIComponent(jobId)+"/integrity/metadata",{cache:"no-store"});
+        if(!response.ok)throw Error("WAV metadata inventory unavailable (HTTP "+response.status+")");
+        const value=await response.json() as {files:SourceContainerRecord[]};
+        if(analysisRevision.current===revision)setContainerRecords(value.files);
+      }catch(e){setStemScanError("Metadata inventory: "+(e instanceof Error?e.message:String(e))+". Acoustic scan continues.");}
       const results=await engine.analyzeAllStems((done,total,name)=>setStemScanProgress({done,total,name}),
         ()=>stemScanCancel.current||analysisRevision.current!==revision);
       if(analysisRevision.current!==revision)throw Error("Sources changed during analysis. Results discarded; scan again.");
@@ -1563,6 +1571,7 @@ export function StemMixer({ jobId, files, expectedDuration, onMissingFfmpeg, sav
         <CleanupReview findings={cleanupFindings} reviewed={reviewedFindings} onReviewedChange={setReviewedFindings} comparison={audio.current?.stageComparison} scanned={cleanupScanned} stale={cleanupStale}
           analyzing={analyzing} error={cleanupError} ready={audioReady} busy={exporting||cleanupLocked||Boolean(correction)}
           stemScanning={stemScanning} stemScanProgress={stemScanProgress} stemScanResults={stemScanResults} stemScanError={stemScanError}
+          containerRecords={containerRecords}
           onScanStems={()=>{void analyzeAllStems();}} onCancelStemScan={()=>{stemScanCancel.current=true;}}
           onAnalyze={()=>{void analyzeMix();}} onSeek={seek} onTryCorrection={tryCorrection} onTryDeclick={tryDeclick}
           onLoop={(start,end)=>{

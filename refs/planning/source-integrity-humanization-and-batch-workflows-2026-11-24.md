@@ -48,6 +48,14 @@ QA on the actual Windows workstation is required: run 2-3 stems including a spli
 - Tests cover fixed synth tone, changing notes, silent/short clips, distorted gated industrial texture, and source immutability. The UI and Windows performance are not yet separately verified for this pass.
 - Next: correlate these measurements with time-localized spectral evidence, add metadata/container inventory, then use controlled listening cases to decide whether any measurement deserves an actionable finding. Do not pursue detector-score reduction as a quality metric.
 
+## Localization and container inventory (2026-11-24)
+
+- Source scans now retain up to three separated timestamps where neighboring active spectral shapes differ most. These are **seek points**, not new defect findings. Fixed-tone negative controls yield no spurious markers; ordinary note changes can produce them.
+- The Scan All Stems workflow also requests a read-only working-WAV container inventory from the local backend. It lists RIFF chunk IDs, sizes and broad categories, but **never tag values**. An unknown chunk is not evidence of a watermark. Unsupported, malformed and unresolved RF64 containers are reported explicitly.
+- The parser bounds chunk count, seeks over sample data without decoding it, and validates chunk lengths against file size. The route limits files to current manifest entries under the project stems directory; no user-supplied arbitrary file paths.
+- Tests cover fixed synth, moving musical notes, silence, metadata presence without identifier disclosure, malformed RIFF length, and normal WAV structures. Windows performance and real-file UI QA remain pending.
+- Next: compare actual source/container inventories against original files; handle more audio formats where justified; investigate reversible musical humanization on MIDI/section automation with level-matched audition.
+
 ## External references
 
 - https://github.com/geeknik/ai-audio-fingerprint-remover (archived MIT, deprecated)

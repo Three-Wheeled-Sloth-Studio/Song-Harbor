@@ -74,6 +74,7 @@ import sfz_render_adapter
 import sfz_candidate_audio
 import deshimmer_stem_jobs
 import deshimmer_versions
+import wav_metadata_inventory
 
 APP_ROOT = Path(os.environ.get("SONG_HARBOR_HOME", str(Path(__file__).resolve().parents[2]))).resolve()
 DATA_ROOT = Path(os.environ.get("SONG_HARBOR_DATA", str(APP_ROOT / "data"))).resolve()
@@ -2401,6 +2402,34 @@ def get_bass_midi_file(ident:str,candidate_id:str)->FileResponse:
 
 class DeshimmerStemRequest(BaseModel):
     filename: str
+
+
+@app.get("/api/projects/{ident}/integrity/metadata")
+def source_metadata_inventory(ident: str) -> dict:
+    """Report container/chunk presence for current working WAV stems; never return tag values."""
+    if not re.fullmatch(r"[a-f0-9]{12}", ident):
+        raise HTTPException(400, "Invalid song identifier")
+    record = projects.read_project(DATA_ROOT, ident)
+    if not record:
+        raise HTTPException(404, "Project not found")
+    files = record.get("files", [])
+    if len(files) > 128:
+        raise HTTPException(400, "Too many sources for bounded inventory")
+    results = []
+    for filename in files:
+        if not isinstance(filename, str) or Path(filename).name != filename or not filename.lower().endswith(".wav"):
+            continue
+        source = DATA_ROOT / "jobs" / ident / "stems" / filename
+        if not source.is_file():
+            results.append({"filename": filename, "status": "missing", "chunks": [], "metadata_chunks": 0,
+                            "container": "unknown", "message": "Working WAV not found"})
+            continue
+        try:
+            results.append(wav_metadata_inventory.inspect_wav(source))
+        except OSError as exc:
+            results.append({"filename": filename, "status": "error", "chunks": [], "metadata_chunks": 0,
+                            "container": "unknown", "message": str(exc)[:160]})
+    return {"files": results, "note": "Chunk presence and size only. No tag values or provenance verification."}
 
 
 @app.post("/api/projects/{ident}/cleanup/deshimmer")

@@ -3,6 +3,8 @@ import {FINDING_GROUPS,type AudioFinding,type AudioFindingKind} from "./AudioCle
 import {findingReviewKey,toggleReviewed,markReviewed} from "./FindingReview";
 import type {StageComparison} from "./AudioStageComparison";
 import type {StemIntegrityResult} from "./SharedClockAudition";
+export type SourceContainerRecord={filename:string;container:string;status:string;message:string;metadata_chunks:number;
+  chunks:readonly {id:string;bytes:number;category:string}[]};
 
 const FILTERS=["All","Levels","Transitions","Vocal / high frequency","Quiet passages","Stereo / mono","Dynamics","Signal audit"] as const;
 const stamp=(seconds:number)=>{
@@ -11,7 +13,7 @@ const stamp=(seconds:number)=>{
 };
 export function CleanupReview({
   findings,reviewed,onReviewedChange,comparison,scanned,stale=false,analyzing,error,ready,busy,onAnalyze,onSeek,onLoop,onTryCorrection,onTryDeclick,
-  stemScanning,stemScanProgress,stemScanResults,stemScanError,onScanStems,onCancelStemScan
+  stemScanning,stemScanProgress,stemScanResults,stemScanError,onScanStems,onCancelStemScan,containerRecords
 }:{
   findings:readonly AudioFinding[];
   reviewed:ReadonlySet<string>;
@@ -26,6 +28,7 @@ export function CleanupReview({
   stemScanning:boolean;stemScanProgress:{done:number;total:number;name:string};
   stemScanResults:readonly StemIntegrityResult[];stemScanError:string;
   onScanStems:()=>void;onCancelStemScan:()=>void;
+  containerRecords:readonly SourceContainerRecord[];
 }){
   const [filter,setFilter]=useState<string>("All");
   const [showReviewed,setShowReviewed]=useState(false);
@@ -64,11 +67,28 @@ export function CleanupReview({
             {item.metrics.sideToMidDb!==null&&` · Side/Mid ${item.metrics.sideToMidDb.toFixed(1)} dB`}
             {item.metrics.spectralConsistency!==null&&` · Spectral consistency ${(100*item.metrics.spectralConsistency).toFixed(0)}%`}
           </small>
+          {item.metrics.spectralChanges.length>0&&<div className="song-cleanup-actions">
+            <small>Largest spectral-shape changes (may be ordinary notes, edits, or transients):</small>
+            {item.metrics.spectralChanges.map(change=><button key={change.timeSeconds} type="button"
+              onClick={()=>onSeek(item.startSeconds+change.timeSeconds)}
+              title="Seek to source spectral change">{stamp(item.startSeconds+change.timeSeconds)} · Seek</button>)}
+          </div>}
           {item.findings.length===0?<small>No observations above current thresholds.</small>:
             <ul>{item.findings.map((finding,i)=><li key={i}>
               <button type="button" onClick={()=>onSeek(finding.timeSeconds)}>{stamp(finding.timeSeconds)}</button>
               {" "}{finding.label}: {finding.detail}
             </li>)}</ul>}
+        </details>)}
+      </details>}
+      {!stemScanning&&containerRecords.length>0&&<details className="song-finding-detail">
+        <summary>WAV container inventory · {containerRecords.length} working files</summary>
+        <small>Chunk names and sizes only. Tag contents are not read or displayed; presence does not prove provenance.</small>
+        {containerRecords.map(record=><details key={record.filename} className="song-finding-detail">
+          <summary>{record.filename} · {record.container} · {record.metadata_chunks} metadata chunks · {record.status}</summary>
+          {record.message&&<small>{record.message}</small>}
+          <div>{record.chunks.map((chunk,index)=><small key={index} style={{display:"block"}}>
+            {chunk.id.trim()||"(blank)"} · {chunk.category} · {chunk.bytes.toLocaleString()} bytes
+          </small>)}</div>
         </details>)}
       </details>}
       {error&&<p role="alert" className="song-cleanup-error">{error}</p>}

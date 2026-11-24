@@ -13,6 +13,7 @@ test("sustained synthesizer is highly consistent but not labeled a defect",()=>{
   const result=spectralStationarity(mono(source));
   assert.ok(result.similarity>.95,JSON.stringify(result));
   assert.equal(result.sampledWindows,24);
+  assert.equal(result.changes.length,0);
   assert.deepEqual(source,original);
 });
 
@@ -24,11 +25,14 @@ test("changing musical notes have less spectral consistency than a fixed drone",
   });
   const a=spectralStationarity(mono(fixed)),b=spectralStationarity(mono(moving));
   assert.ok(b.similarity<a.similarity-.08,JSON.stringify({a,b}));
+  assert.ok(b.changes.length>0,"localized change evidence is available for seeking");
+  assert.ok(b.changes.every(item=>item.timeSeconds>=0&&item.timeSeconds<=duration));
 });
 
 test("silence and short clips return no classification",()=>{
   assert.equal(spectralStationarity(mono(new Float32Array(length))).similarity,null);
   assert.equal(spectralStationarity(mono(new Float32Array(rate))).similarity,null);
+  assert.deepEqual(spectralStationarity(mono(new Float32Array(length))).changes,[]);
 });
 
 test("industrial-style distortion and gating remain descriptive measurements",()=>{
